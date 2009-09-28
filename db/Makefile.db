@@ -1,0 +1,92 @@
+#/*==========================================================
+#
+#%SOURCE FILE
+#	Makefile
+#
+#%DESCRIPTION OF FILE
+#	Make file.
+#
+#%REVISED
+	#	30Aug95 divita -- Initial Version
+#
+#
+#==========================================================*/
+
+O_SYSTEM = $(shell uname)
+
+ifeq '$(O_SYSTEM)' "SunOS"
+  LDFLAGS=-G
+  LIBS = #-lsocket -lnsl -lrt
+else
+  ifeq '$(O_SYSTEM)' "Linux"
+    LDFLAGS=-m32 -shared
+    LIBS = -lpthread
+  endif
+endif
+
+CFLAGS= ${DEFAULT_CFLAGS} -c
+
+SKR_BERKELEY_DB=./berkeley_db
+
+BTREE_QLIB_A = ${SKR_BERKELEY_DB}/btreeQlib.a
+BTREE_QLIB_O = ${SKR_BERKELEY_DB}/btreeQlib.o
+
+DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB} 
+
+LINK_FLAGS = -- -L${BERKELEY}/lib -ldb
+
+SPLFR_BASIC_FLAGS =  --vv --keep
+SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS}
+SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
+SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}
+
+# all:		c_nls_db.so c_nls_db.a ${BTREE_QLIB}
+
+# all:		BDB splfr_STATIC splfr_DYNAMIC
+
+all:
+		@echo NOTHING TO DO HERE
+
+BDB:
+		cd berkeley_db ; make -f Makefile.berkeley_db
+				
+${BTREE_QLIB_A}:
+		cd berkeley_db ; make -f Makefile.berkeley_db
+
+# ${BTREE_QLIB}:
+#		cd berkeley_db;  make -f Makefile.berkeley_db
+
+# c_nls_db.a:	c_nls_db.o ${BTREE_QLIB_O} ${BTREE_QLIB_A}
+# 		${AR} ${ARFLAGS} $@ $?
+
+# c_nls_db.so:	c_nls_db.o
+# 		-${RM} $@
+# 		${LD} ${LDFLAGS} -o c_nls_db.so c_nls_db.o -I${SPINCDIR} ${DBLIBS} -lm ${LIBS}
+
+# c_nls_db.o:	c_nls_db.c ${BTREE_QLIB} ${SKR_BERKELEY_DB}/embed.h
+# 		${CC} ${WARNINGS} ${CFLAGS} c_nls_db.c -I${SKR_BERKELEY_DB} -I${SPINCDIR}
+
+splfr_STATIC:	${BTREE_QLIB_A}
+		${SPLFR} ${SPLFR_STATIC_FLAGS} db_access.pl c_nls_db.c ${DBLIBS} ${LINK_FLAGS}
+
+splfr_DYNAMIC:	${BTREE_QLIB_O}
+		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}
+
+clean:
+		@echo NOTHING to clean here
+
+#		-${RM} *.o *.a *.so *glue*; cd berkeley_db ; make -f Makefile.berkeley_db clean
+
+# original Makefile.db creates c_nls_db.o:
+# /nfsvol/nls/tools/gcc-4.1.1/bin/gcc -g -w -O -fPIC -D__DEBUG -c c_nls_db.c -I./berkeley_db -I/nfsvol/crfiler-ind/II_Research/SICStus/sp-4.0.7-sparc-solaris-5.8/include
+
+# splfr creates c_nls_db.o:
+# /nfsvol/nls/tools/gcc-4.1.1/bin/gcc -g -w -O -fPIC -D__DEBUG -c -I./berkeley_db -I"/nfsvol/crfiler-ind/II_Research/SICStus/sp-4.0.7-sparc-solaris-5.8/include" -I.  -g -O2 -pipe -mcpu=v9 -m32 -mno-app-regs  -Ispio -Wmissing-declarations -Wstrict-prototypes -Wunused  -Wall -Wdisabled-optimization -Wmissing-prototypes -Wnested-externs -Wpointer-arith -W -Wno-sign-compare -fno-common -D__EXTENSIONS__ -DSPDLL -fPIC -DSP_RESNAME=db_0x5Faccess -DSICSTUS_TARGET_VERSION=40007 -c c_nls_db.c -o c_nls_db.o
+
+# original Makefile.db creates c_nls_db.so:
+# ld -G -o c_nls_db.so c_nls_db.o -I/nfsvol/crfiler-ind/II_Research/SICStus/sp-4.0.7-sparc-solaris-5.8/include ./berkeley_db/btreeQlib.a /nfsvol/nls/tools/berkeley_db/db-4.5.20/lib/libdb.a -lm -lsocket -lnsl -lrt
+
+# splfr creates c_nls_db.so:
+# gcc -shared -static-libgcc -mcpu=v9 -m32 -Wl,-M,db_access_glue.mapfile c_nls_db.o db_access_glue.o -o db_access.so /nfsvol/nls/tools/berkeley_db/db-4.5.20/lib/libdb.a ./berkeley_db/btreeQlib.a -ldl -l
+
+

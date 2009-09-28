@@ -1,0 +1,5 @@
+To build the 2007 index files given the file lexiconStatic2007
+$ cd specialist/SKR/src/lexicon/data
+$ cp lexiconStatic2007 LEXICON2007
+$ SKRenv.09 sh ./singleWordLexicon.sh 2007
+

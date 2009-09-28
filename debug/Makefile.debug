@@ -1,0 +1,25 @@
+CFLAGS = ${DEFAULT_CFLAGS}
+INC = .
+INCLUDES = -Iinclude
+HDR = nls_srvr.h
+# SRC = add_str.c cfg_util.c debug.c get_val.c is_null.c llip.c luip.c messages.c strcmp.c strip.c utils.c
+SRC = debug.c get_val.c 
+
+OBJ = ${SRC:%.c=%.o}
+
+all : debug.so debug.a
+
+%.o : %.c
+	${CC} -c ${CFLAGS} ${INCLUDES} -o $@ $<
+
+debug.so : ${OBJ}
+	${CC} ${CFLAGS} -shared -o $@ $?
+
+debug.a :  ${OBJ}
+	${AR} ${ARFLAGS} $@ $?
+
+clean :
+	rm -f *.o *.a *.so
+
+test : test.c debug.a
+	${CC} ${CFLAGS} $? -o $@

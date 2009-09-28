@@ -1,0 +1,85 @@
+/* qp_lookup.pl - lexical lookup predicates.
+*/
+
+:- module(qp_lookup, [
+	assembledefns/2
+   ]).
+
+:- use_module(lexicon(qp_lexicon), [
+	lex_form_ci_recs_input_5/5,
+	default_lexicon_file/1,
+	default_index_file/1
+   ]).
+
+:- use_module(lexicon(qp_shapes), [
+	shapes/3
+   ]).
+
+:- use_module(library(lists), [
+	append/2
+   ]).
+
+
+%%% top level call to lexical lookup from parser
+assembledefns(Input, Recs) :-
+	default_lexicon_file(Lexicon),
+	default_index_file(Index),
+	assembledefns_4(Input, Recs, Lexicon, Index).
+
+assembledefns_4([], [], _Lexicon, _Index).
+assembledefns_4([F|R], AllRecs, Lexicon, Index) :-
+	assembledefns_aux(F, '', SomeRecs, [], Lexicon, Index),
+	append(SomeRecs, MoreRecs, AllRecs),
+	assembledefns_4(R, MoreRecs, Lexicon, Index).
+
+%%% returns matching records in the form: lexicon:[lexmatch:X, inputmatch:Y, records:Z]
+%%% where X is the "best" lexical item that matched, Y is a list of tokens from the
+%%% input, and Z is a list of records of the form: lexrec:[base:B, ...etc]
+assembledefns_aux([], _PrevToken, [], [], _Lexicon, _Index).
+
+%%% from lexicon
+assembledefns_aux([Token|MoreTokens], _PreviousToken, [Recs|MoreRecs], Rest, Lexicon, Index) :-
+	lex_form_ci_recs_input_5([Token|MoreTokens], Recs, Remaining, Lexicon, Index),
+	!,
+	assembledefns_aux(Remaining, Token, MoreRecs, Rest, Lexicon, Index).
+
+
+%%% punctuation
+assembledefns_aux([Token|MoreTokens], _PreviousToken, [R|MoreRecs], Rest, Lexicon, Index) :-
+	punct_token(Token, R),
+	!,
+	assembledefns_aux(MoreTokens, Token, MoreRecs, Rest, Lexicon, Index).
+
+%%% from shapes
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Recs, Rest, Lexicon, Index) :-
+	% shapes(Shapes, PreviousToken, [Token|MoreTokens], Remaining),
+	shapes(Shapes, [Token|MoreTokens], Remaining),
+	( Shapes = [_|_] ->
+	  append(Shapes, MoreRecs, Recs)
+	; Recs = [Shapes|MoreRecs]
+	),
+	!,
+	assembledefns_aux(Remaining, Token, MoreRecs, Rest, Lexicon, Index).
+
+%%% unknown token
+assembledefns_aux([Token|MoreTokens], _PreviousToken, [R|MoreRecs], Rest, Lexicon, Index) :-
+	R = unknown:[inputmatch:[Token]],
+	assembledefns_aux(MoreTokens, Token, MoreRecs, Rest, Lexicon, Index).
+
+
+%%% punctuation records
+punct_token('.', punctuation:[lexmatch:['.'], inputmatch:['.'], records:[punct:[period]]]).
+punct_token(',', punctuation:[lexmatch:[','], inputmatch:[','], records:[punct:[comma]]]).
+punct_token(':', punctuation:[lexmatch:[':'], inputmatch:[':'], records:[punct:[colon]]]).
+punct_token(';', punctuation:[lexmatch:[';'], inputmatch:[';'], records:[punct:[semicolon]]]).
+punct_token('(', punctuation:[lexmatch:['('], inputmatch:['('], records:[punct:[lparen]]]).
+punct_token(')', punctuation:[lexmatch:[')'], inputmatch:[')'], records:[punct:[rparen]]]).
+punct_token('[', punctuation:[lexmatch:['['], inputmatch:['['], records:[punct:[lparen]]]).
+punct_token(']', punctuation:[lexmatch:[']'], inputmatch:[']'], records:[punct:[rparen]]]).
+punct_token('/', punctuation:[lexmatch:['/'], inputmatch:['/'], records:[punct:[slash]]]).
+punct_token('?', punctuation:[lexmatch:['?'], inputmatch:['?'], records:[punct:[question]]]).
+punct_token('!', punctuation:[lexmatch:['!'], inputmatch:['!'], records:[punct:[exclaim]]]).
+punct_token('-', punctuation:[lexmatch:['-'], inputmatch:['-'], records:[punct:[dash, hyphen]]]).
+
+%%%%%% ------------------------
+

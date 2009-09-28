@@ -1,0 +1,37 @@
+# File:	    Makefile
+# Module:   Berkeley DB
+# Author:   Jim
+# SCCS:	@(#)Makefile.berkeley_db	1.1 09/15/06
+
+CFLAGS= ${DEFAULT_CFLAGS}
+
+DBLIBS1 = ./btreeQlib.a ${BERKELEY_LIB_A}
+INCLUDES = -I${BERKELEY_INC}
+
+O_SYSTEM = $(shell uname)
+
+ifeq '$(O_SYSTEM)' "SunOS"
+  LIBS = 
+  DBLIBS = $(DBLIBS1) -lsocket -lnsl -lrt
+else
+  ifeq '$(O_SYSTEM)' "Linux"
+    LIBS = -lpthread
+    DBLIBS = $(DBLIBS1) -lnsl -lrt
+  endif
+endif
+
+all:		btreeQlib.a create_bulk sql
+
+clean:
+		-${RM} *.o *.a *.qof *.so core create_bulk sql
+
+btreeQlib.a:	btreeQlib.c embed.h
+		${CC} ${CFLAGS} -O -c ${INCLUDES} btreeQlib.c
+		${AR} ${ARFLAGS} $@ btreeQlib.o
+
+create_bulk:	create_bulk.c
+		${CC} ${CFLAGS} ${INCLUDES} -o create_bulk create_bulk.c ${DBLIBS}
+
+sql:		sql.c btreeQlib.a
+		${CC} ${CFLAGS} -O ${INCLUDES} -o sql sql.c ${DBLIBS}
+

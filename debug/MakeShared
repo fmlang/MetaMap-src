@@ -1,0 +1,68 @@
+#/*==========================================================
+#
+#%SOURCE FILE
+#	Makefile
+#
+#%DESCRIPTION OF FILE
+#	Make file.
+#
+#%REVISED
+#	29Aug95 divita -- Initial Version
+#
+#%SCCS:	@(#)MakeShared	1.1 09/15/06
+#==========================================================*/
+
+#-----------------------------
+# CSCI
+#-----------------------------
+CSCI = d
+
+#-----------------------------
+# CSC
+#-----------------------------
+CSC = debug
+
+#-----------------------------
+# Library to make
+#-----------------------------
+LIBRARY = $(CSC).so
+COMMON = N
+
+#OPTIMIZE = -xO3
+#MAKE_SHARED_LIB = -dy -G -z text -KPIC 
+
+#-----------------------------
+# Public header 
+#-----------------------------
+#HEADER = $(CSC).h
+#HEADERS = $(INC)/debug.h $(INC)/derrno.h $(INC)/useful.h $(INC)/debug_p.h
+HEADERS = debug.h derrno.h useful.h debug_p.h
+
+#-----------------------------
+# Include paths
+#-----------------------------
+INCLUDES = -I . -I$(INC) 
+
+#
+#.............. DO NOT EDIT BELOW THIS LINE; USE "mkmake -u" ...................
+#
+
+#-----------------------------
+# Header files
+#-----------------------------
+HDR = debug.h debug_p.h derrno.h messages.h useful.h
+
+#-----------------------------
+# Source files
+#-----------------------------
+SRC = add_str.c cfg_util.c debug.c get_val.c is_null.c llip.c luip.c messages.c strcmp.c strip.c utils.c
+
+#-----------------------------
+# Object modules
+#-----------------------------
+OBJ = $(LIBRARY)(add_str.o) $(LIBRARY)(cfg_util.o) $(LIBRARY)(debug.o) $(LIBRARY)(get_val.o) $(LIBRARY)(is_null.o) $(LIBRARY)(llip.o) $(LIBRARY)(luip.o) $(LIBRARY)(messages.o) $(LIBRARY)(strcmp.o) $(LIBRARY)(strip.o) $(LIBRARY)(utils.o) 
+
+#-----------------------------
+# Static section
+#-----------------------------
+include $(NLS)/etc/makedll

@@ -1,0 +1,40 @@
+#/*==========================================================
+#
+#%SOURCE FILE
+#	Makefile
+#
+#%DESCRIPTION OF FILE
+#	Make file.
+#
+#%REVISED
+#	28Sep94 divita -- Initial Version
+#
+#%SCCS:	@(#)Makefile.miscutil	1.1 09/15/06
+#==========================================================*/
+
+#-----------------------------
+# Library to make
+#-----------------------------
+LIBRARY = miscutil.a 
+CFLAGS= ${DEFAULT_CFLAGS}
+
+#-----------------------------
+# Include paths
+#-----------------------------
+INCLUDES = -I${SKR_LEXICON}/include -I${SKR_DEBUG}/include
+
+#-----------------------------
+# Object modules
+#-----------------------------
+OBJ = miscutil.o
+
+all:	${LIBRARY}
+
+${LIBRARY}:	${OBJ}
+		${AR} ${ARFLAGS} ${LIBRARY} ${OBJ}
+
+.c.o:
+	${CC} -c ${CFLAGS} ${INCLUDES} $<
+
+clean:
+	${RM} *.o *.a

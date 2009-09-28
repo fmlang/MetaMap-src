@@ -1,0 +1,32 @@
+#/*==========================================================
+#
+#%SOURCE FILE
+#	Makefile
+#
+#%DESCRIPTION OF FILE
+#	Make file.
+#
+#%REVISED
+#	6Dec96 divita -- Initial Version
+#
+#%SCCS:	@(#)Makefile.query	1.1 09/15/06
+#==========================================================*/
+
+CFLAGS= ${DEFAULT_CFLAGS}
+
+INCLUDES = -I${SKR_LEXICON}/include -I${SKR_DEBUG}/include -I${BERKELEY_INC}
+
+OBJ = btree_query.o tokenize.o wl.o
+
+LIBRARY = lex_btree.a
+
+all:		${LIBRARY}
+
+${LIBRARY}:	${OBJ}
+		${AR} ${ARFLAGS} ${LIBRARY} ${OBJ}
+
+.c.o:
+	${CC} -c ${CFLAGS} ${INCLUDES} $<
+
+clean:
+	${RM} *.o *.a
