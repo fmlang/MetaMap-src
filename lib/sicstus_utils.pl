@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:	    sicstus_utils.pl
 % Module:   SICStus Utils
 % Author:   FML
@@ -8,11 +38,14 @@
 % library predicates that can be implemented in pure SICStus Prolog.
 
 :- module(sicstus_utils, [
+	% must be exported for SemRep
+	atoms_to_strings/2,
 	can_open_file/2,
-	concat_atoms/2,
-	concat_atoms_with_separator/3,
+	concat_atom/2,
+	concat_atom/3,
 	concat_strings_with_separator/3,
 	index/3,
+  	interleave_string/3,
 	lower/2,
 	lower_chars/2,
 	midstring/4,
@@ -51,8 +84,8 @@
 can_open_file(RelativeFileName, Mode) :-
 	absolute_file_name(RelativeFileName, _AbsoluteFileName, [access(Mode)]).
 
-concat_atoms([], '').
-concat_atoms([H|T], Atom) :-
+concat_atom([], '').
+concat_atom([H|T], Atom) :-
 	concat_atoms_1(T, H, Atom).
 
 concat_atoms_1([], H, H).
@@ -62,14 +95,18 @@ concat_atoms_1([Next|Rest], First, Atom) :-
 
 concat_strings_with_separator([], _Separator, []).
 concat_strings_with_separator([H|T], Separator, ConcatString) :-
-	interleave_string(T, H, Separator, Interleaved),
+	interleave_string([H|T], Separator, Interleaved),
 	append(Interleaved, ConcatString).
 
-interleave_string([], H, _Separator, [H]).
-interleave_string([Next|T], H, Separator, [H,Separator|ConcatT]) :-
-	interleave_string(T, Next, Separator, ConcatT).
+interleave_string([], _InterleaveString, []).
+interleave_string([H|T], InterleaveString, InterleavedList) :-
+        interleave_string_1(T, H, InterleaveString, InterleavedList).
 
-concat_atoms_with_separator(AtomList, SeparatorAtom, ConcatAtom) :-
+interleave_string_1([], H, _InterleaveString, [H]).
+interleave_string_1([Next|T], H, InterleaveString, [H,InterleaveString|InterleavedT]) :-
+        interleave_string_1(T, Next, InterleaveString, InterleavedT).
+
+concat_atom(AtomList, SeparatorAtom, ConcatAtom) :-
 	atoms_to_strings(AtomList, StringList),
 	atom_codes(SeparatorAtom, SeparatorString),
 	concat_strings_with_separator(StringList, SeparatorString, ConcatString),

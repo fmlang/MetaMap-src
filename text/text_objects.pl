@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:     text_objects.pl
 % Module:   Text Objects
 % Author:   Lan
@@ -7,8 +37,7 @@
 :- module(text_objects,[
 	extract_token_strings/2,
 	extract_an_lc_strings/2,
-	find_and_coordinate_sentences/5,
-	merge_sentences/2
+	find_and_coordinate_sentences/5
     ]).
 
 
@@ -100,7 +129,7 @@
 	utterance_punc_tok/1,
 	ws_tok/1
     ]).
-	
+
 :- use_module(library(avl),[
 	empty_avl/1,
 	avl_member/2,
@@ -1855,28 +1884,29 @@ match_initial_to_char(0, Depth, AALength, [Token|RestTokens], Char, '',
 % MatchFound == 1 means that a matching token has already been found.
 match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
 		      MatchingTokens, LeftOverTokens) :-
-	format(user_output, '~q~n',
-	       [match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
-				      MatchingTokens, LeftOverTokens)]),
 	NextDepth is Depth + 1,
 	% Once a match has been found, it's OK to quit, as long as the previous matching token
 	% was not a prep/conj/det; we don't want to allow, e.g., "AMI" to expand to
 	% "and acute myocardial infarction".
-	( % Tokens == [],
-	  \+ prep_conj_det(PreviousMatchingText),
-	  MatchingTokens = [],
-	  LeftOverTokens = Tokens
-	; Tokens = [Token|RestTokens],
+	( Tokens = [Token|RestTokens],
 	  skip_tok(Token),
 	  MatchingTokens = [Token|RestMatchingTokens],
 	  match_initial_to_char(1, NextDepth, AALength, RestTokens, Char, " ",
 				RestMatchingTokens, LeftOverTokens)
+	; Depth < 2 * AALength,
+	  Tokens = [Token|RestTokens],
+	  Token = tok(_,_,LCText,_),
+	  an_tok(Token),
+	  MatchingTokens = [Token|RestMatchingTokens],
+	  match_initial_to_char(1, NextDepth, AALength, RestTokens, Char,
+				LCText, RestMatchingTokens, LeftOverTokens)
 	 % We've found a matching token, so stop.
 	 % This must NOT be an if-then-else, because we must be able to backtrack
 	 % over non-matching tokens so the algorithm doesn't give up prematurely,
 	 % e.g., on "Department of Defense (DoD)".
 	; Tokens = [Token|RestTokens],
 	  Token = tok(_,_,LCText,_),
+	  an_tok(Token),
 	  LCText = [Char|_],
 	  % format(user_output, 'PMT: ~w~n', [LCText]),
 	  \+ prep_conj_det(LCText),
@@ -1885,13 +1915,12 @@ match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
 	  LeftOverTokens = []
 	  % match_initial_to_char(1, NextDepth, AALength, RestTokens, Char, LCText,
 	  % 			  RestMatchingTokens, LeftOverTokens)
-	; Depth < 2 * AALength,
-	  Tokens = [Token|RestTokens],
-	  Token = tok(_,_,LCText,_),
-	  MatchingTokens = [Token|RestMatchingTokens],
-	  match_initial_to_char(1, NextDepth, AALength, RestTokens, Char,
-				LCText, RestMatchingTokens, LeftOverTokens)
+	  ; % Tokens == [],
+	  \+ prep_conj_det(PreviousMatchingText),
+	  MatchingTokens = [],
+	  LeftOverTokens = Tokens
 	).
+
 %	; % Token does not match, so quit.
 %	  % make sure that the last matching word is content-bearing
 %	  Tokens = [Token|RestTokens],
@@ -2617,7 +2646,7 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences, AAs) 
 	% format(user_output, '~nFieldTokens0: ~p~n', [FieldTokens0]),
 	filter_out_field_comments(FieldTokens0, FieldTokens),
 	% format(user_output, '~nFieldTokens: ~p~n', [FieldTokens]),
-	find_field_sentences(FieldTokens,FieldSentences),
+	find_field_sentences(FieldTokens, FieldSentences),
 	% format(user_output, '~nFieldSentences: ~p~n', [FieldSentences]),
 	flatten_field_sentences(FieldSentences, Sentences0),
 	% format(user_output, '~nSentences0:~n', []),
@@ -2626,103 +2655,18 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences, AAs) 
 	% format(user_output, '~nAAs:~p~n', [AAs]),
 	annotate_with_aas(AAs, Sentences0, Sentences1),
 	% format(user_output, '~nSentences1:~n', []),
-	add_sentence_labels(Sentences1, UI, Sentences),
+	% remove the spurious final ws token that was added
+	% to allow AA-detection to find an utterance-final AA
+	append(Sentences2, [_], Sentences1),
+	add_sentence_labels(Sentences2, UI, Sentences),
 	% format(user_output, '~nSentences:~n', []),
 	coordinate_sentences(Sentences, UI, TempCoordinatedSentences),
 	CoordinatedSentences  = TempCoordinatedSentences,
-	% Not sure why I do this?
-	% merge_sentences(TempCoordinatedSentences, CoordinatedSentences),
 	% format(user_output, user_output, 'TempCoordinatedSentences:~n', []),
 	% skr_fe:write_token_list(TempCoordinatedSentences, 0, 1),
 	% format(user_output, user_output, 'CoordinatedSentences:~n', []),
 	% skr_fe:write_token_list(CoordinatedSentences, 0, 1),
 	!.
-
-merge_tokens(ThisToken, NextToken, NewNextToken) :-
-	ThisToken = tok(ThisType, ThisTokenText, _ThisLCText,
-			pos(ThisStart1,_ThisEnd1),
-			pos(ThisStart2,_ThisEnd2)),
-	NextToken = tok(NextType, NextTokenText, _NextLCText,
-			pos(_NextStart1,NextEnd1),
-			pos(_NextStart2,NextEnd2)),
-	append(ThisTokenText, NextTokenText, MergedText),
-	lower(MergedText, LCMergedText),
-	NewStart1 is ThisStart1,
-	NewEnd1 is NextEnd1,
-	NewStart2 is ThisStart2,
-	NewEnd2 is NextEnd2,
-	merge_token_types(ThisType, NextType, NewType),
-	NewNextToken = tok(NewType, MergedText, LCMergedText,
-			   pos(NewStart1,NewEnd1),
-			   pos(NewStart2,NewEnd2)).
-	
-
-% What is the resulting token type if two tokens
-% of types ThisType and NextType are concatenated?
-merge_token_types(lc, NextType, NewType) :- merge_token_types_lc(NextType, NewType).
-merge_token_types(uc, NextType, NewType) :- merge_token_types_uc(NextType, NewType).
-merge_token_types(ic, NextType, NewType) :- merge_token_types_ic(NextType, NewType).
-merge_token_types(mc, NextType, NewType) :- merge_token_types_mc(NextType, NewType).
-merge_token_types(an, NextType, NewType) :- merge_token_types_an(NextType, NewType).
-merge_token_types(nu, NextType, NewType) :- merge_token_types_nu(NextType, NewType).
-
-merge_token_types_lc(lc, lc).
-merge_token_types_lc(uc, mc).
-merge_token_types_lc(ic, mc).
-merge_token_types_lc(mc, an).
-merge_token_types_lc(an, an).
-merge_token_types_lc(nu, an).
-
-merge_token_types_uc(lc, mc).
-merge_token_types_uc(uc, uc).
-merge_token_types_uc(ic, mc).
-merge_token_types_uc(mc, mc).
-merge_token_types_uc(an, an).
-merge_token_types_uc(nu, an).
-
-merge_token_types_ic(lc, ic).
-merge_token_types_ic(uc, mc).
-merge_token_types_ic(ic, mc).
-merge_token_types_ic(mc, mc).
-merge_token_types_ic(an, an).
-merge_token_types_ic(nu, an).
-
-merge_token_types_mc(lc, mc).
-merge_token_types_mc(uc, mc).
-merge_token_types_mc(ic, mc).
-merge_token_types_mc(mc, mc).
-merge_token_types_mc(an, an).
-merge_token_types_mc(nu, an).
-
-merge_token_types_an(lc, an).
-merge_token_types_an(uc, an).
-merge_token_types_an(ic, an).
-merge_token_types_an(mc, an).
-merge_token_types_an(an, an).
-merge_token_types_an(nu, an).
-
-merge_token_types_nu(lc, an).
-merge_token_types_nu(uc, an).
-merge_token_types_nu(ic, an).
-merge_token_types_nu(mc, an).
-merge_token_types_nu(an, an).
-merge_token_types_nu(nu, nu).
-
-merge_sentences(Sentences, MergedSentences) :-
-	Sentences = [FirstToken|RestTokens],
-	merge_sentences_aux(RestTokens, FirstToken, MergedSentences).
-
-merge_sentences_aux([], LastToken, [LastToken]).
-merge_sentences_aux([NextToken|RestTokens], ThisToken, MergedTokens) :-
-	% Two consecutive an tokens: merge them into the second.
-	% Still need to merge token types!!
-	( an_tok(ThisToken),
-	  an_tok(NextToken) ->
-	  merge_tokens(ThisToken, NextToken, NewNextToken),
-	  merge_sentences_aux(RestTokens, NewNextToken, MergedTokens)
-	; MergedTokens = [ThisToken|RestMergedTokens],
-	  merge_sentences_aux(RestTokens, NextToken, RestMergedTokens)
-	).
 
 skip_over_position([],_,[]) :-
     !.
@@ -2886,7 +2830,6 @@ coordinate_sentences([tok(aadef,_Def,_AA,Pos)|Rest], UI, Field, N,
 			     OffsetIn, OffsetInOut, CoordinatedAADefTokens),
 	skip_over_ws_parenthetical(NewRest0, NewRest),
 	append(CoordinatedAADefTokens, CoordinatedNewRest, CoordinatedRest),
-	% add_ws_token(NewRest0, CoordinatedNewRest, CoordinatedNewRest1),
 	coordinate_sentences(NewRest, UI, Field, N,
 			     OffsetInOut, OffsetOut, CoordinatedNewRest).
 coordinate_sentences([tok(aa,_AAToks,RelatedAAToks,Pos)|Rest],UI,Field,N,
@@ -2936,14 +2879,6 @@ coordinate_sentences([tok(Type,Text,LCText,Pos)|Rest],UI,Field,N,
     OffsetInOut is OffsetIn + TokenLength,
     TypePos=pos(OffsetIn,OffsetInOut),
     coordinate_sentences(Rest,UI,Field,N,OffsetInOut,OffsetOut,CoordinatedRest).
-
-
-add_ws_token(NewRest0, CoordinatedNewRest, CoordinatedNewRest1) :-
-	( NewRest0 = [H|_T],
-	  ws_tok(H) ->
-	  CoordinatedNewRest1 = [H|CoordinatedNewRest]
-	; CoordinatedNewRest1 = CoordinatedNewRest
-	).
 
 conditionally_skip_over_ws_parenthetical(TypeTokens, NewRest0, NewRest) :-
 	( member(Token, TypeTokens),

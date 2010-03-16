@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:     skr_text_processing.pl
 % Module:   SKR
 % Author:   Lan
@@ -5,8 +35,9 @@
 
 
 :- module(skr_text_processing,[
-	extract_sentences/6, % new
-	get_skr_text/1
+	extract_sentences/6,
+	get_skr_text/1,
+	text_field/1
 	% is_sgml_text/1,
 	% moved from labeler % needed by sgml_extractor?
 	% warn_remove_non_ascii_from_input_lines/2
@@ -118,57 +149,35 @@ acronym/abbreviation discovery.
 
 */
 
+% This is a hack designed to allow AA-detection to detect an AA
+% at the very end of an utterance. We simply add a blank space
+% to the final string in the input.
+% The resulting final ws token is removed
+% via	append(Sentences1, [_], Sentences2),
+% in find_and_coordinate_sentences/5
+add_final_ws([], LastLine, [LastLineWithFinalWS]) :-
+	append(LastLine, " ", LastLineWithFinalWS).
+add_final_ws([Next|T], H, [H|NewT]) :-
+	add_final_ws(T, Next, NewT).
+
 extract_sentences(Lines0, InputType, Sentences, CoordinatedSentences, AAs, Lines) :-
-    replace_tabs_in_strings(Lines0,Lines1),
-    replace_nonprints_in_strings(Lines1,Lines2),
-    (   is_medline_citation(Lines2) ->
-	extract_coord_sents_from_citation(Lines2, Sentences, CoordinatedSentences, AAs),
-	InputType=citation,
-	Lines = Lines2
-    % ;	is_fielded_loosely(Lines2,RestLines,ID) ->  % needs modernizing
-    %	extract_utterances_loosely(RestLines,ID,Utts),
-    %   form_utterance_terms(Utts,UttTerms),
-    %	ExpUttTerms=[],
-    %	InputType=loose,
-    %	Lines = Lines2
-    ;	is_smart_fielded(Lines2) ->
-	extract_coord_sents_from_smart(Lines2,Sentences,CoordinatedSentences),
-	InputType=smart,
-	Lines = Lines2
-    % ;	is_sgml_text(Lines2) ->  % needs modernizing
-    %	initialize_sgml_extractor,
-    %	extract_utterances_from_sgml(Lines2,Sentences, CoordinatedSentences, AAs, Lines),
-    %   form_utterance_terms(Utts,UttTerms),
-    %	ExpUttTerms=[],
-    %	InputType=sgml
-    % ;	is_project_description(Lines2) ->
-    %	extract_coord_sents_from_project(Lines2,Sentences,
-    %					 CoordinatedSentences), % careful!
-    %	% form_utterance_terms(Utterances,UttTerms),                   % careful!
-    %	InputType=project,
-    %	Lines = Lines2
-    %   % for backward compatibility, the following handles previously
-    %    % labeled text
-    % ;   (Lines2=[Line|RestLines],
-    %	 parse_labeled_utterance(Line,Label0,RestLine),
-    %	 Label0\==[]) ->  % needs modernizing
-    %    trim_whitespace(Label0,Label1),
-    %    atom_codes(Label,Label1),
-    % 	(RestLine==[] ->
-    %	    concatenate_strings(RestLines," ",Text)
-    %	;   concatenate_strings([RestLine|RestLines]," ",Text)
-    %	),
-    %	UttTerms=[utterance(Label,Text,_PosInfo,_ReplPos)],
-    %	ExpUttTerms=[],
-    %	InputType=lutt,
-    %	Lines = Lines2
-    ;   form_dummy_citation(Lines2,CitationLines),
-	extract_coord_sents_from_citation(CitationLines, Sentences,
-					  CoordinatedSentences, AAs),
-	Lines = Lines2,
-	InputType=simple
-    ),
-    !.
+	Lines0 = [H|T],
+	add_final_ws(T, H, Lines1),
+	replace_tabs_in_strings(Lines1, Lines2),
+	replace_nonprints_in_strings(Lines2, Lines3),
+	( is_medline_citation(Lines2) ->
+	  extract_coord_sents_from_citation(Lines3, Sentences, CoordinatedSentences, AAs),
+	  InputType = citation
+	; is_smart_fielded(Lines3) ->
+	  extract_coord_sents_from_smart(Lines3, Sentences, CoordinatedSentences, AAs),
+	  InputType = smart
+	; form_dummy_citation(Lines3, CitationLines),
+	  extract_coord_sents_from_citation(CitationLines, Sentences,
+					    CoordinatedSentences, AAs),
+	  InputType = simple
+	),
+	Lines = Lines3,
+	!.
 
 is_medline_citation([First|_]) :-
 	split_string_completely(First, " ", Tokens0),
@@ -214,73 +223,6 @@ pad_lines([First|Rest], Padding, [PaddedFirst|PaddedRest]) :-
 	pad_lines(Rest, Padding, PaddedRest).
 
 padding_string("      ").
-
-%%% /* parse_labeled_utterance(+InputString, -LabelString, -TextString)
-%%% 
-%%% parse_labeled_utterance/3 parses InputString into LabelString and TextString.  
-%%% InputString is of the form <delimlabel><text> where <delimlabel>, which is
-%%% optional, is of the form "[ <label> ]".  <label> is usually of the form
-%%% <ui>.<field>.<n> indicating the nth utterance of <field> in citation <ui>.
-%%% The form of a label is in flux. The current definition is "[ <label> ]", where
-%%% the space after the left bracket is mandatory, and <label> is a string of
-%%% non-right-brackets. */
-%%% 
-%%% parse_labeled_utterance(InputString,LabelString,TextString) :-
-%%%     phrase(r_labelled_text([LabelString,TextString]),InputString).
-%%% 
-%%% % ---------- GRAMMAR FOR LABELLED TEXT 
-%%% 
-%%% r_labelled_text(LT) --> ([0' ], !, r_labelled_text(LT)
-%%%                     ;    r_label(L), r_text(T), {LT=[L,T]}
-%%%                     ;    r_text(T), {LT=[[],T]}
-%%%                         ), !.
-%%% 
-%%% r_label(L) --> [0'[], [0' ], r_non_r_bracket(L), [0']].
-%%% 
-%%% r_text(T) --> ([0' ], !, r_text(T)
-%%%           ;    r_any(T)
-%%% %          ;    r_non_comment(T1), r_comment(_C), r_text(T2),
-%%% %               {append([T1," ",T2],T)}
-%%% %          ;    r_non_comment(T)
-%%%               ), !.
-%%% 
-%%% r_non_r_bracket(S) --> ([Char], {\+Char==0']}, r_non_r_bracket(T), {S=[Char|T]}
-%%%                    ;    {S=[]}
-%%%                        ), !.
-%%% 
-%%% r_any(S) --> ([Char], r_any(T), {S=[Char|T]}
-%%%          ;    {S=[]}
-%%%              ), !.
-%%% 
-%%% %r_non_comment(S) --> ([Char], {\+Char==0'{}, r_non_comment(T), {S=[Char|T]}
-%%% %                 ;    {S=[]}
-%%% %                       ), !.
-%%% 
-%%% %r_comment(C) --> [0'{], r_non_r_brace(C), [0'}].
-%%% 
-%%% %r_non_r_brace(S) --> ([Char], {\+Char==0'}}, r_non_r_brace(T), {S=[Char|T]}
-%%% %                 ;    {S=[]}
-%%% %                       ), !.
-%%% 
-%%% 
-%%% /* form_utterance_terms(+Utterances, -UtteranceTerms)
-%%% 
-%%% form_utterance_terms/2 transforms Utterances, a list of multi-line labeled
-%%% utterances, the first line of which is of the form <label> <text>,
-%%% into UtteranceTerms of the form utterance(<Label>,<Text>,<StartPos>/<Length>,<ReplPos>).  */
-%%% 
-%%% form_utterance_terms([],[]).
-%%% form_utterance_terms([[FirstLine|RestLines]|Rest],
-%%% 		     [utterance(Label,Text,_PosInfo,_ReplPos)|RestTerms]) :-
-%%%     parse_labeled_utterance(FirstLine,Label0,FirstText),
-%%%     trim_whitespace(Label0,Label1),
-%%%     atom_codes(Label,Label1),
-%%%     (FirstText=="" ->
-%%%         concatenate_strings(RestLines," ",Text)
-%%%     ;   concatenate_strings([FirstText|RestLines]," ",Text)
-%%%     ),
-%%%     form_utterance_terms(Rest,RestTerms).
-
 
 /* 
    extract_coord_sents_from_citation(+CitationLines, -Sentences,
@@ -333,7 +275,7 @@ extract_coord_sents_from_citation(CitationLines, Sentences,
 %%% extract_real_text_from_each_field([H|T], [TextH|TextT]) :-
 %%%         H = [_FieldType, TextHStrings],
 %%% 	atom_codes_list(TextHAtoms, TextHStrings),
-%%% 	concat_atoms(TextHAtoms, ' ', TextHAtomsWithBlanks),
+%%% 	concat_atom(TextHAtoms, ' ', TextHAtomsWithBlanks),
 %%% 	atom_codes(TextHAtomsWithBlanks, TextH),
 %%% 	extract_real_text_from_each_field(T, TextT).
 
@@ -637,14 +579,14 @@ medline_field('UOF',
 medline_field('VI',
 	      'Volume', 'Journal volume').
 
-extract_coord_sents_from_smart(SmartLines,Sentences,CoordinatedSentences) :-
+extract_coord_sents_from_smart(SmartLines,Sentences,CoordinatedSentences, AAs) :-
     extract_all_smart_fields(SmartLines,CitationFields),
     (select_field("UI",CitationFields,UIField) ->
         extract_ui(UIField,UI)
     ;   UI="00000000"
     ),
     extract_coord_sents_from_fields(UI, CitationFields, Sentences,
-				    CoordinatedSentences, _AAs),
+				    CoordinatedSentences, AAs),
     !.
 
 /* extract_all_smart_fields(+SmartLines, -CitationFields)
@@ -733,61 +675,17 @@ extract_ui(Field, UI) :-
 	; UI  = "00000000"
 	).
 
-%%% /* extract_utterances_from_text_fields(+UI, +CitationFields, -Utterances)
-%%% 
-%%% extract_utterances_from_text_fields/3 extracts utterances from all text
-%%% CitationsFields for UI producing Utterances. */
-%%% 
-%%% extract_utterances_from_text_fields(UI,CitationFields,Utterances) :-
-%%%     text_fields(TextFields),
-%%%     extract_utterances_from_text_fields_aux(TextFields,UI,CitationFields,
-%%% 					    Utterances0),
-%%%     append(Utterances0,Utterances),
-%%%     !.
-%%% 
-%%% extract_utterances_from_text_fields_aux([],_UI,_CitationFields,[]) :-
-%%%     !.
-%%% extract_utterances_from_text_fields_aux([First|Rest],UI,CitationFields,
-%%%                                         [FirstExtracted|RestExtracted]) :-
-%%%     extract_utterances(First,UI,CitationFields,FirstExtracted),
-%%%     extract_utterances_from_text_fields_aux(Rest,UI,CitationFields,
-%%%                                             RestExtracted).
-
 extract_coord_sents_from_fields(UI, Fields, Sentences, CoordinatedSentences, AAs) :-
 	extract_text_fields(Fields,TextFields0),
-	% trim_fields(TextFields0,TextFields1),
 	padding_string(Padding),
 	unpad_fields(TextFields0, Padding, TextFields1),
-	% TextFields1 = TextFields0,
-	% punctuate_fields(TextFields1,TextFields),
 	TextFields = TextFields1,
-	% format('TextFields: ~p~n',[TextFields]),
-	%    append_fields(TextFields,TextLines),
-	%    format('TextLines: ~p~n',[TextLines]),
-	%    find_and_expand_aas(TextLines,Utts,ExpUtts),
 	find_and_coordinate_sentences(UI, TextFields, Sentences, CoordinatedSentences, AAs),
 	!.
-
-	%    format('Sentences: ~p~n',[Sentences]),
-	%    format('CoordinatedSentences: ~p~n',[CoordinatedSentences]),
-	%    format('Utts: ~p~n',[Utts]),
-	%    format('ExpUtts: ~p~n',[ExpUtts]),
-	%    allocate_utts_to_fields(TextFields,Utts,FieldAllocation),
-	%    format('FieldAllocation: ~p~n',[FieldAllocation]),
-	%    construct_utt_labels(FieldAllocation,UI,"none",0,Labels),
-	%    format('Labels: ~p~n',[Labels]),
-	%    construct_utt_terms(Utts,Labels,UttTerms),
-	%    format('UttTerms: ~p~n',[UttTerms]),
-	%    construct_utt_terms(ExpUtts,Labels,ExpUttTerms),
-	%    format('ExpUttTerms: ~p~n',[ExpUttTerms]),
-
-
 
 /* text_field(?TextField)
    text_field/1 is a factual predicate of the individual textual fields.
 */
-
-text_fields(["DOC","QU","QT","TI","AB","AS","MP","OP","SP","PE","RX","HX","TX"]).
 
 text_field('DOC').
 text_field('QU').
@@ -819,39 +717,6 @@ extract_text_fields([_First|Rest], ExtractedRest) :-
 	extract_text_fields(Rest, ExtractedRest).
 
 
-%%%%% /* punctuate_fields(+FieldsIn, -FieldsOut)
-%%%%%    punctuate_lines(+LinesIn, -LinesOut)
-%%%%% 
-%%%%% punctuate_fields/2 adds a period to the last line, if necessary, to each
-%%%%% field in FieldsIn producing FieldsOut. */
-%%%%% 
-%%%%% punctuate_fields([],[]) :-
-%%%%%     !.
-%%%%% punctuate_fields([[Field,Lines]|Rest],
-%%%%% 		 [[Field,PunctuatedLines]|PunctuatedRest]) :-
-%%%%%     punctuate_lines(Lines,PunctuatedLines),
-%%%%%     punctuate_fields(Rest,PunctuatedRest).
-%%%%% 
-%%%%% punctuate_lines([],[]) :-
-%%%%%     !.
-%%%%% punctuate_lines(Lines,PunctuatedLines) :-
-%%%%%     rev(Lines,[Last|RevRest]),
-%%%%%     punctuate_line(Last,PunctuatedLast),
-%%%%%     rev([PunctuatedLast|RevRest],PunctuatedLines).
-%%%%% 
-%%%%% punctuate_line([],[]) :-
-%%%%%     !.
-%%%%% punctuate_line(Line,PunctuatedLine) :-
-%%%%%     rev(Line,[Last|RevRest]),
-%%%%%     ((is_final_punctuation(Last); Last==0',; Last==0':) ->
-%%%%%         PunctuatedLine=Line
-%%%%%     ;   RevPunctuatedLine=[0'.,Last|RevRest],
-%%%%%         rev(RevPunctuatedLine,PunctuatedLine)
-%%%%%     ).
-%%%%% 
-%%%%% 
-
-
 unpad_fields([], _Padding, []).
 unpad_fields([[Field,Lines]|Rest], Padding, [[Field,UnPaddedLines]|UnPaddedRest]) :-
 	unpad_lines(Lines, Padding, UnPaddedLines),
@@ -866,474 +731,3 @@ unpad_lines([First|Rest], Padding, [UnPaddedFirst|UnPaddedRest]) :-
 	),
 	unpad_lines(Rest, Padding, UnPaddedRest).
 
-/* trim_fields(+FieldsIn, -FieldsOut)
-   trim_lines(+LinesIn, -LinesOut)
-
-trim_fields/2 trims blanks from the lines in FieldsIn producing
-FieldsOut. */
-
-trim_fields([], []).
-trim_fields([[Field,Lines]|Rest], [[Field,TrimmedLines]|TrimmedRest]) :-
-	trim_lines(Lines, TrimmedLines),
-	trim_fields(Rest, TrimmedRest).
-
-trim_lines([], []).
-trim_lines([First|Rest], [TrimmedFirst|TrimmedRest]) :-
-	trim_whitespace(First, TrimmedFirst),
-	trim_lines(Rest, TrimmedRest).
-
-%%% /* extract_utterances(+FieldID, +UI, +CitationFields, -Utterances)
-%%% 
-%%% extract_utterances/4 extracts utterances for the text field, FieldID, of
-%%% UI with fields CitationFields.  */
-%%% 
-%%% extract_utterances(FieldID,UI,CitationFields,Utterances) :-
-%%%     select_field(FieldID,CitationFields,Field0),
-%%%     !,
-%%%     (FieldID=="AB" ->
-%%% 	remove_truncation_notice(Field0,Field)
-%%%     ;   Field=Field0
-%%%     ),
-%%%     parse_lines_into_utterances(Field,Utterances0),
-%%%     lower(FieldID,LCFieldID),
-%%%     label_and_format_utterances(UI,LCFieldID,1,_LastN,Utterances0,Utterances).
-%%% extract_utterances(_FieldID,_UI,_CitationFields,[]).
-
-
-%%% /* remove_truncation_notice(+LinesIn, -LinesOut)
-%%% 
-%%% remove_truncation_notice/2 removes "(ABSTRACT TRUNCATED AT nnn WORDS)" from
-%%% the end of LinesIn producing LinesOut. The truncation notice cannot span
-%%% more than two lines, and the last line must end with "WORDS)" (no trailing
-%%% characters at all). */
-%%% 
-%%% remove_truncation_notice([],[]) :-
-%%%     !.
-%%% remove_truncation_notice([Line1,Line2],Result) :-
-%%%     split_string(Line1,"(ABSTRACT",TruncatedLine1,_),
-%%%     append(_,"WORDS)",Line2),
-%%%     !,
-%%%     (TruncatedLine1=="" ->
-%%%         Result=[]
-%%%     ;   Result=[TruncatedLine1]
-%%%     ).
-%%% remove_truncation_notice([Line],Result) :-
-%%%     split_string(Line,"(ABSTRACT",TruncatedLine,RestLine),
-%%%     append(_,"WORDS)",RestLine),
-%%%     !,
-%%%     (TruncatedLine=="" ->
-%%%         Result=[]
-%%%     ;   Result=[TruncatedLine]
-%%%     ).
-%%% remove_truncation_notice([First|Rest],[First|TruncatedRest]) :-
-%%%     remove_truncation_notice(Rest,TruncatedRest).
-
-
-%%% /* label_and_format_utterances(+UI, +FieldID, +FirstN, -LastN,
-%%%                                +Utterances, -LFUtterances)
-%%% 
-%%% label_and_format_utterances/6
-%%% label_and_format_utterances/5
-%%% xxx
-%%% */
-%%% 
-%%% label_and_format_utterances(_UI,_FieldID,N,N,[],[]) :-
-%%%     !.
-%%% label_and_format_utterances(UI,FieldID,N,LastN,[First|Rest],[LFFirst|LFRest]) :-
-%%%     concatenate_items_to_string(["[ ",UI,".",FieldID,".",N," ]"],Label),
-%%%     form_lines_from_words([Label|First],78,LFFirst),
-%%%     !,
-%%%     NewN is N+1,
-%%%     label_and_format_utterances(UI,FieldID,NewN,LastN,Rest,LFRest).
-
-%%% /* form_lines_from_words(+Words, +MaxLength, -Lines)
-%%%    form_lines_from_words(+Words, +MaxLength, +LengthIn, +RevLineIn, -Lines)
-%%% 
-%%% form_lines_from_words/3
-%%% form_lines_from_words/5
-%%% xxx
-%%% */
-%%% 
-%%% form_lines_from_words(Words,MaxLength,Lines) :-
-%%%     form_lines_from_words(Words,MaxLength,0,[],Lines).
-%%% 
-%%% form_lines_from_words([],_,0,[],[]) :-
-%%%     !.
-%%% form_lines_from_words([],_,_,RevLineIn,[Line]) :-
-%%%     !,
-%%%     rev(RevLineIn,Line0),
-%%%     append(Line0,Line).
-%%% form_lines_from_words([First|Rest],MaxLength,LengthIn,RevLineIn,Lines) :-
-%%%     length(First,NFirst),
-%%%     (RevLineIn==[] ->
-%%%         NewLengthIn is LengthIn+NFirst,
-%%%         form_lines_from_words(Rest,MaxLength,NewLengthIn,[First],Lines)
-%%%     |   NewLengthIn is LengthIn+NFirst+1,
-%%%         NewLengthIn=<MaxLength,
-%%%         form_lines_from_words(Rest,MaxLength,NewLengthIn,[First," "|RevLineIn],
-%%%                               Lines)
-%%%     ).
-%%% form_lines_from_words(Words,MaxLength,_,RevLineIn,[Line|Lines]) :-
-%%%     rev(RevLineIn,Line0),
-%%%     append(Line0,Line),
-%%%     form_lines_from_words(Words,MaxLength,0,[],Lines).
-
-
-%%% /* extract_utterances_loosely(+Lines, +ID, -Utterances)
-%%%    extract_utterances_loosely(+Lines, +FieldChar, +ID, -Utterances)
-%%% 
-%%% extract_utterances_loosely/3 uses extract_utterances_loosely/4 with
-%%% FieldChar asterisk (*) to extract labeled Utterances from Lines.
-%%% ID is used as the first component of labels.  */
-%%% 
-%%% extract_utterances_loosely(Lines,ID,Utterances) :-
-%%%     extract_utterances_loosely(Lines,0'*,ID,Utterances).
-%%% 
-%%% extract_utterances_loosely(Lines,FieldChar,ID,Utterances) :-
-%%%     extract_fields_from_lines(Lines,FieldChar,Fields),
-%%%     form_utterances_from_fields(Fields,text,_ModeOut,FieldUtterances),
-%%%     label_field_utterances(FieldUtterances,ID,Utterances).
-%%% 
-%%% /* extract_fields_from_lines(+Lines, +FieldChar, -Fields)
-%%%    extract_fields_from_lines(+Lines, +FieldChar, +FieldID, +FieldLines,
-%%%                              +FieldsIn, -FieldsOut)
-%%% 
-%%% extract_fields_from_lines/3 extracts Fields from Lines where the
-%%% the beginning of a field is signalled by a line starting with FieldChar,
-%%% e.g. *AN or *DL).  A field in Fields is of the form field(<field_id>,<lines>)
-%%% where <lines> is a list of strings.  extract_fields_from_lines/6 is an
-%%% auxiliary.  */
-%%% 
-%%% extract_fields_from_lines(Lines,FieldChar,Fields) :-
-%%%     extract_fields_from_lines(Lines,FieldChar,none,[],[],Fields0),
-%%%     rev(Fields0,Fields).
-%%% 
-%%% extract_fields_from_lines([],_FieldChar,FieldID,FieldLines,
-%%% 			  FieldsIn,FieldsOut) :-
-%%%     !,
-%%%     (FieldLines==[] ->
-%%% 	FieldsOut=FieldsIn
-%%%     ;   rev(FieldLines,RevFieldLines),
-%%%         FieldsOut=[field(FieldID,RevFieldLines)|FieldsIn]
-%%%     ).
-%%% extract_fields_from_lines([Line0|Rest],FieldChar,FieldID,FieldLines,
-%%% 			  FieldsIn,FieldsOut) :-
-%%%     replace_tabs(Line0,Line1),
-%%%     replace_nonprints(Line1,Line),
-%%%     (   Line=="" ->
-%%%         extract_fields_from_lines(Rest,FieldChar,FieldID,FieldLines,
-%%% 				  FieldsIn,FieldsOut)
-%%%     ;   is_control_command(Line,_Mode) ->
-%%%         (FieldLines==[] ->
-%%%             extract_fields_from_lines(Rest,FieldChar,FieldID,[],
-%%% 				      [field(Line,[])|FieldsIn],FieldsOut)
-%%%         ;   rev(FieldLines,RevFieldLines),
-%%%             extract_fields_from_lines(Rest,FieldChar,FieldID,[],
-%%% 				      [field(Line,[]),
-%%% 				       field(FieldID,RevFieldLines)|FieldsIn],
-%%% 				      FieldsOut)
-%%%         )
-%%%     ;   begins_loose_field(Line,FieldChar,NewFieldID) ->
-%%%         (FieldLines==[] ->
-%%%             extract_fields_from_lines(Rest,FieldChar,NewFieldID,[],
-%%% 				      FieldsIn,FieldsOut)
-%%%         ;   rev(FieldLines,RevFieldLines),
-%%%             extract_fields_from_lines(Rest,FieldChar,NewFieldID,[],
-%%% 				      [field(FieldID,RevFieldLines)|FieldsIn],
-%%% 				      FieldsOut)
-%%%         )
-%%%     ;   extract_fields_from_lines(Rest,FieldChar,FieldID,[Line|FieldLines],
-%%% 				  FieldsIn,FieldsOut)
-%%%     ).
-%%% 
-
-%%% /* is_control_command(?Chars, ?Mode)
-%%% 
-%%% is_control_command/1 is a factual predicate which controls how subsequent
-%%% lines of text are to be labeled.  Labeler has two modes for labeling
-%%% utterances: text and list.  In text mode, utterances can span several lines
-%%% and are essentially detected by final punctuation.  In list mode, each
-%%% line is an utterance; no final punctuation is necessary.
-%%% The default mode is text except for fields *FS and *DL which are always
-%%% processed in list mode.  A control command for changing modes must appear
-%%% alone on a separate line.  Its effect continues until another control command
-%%% is issued.  It is expected that control commands will be issued in pairs:
-%%% + (to start list mode), and - (to stop list mode, returning to text mode).  */
-%%% 
-%%% is_control_command("+",list).  % starts list mode
-%%% is_control_command("-",text).  % stops list mode (and hence starts text mode)
-
-
-%%% /* begins_loose_field(+Line, +FieldChar, -FieldID)
-%%% 
-%%% begins_loose_field/2 determines if Line begins a "loose" field.  It does if
-%%% it begins with FieldChar.  FieldID is rest of the Line lowercased.  */
-%%% 
-%%% begins_loose_field([FieldChar|FieldID0],FieldChar,FieldID) :-
-%%%     lower(FieldID0,FieldID).
-
-
-%%% /* form_utterances_from_fields(+Fields, +ModeIn, -ModeOut, -FieldUtterances)
-%%%    form_utterances_from_field(+Field, +ModeIn, -ModeOut, -FieldUtterances)
-%%% 
-%%% form_utterances_from_fields/4 forms FieldUtterances from Fields in one of two
-%%% ways: for fields which consist of lists of items, each line determines an
-%%% utterance; for text fields, the same approach as for citations is used to
-%%% extract the utterances.  ModeIn determines the mode (text or list) for
-%%% subsequent processing.  Special command fields change the mode.  */
-%%% 
-%%% form_utterances_from_fields([],ModeIn,ModeIn,[]) :-
-%%%     !.
-%%% form_utterances_from_fields([First|Rest],ModeIn,ModeOut,FieldUtterances) :-
-%%%     form_utterances_from_field(First,ModeIn,ModeInOut,FirstFieldUtterances),
-%%%     (FirstFieldUtterances=[] ->
-%%%         FieldUtterances=RestFieldUtterances
-%%%     ;   FieldUtterances=[FirstFieldUtterances|RestFieldUtterances]
-%%%     ),
-%%%     form_utterances_from_fields(Rest,ModeInOut,ModeOut,RestFieldUtterances).
-%%% 
-%%% form_utterances_from_field(field(FieldID,_Lines),_ModeIn,NewMode,[]) :-
-%%%     is_control_command(FieldID,NewMode),
-%%%     !.
-%%% form_utterances_from_field(field(FieldID,Lines),ModeIn,ModeIn,
-%%%                            [FieldID,Utterances]) :-
-%%%     is_list_field(FieldID),
-%%%     !,
-%%%     parse_lines_into_word_lists(Lines,Utterances).
-%%% form_utterances_from_field(field(FieldID,Lines),ModeIn,ModeIn,
-%%%                            [FieldID,Utterances]) :-
-%%%     (ModeIn==text ->
-%%%         parse_lines_into_utterances(Lines,Utterances)
-%%%     ;   parse_lines_into_word_lists(Lines,Utterances)
-%%%     ).
-%%% 
-%%% 
-%%% /* is_list_field(?FieldID)
-%%% 
-%%% is_list_field/1 is a factual predicate indicating which of the "loose"
-%%% fields consist of lists of items.  */
-%%% 
-%%% is_list_field("dl").
-%%% is_list_field("fs").
-
-
-%%% /* label_field_utterances(+FieldUtterances, +ID, -LFUtterances)
-%%%    label_field_utterances(+FieldUtterances, +ID, +FirstN, -LFUtterances)
-%%% 
-%%% label_field_utterances/3 labels FieldUtterances using ID to produce
-%%% LFUtterances (labeled, formatted utterances).  */
-%%% 
-%%% label_field_utterances(FieldUtterances,ID,LFUtterances) :-
-%%%     label_field_utterances(FieldUtterances,ID,1,LFUtterances).
-%%% 
-%%% label_field_utterances([],_ID,_FirstN,[]) :-
-%%%     !.
-%%% label_field_utterances([[FieldID,Utterances0]|Rest],ID,FirstN,LFUtterances) :-
-%%%     label_and_format_utterances(ID,FieldID,FirstN,NextN,Utterances0,
-%%%                                 FirstLFUtterances),
-%%%     append(FirstLFUtterances,RestLFUtterances,LFUtterances),
-%%%     label_field_utterances(Rest,ID,NextN,RestLFUtterances).
-
-
-%%% /* parse_lines_into_utterances(+Lines, -Utterances)
-%%% 
-%%% parse_lines_into_utterances/2
-%%% xxx
-%%% */
-%%% 
-%%% parse_lines_into_utterances([],[]) :-
-%%%     !.
-%%% parse_lines_into_utterances(Lines,Utterances) :-
-%%%     parse_lines_into_word_lists(Lines,WordLists),
-%%%     append(WordLists,Words),
-%%%     form_utterances_from_words(Words,Utterances),
-%%%     !.
-%%% 
-%%% /* parse_lines_into_word_lists(+Lines, -WordLists)
-%%% 
-%%% parse_lines_into_word_lists/2
-%%% xxx
-%%% */
-%%% 
-%%% parse_lines_into_word_lists([],[]) :-
-%%%     !.
-%%% parse_lines_into_word_lists([FirstLine|RestLines],
-%%%                             [FirstWordList|RestWordLists]) :-
-%%%     parse_line_into_word_list(FirstLine,FirstWordList),
-%%%     parse_lines_into_word_lists(RestLines,RestWordLists).
-%%% 
-%%% parse_line_into_word_list(Line,WordList) :-
-%%%     phrase(t_string(WordList),Line).
-
-
-%%% /*  TOKENIZE STRING GRAMMAR  */
-%%% 
-%%% t_string(TS) --> [0' ], !, t_string(TS)
-%%% 
-%%%              |   t_token(T), {T\==[]}, t_string(S), !, {TS=[T|S]}
-%%% 
-%%%              |   {TS=[]}.
-%%% 
-%%% t_token(T) --> [Char], {\+Char==0' }, !, t_token(S), {T=[Char|S]}
-%%% 
-%%%            |   {T=[]}.
-
-
-/* form_utterances_from_words(+Words, -Utterances)
-   form_utterances_from_words(+Words, +RevUtteranceIn, -UtterancesOut)
-   
-form_utterances_from_words/2
-form_utterances_from_words/3
-xxx
-*/
-
-form_utterances_from_words(Words,Utterances) :-
-    form_utterances_from_words(Words,[],Utterances).
-
-form_utterances_from_words([],[],[]) :-
-    !.
-form_utterances_from_words([],RevUtteranceIn,[UtteranceIn]) :-
-    !,
-    rev(RevUtteranceIn,UtteranceIn).
-form_utterances_from_words([Word|Rest],RevUtteranceIn,Utterances) :-
-    (ends_utterance(Word,Rest) ->
-        !,
-        rev([Word|RevUtteranceIn],UtteranceIn),
-        Utterances=[UtteranceIn|RestUtterances],
-        form_utterances_from_words(Rest,[],RestUtterances)
-    |   form_utterances_from_words(Rest,[Word|RevUtteranceIn],
-                                   Utterances)
-    ).
-
-/* ends_utterance(+Word, +RestWords)
-
-ends_utterance/2
-*/
-
-ends_utterance(Word,RestWords) :- % The word ends with final punctuation
-    rev(Word,[Last|_]),
-    is_final_punctuation(Last),
-    \+is_end_utterance_exception(Last,Word,RestWords),
-    !.
-ends_utterance(Word,_RestWords) :-  % The word contains ".["
-    split_string(Word,".[",_,_),
-    !.
-
-/* is_final_punctuation(+Char)
-
-is_final_punctuation/1 succeeds if Char is final punctuation.  */
-
-is_final_punctuation(0'.).
-is_final_punctuation(0'?).
-is_final_punctuation(0'!).
-is_final_punctuation(0';).
-
-
-/* is_end_utterance_exception(+FinalPunctuation, +Word, +RestWords)
-
-is_end_utterance_exception/3
-The exceptions to breaking at final punctuation are (in order of the clauses
-below):
-  1. The next word begins with a lowercase character;
-%?  2. The word is a single character abbreviation (e.g., E.);
-  3. The word is Dr.; and
-  4. The word and next word are explicit exceptions, currently either
-     St. Louis, St. Paul, i.e., or e.g.
-xxx
-*/
-
-is_end_utterance_exception(0'.,_Word,[[NextChar|_]|_]) :-
-    is_lower(NextChar).
-%?is_end_utterance_exception(0'.,[Char,_],_) :-
-%?    is_alpha(Char).
-is_end_utterance_exception(0'.,"Dr.",[_|_]).
-is_end_utterance_exception(0'.,Word,[NextWord|_]) :-
-    lower(Word,LCWord),
-    exception_list(LCWord,SecondWord),
-    lower(NextWord,LCNextWord),
-    append(SecondWord,_,LCNextWord).
-
-/* exception_list(?FirstWord, ?SecondWord)
-
-exception_list/2
-xxx
-*/
-
-exception_list("st.","louis").
-exception_list("st.","paul").
-exception_list("i.","e.").
-exception_list("e.","g.").
-
-
-%%% extract_coord_sents_from_project(ProjectLines,Sentences,CoordinatedSentences) :-
-%%%     extract_project_fields(ProjectLines,ProjectFields),
-%%%     (select_field("UI",ProjectFields,UIField) ->
-%%%         extract_ui(UIField,UI)
-%%%     ;   UI="00000000"
-%%%     ),
-%%%     extract_coord_sents_from_fields(UI, ProjectFields, Sentences,
-%%% 				    CoordinatedSentences, _AAs),
-%%%     !.
-%%% 
-%%% extract_project_fields(ProjectLines,[["UI",[ProjectID]],
-%%% 				     ["TI",TitleLines],
-%%% 				     ["AB",DescriptionLines]]) :-
-%%%     extract_project_id(ProjectLines,ProjectLines1,ProjectID),
-%%%     extract_project_title(ProjectLines1,ProjectLines2,TitleLines),
-%%%     extract_project_description(ProjectLines2,DescriptionLines),
-%%%     !.
-%%% 
-%%% extract_project_id([First|Rest],Rest,ProjectID) :-
-%%%     split_string(First,"--PROJECT NUMBER","",String1),
-%%%     trim_left_periods(String1,String2),
-%%%     (split_string(String2,"SUB:",String3,String4) ->
-%%% 	trim_whitespace(String3,String5),
-%%% 	trim_whitespace(String4,String6),
-%%% 	append([String5," ",String6],String7)
-%%%     ;   trim_whitespace(String2,String7)
-%%%     ),
-%%%     replace_all_substrings(String7," ",":",ProjectID).
-%%% 
-%%% 
-%%% trim_left_periods([0'.|Rest],Result) :-
-%%%     !,
-%%%     trim_left_periods(Rest,Result).
-%%% trim_left_periods(String,String).
-%%% 
-%%% extract_project_title([_TitleLine,SubTitleLine|Rest],Rest,[SubTitle]) :-
-%%%     split_string(SubTitleLine,"SUB TITLE",_,SubTitle0),
-%%%     !,
-%%%     trim_whitespace(SubTitle0,SubTitle).
-%%% extract_project_title([TitleLine|Rest],Rest,[Title]) :-
-%%%     split_string(TitleLine,"TITLE",_,Title0),
-%%%     trim_whitespace(Title0,Title).
-%%% 
-%%% extract_project_description(ProjectLines, DescriptionLines) :-
-%%% 	trim_all_blanks(ProjectLines, DescriptionLines).
-%%% 
-%%% trim_all_blanks([], []).
-%%% trim_all_blanks([First|Rest], [TrimmedFirst|TrimmedRest]) :-
-%%% 	trim_whitespace(First, TrimmedFirst),
-%%% 	trim_all_blanks(Rest, TrimmedRest).
-
-
-%%% warn_remove_non_ascii_from_input_lines([], []).
-%%% warn_remove_non_ascii_from_input_lines([H|T], [AsciiH|AsciiT]) :-
-%%% 	warn_remove_non_ascii_from_string(H, H, 1, AsciiH),
-%%% 	warn_remove_non_ascii_from_input_lines(T, AsciiT).
-
-%%% warn_remove_non_ascii_from_string([], _String, _CharPos, []).
-%%% warn_remove_non_ascii_from_string([H|T], String, CharPos, AsciiString) :-
-%%% 	( is_ascii(H) ->
-%%% 	  AsciiString = [H|RestAsciiString]
-%%% 	; RestAsciiString = AsciiString,
-%%% 	  warn_non_ascii_char(H, CharPos, String)
-%%% 	),
-%%% 	NextCharPos is CharPos + 1,
-%%% 	warn_remove_non_ascii_from_string(T, String, NextCharPos, RestAsciiString).
-%%% 
-%%% warn_non_ascii_char(H, CharPos, String) :-
-%%% 	format(user_output,
-%%% 	       '~n### WARNING: Non-ASCII char ~c was removed from position ~d in input string~n###         "~s"~n',
-%%% 	       [H, CharPos, String]).
-%%% 

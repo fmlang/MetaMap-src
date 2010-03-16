@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:	    nls_io.pl
 % Module:   NLS I/O
 % Author:   Lan
@@ -5,13 +35,17 @@
 
 
 :- module(nls_io,[
-    fget_non_ws_only_line/2,
-    fget_lines_until_skr_break/2
+	fget_line/2,
+  	fget_non_ws_only_line/2,
+	fget_lines_until_skr_break/2,
+	% needed by tools/lib/reader.pl
+  	get_line/1,
+    	get_line/2
     ]).
 
 
 :- use_module(skr_lib(ctypes),[
-    is_space/1
+	is_space/1
     ]).
 
 /* fget_non_ws_only_line(+Stream, -Line)
@@ -69,8 +103,7 @@ fget_lines_until_skr_break(Stream, []) :-
 fget_lines_until_skr_break(Stream, Lines) :-
 	fget_line(Stream,Line),
 	( is_ws_only(Line) ->
-	  % add a blank space so that citation-ending AAs will be detected
-	  Lines = [" "]
+	  Lines = []
 	; Lines = [Line|Rest],
           fget_lines_until_skr_break(Stream, Rest)
 	).
@@ -78,8 +111,9 @@ fget_lines_until_skr_break(Stream, Lines) :-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % The following predicates are slightly-modified versions of code
 % taken from the QP3.5 library file lineio.pl;
-% The only change is to get_line_1/2, in which the line
-%	(   Char =:= 10 ->
+% The only change (other than renaming "Chars" variables to "Codes"
+% is to fget_line_1/2 and get_line_1/2, in which the line
+%	( terminator_code(Code) ->
 % replaces the line
 %	(   Char < " ", Char =\= 9, Char =\= 5 ->
 % However, since get_line_1/2 is the lowest-level predicate,
@@ -98,24 +132,24 @@ fget_line(Stream, Codes) :-
 	Terminator >= 0,		% not end-of-file
 	Codes = Line.
 
-%   fget_line(+Stream, ?Codes, ?Terminator)
-%   reads a line from the given input Stream, and returns the characters in
-%   the list Codes, and the line terminating character in Terminator.  If the
-%   terminator was end of file, it just returns it like always.  When you use
-%   this routine, the last line will often be ignored if not properly ended.
+% fget_line(+Stream, ?Codes, ?Terminator)
+% reads a line from the given input Stream, and returns the characters in
+% the list Codes, and the line terminating character in Terminator.  If the
+% terminator was end of file, it just returns it like always.  When you use
+% this routine, the last line will often be ignored if not properly ended.
 
 fget_line(Stream, Codes, Term) :-
-	get_line_1(Stream, Line, Terminator),
+	fget_line_1(Stream, Line, Terminator),
 	Codes = Line,
 	Term = Terminator.
 
-get_line_1(Stream, Line, Terminator) :-
+fget_line_1(Stream, Line, Terminator) :-
 	get_code(Stream, Code),
 	( terminator_code(Code) ->
 	  Line = [],
-	  Terminator = 10
+	  Terminator = Code
 	; Line = [Code|Codes],
-	  get_line_1(Stream, Codes, Terminator)
+	  fget_line_1(Stream, Codes, Terminator)
 	).
 
 % NL
@@ -124,4 +158,34 @@ terminator_code(10).
 terminator_code(13).
 % eof in case user does not have a <CR> at the end of the file!!
 terminator_code(-1).
+
+%   get_line(?Codes)
+%   reads a line from the current input stream, and returns the characters in
+%   the list Chars.  It does NOT return the line terminating character, so it
+%   is useful for portable programming.  If the terminator was the end of the
+%   file, it simply fails and later calls will abort.
+
+get_line(Codes) :-
+        get_line_1(Line, Terminator),
+        Terminator >= 0,                % not end-of-file
+        Codes = Line.
+
+% get_line(?Codes, ?Terminator)
+% reads a line from the current input stream, and returns the characters in
+% the list Codes, and the line terminating character in Terminator.  If the
+% terminator was end of file, it just returns it like always.  When you use
+% this routine, the last line will often be ignored if not properly ended.
+
+get_line(Codes, Terminator) :-
+        get_line_1(Line, Terminator),
+        Codes = Line.
+
+get_line_1(Line, Terminator) :-         % 9 is the ASCII TAB character.
+        get_code(Code),                     % 5 is the EBCDIC TAB character.
+        (   Code < " ", Code =\= 9, Code =\= 5 ->
+            Line = [], Terminator = Code
+        ;   Line = [Code|Codes],
+            get_line_1(Codes, Terminator)
+        ).
+
 

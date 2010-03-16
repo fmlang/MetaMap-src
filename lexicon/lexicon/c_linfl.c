@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /*==========================================================
 
 %SOURCE FILE
@@ -19,7 +49,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <debug.h>
-#include <lm.h>
+#include "lm.h"
 #include "lexicon.h"
 #include "sicstus/sicstus.h"
 #include "qp_lexicon_glue.h"
@@ -34,19 +64,15 @@
 /*end of constants ---------*/
 
 /*----------------------------
-%MACROS
-----------------------------*/
-/*end of macros ------------*/
-
-/*----------------------------
-%STATIC FUNCTIONS
-----------------------------*/
-/*end of static functions --*/
-
-/*----------------------------
 %EXTERNAL FUNCTIONS
 ----------------------------*/
-extern LmStruct    *lm_variants( char *term, lm_t cats, lm_t rules, lm_t infls, int *numV);
+extern LmStruct *lm_variants(
+			     char *term,
+			     lm_t cats,
+			     lm_t rules,
+			     lm_t infls,
+			     int *numV
+			     );
 extern int DPR(int flag, char *msg);
 
 
@@ -110,17 +136,6 @@ static FILE *c_get_varlist_fp = NULL;
 
 /*end of global variables --*/
 
-
-/*----------------------------
-%PRIVATE STRUCTURES
-----------------------------*/
-/*end of private structures */
-
-/*----------------------------
-%TYPEDEFS
-----------------------------*/
-/*end of typedefs ----------*/
-
 /*----------------------------
 %DEBUG FLAGS
 ----------------------------*/
@@ -166,13 +181,12 @@ long int c_get_varlist(
 		       long int     ofs,          /* Input */
 		       SP_term_ref  varList       /* O list of returned variants */
 		       )
-
-
 {
    int return_code = D_S_SUCCESS;
 
    char 	line[256];
    char 	*lp 	 = NULL;
+   char 	*np;
    int 		i 	 = 0;
    char		*inflStr = NULL;
    SP_term_ref  pTerm 	 = SP_new_term_ref();
@@ -247,7 +261,7 @@ long int c_get_varlist(
       {
 	 lp += 6;
 
-	 if ((base = malloc((unsigned) (strlen(lp)+1))) == (char *)NULL) {
+	 if ((base = malloc((size_t)(strlen(lp)+1))) == (char *)NULL) {
 	   fprintf(stderr, "FAILURE #3: malloc\n");
 	   return_code = D_E_ERROR;
 	   goto bottom;
@@ -263,7 +277,7 @@ long int c_get_varlist(
 	 {
 	    n_alloc_svs = DEFAULT_ALLOC_SIZE;
 
-	    if ((svs=(char **)malloc((unsigned)(n_alloc_svs*sizeof(char *))))==
+	    if ((svs=(char **)malloc((size_t)(n_alloc_svs*sizeof(char *))))==
 		(char **)NULL) {
 	      fprintf(stderr, "FAILURE #4: malloc\n");
 	      return_code = D_E_ERROR;
@@ -283,7 +297,7 @@ long int c_get_varlist(
 	    }
 
 	 }
-	 if ((*(svs+n_svs) = (char *)malloc((unsigned) (strlen(lp)+1))) == (char *)NULL) {
+	 if ((*(svs+n_svs) = (char *)malloc((size_t)(strlen(lp)+1))) == (char *)NULL) {
 	   fprintf(stderr, "FAILURE #6: malloc\n");
 	   return_code = D_E_ERROR;
 	   goto bottom; 
@@ -374,7 +388,7 @@ long int c_get_varlist(
 	    /* ---------------------------------   
 	       generate the "s" variant for base
 	       --------------------------------- */
-	       if ((mreg = (char *) malloc((unsigned)(strlen(base)+2))) 
+	       if ((mreg = (char *) malloc((size_t)(strlen(base)+2))) 
 		   == (char *)NULL) {
 		 fprintf(stderr, "FAILURE #8: malloc\n");
 		 return_code = D_E_ERROR;
@@ -390,7 +404,7 @@ long int c_get_varlist(
 	    /* ----------------------------------  
 	       Generate the "'s" variant for base
 	       ---------------------------------- */
-	       if ((mreg = (char *) malloc((unsigned)(strlen(base)+3))) 
+	       if ((mreg = (char *) malloc((size_t)(strlen(base)+3))) 
 		   == (char *)NULL) {
 		 fprintf(stderr, "FAILURE #9: malloc\n");
 		 return_code = D_E_ERROR;
@@ -410,7 +424,7 @@ long int c_get_varlist(
 	       /* ---------------------------------------------  
 		  Generate the "s" variant for spelling variant
 	          --------------------------------------------- */
-		 if ((mreg = (char *) malloc((unsigned)(strlen(*(svs+i))+2))) == (char *)NULL) {
+		 if ((mreg = (char *) malloc((size_t)(strlen(*(svs+i))+2))) == (char *)NULL) {
 		   fprintf(stderr, "FAILURE #10: malloc\n");
 		   return_code = D_E_ERROR;
 		   goto bottom; 
@@ -426,7 +440,7 @@ long int c_get_varlist(
 	       /* ---------------------------------------------  
 		  Generate the "'s" variant for spelling variant
 	          --------------------------------------------- */
-		  if ((mreg = (char *) malloc((unsigned)(strlen(*(svs+i))+3))) == (char *)NULL) {
+		  if ((mreg = (char *) malloc((size_t)(strlen(*(svs+i))+3))) == (char *)NULL) {
 		    fprintf(stderr, "FAILURE #11: malloc\n");
 		    return_code = D_E_ERROR;
 		    goto bottom;
@@ -451,13 +465,19 @@ long int c_get_varlist(
 	    
 	    lp += 12;
 	    
+	    if ((np = strchr(lp, PIPE)) == (char *)NULL)
+	      break;
+	    lp = np + 1;
+	    /*fprintf(stderr, "found a group irreg np = [%s]\n", np);*/
+	    /*fprintf(stderr, "found a group irreg lp = [%s]\n", lp);*/
+
 	    if ((tp = strchr(lp, PIPE)) == (char *)NULL)
 	      break;
-
+	    /*fprintf(stderr, "found a group irreg tp = [%s]\n", tp); */
 
 	    if ((tp-lp) > 0)
 	    {
-	      if ((irreg = malloc((size_t) ((tp-lp)+1))) == (char *)NULL) {
+	      if ((irreg = malloc((size_t)((tp-lp)+1))) == (char *)NULL) {
 	        fprintf(stderr, "FAILURE #12: malloc\n");
 		return_code = D_E_ERROR;
 		goto bottom; 
@@ -488,6 +508,11 @@ long int c_get_varlist(
 	    /* ---------------  
 	       Get comparative
 	       --------------- */
+	       /* get Base - we are going pass over this*/
+	       if ((np = strchr(lp, PIPE)) == (char *)NULL)
+		 break;
+	       lp = np + 1;
+
 	       if ((tp = strchr(lp, PIPE)) == (char *)NULL)
 	         break;
 
@@ -521,7 +546,7 @@ long int c_get_varlist(
 		   goto bottom; 
 		 }
 		 
-		 strncpy(irreg, lp, (size_t)(tp-lp));
+		  strncpy(irreg, lp, (size_t)(tp-lp));
 		  *(irreg+(tp-lp)) = EOS;
 		  inflStr = get_infl(LM_INFL_SUPERLATIVE);
 		  pTerm = make_term(irreg, catStr, inflStr);
@@ -535,8 +560,16 @@ long int c_get_varlist(
 	    /* ----------
 	       Get plural
 	       ---------- */
+	       /* get Base - we are going pass over this*/
+	       if ((np = strchr(lp, PIPE)) == (char *)NULL) 
+	         break;
+					
+	       /* get plural form*/
+	       lp = np + 1;
+
 	       if ((tp = strchr(lp, PIPE)) == (char *)NULL)
 	       break;
+
 	       if ((tp-lp) > 0)
 	       {
 		 if ((irreg = malloc((size_t)((tp-lp)+1))) == (char *)NULL) {
@@ -545,7 +578,7 @@ long int c_get_varlist(
 		   goto bottom; 
 		 }
 
-		 strncpy(irreg, lp, (size_t)(tp-lp));
+		  strncpy(irreg, lp, (size_t)(tp-lp));
 		  *(irreg+(tp-lp)) = EOS;
 		  inflStr = get_infl(LM_INFL_PLURAL);
 		  pTerm = make_term(irreg, catStr, inflStr);
@@ -561,10 +594,10 @@ long int c_get_varlist(
 	       variants=irreg|show|shows|showed|shown|showing|
 	       Skip over infinitive
 	       ----------- */
+
 	       if ((tp = strchr(lp, PIPE)) == (char *)NULL)
 	       break;
 	       lp = tp+1;
-
 
 	    /* -----------
 	       Get present 
@@ -573,13 +606,13 @@ long int c_get_varlist(
 	       break;
 	       if ((tp-lp) > 0)
 	       {
-		 if ((irreg = malloc((size_t) ((tp-lp)+1))) == (char *)NULL) {
+		 if ((irreg = malloc((size_t)((tp-lp)+1))) == (char *)NULL) {
 	           fprintf(stderr, "FAILURE #16: malloc\n");
 		   return_code = D_E_ERROR;
 		   goto bottom; 
 		 }
 
-		 strncpy(irreg, lp, (size_t)(tp-lp));
+		  strncpy(irreg, lp, (size_t)(tp-lp));
 		  *(irreg+(tp-lp)) = EOS;
 		  inflStr = get_infl(LM_INFL_PRESENT);
 		  pTerm = make_term(irreg, catStr, inflStr);
@@ -601,7 +634,7 @@ long int c_get_varlist(
 		   goto bottom;
 		 }
 
-		 strncpy(irreg, lp, (size_t)(tp-lp));
+		  strncpy(irreg, lp, (size_t)(tp-lp));
 		  *(irreg+(tp-lp)) = EOS;
 		  inflStr = get_infl(LM_INFL_PAST);
 		  pTerm = make_term(irreg, catStr, inflStr);
@@ -623,12 +656,12 @@ long int c_get_varlist(
 		   goto bottom; 
 		 }
 		 
-		 strncpy(irreg, lp, (size_t)(tp-lp));
-		 *(irreg+(tp-lp)) = EOS;
-		 inflStr = get_infl(LM_INFL_PASTPART);        /* GD 08/14/09 */
-                 pTerm = make_term(irreg, catStr, inflStr ); 
-		 SP_cons_list(varList, pTerm, varList);
-		 (void) free(irreg);
+		  strncpy(irreg, lp, (size_t)(tp-lp));
+		  *(irreg+(tp-lp)) = EOS;
+		  inflStr = get_infl(LM_INFL_PASTPART);        /* GD 08/14/09 */
+                  pTerm = make_term(irreg, catStr, inflStr ); 
+		  SP_cons_list(varList, pTerm, varList);
+		  (void) free(irreg);
 	       }
 	       lp = tp+1;
 	       
@@ -645,7 +678,7 @@ long int c_get_varlist(
 		   goto bottom;
 		 }
 
-		 strncpy(irreg, lp, (size_t)(tp-lp));
+		  strncpy(irreg, lp, (size_t)(tp-lp));
 		  *(irreg+(tp-lp)) = EOS;
 		  inflStr = get_infl(LM_INFL_ING);
 		  pTerm = make_term(irreg, catStr, inflStr);
@@ -662,7 +695,7 @@ long int c_get_varlist(
 	 {
 	    char *infl;
 	    
-	    if ((infl = malloc((unsigned)(strlen(lp)+1))) == (char *)NULL) {
+	    if ((infl = malloc((size_t)(strlen(lp)+1))) == (char *)NULL) {
               fprintf(stderr, "FAILURE #20: malloc\n");
 	      return_code = D_E_ERROR;
 	      goto bottom;
@@ -682,7 +715,7 @@ long int c_get_varlist(
 	 lp += 4;
 	 if (lexCat > 0)
 	 {
-	   if ((key=malloc((unsigned)(strlen(lp) + 1))) == (char *)NULL) {
+	   if ((key=malloc((size_t)(strlen(lp) + 1))) == (char *)NULL) {
 	     fprintf(stderr, "FAILURE #21: malloc\n");
 	     return_code = D_E_ERROR;
 	     goto bottom; 
@@ -700,7 +733,7 @@ long int c_get_varlist(
 	 lp += 8;
 	 if (lexCat > 0)
 	 {
-	   if ((variant=malloc((unsigned)(strlen(lp) + 1))) == (char *)NULL) {
+	   if ((variant=malloc((size_t)(strlen(lp) + 1))) == (char *)NULL) {
 	     fprintf(stderr, "FAILURE #22: malloc\n");
 	     return_code = D_E_ERROR;
 	     goto bottom; 
@@ -1006,8 +1039,7 @@ static char * get_infl(
   DFNAME("get_infl");
   DENTER(DT2796);
 
-
-     switch (infl)
+   switch (infl)
    {
     case LM_INFL_COMPARATIVE:
          return_code = s[0];
@@ -1017,12 +1049,16 @@ static char * get_infl(
          return_code = s[1];
 	 break;
 
+    case LM_INFL_PLURAL:
+         return_code = s[2];
+	 break;
+
     case LM_INFL_PRESENT:
          return_code = s[3];
 	 break;
 
-    case LM_INFL_PLURAL:
-         return_code = s[2];
+    case LM_INFL_ING:
+	 return_code = s[4];  /* changed from 5 to 4 GD 08/14/09 */
 	 break;
 
     case LM_INFL_PAST:
@@ -1031,10 +1067,6 @@ static char * get_infl(
 
     case LM_INFL_PASTPART:
 	 return_code = s[6];   /*  changed from 3 to this new code  GD 08/14/09 */
-	 break;
-
-    case LM_INFL_ING:
-	 return_code = s[4];  /* changed from 5 to 4 GD 08/14/09 */
 	 break;
 
    }
@@ -1081,8 +1113,8 @@ static SP_term_ref make_term(
   SP_term_ref 	     pCat  = SP_new_term_ref();
   SP_term_ref 	     pInfl = SP_new_term_ref();
   
-  DFNAME("make_term");
-  DENTER(DT2798);
+   DFNAME("make_term");
+   DENTER(DT2798);
 
    pTerm = SP_new_term_ref();
    pAtom = SP_atom_from_string(catStr);

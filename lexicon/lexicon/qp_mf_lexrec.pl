@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /*==========================================================
 
 %SOURCE FILE
@@ -173,9 +203,11 @@ mf_adj_variants([V|R]) -->
 
 mf_adj_variant(reg) --> "reg".
 mf_adj_variant(regd) --> "regd".
-mf_adj_variant(irreg:[Comp,Super]) -->
-    { atom_codes(Comp, CompL), atom_codes(Super, SuperL) },
-    "irreg|", CompL, "|", SuperL, "|".
+mf_adj_variant(irreg:[Pos, Comp, Super]) -->
+	{ atom_chars(Pos, PosL),
+	  atom_chars(Comp, CompL),
+	  atom_chars(Super, SuperL) },
+	"irreg|", PosL, "|", CompL, "|", SuperL, "|".
 mf_adj_variant(inv:[periph]) --> "inv;periph".
 mf_adj_variant(inv) --> "inv".
 
@@ -240,9 +272,11 @@ mf_adv_variants([V|R]) -->
 
 mf_adv_variant(reg) --> "reg".
 mf_adv_variant(regd) --> "regd".
-mf_adv_variant(irreg:[Comp,Super]) -->
-    { atom_codes(Comp,CompL), atom_codes(Super,SuperL) },
-    "irreg|", CompL, "|", SuperL, "|".
+mf_adv_variant(irreg:[Pos,Comp,Super]) -->
+    { atom_chars(Pos, PosL),
+      atom_chars(Comp,CompL),
+      atom_chars(Super,SuperL) },
+    "irreg|", PosL, "|", CompL, "|", SuperL, "|".
 mf_adv_variant(inv:[periph]) --> "inv;periph".
 mf_adv_variant(inv) --> "inv".
 
@@ -303,9 +337,13 @@ mf_aux_variant_val(reg) -->
 
 
 mf_aux_variant_val(regd) --> "regd".
-mf_aux_variant_val(irreg:[V1,V2,V3,V4]) -->
-    { atom_codes(V1,L1), atom_codes(V2,L2), atom_codes(V3,L3), atom_codes(V4,L4) },
-    "irreg|", L1, "|", L2, "|", L3, "|", L4, "|".
+mf_aux_variant_val(irreg:[V1,V2,V3,V4,V5]) -->
+    { atom_chars(V1,L1),
+      atom_chars(V2,L2),
+      atom_chars(V3,L3),
+      atom_chars(V4,L4),
+      atom_chars(V5,L5) },
+    "irreg|", L1, "|", L2, "|", L3, "|", L4, "|", L5, "|".
 
 %%% complementizers
 
@@ -396,14 +434,18 @@ mf_noun_variants([V|R]) -->
 
 mf_noun_variant(reg) --> "reg".
 mf_noun_variant(glreg) --> "glreg".
-mf_noun_variant(irreg:[V]) -->
-    { atom_codes(V, L) }, "irreg|", L, "|".
+mf_noun_variant(irreg:[Sing,Plu]) -->
+    { atom_chars(Sing, SingL),
+      atom_chars(Plu, PluL) },
+      "irreg|", SingL, "|", PluL, "|".
 mf_noun_variant(inv) --> "inv".
 mf_noun_variant(uncount) --> "uncount".
 mf_noun_variant(group:[reg]) --> "group(reg)".
 mf_noun_variant(group:[glreg]) --> "group(glreg)".
-mf_noun_variant(group:[irreg:[V]]) -->
-    { atom_codes(V, L) }, "group(irreg|", L, "|)".
+mf_noun_variant(group:[irreg:[Sing,Plu]]) -->
+    { atom_chars(Sing, SingL),
+      atom_chars(Plu,PluL) },
+      "group(irreg|", SingL, "|", PluL, "|)".
 mf_noun_variant(group:[sing]) --> "group(sing)".
 mf_noun_variant(group:[metareg]) --> "group(metareg)".
 mf_noun_variant(groupuncount) --> "groupuncount".
@@ -524,12 +566,13 @@ mf_verb_variants([V|R]) -->
 
 mf_verb_variant(reg) --> "reg".
 mf_verb_variant(regd) --> "regd".
-mf_verb_variant(irreg:[V1, V2, V3, V4]) -->
-    { (V1 = [], L1 = ""; atom_codes(V1, L1)), 
-      (V2 = [], L2 = ""; atom_codes(V2, L2)), 
-      (V3 = [], L3 = ""; atom_codes(V3, L3)), 
-      (V4 = [], L4 = ""; atom_codes(V4, L4)) },
-    "irreg|", L1, "|", L2, "|", L3, "|", L4, "|".
+mf_verb_variant(irreg:[V1, V2, V3, V4, V5]) -->
+    { (V1 = [], L1 = ""; atom_chars(V1, L1)), 
+      (V2 = [], L2 = ""; atom_chars(V2, L2)), 
+      (V3 = [], L3 = ""; atom_chars(V3, L3)), 
+      (V4 = [], L4 = ""; atom_chars(V4, L4)),
+      (V5 = [], L5 = ""; atom_chars(V5, L5)) },
+    "irreg|", L1, "|", L2, "|", L3, "|", L4, "|", L5, "|".
 
 %%% at least one complement
 mf_verb_complements([C]) --> mf_verb_complement_value(C).

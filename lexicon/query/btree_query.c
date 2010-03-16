@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /*==========================================================
 
 %SOURCE FILE
@@ -112,9 +142,6 @@ LexIndexKey * lex_index_keys(char *record, int  *num);
 
 char * get_record_from_offset( long record_offset, char *lexicon_file_name) ;
 
-WordList *query_lex_records( char *term, int caseSensitivity, int prefix_type,
-			     char *lexicon_index_name, char *lexicon_file_name );
-     
 FILE * init_lex_record_file( char *record_file, int write_mode );
 
 int close_lexicon_record_file(void);
@@ -134,9 +161,6 @@ int output_entries( char *query, int  which_table, WordList *wl, FILE *output_fi
 int lf_usage( int );
 
 int grab_lex_fields_from_btree_row( char *row, lex_t *flag, long  *ofs, char  **inflected_term );
-
-char **query_base_lex_record( char *term, int caseSensitivity, int prefix_type,
-			      char *lexicon_index_name, char *lexicon_file_name );
 
 int lex_insert( char *btree_index_file, char *lexicon_file_name, char *orig_record );
 
@@ -234,8 +258,6 @@ static DBC *static_eui_dbcp = NULL;
 #define DF1313  1313          /* DF for close_lex_btree() */
 #define DT1616  1616          /* DT for get_record_from_offset() */
 #define DF1617  1617          /* DF for get_record_from_offset() */
-#define DT1618  1618          /* DT for query_lex_record() */
-#define DF1619  1619          /* DF for query_lex_record() */
 #define DT1620  1620          /* DT for init_lex_record_file() */
 #define DF1621  1621          /* DF for init_lex_record_file() */
 #define DT1624  1624          /* DT for close_lexicon_record_file() */
@@ -259,8 +281,6 @@ static DBC *static_eui_dbcp = NULL;
 #define DF1639  1639          /* DF for lf_usage() */
 #define DT1640  1640          /* DT for grab_lex_fields_from_btree_row() */
 #define DF1641  1641          /* DF for grab_lex_fields_from_btree_row() */
-#define DT2188  2188          /* DT for query_base_lex_record() */
-#define DF2189  2189          /* DF for query_base_lex_record() */
 #define DT2628  2628          /* DT for lex_insert() */
 #define DF2629  2629          /* DF for lex_insert() */
 #define DT2630  2630          /* DT for lex_update() */
@@ -736,14 +756,6 @@ int init_lex_btree(
       goto bottom; 
     }
     
-#ifdef BDB_3_0_55
-    errno = inflected_form_db->open(inflected_form_db,
-				    infl_index, 
-				    NULL, 
-				    DB_BTREE, 
-				    (mode), 
-				    0644) ; 
-#else    
     errno = inflected_form_db->open(inflected_form_db,
 				    NULL,
 				    infl_index, 
@@ -751,8 +763,6 @@ int init_lex_btree(
 				    DB_BTREE, 
 				    (u_int32_t)(mode), 
 				    0644) ;
-#endif 
-    
     if ( errno != 0 ) { 
       
       inflected_form_db->err(inflected_form_db, errno, "inflected form db-open-> %s", infl_index);
@@ -769,14 +779,6 @@ int init_lex_btree(
     
     eui_db->set_flags(eui_db, DB_DUP ); 
     
-#ifdef BDB_3_0_55
-    errno = eui_db->open(eui_db,
-			 eui_index, 
-			 NULL, 
-			 DB_BTREE, 
-			 (mode), 
-			 0644) ;
-#else
     errno = eui_db->open(eui_db,
 			 NULL,
 			 eui_index, 
@@ -784,8 +786,7 @@ int init_lex_btree(
 			 DB_BTREE, 
 			 (u_int32_t)(mode), 
 			 0644) ;
-#endif
-    
+
     if ( errno != 0 ) { 
       
       eui_db->err(eui_db, errno, "eui_db->open-> %s", eui_index);
@@ -971,101 +972,6 @@ char * get_record_from_offset(
   return ( aRecord );
 
 } /*** End get_record_from_offset */
-/**/
-/*==========================================================
-%FUNCTION NAME
-%COMMAND NAME
-	query_lex_record
-%PURPOSE
-	?
-%USAGE
-%SYNTAX
-	?
-%EXAMPLE CALL
-	?ret_val = query_lex_record(arg);
-%RETURNS
-	?
-%SCOPE
-	?public | private | static
-%NEEDED INCLUDES
-	#include "?"
-%METHOD
-	?
-%FILES
-	?
-%TABLES
-	?
-%NOTES
-	?
-%BUGS
-	?
-%FLAGS  
-	TRACE DT1618
-	FULL  DF1619
-%HEADER END
-==========================================================*/
-WordList *query_lex_records( 
-			    char *term ,               /* Input */
-			    int caseSensitivity,       /* Input */  
-			    int prefix_type,           /* Input */
-			    char *lexicon_index_name,  /* Input */
-			    char *lexicon_file_name    /* Input */
-			   )
-     
-     
-{
- 
-  WordList *wl  =  NULL;
-  WordList *wl2 =  NULL;
-  int i = 0;
-  char string_offset[32];
-  char *aPtr = NULL;
-  long record_offset = 0;
-
-  DFNAME("query_lex_record");
-  DENTER(DT1618);
-
-  
-  wl = query_lex_info ( term, 
-			caseSensitivity, 
-			prefix_type, 
-			lexicon_index_name);
-			
-
-  if ( wl != NULL )
-    {
-     
-      wl2 = (WordList *) malloc ( sizeof ( WordList ) );
-      wl2->words = (char **) malloc ( sizeof ( char *) * 100 );
-      wl2->n = 0;
-      for ( i = 0 ; i < wl->n; i++ )
-	{
-	  /* -------------------------------
-	     Grab the record for this offset
-	     ------------------------------- */
-	  get_value_from_field(OFFSET_FIELD, string_offset, WLWN( wl,i ));
-
-	  record_offset= atoi( string_offset );
-	  aPtr = (char *) get_record_from_offset( record_offset, lexicon_file_name );
-	  if ( aPtr != NULL )
-	    {
-	      wl2->words[wl2->n] =  strdup ( aPtr );
-	      wl2->n++;
-	    }
-	  
-	  free ( wl->words[i] );
-	  wl->words[i] = NULL; 
-	  
-	}
-      free ( wl );
-      wl = NULL;
-      
-    }
-
-  DEXIT(DT1618);
-  return ( wl2 );
-
-} /*** End query_lex_record */
 /**/
 /*==========================================================
 %FUNCTION NAME
@@ -1464,7 +1370,8 @@ int process_term(
 
   output_entries(term, FROM_INFLECTION_TABLE, wl ,output_file_ptr);
 
-  free_wl( &wl );
+  /*  free_wl( &wl ); */
+  free(wl);
   wl = NULL;
 
   DEXIT(DT1630);
@@ -2113,11 +2020,7 @@ static DB_ENV *db_init(
   } 
    
   /* if ((errno = dbenv->open(dbenv, home, NULL, DB_USE_ENVIRON, 0)) == 0) { */
-#ifdef BDB_3_0_55 
-  if ((errno = dbenv->open(dbenv, home, NULL, 0, 0)) == 0) {
-#else
   if ((errno = dbenv->open(dbenv, home, 0, 0)) == 0) { 
-#endif
     ;;
   } else {
     (void)dbenv->close(dbenv,0);
@@ -2274,119 +2177,6 @@ int grab_lex_fields_from_btree_row(
   return ( return_code );
 
 } /*** End grab_lex_fields_from_btree_row */
-/**/
-/*==========================================================
-%FUNCTION NAME
-%COMMAND NAME
-	query_base_lex_record
-%PURPOSE
-	?
-%USAGE
-%SYNTAX
-	?
-%EXAMPLE CALL
-	?ret_val = query_base_lex_record(arg);
-%RETURNS
-	?
-%SCOPE
-	?public | private | static
-%NEEDED INCLUDES
-	#include "?"
-%METHOD
-	?
-%FILES
-	?
-%TABLES
-	?
-%NOTES
-	?
-%BUGS
-	?
-%FLAGS  
-	TRACE DT2188
-	FULL  DF2189
-%HEADER END
-==========================================================*/
-char  **query_base_lex_record(
-				char *term ,               /* Input */
-				int caseSensitivity,       /* Input */  
-				int prefix_type,           /* Input */
-				char *lexicon_index_name,  /* Input */
-				char *lexicon_file_name    /* Input */
-				)
-     
-
-{
-  WordList *wl = NULL;
-
-  char retString[MAXLINE];
-  char **returnValue= NULL;
-
-  int int_flags = 0;
-  char string_flags[256];
-  char string_offset[256];
-  int record_offset;
-  char *aPtr = NULL;
-  int i = 0;
-  
-
-
-  DFNAME("query_base_lex_record");
-  DENTER(DT2188);
-
-  
-  strcpy(retString,"");
-
-  wl = query_lex_info ( term, 
-			caseSensitivity, 
-			prefix_type, 
-			lexicon_index_name);
-  
-  
-  if ( wl != NULL )
-    {
-     
-      for ( i = 0 ; i < wl->n; i++ ) {
-	/* -------------------------------------
-	   Grab only base form entries
-	   ------------------------------------- */
-	get_value_from_field(FLAG_FIELD,   string_flags,  WLWN( wl,i ));
-	
-	int_flags = atoi( string_flags );
-	
-	if ( IS_LEX_BASE( int_flags ) ) {
-	  
-	  /* -------------------------------
-	     Grab the record for this offset
-	     ------------------------------- */
-	  get_value_from_field(OFFSET_FIELD, string_offset, WLWN( wl,i ));
-	  
-	  
-	  record_offset = atoi( string_offset );
-	  aPtr = (char *) get_record_from_offset( record_offset, lexicon_file_name );
-	  if ( aPtr != NULL ) {
-	    strcat ( retString, aPtr ); 
-	  }
-	  
-	  free ( wl->words[i] );
-	  wl->words[i] = NULL; 
-	  
-	  break;
-	}
-	
-      }
-      
-      free ( wl );
-      wl = NULL;
-      
-    }
-
-  if ( strlen(retString ) > 0 ) *returnValue = strdup ( retString );
-
-  DEXIT(DT2188);
-  return ( returnValue );
-
-} /*** End query_base_lex_record */
 /**/
 /*==========================================================
 %FUNCTION NAME

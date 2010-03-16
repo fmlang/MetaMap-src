@@ -1,14 +1,54 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:     skr_fe.pl
 % Module:   SKR Front-End
 % Author:   Lan
 % Purpose:  Provide MetaMap, MMI and SemRep functionality
 
 
-:- module(skr_fe,[
+:- module(skr_fe, [
+	% must be exported for SemRep
+	form_expanded_sentences/3,
+	% must be exported for SemRep
+	form_original_sentences/7,
 	go/0,
 	go/1,
-	go/2
-    ]).
+	go/2,
+	% called by MetaMap API -- do not change signature!
+	initialize_skr/4,
+	% called by MetaMap API -- do not change signature!
+	postprocess_sentences/9,
+	% called by MetaMap API -- do not change signature!
+	process_text/11
+   ]).
 
 % :- extern(skr_fe_go).
 % The first two arguments of skr_text/3 are atoms representing a list of
@@ -20,41 +60,42 @@
 % Because they are called in the code regardless of which application we compile,
 % they must still be defined, even as stubs, so as not to get a warning message.
 
-:- use_module(lexicon(qp_lexicon),[
+:- use_module(lexicon(qp_lexicon), [
 	use_multi_word_lexicon/0
-    ]).
+   ]).
 
-:- use_module(metamap(metamap_parsing),[
+:- use_module(metamap(metamap_parsing), [
 	collapse_syntactic_analysis/2,
 	generate_syntactic_analysis_plus/3,
 	generate_syntactic_analysis_plus/4
-    ]).
+   ]).
 
-:- use_module(mmi(mmi),[
-        do_MMI_processing/5
-    ]).
+:- use_module(mmi(mmi), [
+        do_MMI_processing/4
+   ]).
 
-:- use_module(skr(skr),[
+:- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/14,
+	skr_phrases/17,
 	stop_skr/0
    ]).
 
-:- use_module(skr(skr_text_processing),[
+:- use_module(skr(skr_text_processing), [
 	extract_sentences/6,
 	get_skr_text/1
 	% is_sgml_text/1
 	% warn_remove_non_ascii_from_input_lines/2
-    ]).
+   ]).
 
-:- use_module(skr(skr_utilities),[
+:- use_module(skr(skr_utilities), [
+	conditionally_print_end_info/0,
+	conditionally_print_header_info/4,
 	compare_utterance_lengths/2,
-	compute_original_phrase/7,
 	do_formal_tagger_output/0,
-	do_sanity_checking_and_housekeeping/2,
+	do_sanity_checking_and_housekeeping/5,
 	generate_bracketed_output/2,
 	generate_candidates_output/3,
-	generate_EOT_output/0,
+	generate_EOT_output/1,
 	generate_header_output/6,
 	generate_mappings_output/5,
 	generate_phrase_output/7,
@@ -70,35 +111,36 @@
         write_MMO_terms/1,
         write_raw_token_lists/3,
         write_sentences/3
-    ]).
+   ]).
 
-:- use_module(skr(skr_xml),[
+:- use_module(skr(skr_xml), [
 	conditionally_print_xml_header/2,
 	conditionally_print_xml_footer/3,
 	generate_and_print_xml/1,
 	xml_header_footer_print_setting/3
-    ]).
+   ]).
 
-:- use_module(skr_db(db_access),[
+:- use_module(skr_db(db_access), [
 	default_full_year/1
-    ]).
+   ]).
+
+:- use_module(skr_lib(efficiency), [
+	maybe_atom_gc/2
+   ]).
 
 :- use_module(skr_lib(negex), [
 	compute_negex/4,
 	generate_negex_output/1
-    ]).
+   ]).
 
-:- use_module(skr_lib(efficiency),[
-	maybe_atom_gc/2
-    ]).
-
-:- use_module(skr_lib(nls_strings),[
+:- use_module(skr_lib(nls_strings), [
 	eliminate_multiple_meaning_designator_string/2,
 	form_one_string/3,
 	normalized_syntactic_uninvert_string/2,
 	split_atom_completely/3,
-	trim_whitespace/2
-    ]).
+	trim_whitespace/2,
+	trim_whitespace_left/3
+   ]).
 
 :- use_module(skr_lib(nls_system), [
 	get_control_options_for_modules/2,
@@ -110,47 +152,48 @@
 	interpret_options/4,
 	interpret_args/4,
 	get_from_iargs/4
-    ]).
+   ]).
 
 :- use_module(skr_lib(pos_info), [
 	create_EXP_raw_token_list/6,
 	create_UNEXP_raw_token_list/5,
 	get_next_token_state/3
-    ]).
-
-:- use_module(skr_lib(sicstus_utils),[
-	subchars/4,
-	ttyflush/0
-    ]).
-
-:- use_module(tagger(tagger_access),[
-	tag_text/4
-    ]).
-
-:- use_module(text(text_objects),[
-	merge_sentences/2
    ]).
 
-:- use_module(text(text_object_util),[
+:- use_module(skr_lib(sicstus_utils), [
+	subchars/4,
+	ttyflush/0
+   ]).
+
+:- use_module(tagger(tagger_access), [
+	get_tagger_server_hosts_and_port/3,
+	tag_text/7
+   ]).
+
+:- use_module(text(text_object_util), [
 	higher_order_or_annotation_type/1
    ]).
 
-:- use_module(library(avl),[
+:- use_module(wsd(wsdmod), [
+	get_WSD_server_hosts_and_port/3
+   ]).
+
+:- use_module(library(avl), [
 	empty_avl/1
-    ]).
+   ]).
 
-:- use_module(library(file_systems),[
+:- use_module(library(file_systems), [
 	close_all_streams/0
-    ]).
+   ]).
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	append/2,
 	rev/2
-    ]).
+   ]).
 
-:- use_module(library(system),[
+:- use_module(library(system), [
 	environ/2
-    ]).
+   ]).
 
 /* go
    skr_fe_go
@@ -167,27 +210,13 @@ go(HaltOption) :-
 	parse_command_line(CLTerm),
 	go(HaltOption, CLTerm).
 
-% sample command_line/2 term:
-% command_line([q,'E',+],['INFILE.test'])
-
-recompile_user_files :-
-	( environ('RECOMPILE_FILES', Files) ->
-	  split_atom_completely(Files, ':', FilesList),
-	  compile(FilesList)
-	; true
-	).
-	
-
 go(HaltOption, command_line(Options,Args)) :-
-	recompile_user_files,
 	reset_control_options(metamap),
-	% get_program_name(ProgramName),
-	ProgramName = 'MetaMap',
+	get_program_name(ProgramName),
 	default_full_year(FullYear),
 	close_all_streams,
-	( initialize_skr(Options, Args, InterpretedArgs, ProgramName, FullYear, IOptions) ->
-	  nl,
-          ( skr_fe(InterpretedArgs, IOptions)
+	( initialize_skr(Options, Args, InterpretedArgs, IOptions) ->
+          ( skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions)
 	  ; true
 	  )
 	; usage
@@ -198,15 +227,15 @@ go(HaltOption, command_line(Options,Args)) :-
 	; true
 	).
 
-/* initialize_skr(+Options, +Args, -InterpretedArgs, +ProgramName, +FullYear, +IOptions)
+/* initialize_skr(+Options, +Args, -InterpretedArgs, +IOptions)
 
-initialize_skr/6 interprets command line options and arguments (opening
+initialize_skr/4 interprets command line options and arguments (opening
 files as necessary) and, sets and displays the SKR control options
 discovered, and performs other initialization tasks including initializing
 other modules by calling initialize_skr/1.  It returns InterpretedArgs
 for later use (e.g., the stream associated with a file).  */
 
-initialize_skr(Options, Args, IArgs, ProgramName, FullYear, IOptions) :-
+initialize_skr(Options, Args, IArgs, IOptions) :-
 	get_control_options_for_modules([metamap], AllOptions),
 	interpret_options(Options, AllOptions, metamap, IOptions),
 	\+ member(iopt(help,_), IOptions),
@@ -221,7 +250,6 @@ initialize_skr(Options, Args, IArgs, ProgramName, FullYear, IOptions) :-
 	toggle_control_options(IOptions),
 	set_control_values(IOptions,IArgs),
 	use_multi_word_lexicon,
-	do_sanity_checking_and_housekeeping(ProgramName, FullYear),
 	initialize_skr([]).
 
 
@@ -230,8 +258,10 @@ initialize_skr(Options, Args, IArgs, ProgramName, FullYear, IOptions) :-
 skr_fe/1 calls either process_all/1 or batch_skr/1 (which redirects
 I/O streams and then calls process_all/1) depending on InterpretedArgs.  */
 
-skr_fe(InterpretedArgs, IOptions) :-
+skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions) :-
 	set_tag_option_and_mode(TagOption, TagMode),
+	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
+	get_WSD_server_hosts_and_port(WSDServerHosts, WSDForced, WSDServerPort),
 	% XML header will be printed here (and XML footer several lines below) iff
 	% (1) XML command-line option is on, and
 	% (2) OutputChoice is 1 (which is manually forced)
@@ -243,18 +273,25 @@ skr_fe(InterpretedArgs, IOptions) :-
 	( InputStream = user_input,
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
-          process_all(TagOption, InterpretedArgs, IOptions)
+          process_all(ProgramName, FullYear,
+		      InputStream, OutputStream, OutputStream,
+		      TagOption, TaggerServerHosts,
+		      TaggerForced, TaggerServerPort,
+		      WSDServerHosts, WSDForced, WSDServerPort,
+		      InterpretedArgs, IOptions)
           % batch_skr is for batch processing
-        % ; batch_skr(InterpretedArgs, TagOption, TagMode, IOptions, InputStream, OutputStream)
-        ; batch_skr(InterpretedArgs, TagOption, TagMode, IOptions, InputStream)
+        ; batch_skr(InterpretedArgs, ProgramName, FullYear,
+		    TaggerServerHosts, TaggerForced, TaggerServerPort,
+		    WSDServerHosts, WSDForced, WSDServerPort,
+		    TagOption, TagMode, IOptions, InputStream)
 	),
 	% conditionally_print_xml_footer/4 will be called here
 	% only if MetaMap is in batch mode, because otherwise (in interactive use)
 	% the user will have control-C-ed the program or exited it altogether.
 	conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream),
+	generate_EOT_output(OutputStream),
 	close(OutputStream),
 	close(InputStream).
-
 
 get_output_stream(OutputStream) :-
 	( current_stream(_File, write, OutputStream) ->
@@ -270,63 +307,83 @@ set_tag_option_and_mode(TagOption, TagMode) :-
 	  TagMode   = ''
 	).
 
-/* batch_skr(+InterpretedArgs, +TagOption, +TagMode, +IOptions)
+/* batch_skr(+InterpretedArgs, +ProgramName, +FullYear,
+   	     +TagOption, +TagMode, +IOptions)
 
-batch_skr/4 controls batch processing.  It gets input and output
+batch_skr/6 controls batch processing.  It gets input and output
 file names from InterpretedArgs and redirects I/O to them.
 Meta concepts are computed for each noun phrase in the input.  */
 
-% batch_skr(InterpretedArgs, TagOption, TagMode, IOptions, InputStream, OutputStream) :-
-batch_skr(InterpretedArgs, TagOption, TagMode, IOptions, InputStream) :-
+batch_skr(InterpretedArgs, ProgramName, FullYear,
+	  TaggerServerHosts, TaggerForced, TaggerServerPort,
+	  WSDServerHosts, WSDForced, WSDServerPort,
+	  TagOption, TagMode, IOptions, InputStream) :-
 	get_from_iargs(infile,  name,   InterpretedArgs, InputFile),
 	get_from_iargs(infile,  stream, InterpretedArgs, InputStream),
 	get_from_iargs(outfile, name,   InterpretedArgs, OutputFile),
 	get_from_iargs(outfile, stream, InterpretedArgs, OutputStream),
-	format('~n~nBeginning to process ~a ~asending output to ~a.~n',
-	       [InputFile,TagMode,OutputFile]),
-        ( TagOption == tag ->
-	  format('Tagging will be done dynamically.~n',[])
-        ; format('No tagging will be done.~n',[])
-        ),
-	% format('~n',[]),
+	conditionally_print_header_info(InputFile, TagMode, OutputFile, TagOption),
 	current_input(SavedCurrentInput),
 	set_input(InputStream),
 	current_output(SavedCurrentOutput),
 	set_output(OutputStream),
-	( process_all(TagOption, InterpretedArgs, IOptions) ->
+	( process_all(ProgramName, FullYear,
+		      InputStream, OutputStream, SavedCurrentOutput,
+		      TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+		      WSDServerHosts, WSDForced, WSDServerPort,
+		      InterpretedArgs, IOptions) ->
 	  true
 	; true
 	),
 	!,
-	generate_EOT_output,
 	set_input(SavedCurrentInput),
 	set_output(SavedCurrentOutput),
-	format('~nBatch processing is finished.~n',[]).
+	conditionally_print_end_info.
 
-/* process_all(+TagOption, +InterpretedArgs, +IOptions)
+/* process_all(+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
+	       +WSDServerHosts, +WSDForced, +WSDServerPort,
+   	       +InterpretedArgs, +IOptions)
 
-process_all/3 reads utterances from user_input and performs all SKR
+process_all/9 reads utterances from user_input and performs all SKR
 processing (MetaMapping, MMI processing, Semantic interpretation).
 user_input and user_output may have been redirected to files.)
 If TagOption is 'tag', then tagging is done. */
 
-process_all(TagOption, InterpretedArgs, IOptions) :-
+process_all(ProgramName, FullYear,
+	    InputStream, OutputStream, SavedCurrentOutput,
+	    TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+	    WSDServerHosts, WSDForced, WSDServerPort,
+	    InterpretedArgs, IOptions) :-
+	do_sanity_checking_and_housekeeping(ProgramName, FullYear,
+					    InputStream, OutputStream, SavedCurrentOutput),
+	process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+		      WSDServerHosts, WSDForced, WSDServerPort,
+		      InterpretedArgs, IOptions).
+
+
+process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+	      WSDServerHosts, WSDForced, WSDServerPort,
+	      InterpretedArgs, IOptions) :-
 	get_skr_text(Strings),
 	( Strings \== [] ->
-	  % Strings = [First|_],
-	  % atom_codes(Atom, First),
-	  % format(user_output, '~w~n', [Atom]),
-	  % warn_remove_non_ascii_from_input_lines(Strings, AsciiStrings),
-	  process_text(Strings, TagOption, ExpRawTokenList, AAs, MMResults),
+	  process_text(Strings,
+		       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+		       WSDServerHosts, WSDForced, WSDServerPort,
+		       ExpRawTokenList, AAs, MMResults),
 	  output_should_be_bracketed(BracketedOutput),
  	  postprocess_text(Strings, BracketedOutput, InterpretedArgs,
 			   IOptions, ExpRawTokenList, AAs, MMResults),
-	  process_all(TagOption, InterpretedArgs, IOptions)
+	  process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+			WSDServerHosts, WSDForced, WSDServerPort,
+			InterpretedArgs, IOptions)
 	; true
 	),
 	!.
 
-/* process_text(+Lines, +TagOption, -ExpRawTokenList, -MMResults)
+/* process_text(+Lines,
+   		+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
+		+WSDServerHosts, +WSDForced, +WSDServerPort,
+		-ExpRawTokenList, -MMResults)
 
    postprocess_text(+Lines, +BracketedOutputFlag, +InterpretedArgs,
    	            +IOptions, +ExpRawTokenList, +MMResults)
@@ -338,7 +395,7 @@ process_all(TagOption, InterpretedArgs, IOptions) :-
                        +Sentences, +CoordSentencesIn, -CoordSentencesOut,
                        +N, +M, +Label, -PhraseMMO)
 
-process_text/4 maps Lines (in one of the formats recognized by
+process_text/11 maps Lines (in one of the formats recognized by
 extract_sentences/5) using the auxiliary process_text/3 which processes
 ExpandedUtterances (expanded utterances, e.g., in which acronyms/abbreviations
 are replaced with their expanded definitions) and produces MMOutput
@@ -384,8 +441,15 @@ in Sentences in case the original text is preferred. */
 % 	 ev0(Evaluations3),
 % 	 aphrases(APhrases))
 
-process_text(Text, TagOption, RawTokenList, AAs, MMResults) :-
-	( process_text_1(Text, TagOption, RawTokenList, AAs, MMResults) ->
+%%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
+process_text(Text,
+	     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+	     WSDServerHosts, WSDForced, WSDServerPort,
+	     RawTokenList, AAs, MMResults) :-
+	( process_text_1(Text,
+			 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+			 WSDServerHosts, WSDForced, WSDServerPort,
+			 RawTokenList, AAs, MMResults) ->
 	  true
  	; format('#### ERROR: process_text/4 failed for~n~p~n',[Text]),
 	  format(user_output,'#### ERROR: process_text/4 failed for~n~p~n',[Text]),
@@ -394,21 +458,13 @@ process_text(Text, TagOption, RawTokenList, AAs, MMResults) :-
 	  ttyflush
 	).
 
-process_text_1(Lines0, TagOption, ExpRawTokenList, AAs, MMResults) :-
-	%%% temp
-	%display_time_and_reset('ET fe 1'),
- 	% Construct output terms
-	%    MMResults=mm_results(Lines0,TagOption,ModifiedLines,InputType,
-	%			  UtteranceTerms,MMOutput),
+process_text_1(Lines0,
+	       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+	       WSDServerHosts, WSDForced, WSDServerPort,
+	       ExpRawTokenList, AAs, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
-	% ( is_sgml_text(Lines0) ->
-	%   current_input(CurrentInput),
-	%   fget_all_non_null_lines(CurrentInput, Lines1),
-	%   append(Lines0, Lines1, Lines2)
-	% ; Lines2 = Lines0
-	% ),
 	Lines2 = Lines0,
 	% Sentences and CoordSentences are the token lists
 	% CoordSentences includes the positional information for the original text
@@ -419,15 +475,20 @@ process_text_1(Lines0, TagOption, ExpRawTokenList, AAs, MMResults) :-
 	% showing the position of each token in the raw, undoctored text.
 	form_one_string(Lines, [10], InputStringWithCRs),
 	form_one_string(Lines, " ", InputStringWithBlanks),
-	atom_codes(CitationTextAtomWithCRs, InputStringWithCRs),
 
 	write_sentences(PMID, CoordSentences, Sentences),
 
 	% '' is just the previous token type, which, for the initial call, is null
-	create_EXP_raw_token_list(Sentences, '',  0, 0, InputStringWithBlanks, TempExpRawTokenList),
-	% merge_sentences(TempExpRawTokenList, ExpRawTokenList),
+	TokenState is 0,
+	atom_codes(CitationTextAtomWithCRs, InputStringWithCRs),
+	CurrentPos is 0,
+	create_EXP_raw_token_list(Sentences, '',
+				  CurrentPos, TokenState,
+				  InputStringWithBlanks, TempExpRawTokenList),
 	ExpRawTokenList = TempExpRawTokenList,
-	create_UNEXP_raw_token_list(Sentences, 0, 0, InputStringWithBlanks, UnExpRawTokenList),
+	create_UNEXP_raw_token_list(Sentences,
+				    CurrentPos, TokenState,
+				    InputStringWithBlanks, UnExpRawTokenList),
 	!,
 	% halt,
 	% length(Sentences,         SentencesLength),
@@ -461,18 +522,24 @@ process_text_1(Lines0, TagOption, ExpRawTokenList, AAs, MMResults) :-
 	ExpRawTokenList \== '',
 	empty_avl(WordDataCacheIn),
 	empty_avl(USCCacheIn),
-	process_text_aux(ExpandedUtterances, TagOption, CitationTextAtomWithCRs, AAs, 
+	process_text_aux(ExpandedUtterances,
+			 TagOption,  TaggerServerHosts, TaggerForced, TaggerServerPort,
+			 WSDServerHosts, WSDForced, WSDServerPort,
+			 CitationTextAtomWithCRs, AAs, 
 			 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut, MMOutput),
-	%%% temp
-	%display_time_and_reset('ET fe 99'),
         !.
 
-process_text_aux([], _TagOption, _CitationTextAtom, _AAs, ExpRawTokenListOut,
-		 WordDataCache, USCCache,
-		 ExpRawTokenListOut,
-		 WordDataCache, USCCache, []).
-process_text_aux([ExpandedUtterance|Rest], TagOption, CitationTextAtom, AAs,
+process_text_aux([],
+		 _TagOption, _TaggerServerHosts, _TaggerForced, _TaggerServerPort,
+		 _WSDServerHosts, _WSDForced, _WSDServerPort,
+		 _CitationTextAtom, _AAs,
+		 ExpRawTokenList, WordDataCache, USCCache,
+		 ExpRawTokenList, WordDataCache, USCCache, []).
+process_text_aux([ExpandedUtterance|Rest],
+		 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+		 WSDServerHosts, WSDForced, WSDServerPort,
+		 CitationTextAtom, AAs,
 		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
 		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
 		 [mm_output(ExpandedUtterance,CitationTextAtom,ModifiedText,Tagging,AAs,
@@ -487,14 +554,18 @@ process_text_aux([ExpandedUtterance|Rest], TagOption, CitationTextAtom, AAs,
 	conditionally_announce_processing(InputLabel, Text0),
 	maybe_atom_gc(_DidGC,_SpaceCollected),
 	set_utterance_text(Text0, UtteranceText),
-	do_syntax_processing(TagOption, UtteranceText, FullTagList, TagList,
+	do_syntax_processing(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+			     UtteranceText, FullTagList, TagList,
 			     HRTagStrings, Definitions, SyntAnalysis0),
 	conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-		    AAs, SyntAnalysis, WordDataCacheIn, USCCacheIn,
-		    ExpRawTokenListIn, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
+		    AAs, SyntAnalysis, WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
+		    WSDServerHosts, WSDForced, WSDServerPort,
+		    ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 		    DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases),
-	process_text_aux(Rest, TagOption, CitationTextAtom, AAs,
+	process_text_aux(Rest, TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+			 WSDServerHosts, WSDForced, WSDServerPort,
+			 CitationTextAtom, AAs,
 			 ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 			 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
 
@@ -517,37 +588,34 @@ postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
 		   IOptions, ExpRawTokenList, AAs, MMResults) :-
 	% Decompose input
 	MMResults = mm_results(Lines0, _TagOption, _ModifiedLines, _InputType,
-			       Sentences, CoordSentences, OrigUtterances, DisambMMOutput),
+			       Sentences, _CoordSentences, OrigUtterances, DisambMMOutput),
 
 	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
 	generate_negex_output(NegationTerms),
 	postprocess_sentences(OrigUtterances, NegationTerms, InterpretedArgs, IOptions, AAs,
-			      Sentences, CoordSentences, BracketedOutput, DisambMMOutput,
-			      AllMMO),
+			      Sentences, BracketedOutput, DisambMMOutput, AllMMO),
 	% All the XML output for the current citation is handled here
 	generate_and_print_xml(AllMMO),
-	do_MMI_processing(OrigUtterances, BracketedOutput,
-			  Sentences, CoordSentences, DisambMMOutput),
+	do_MMI_processing(OrigUtterances, BracketedOutput, Sentences, DisambMMOutput),
 	do_formal_tagger_output.
 
+%%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
 postprocess_sentences(OrigUtterances, NegExList, IArgs, IOptions, AAs,
-		      Sentences, CoordSentences, BracketedOutput, DisambMMOutput,
-		      AllMMO) :-
+		      Sentences, BracketedOutput, DisambMMOutput, AllMMO) :-
 	AllMMO = HeaderMMO,
 	HeaderMMORest = UtteranceMMO,
 	generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
 			       HeaderMMO, HeaderMMORest),
-	postprocess_sentences_1(OrigUtterances, Sentences, CoordSentences,
+	postprocess_sentences_1(OrigUtterances, Sentences,
 				BracketedOutput, 1, AAs, DisambMMOutput, UtteranceMMO, []),
 	write_MMO_terms(AllMMO).
 
-postprocess_sentences_1([], _Sentences, _CoordSentencesIn,
-			_BracketedOutput, _N, _AAs, [], MMO, MMO) :- !.
-postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences, CoordSentencesIn,
+postprocess_sentences_1([], _Sentences, _BracketedOutput, _N, _AAs, [], MMO, MMO) :- !.
+postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences,
 			BracketedOutput, N, AAs, [MMOutput|RestMMOutput],
 			MMOIn, MMOOut) :-
 	% Decompose input
-	OrigUtterance = utterance(Label, TextString, StartPos/Length,ReplPos),
+	OrigUtterance = utterance(Label, TextString, StartPos/Length, ReplPos),
 	MMOutput = mm_output(_ExpandedUtterance, _Citation, _ModifiedText, Tagging,
 			     _AAs, _Syntax, MMOPhrases, ExtractedPhrases),
 	Tagging = tagging(_TagOption, FullTagList, _TagList, HRTagStrings),
@@ -556,14 +624,13 @@ postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences, CoordSent
 	MMOIn = [UtteranceMMO|MMONext1],
 	output_tagging(BracketedOutput, HRTagStrings, FullTagList),
 	postprocess_phrases(MMOPhrases, ExtractedPhrases,
-			    Sentences, CoordSentencesIn, CoordSentencesNext,
-			    BracketedOutput, N, 1, AAs, Label, MMONext1, MMONext2),
+			    Sentences, BracketedOutput, N, 1, AAs, Label, MMONext1, MMONext2),
 	!,
 	NextN is N + 1,
-	postprocess_sentences_1(RestOrigUtterances, Sentences, CoordSentencesNext,
+	postprocess_sentences_1(RestOrigUtterances, Sentences,
 				BracketedOutput, NextN, AAs, RestMMOutput,
 				MMONext2, MMOOut).
-postprocess_sentences_1([FailedUtterance|_], _Sentences, _CoordSentencesIn,
+postprocess_sentences_1([FailedUtterance|_], _Sentences,
 			_BracketedOutput, _N, _AAs, _MMOutput, _MMOIn, _MMOOut) :-
 	FailedUtterance = utterance(UtteranceID,UtteranceText,_PosInfo,_ReplPos),
 	format(user_output,
@@ -573,12 +640,10 @@ postprocess_sentences_1([FailedUtterance|_], _Sentences, _CoordSentencesIn,
 	fail.
 
 
-postprocess_phrases([], [], _Sentences, _CoordSentencesIn, _CoordSentencesIn,
-		    _BracketedOutput, _N, _M, _AAs, _Label, MMO, MMO) :- !.
+postprocess_phrases([], [], _Sentences, _BracketedOutput, _N, _M, _AAs, _Label, MMO, MMO) :- !.
 postprocess_phrases([MMOPhrase|RestMMOPhrases],
 		    [_ExtractedPhrase|RestExtractedPhrases],
-		    Sentences, CoordSentencesIn, CoordSentencesOut,
-		    BracketedOutput, N, M, AAs, Label, MMOIn, MMOOut) :-
+		    Sentences, BracketedOutput, N, M, AAs, Label, MMOIn, MMOOut) :-
 	MMOPhrase = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
 			   candidates(Evaluations),
 			   mappings(Mappings),
@@ -586,9 +651,7 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 			   gvcs(GVCs),
 			   ev0(Evaluations3),
 			   aphrases(APhrases)),
-	compute_original_phrase(PhraseTextAtom0, AAs,
-				Sentences, CoordSentencesIn, CoordSentencesNext,
-				_CoordPhraseTokens, PhraseTextAtom),
+	PhraseTextAtom = PhraseTextAtom0,
 	% format('PhraseTextAtom:~n~p~n',[PhraseTextAtom]),
 	generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length, ReplacementPos,
 			       BracketedOutput, PhraseMMO),
@@ -602,8 +665,7 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 	MMOIn = [PhraseMMO,CandidatesMMO,MappingsMMO|MMONext],
 	NextM is M + 1,
 	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases,
-			    Sentences, CoordSentencesNext, CoordSentencesOut,
-			    BracketedOutput, N, NextM, AAs, Label, MMONext, MMOOut).
+			    Sentences, BracketedOutput, N, NextM, AAs, Label, MMONext, MMOOut).
 /*
    form_original_sentences(+Sentences, +StartPos, +EndPos, +TokenState, +CitationTextAtom,
 			   +RawTokenList, -OrigUtterances)
@@ -653,9 +715,13 @@ form_original_sentences_aux([], StartPos, EndPos, _TokenState, CitationTextAtom,
 	% rev(RevTexts, Texts),
 	% append(Texts, Text0),
 	% trim_whitespace(Text0, Text),
-	Length is EndPos - StartPos,
-	subchars(CitationTextAtom, OrigTextWithCRs, StartPos, Length),
-	replace_crs_with_blanks(OrigTextWithCRs, StartPos, OrigText, ReplPos).
+	TempLength is EndPos - StartPos,
+	subchars(CitationTextAtom, OrigTextWithCRs, StartPos, TempLength),
+	replace_crs_with_blanks(OrigTextWithCRs, StartPos, OrigText, ReplPos),
+	length(OrigTextWithCRs, OrigTextWithCRsLength),
+	length(OrigText, OrigTextLength),
+	LengthDiff is OrigTextWithCRsLength - OrigTextLength,
+	Length is TempLength - LengthDiff.	
 % Skip a "label" field if there is no previous RevText,
 % but convert the Label text to an atom and pass it along.
 % form_original_sentences_aux([tok(label,TokLabel,_,_)|Rest], StartPos, EndPos,
@@ -680,9 +746,14 @@ form_original_sentences_aux([Token|Rest], StartPos, EndPos,
 	% append(Texts, Text0),
 	% trim_whitespace(Text0, Text),
 	atom_codes(NewLabel, TokLabel),
-	Length is EndPos - StartPos,
-	subchars(CitationTextAtom, OrigTextWithCRs, StartPos, Length),
+
+	TempLength is EndPos - StartPos,
+	subchars(CitationTextAtom, OrigTextWithCRs, StartPos, TempLength),
 	replace_crs_with_blanks(OrigTextWithCRs, StartPos, OrigText, ReplPos),
+	length(OrigTextWithCRs, OrigTextWithCRsLength),
+	length(OrigText, OrigTextLength),
+	LengthDiff is OrigTextWithCRsLength - OrigTextLength,
+	Length is TempLength - LengthDiff,
 	form_original_sentences_aux(Rest, StartPos, EndPos, TokenState, CitationTextAtom,
 				    RestRawTokenList, NewLabel, [], RestOrigUtterances).
 % form_original_sentences_aux([tok(TokenType,_,_,_)|Rest], StartPos, EndPos,
@@ -710,8 +781,6 @@ form_original_sentences_aux([Token|Rest],
 			    CurrStartPos, _CurrEndPos, TokenState, CitationTextAtom,
 			    [RawToken|RestRawTokenList],
 			    Label, RevTexts, OrigUtterances) :-
-	% temp
-	%    format('  ~a:"~s"~n',[TokenType,TokenText]),
 	token_template(Token, TokenType, TokenText, _PosInfo1, _PosInfo2),
 	get_next_token_state(TokenState, TokenType, NextTokenState),
 	RawToken = tok(_Type, _String, _LCStr, _Pos1, pos(RawTokStartPos,RawTokLength)),
@@ -816,11 +885,13 @@ form_expanded_sentences_aux([Token|Rest], OrigUtterances,
 				    Label, [TokenText|RevTexts], ExpandedSentences).
 
 conditionally_announce_processing(InputLabel, Text0) :-
-	current_output(CurrentOutput),
+	telling(CurrentOutput),
 	( CurrentOutput == user_output ->
 	  true
-	; format(user_output,'Processing ~a: ~s~n', [InputLabel,Text0]),
+	; \+ control_option(silent) ->
+	  format(user_output,'~nProcessing ~a: ~s~n', [InputLabel,Text0]),
 	  flush_output(user_output)
+	; true
 	),
 	flush_output(CurrentOutput).
 
@@ -831,15 +902,21 @@ set_utterance_text(Text0, UtteranceText) :-
 	; UtteranceText = Text0
 	).
 
-do_syntax_processing(TagOption, UtteranceText, FullTagList, TagList,
+do_syntax_processing(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+		     UtteranceText, FullTagList, TagList,
 		     HRTagStrings, Definitions, SyntAnalysis0) :-
 	( TagOption == tag ->
-	  tag_text(UtteranceText,FullTagList,TagList,HRTagStrings),
-	  generate_syntactic_analysis_plus(UtteranceText,TagList,SyntAnalysis0,Definitions)
+	  tag_text(UtteranceText,
+		   TaggerServerHosts, TaggerForced, TaggerServerPort,
+		   FullTagList, TagList, HRTagStrings),
+	  % If tag_text succeeded, cut out the choice point
+	  % left behind when the tagger was chosen
+	  !,
+	  generate_syntactic_analysis_plus(UtteranceText, TagList, SyntAnalysis0, Definitions)
 	; FullTagList = [],
 	  TagList = [],
 	  HRTagStrings = [],
-	  generate_syntactic_analysis_plus(UtteranceText,SyntAnalysis0,Definitions)
+	  generate_syntactic_analysis_plus(UtteranceText, SyntAnalysis0, Definitions)
 	).
 
 conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis) :-

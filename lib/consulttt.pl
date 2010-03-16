@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:	    consulttt.pl
 % Module:   consulttt
 % Author:   tcr
@@ -13,7 +43,6 @@
 % ----- Imported predicates
 
 :- use_module( library( lists ),    [ nth1/3 ] ).
-
 
 /* CONSULT_TAGGED_TEXT
 
@@ -48,17 +77,18 @@ consult_tagged_text( [ lexicon:[ lexmatch:LexMatch, inputmatch:InputMatch | _ ] 
 
     can_be_pastP(VarInfoList),
 
+    % bug fix by Francois for "Patients with pulmonary disease had worse fever."
+    % where the parse was "[Patients],[with,pulmonary,disease,had,worse,fever]".
+%    PrevLabel == adj,!,
     PrevLabel == adj,
-
     length( InputMatch, Len ),
-
-    % get the tag of the *last* word in the InputMatch list
-    RealIndexIn is IndexIn + Len,
-
+    RealIndexIn is IndexIn + Len - 1, 
+%    nth1( IndexIn, TaggedTextIn, [ _TagToken, Tag ] ),
     nth1( RealIndexIn, TaggedTextIn, [ _TagToken, Tag ] ),
-
     Tag \== aux,
     !,
+    % end of bug fix 
+
     IndexOut is IndexIn + Len,
 
     Info = [ lexmatch(LexMatch), inputmatch(InputMatch), tag(Tag) ],
@@ -105,6 +135,19 @@ consult_tagged_text( [ lexicon:[ lexmatch:LexMatch, inputmatch:InputMatch,
 
     consult_tagged_text( MoreDefinitions, MoreVarInfoList, TaggedTextIn, MoreTaggedTextOut, IndexOut,verb ).
 
+% !!! Force "painful" to be an adj
+consult_tagged_text( [ lexicon:[ lexmatch:LexMatch, inputmatch:InputMatch, 
+                       records:[ lexrec:[base:['painful']| _ ] |_ ] | _ ] | MoreDefinitions ],
+                     [ _VarInfoAtom:[_Label:_ | _ ] | MoreVarInfoList ],
+                     TaggedTextIn,
+                     [ ThisItem | MoreTaggedTextOut ],
+                     IndexIn,_PrevLab ) :-
+
+    !, IndexOut is IndexIn + 1,
+
+    ThisItem = adj([lexmatch(LexMatch), inputmatch(InputMatch), tag(adj)]),
+
+    consult_tagged_text( MoreDefinitions, MoreVarInfoList, TaggedTextIn, MoreTaggedTextOut, IndexOut, adj ).
 
 consult_tagged_text( [ lexicon:[ lexmatch:LexMatch, inputmatch:InputMatch | _ ] | MoreDefinitions ],
                      [ _VarInfoAtom:VarInfoList | MoreVarInfoList ],
@@ -121,7 +164,7 @@ consult_tagged_text( [ lexicon:[ lexmatch:LexMatch, inputmatch:InputMatch | _ ] 
 
     VarInfoList = [Label:_ | _ ],
 
-    ( Len = 1 
+    ( Len = 1
       -> functor( ThisItem, Tag, 1 ),
          arg( 1, ThisItem, Info ),
          POS = Tag
@@ -140,7 +183,6 @@ consult_tagged_text( [ lexicon:[ lexmatch:LexMatch, inputmatch:InputMatch | _ ] 
     ),
 
     consult_tagged_text( MoreDefinitions, MoreVarInfoList, TaggedTextIn, MoreTaggedTextOut, IndexOut, ThisLab ).
-
 
 
 consult_tagged_text( [ shapes:[ inputmatch:ShapesList, features:FeatList | _ ] | MoreDefinitions ],
@@ -193,7 +235,6 @@ consult_tagged_text( [ unknown:[ inputmatch:[Token]| _ ] | MoreDefinitions ],
     IndexOut is IndexIn + 1,
 
     consult_tagged_text( MoreDefinitions, MoreVarInfoList, TaggedTextIn, MoreTaggedTextOut, IndexOut, unknown ).
-
 
 % --------
 

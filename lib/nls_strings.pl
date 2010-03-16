@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:     nls_strings.pl
 % Module:   NLS Strings
 % Author:   Lan
@@ -8,12 +38,11 @@
 :- module(nls_strings,[
 	atom_codes_list/2,
 	atom_codes_list_list/2,
-	atom_codes_pair_list/2,
 	concatenate_items_to_atom/2,
 	concatenate_items_to_string/2,
 	convert_item_list_to_string/2,
-	double_quotes/2,
 	eliminate_multiple_meaning_designator_string/2,
+	% must be exported for mwi_utilities
 	eliminate_nos_string/2,
 	form_one_string/3,
 	is_integer_string/1,
@@ -23,6 +52,7 @@
 	portray_strings_double_quoted/1,
 	prep_conj_det/1,
 	prep_conj_det_atom/1,
+	% must be exported for mm_print and mwi_utilities 
 	replace_all_substrings/4,
 	replace_nonprints_in_strings/2,
 	replace_tabs_in_strings/2,
@@ -30,13 +60,16 @@
 	split_atom_completely/3,
 	split_string_completely/3,
 	split_string_backtrack/4,
-	string_prefix_n/4,
+	% must be exported for mm_print and mwi_utilities
 	syntactic_uninvert_string/2,
 	trim_and_compress_internal_whitespace/2,
 	trim_whitespace/2,
-	% used by mwi_utilities
+	% must be exported for mwi_utilities
 	trim_whitespace_left/2,
-	trim_whitespace_left_1/4
+	trim_whitespace_left/3,
+	trim_whitespace_left_1/4,
+	% must be exported for SemRep
+	trim_whitespace_right/2
     ]).
 
 
@@ -49,6 +82,7 @@
 	is_alnum/1,
 	is_print/1,
 	is_digit/1,
+	is_white/1,
 	to_lower/2
     ]).
 
@@ -129,16 +163,6 @@ atom_codes_list_list_aux([FirstAtomList|RestAtomListList],
 	atom_codes_list_list_aux(RestAtomListList, RestStringListList).
 
 
-/* atom_codes_pair_list(?AtomPairList, ?StringPairList)
-atom_codes_pair_list/2 applies atom_codes/2 to lists of pairs. */
-
-atom_codes_pair_list([], []).
-atom_codes_pair_list([FirstAtomL:FirstAtomR|RestAtomPairList],
-                     [FirstStringL:FirstStringR|RestStringPairList]) :-
-	atom_codes(FirstAtomL, FirstStringL),
-	atom_codes(FirstAtomR, FirstStringR),
-	atom_codes_pair_list(RestAtomPairList, RestStringPairList).
-
 /* concatenate_items_to_atom
 Concatenate a list of items forming an atom.  The items must be strings, 
 atoms or numbers. */
@@ -185,20 +209,6 @@ convert_each_item_to_string([], []).
 convert_each_item_to_string([Item|Rest], [String|ConvertedRest]) :-
 	convert_item_to_string(Item, String),
 	convert_each_item_to_string(Rest, ConvertedRest).
-
-
-/* double_quotes(+String, -ModifiedString)
-
-double_quotes/2 computes ModifiedString by doubling each occurrence of a
-single quotation mark.  */
-
-double_quotes("","").
-double_quotes([0'\'|Rest],[0'\',0'\'|ModifiedRest]) :-
-    !,
-    double_quotes(Rest,ModifiedRest).
-double_quotes([First|Rest],[First|ModifiedRest]) :-
-    double_quotes(Rest,ModifiedRest).
-
 
 /* eliminate_multiple_meaning_designator_string(+String, -ModifiedString)
 
@@ -870,20 +880,10 @@ split_string/4 embodies the property that String is the concatenation of
 Left, Substring and Right in that order.  Substring (and hence String) must be
 non-null.  Backtracking is allowed. */
 
-split_string_backtrack(String,SubString,Left,Right) :-
-    \+SubString=[],
-    append(SubString,Right,S1),
-    append(Left,S1,String).
-
-
-/* string_prefix_n(+N, +String, -Left, -Right)
-string_prefix_n/4 embodies the property that String is the concatenation of
-Left and Right and that the prefix Left is of length N.  */
-
-string_prefix_n(N, String, Left, Right) :-
-	append(Left, Right, String),
-	length(Left, N),
-	!.
+split_string_backtrack(String, SubString, Left, Right) :-
+	\+ SubString = [],
+	append(SubString, Right, S1),
+	append(Left, S1, String).
 
 form_one_string(Lines, InterLeaveString, InputString) :-
 	concat_strings_with_separator(Lines, InterLeaveString, InputString).
@@ -895,21 +895,19 @@ put_print_string/1 uses put/1 to print String in double-quoted format, i.e.,
 surrounded by double quotes and doubling internal double quotes.  */
 
 put_print_string(String) :-
-    put(0'"),
-    put_print_string_aux(String),
-    put(0'").
+	put_code(0'"), %" this is just to fake out Emacs's colorization!!
+	put_print_string_aux(String),
+	put_code(0'"). %" this is just to fake out Emacs's colorization!!
 
-put_print_string_aux([]) :-
-    !.
-put_print_string_aux([0'"|Rest]) :-
-    !,
-    put(0'"),
-    put(0'"),    %" this is just to fake out Emacs's colorization!!
-    put_print_string_aux(Rest).
+put_print_string_aux([]).
+put_print_string_aux([0'"|Rest]) :- %" this is just to fake out Emacs's colorization!!
+	!,
+	put_code(0'"),    %" this is just to fake out Emacs's colorization!!
+	put_code(0'"),    %" this is just to fake out Emacs's colorization!!
+	put_print_string_aux(Rest).
 put_print_string_aux([Char|Rest]) :-
-    put(Char),
-    put_print_string_aux(Rest).
-
+	put_code(Char),
+	put_print_string_aux(Rest).
 
 /* trim_whitespace([+WhichEnd,] +String, -TrimmedString)
 
@@ -919,10 +917,15 @@ value of WhichEnd (left, right, left_and_right, or all).  */
 trim_whitespace(String, TrimmedString) :-
 	trim_whitespace_both(String, TrimmedString).
 
+trim_whitespace_left(String, TrimmedString, NumBlanksTrimmed) :-
+	trim_whitespace_left_1(String, 0, TrimmedString, NumBlanksTrimmed).
+
 trim_whitespace_left(String, TrimmedString) :-
 	trim_whitespace_left_1(String, 0, TrimmedString, _NumBlanksTrimmed).
 
-trim_whitespace_left_1([0' |RestString], TempNumBlanksTrimmed, TrimmedString, NumBlanksTrimmed) :-
+trim_whitespace_left_1([FirstChar|RestString], TempNumBlanksTrimmed,
+		       TrimmedString, NumBlanksTrimmed) :-
+	is_white(FirstChar),
 	NextNumBlanksTrimmed is TempNumBlanksTrimmed + 1,
 	trim_whitespace_left_1(RestString, NextNumBlanksTrimmed, TrimmedString, NumBlanksTrimmed),
 	!.
@@ -933,7 +936,8 @@ trim_whitespace_right(String, TrimmedString) :-
 	trim_whitespace_right_1(String, TrimmedString, _NumBlanksTrimmed).
 
 trim_whitespace_right_1(String, TrimmedString, NumBlanksTrimmed) :-
-	rev(String, [0' |RevString]),
+	rev(String, [FirstChar|RevString]),
+	is_white(FirstChar),
 	trim_whitespace_left_1(RevString, 0, TrimmedRevString, NumBlanksTrimmed),
 	rev(TrimmedRevString, TrimmedString),
 	!.
@@ -956,8 +960,8 @@ trim_and_compress_internal_whitespace([H|T], Compressed) :-
 
 trim_and_compress_internal_whitespace_1([], H, [H]).
 trim_and_compress_internal_whitespace_1([Next|Rest], First, Trimmed) :-
-	( First =:= 32,
-	  Next =:= 32 ->
+	( is_white(First),
+	  is_white(Next) ->
 	  RestTrimmed = Trimmed
 	; Trimmed = [First|RestTrimmed]
 	),

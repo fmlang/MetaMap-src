@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:     loader.pl
 % Module:   MetaMap
 % Author:   Lan
@@ -25,6 +55,15 @@
 	ttyflush/0
     ]).
 
+:- use_module(library(random), [
+        random/1,
+        setrand/1
+    ]).
+
+:- use_module(library(system), [
+	datime/1
+    ]).
+
 %%% Code provided by Mats Carlsson of SICS to FML via e-mail 03/27/2007:
 %%% 
 %%% There are two issues:
@@ -45,7 +84,7 @@
 
 %%% SICStus version updated by Per Mildner.
 
-initialize_random_seed :-
+:- initialization
 	datime(Date),
 	Date = datime(A,B,C,D,E,F),
 	X is 1 + ((A*D) mod 30000),
@@ -57,11 +96,11 @@ initialize_random_seed :-
 	setrand(random(X,Y,Z,W)).
 
 runtime_entry(start) :-
-    establish_signal_handling,
-    go.
+	establish_signal_handling,
+	go.
     
 runtime_entry(abort) :-
-    format(user_output,'~nDisconnecting servers and closing files...',[]),
-    ttyflush,
-    stop_skr,
-    format(user_output,'Done.~n',[]).
+	format(user_output,'~nDisconnecting servers and closing files...',[]),
+	ttyflush,
+	stop_skr,
+	format(user_output,'Done.~n',[]).

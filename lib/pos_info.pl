@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:     pos_info.pl
 % Module:   SKR Positional Information
 % Author:   FML
@@ -5,13 +35,19 @@
 
 
 :- module(pos_info,[
+	collapse_pos_info/3,
 	create_EXP_raw_token_list/6,
 	create_UNEXP_raw_token_list/5,
 	get_next_token_state/3
     ]).
 
 :- use_module(skr_lib(nls_strings),[
+	trim_whitespace_left/3,
 	trim_whitespace_left_1/4
+    ]).
+
+:- use_module(skr(skr_text_processing),[
+	text_field/1
     ]).
 
 :- use_module(skr(skr_utilities),[
@@ -157,7 +193,7 @@ handle_token_type(TokenType, PrevToken, TokenState,
 				    RestNewTokens)
 	; % aadef and aa are higher-order types, but they'll be caught by the first branch
 	  higher_order_or_annotation_type(TokenType) ->
-	  handle_hoa_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn, _TokenState,
+	  handle_hoa_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 			  RestNewTokens)
 	; handle_an_pn_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn, TokenState,
@@ -264,28 +300,28 @@ handle_special_token_type(aa, _PrevToken,
 	  % consume_aa_token_strings must be backtrackable. Ugh.
 	  % !,
 	  NextPos is CurrentPos + AALength.
-handle_special_token_type(aa, _PrevToken,
-			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
-			  InputStringNext, NewTokens,     NextPos,    RestTokensNext,
-			  RestNewTokens) :-
-	format(user_output, '#### WARNING: aa token failed:~n', []),
-	write_token_list([CurrentToken], 0, 1),
-	ttyflush,
-	InputStringNext = InputStringIn,
-	RestNewTokens = NewTokens,
-	NextPos is CurrentPos,
-	RestTokensNext = RestTokensIn.
+% handle_special_token_type(aa, _PrevToken,
+% 			  InputStringIn,   _CurrentToken, CurrentPos, RestTokensIn,
+% 			  InputStringNext, NewTokens,     NextPos,    RestTokensNext,
+% 			  RestNewTokens) :-
+% 	format(user_output, '#### WARNING: aa token failed:~n', []),
+% 	write_token_list([CurrentToken], 0, 1),
+% 	ttyflush,
+% 	InputStringNext = InputStringIn,
+% 	RestNewTokens = NewTokens,
+% 	NextPos is CurrentPos,
+% 	RestTokensNext = RestTokensIn.
 
 % Token types field, label, sn, pe are handled identically via handle_hoa_type.
 % "hoa" == "higher-order or annotation type" (other than aadef and aa)
-handle_hoa_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn, _TokenState,
+handle_hoa_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 		InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 		RestNewTokens) :-
-	  add_raw_pos_info_1(CurrentToken, CurrentPos, NewCurrentToken),
-          NextPos is CurrentPos,
-          InputStringNext = InputStringIn,
-	  RestTokensNext = RestTokensIn,
-	  NewTokens = [NewCurrentToken|RestNewTokens].
+	add_raw_pos_info_1(CurrentToken, CurrentPos, NewCurrentToken),
+	InputStringNext = InputStringIn,
+	RestTokensNext = RestTokensIn,
+	NextPos is CurrentPos,
+	NewTokens = [NewCurrentToken|RestNewTokens].
 
 % Token types an, ic, lc, mc, nu, pn, uc are handled identically via handle_an_pn_type.
 handle_an_pn_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn, TokenState,
@@ -367,11 +403,14 @@ get_aa_tokens_length([FirstAAToken|RestAATokens], InputStringIn, _PrevNumLeftBla
 % (1) the chars in TokenString, and then
 % (2)  all leading blanks (i.e., trim_left)
 get_one_token_pos_length(AAToken, InputStringIn,
-			 InputStringOut, TokenStringLength, NumLeftBlanksTrimmed) :-
+			 InputStringOut, StringLength, NumLeftBlanksTrimmed) :-
 	token_template(AAToken,
 		       _TokenType, TokenString, _LCTokenString, _PosInfo),
-	append(TokenString, InputStringNext, InputStringIn),
+	append(Prefix, InputString0, InputStringIn),
+	append(TokenString, InputStringNext, InputString0),
+	length(Prefix, PrefixLength),
 	length(TokenString, TokenStringLength),
+	StringLength is PrefixLength + TokenStringLength,	
 	trim_whitespace_left_1(InputStringNext, 0, InputStringOut, NumLeftBlanksTrimmed).
 
 %%% get_aa_tokens_start_and_end_pos([FirstAAToken|RestAATokens], InputStringIn,
@@ -915,36 +954,17 @@ add_raw_pos_info_1(OrigToken, CurrentPos, NewToken) :-
 create_new_pos_term(pos(X1,Y1), CurrentPos, pos(CurrentPos, TextLength)) :-
 	TextLength is Y1 - X1.
 
-% add_pos_term_1([pos(X2,Y2)], pos(X1,Y1), CurrentPos,
-% 	     pos(X1,Y1), pos(X2,Y2), pos(CurrentPos, TextLength)) :-
-% 	TextLength is Y1 - X1.
-
-% For alphanumeric tokens (an, ic, lc, mc, nu, uc)
-% add_pos_term_2(pos(X1,Y1), CurrentPos, pos(CurrentPos, TextLength)).
-% 	TextLength is Y1 - X1.
-
-% add_pos_term_2([pos(X2,Y2)], pos(X1,Y1), CurrentPos, TextLength,
-% 	       pos(X1,Y1), pos(X2,Y2), pos(CurrentPos, TextLength)).
-
-% If we encounter an AA at the very beginning of a citation,
-% we need to index into the text to find the real starting position.
-
-%%% adjust_start_and_end_pos(_InputStringIn, CurrentPos,
-%%% 			 AAStartPos, AAEndPos,
-%%% 			 _AATokenList,
-%%% 			 CurrentPos, AAStartPos, AAEndPos) :- !.
-%%% 
-%%% adjust_start_and_end_pos(InputStringIn, TempCurrentPos,
-%%% 			 TempAAStartPos, TempAAEndPos,
-%%% 			 AATokenList,
-%%% 			 CurrentPos, AAStartPos, AAEndPos) :-
-%%% 	( TempCurrentPos > 0 ->
-%%% 	  AAStartPos is TempAAStartPos,
-%%% 	  AAEndPos is TempAAEndPos
-%%% 	; AATokenList = [FirstAAToken|_],
-%%% 	  FirstAAToken = tok(_TokenType,TokenText,_LCText,_PosInfo),
-%%% 	  sublist(InputStringIn, TokenText, PrefixLength, _TextLength),
-%%% 	  AAStartPos is TempAAStartPos + PrefixLength,
-%%% 	  CurrentPos is TempCurrentPos + PrefixLength,
-%%% 	  AAEndPos is TempAAEndPos + PrefixLength
-%%% 	).
+% Collapse consecutive PosInfo tokens if they denote adjacent positions.
+% E.g., 91:3,95:5 are adjacent, because 91:3 ends just before 95:5 begins.
+collapse_pos_info([], X, [X]).
+collapse_pos_info([Next|Rest], First, CollapsedPosInfo) :-
+	First = FirstStartPos/FirstLength,
+	Next = NextStartPos/NextLength,
+	( NextStartPos is FirstStartPos + FirstLength + 1 ->
+	  NewLength is FirstLength + NextLength + 1,
+	  % format(user_output, 'Collapsed ~w and ~w into ~w~n',
+	  %	   [First,Next,FirstStartPos/NewLength]),
+	  collapse_pos_info(Rest, FirstStartPos/NewLength, CollapsedPosInfo)
+	; CollapsedPosInfo = [First|RestCollapsed],
+	  collapse_pos_info(Rest, Next, RestCollapsed)
+	).

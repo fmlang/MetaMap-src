@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:	    metamap_evaluation.pl
 % Module:   MetaMap
 % Author:   Lan
@@ -5,6 +35,7 @@
 
 
 :- module(metamap_evaluation, [
+	consolidate_matchmap/3,
 	evaluate_all_GVCs/16,
 	extract_components/3,
 	component_intersects_components/2,
@@ -26,9 +57,9 @@
 	linearize_components/2
     ]).
 
-:- use_module(skr(skr), [
-    	calculate_aa_extra_chars/4
-    ]).
+% :- use_module(skr(skr), [
+%     	calculate_aa_extra_chars/4
+%     ]).
 
 :- use_module(skr(skr_utilities), [
     	compute_sum/3,
@@ -54,55 +85,35 @@
     	eliminate_multiple_meaning_designator/2
     ]).
 
+:- use_module(skr_lib(pos_info), [
+    	collapse_pos_info/3
+    ]).
+
 :- use_module(library(avl), [
-    avl_fetch/3,
-    avl_incr/4,
-    avl_member/3
+	avl_fetch/3,
+	avl_incr/4,
+	avl_member/3
     ]).
 
 :- use_module(library(lists), [
-    append/2,
-    last/2,
-    prefix/2,
-    proper_prefix/2,
-    rev/2,
-    select/3
+	append/2,
+	last/2,
+	prefix/2,
+	proper_prefix/2,
+	rev/2,
+	select/3
     ]).
-
-% temp
-%:- use_module(library(tcp), [
-%    tcp_now/1,
-%    tcp_time_plus/3
-%    ]).
-
-%:- add_advice(evaluate_candidates(USCs,_,_,_,_,_,_,_,_),call,
-%              (spy_it(USCs), spy evaluate_candidates/9)).
-%
-%spy_it([usc(U,_S,_C)|_]) :-
-%%    caseconv:lower(S,LCS),
-%format(user_output,'spy_it: ~p~n',[U]),
-%%    nls_text:split_text(LCS,'library',_,_).
-%    U=[library|_].
-
-
-/* ************************************************************************
-   ************************************************************************
-   ************************************************************************
-                            MetaMap Evaluation Predicates
-   ************************************************************************
-   ************************************************************************
-   ************************************************************************ */
 
 /* evaluate_all_GVCs(+GVCs, +DebugFlags, +Label, +UtteranceText,
    		     +Variants, +TokenPhraseWords, +PhraseTokenLength,
 		     +TokenHeadWords,
 		     +PhraseTokens, +RawTokensOut, +AAs,
-		     +ChromosomeWordFound, +InputmatchPhraseWords,
+		     +InputmatchPhraseWords,
 		     +CCsIn, -CCsOut,
 		     +EvaluationsIn, -EvaluationsOut)
    evaluate_one_gvc(+GVC, +DebugFlags, +Variants, +TokenPhraseWords, +PhraseTokenLength,
    		    +TokenHeadWords, +PhraseTokens, +RawTokensOut,
-		    +AAs, +ChromosomeWordFound, +InputmatchPhraseWords,
+		    +AAs, +InputmatchPhraseWords,
 		    +CCsIn, -CCsOut,
 		    +EvaluationsIn, -EvaluationsOut)
 */
@@ -110,28 +121,24 @@
 evaluate_all_GVCs([], _DebugFlags, _Label, _UtteranceText, _Variants, _TokenPhraseWords,
 		  _PhraseTokenLength, _TokenHeadWords,
 		  _PhraseTokens, _RawTokensOut, _AAs,
-		  % _ChromosomeWordFound, _InputmatchPhraseWords,
 		  _InputmatchPhraseWords,
 		  CCsIn, CCsIn,
 		  EvaluationsIn, EvaluationsIn).
 evaluate_all_GVCs([First|Rest], DebugFlags, Label, UtteranceText, Variants, TokenPhraseWords,
 		  PhraseTokenLength, TokenHeadWords,
 		  PhraseTokens, RawTokensOut, AAs,
-		  % ChromosomeWordFound, InputmatchPhraseWords,
 		  InputmatchPhraseWords,
 		  CCsIn, CCsOut,
 		  EvaluationsIn, EvaluationsOut) :-
 	evaluate_one_GVC(First, DebugFlags, Label, UtteranceText, Variants, TokenPhraseWords,
 			 PhraseTokenLength, TokenHeadWords,
 			 PhraseTokens,  RawTokensOut, AAs,
-			 % ChromosomeWordFound, InputmatchPhraseWords,
 			 InputmatchPhraseWords,
 			 CCsIn, CCsInOut,
 			 EvaluationsIn, EvaluationsInOut),
 	evaluate_all_GVCs(Rest, DebugFlags, Label, UtteranceText, Variants, TokenPhraseWords,
 			  PhraseTokenLength, TokenHeadWords,
 			  PhraseTokens, RawTokensOut, AAs,
-			  % ChromosomeWordFound, InputmatchPhraseWords,
 			  InputmatchPhraseWords,
 			  CCsInOut, CCsOut,
 			  EvaluationsInOut, EvaluationsOut).
@@ -139,7 +146,6 @@ evaluate_all_GVCs([First|Rest], DebugFlags, Label, UtteranceText, Variants, Toke
 evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, Variants,
 		 TokenPhraseWords, PhraseTokenLength,
 		 TokenHeadWords, PhraseTokens,  RawTokensOut, AAs,
-		 % ChromosomeWordFound, InputmatchPhraseWords,
 		 InputmatchPhraseWords,
 		 CCsIn, CCsOut,
 		 EvaluationsIn, EvaluationsOut) :-
@@ -153,7 +159,6 @@ evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, 
 	evaluate_candidate_list(Candidates, DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength,
 				TokenHeadWords, PhraseTokens, RawTokensOut,
-				% AAs, ChromosomeWordFound, InputmatchPhraseWords,
 				AAs, InputmatchPhraseWords,
 				CCsIn, CCsOut, Evaluations).
 	% format(user_output, '~n### Generator evaluation DONE!~n', []).
@@ -161,14 +166,12 @@ evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, 
 evaluate_candidate_list([], _DebugFlags, _Label, _UtteranceText, _Variants, _TokenPhraseWords,
 			_PhraseTokenLength, _Headwords,
 			_PhraseTokens, _RawTokensOut, _AAs,
-			% _ChromosomeWordFound, _InputmatchPhraseWords,
 			_InputmatchPhraseWords,
 			CCsIn, CCsIn, []).
 evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			DebugFlags, Label, UtteranceText,
 			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 			PhraseTokens, RawTokensOut, AAs,
-			% ChromosomeWordFound, InputmatchPhraseWords,
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
 	debug_evaluate_candidate_list_1(DebugFlags, MetaCanonical,MetaString,MetaConcept),
@@ -185,7 +188,6 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 				PhraseTokens, RawTokensOut, AAs,
-				% ChromosomeWordFound, InputmatchPhraseWords,
 				InputmatchPhraseWords,
 				CCsIn, CCsOut, Evaluations).
 
@@ -196,7 +198,6 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			DebugFlags, Label, UtteranceText,
 			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 			PhraseTokens, RawTokensOut, AAs,
-			% ChromosomeWordFound, InputmatchPhraseWords,
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
 	\+ control_option(allow_duplicate_concept_names),
@@ -206,7 +207,6 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				 MetaString, MetaConcept,
 				 Variants, TokenPhraseWords, PhraseTokenLength,
 				 RawTokensOut, AAs,
-				 % ChromosomeWordFound, InputmatchPhraseWords,
 				 InputmatchPhraseWords,
 				 TokenHeadWords, PhraseTokens, Evaluation) ->
 	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]) ->
@@ -221,25 +221,21 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 				PhraseTokens, RawTokensOut, AAs,
-				% ChromosomeWordFound, InputmatchPhraseWords,
 				InputmatchPhraseWords,
-				% [cc(MetaCanonical,MetaConcept)|CCsIn], CCsOut,
 				CCsNext, CCsOut, RestEvaluations).
 
 evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			DebugFlags, Label, UtteranceText,
 			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 			PhraseTokens, RawTokensOut, AAs,
-			% ChromosomeWordFound, InputmatchPhraseWords,
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
-	control_option(allow_duplicate_concept_names),
+	% control_option(allow_duplicate_concept_names),
 	!,
 	( compute_all_evaluations(MetaCanonical, DebugFlags, Label, UtteranceText,
 				  MetaString, MetaConcept,
 				  Variants, TokenPhraseWords, PhraseTokenLength,
 				  RawTokensOut, AAs,
-				  % ChromosomeWordFound, InputmatchPhraseWords,
 				  InputmatchPhraseWords,
 				  TokenHeadWords, PhraseTokens, NewEvaluations) ->
 	  debug_evaluate_candidate_list_5(DebugFlags, NewEvaluations),
@@ -252,34 +248,18 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 				PhraseTokens, RawTokensOut, AAs,
-				% ChromosomeWordFound, InputmatchPhraseWords,
 				InputmatchPhraseWords,
-				% [cc(MetaCanonical,MetaConcept)|CCsIn], CCsOut,
 				CCsNext, CCsOut, RestEvaluations).
-
-% show_one_evaluation(MetaCanonical, DebugFlags, Label, UtteranceText,
-% 			    MetaString, MetaConcept,
-% 			     Variants, TokenPhraseWords, PhraseTokenLength,
-% 			     RawTokensOut, AAs, InputmatchPhraseWords,
-% 			     TokenHeadWords, PhraseTokens, _Evaluation) :-
-% 	format(user_output, '~n### ~q~n',
-% 	       [compute_one_evaluation(MetaCanonical, DebugFlags, Label, UtteranceText,
-% 				       MetaString, MetaConcept,
-% 				       Variants, TokenPhraseWords, PhraseTokenLength,
-% 				       RawTokensOut, AAs, InputmatchPhraseWords,
-%				       TokenHeadWords, PhraseTokens, _Eval)]).
 
 /* 
    compute_one_evaluation(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaTerm, +MetaConcept,
    			  +Variants, +TokenPhraseWords, +PhraseTokenLength,
-			  +RawTokensOut, +AAs,
-			  +ChromosomeWordFound, +InputmatchPhraseWords,
+			  +RawTokensOut, +AAs, +InputmatchPhraseWords,
 		          +TokenHeadWords, +PhraseTokens, -Evaluation)
 
    compute_all_evaluations(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaTerm, +MetaConcept,
                            +Variants, +TokenPhraseWords, +PhraseTokenLength,
-			   +RawTokensOut, +AAs,
-			   +ChromosomeWordFound, +InputmatchPhraseWords,
+			   +RawTokensOut, +AAs, +InputmatchPhraseWords,
 		           +TokenHeadWords, +PhraseTokens, -Evaluations)
 
 compute_one_evaluation/14 computes the ev/9 term corresponding to the inputs.
@@ -289,14 +269,23 @@ in which multiple CUIs can have the same preferred name).
 
 compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, MetaConcept,
 		       Variants, TokenPhraseWords, PhraseTokenLength,
-		       % RawTokensOut, AAs, ChromosomeWordFound, _InputmatchPhraseWords,
-		       RawTokensOut, AAs, _InputmatchPhraseWords,
+		       RawTokensOut, _AAs, _InputmatchPhraseWords,
 		       TokenHeadWords, PhraseTokens, Evaluation) :-
 	% filter_out_multiple_meaning_designators(MetaWords0,MetaWords),
 	compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 			     TokenPhraseWords, MetaWords,
 			     Variants, PhraseTokenLength,
-			     MatchMap, InvolvesHead, IsOvermatch),
+			     TempMatchMap, InvolvesHead, IsOvermatch),
+	TempMatchMap = [MatchMapHead|MatchMapTail],
+	consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
+	% ( TempMatchMap = MatchMap ->
+	%   true
+	% ; format(user_output, '~n### MetaWords  = ~q~n', [MetaWords]),
+	%   format(user_output, '### TokenWords = ~q~n', [TokenPhraseWords]),
+	%   format(user_output, '### TempMM     = ~q~n', [TempMatchMap]),
+	%   format(user_output, '### MM         = ~q~n', [MatchMap]),
+	%   debug_message(trace, '~N### computing one evaluation: ~q~n', [MetaWords])
+	% ),
 	debug_message(trace, '~N### computing one evaluation: ~q~n', [MetaWords]),
 	% format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
 	MatchMap \== [],
@@ -307,10 +296,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	debug_compute_one_evaluation_1(DebugFlags, TokenPhraseWords, MetaWords,
 				       MatchMap, MatchCCs, ExtraMetaWords),
 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
-			    ExtraMetaWords, Variants,
-			    InvolvesHead, Value),
-	% compute_match_value(MatchMap,MatchCCs,NTokenPhraseWords,NMetaWords,
-	%                     InvolvesHead,Value),
+			    ExtraMetaWords, Variants, InvolvesHead, Value),
 	debug_compute_one_evaluation_2(DebugFlags, MetaTerm),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
@@ -322,28 +308,45 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	% This is just so the debugger will let me examine Evaluation
 	Evaluation \== [],
 	% get the positional info corresponding to this MatchMap
-	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, % ChromosomeWordFound,
-			 RawTokensOut, MatchingTokensList, TempPosInfo),
-	append(MatchingTokensList, MatchingTokens),
-	calculate_aa_extra_chars(MatchingTokens, AAs, RawTokensOut, AAExtraCharCount),
-	modify_pos_info_for_aa_count(AAExtraCharCount, TempPosInfo, PosInfo).
+	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo).
 
-modify_pos_info_for_aa_count(AAExtraCharCount, TempPosInfo, PosInfo) :-
-	( AAExtraCharCount =:= 0 ->
-	  PosInfo = TempPosInfo;
-	  TempPosInfo = [FirstTempPosInfo|RestTempPosInfo],
-	  increase_final_length(RestTempPosInfo, FirstTempPosInfo, AAExtraCharCount, PosInfo)
+consolidate_matchmap([], MatchMapHead, [MatchMapHead]).
+consolidate_matchmap([MatchMap2|RestMatchMap], MatchMap1, MatchMap) :-
+	( merge_matchmap_components(MatchMap1, MatchMap2, MergedMatchMap) ->
+	  consolidate_matchmap(RestMatchMap, MergedMatchMap, MatchMap)
+	; MatchMap = [MatchMap1|MatchMapOut],
+	  consolidate_matchmap(RestMatchMap, MatchMap2, MatchMapOut)
 	).
-	
-increase_final_length([], LastTempPosInfo, AAExtraCharCount, [PosInfo]) :-
-	LastTempPosInfo = LastStartPos/LastLength,
-	NewLastLength is LastLength + AAExtraCharCount,
-	PosInfo = LastStartPos/NewLastLength.
 
-increase_final_length([NextTempPosInfo|RestTempPosInfo], FirstTempPosInfo,
-		      AAExtraCharCount,
-		      [FirstTempPosInfo|RestPosInfo]) :-
-	increase_final_length(RestTempPosInfo, NextTempPosInfo, AAExtraCharCount, RestPosInfo).
+merge_matchmap_components([[Text1Start,Text1End], [Concept1Start,Concept1End], Variation1],
+			  [[Text2Start,Text2End], [Concept2Start,Concept2End], Variation2],
+			  [[Text1Start,Text2End], [Concept1Start,Concept2End], Variation3]) :-
+	Text2Start is Text1End + 1,
+	Concept2Start is Concept1End + 1,
+	% Average
+	Variation3 is (Variation1 + Variation2)/2.
+
+	% Sum
+	% Variation3 is Variation1 + Variation2.
+	% Max
+	% Variation3 is max(Variation1, Variation2).
+
+%%% modify_pos_info_for_aa_count(AAExtraCharCount, TempPosInfo, PosInfo) :-
+%%% 	( AAExtraCharCount =:= 0 ->
+%%% 	  PosInfo = TempPosInfo;
+%%% 	  TempPosInfo = [FirstTempPosInfo|RestTempPosInfo],
+%%% 	  increase_final_length(RestTempPosInfo, FirstTempPosInfo, AAExtraCharCount, PosInfo)
+%%% 	).
+%%% 	
+%%% increase_final_length([], LastTempPosInfo, AAExtraCharCount, [PosInfo]) :-
+%%% 	LastTempPosInfo = LastStartPos/LastLength,
+%%% 	NewLastLength is LastLength + AAExtraCharCount,
+%%% 	PosInfo = LastStartPos/NewLastLength.
+%%% 
+%%% increase_final_length([NextTempPosInfo|RestTempPosInfo], FirstTempPosInfo,
+%%% 		      AAExtraCharCount,
+%%% 		      [FirstTempPosInfo|RestPosInfo]) :-
+%%% 	increase_final_length(RestTempPosInfo, NextTempPosInfo, AAExtraCharCount, RestPosInfo).
 
 
 % A MatchMap list is a list of lists of the form [[X1,Y1], [X2,Y2], Z].
@@ -370,26 +373,25 @@ increase_final_length([NextTempPosInfo|RestTempPosInfo], FirstTempPosInfo,
 % tok(ws,' ',' ',pos(232,233),pos(450,1))
 % tok(lc,collagen,collagen,pos(233,241),pos(457,8))
 
-get_all_pos_info([], _TokenPhraseWords, _PhraseTokens,
-		 % _ChromosomeWordFound, _RawTokensOut, [], []).
-		 _RawTokensOut, [], []).
-get_all_pos_info([FirstMatchMap|RestMatchMaps], TokenPhraseWords,
-		 % PhraseTokens, ChromosomeWordFound, RawTokensOut,
-		 PhraseTokens, RawTokensOut,
-		 [OneMatchingTokens|RestMatchingTokens],
-		 [FirstPosInfo|RestPosInfo]) :-
+get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo) :-
+	get_all_pos_info_1(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, TempPosInfo),
+	append(TempPosInfo, AppendedPosInfo),
+	sort(AppendedPosInfo, SortedPosInfo),
+	SortedPosInfo = [H|T],
+	collapse_pos_info(T, H, MergedPosInfo),
+	PosInfo = MergedPosInfo.
+
+get_all_pos_info_1([], _TokenPhraseWords, _PhraseTokens, _RawTokensOut, []).
+get_all_pos_info_1([FirstMatchMap|RestMatchMaps], TokenPhraseWords,
+		   PhraseTokens, RawTokensOut, [FirstPosInfo|RestPosInfo]) :-
 	get_one_pos_info(FirstMatchMap, TokenPhraseWords, PhraseTokens, RestPhraseTokens,
-			 % ChromosomeWordFound,
-			 RawTokensOut, OneMatchingTokens, FirstPosInfo),
-	get_all_pos_info(RestMatchMaps, TokenPhraseWords, RestPhraseTokens,
-			 % ChromosomeWordFound,
-			 RawTokensOut, RestMatchingTokens, RestPosInfo),
-	!.
+			 RawTokensOut, _OneMatchingTokens, FirstPosInfo),
+	get_all_pos_info_1(RestMatchMaps, TokenPhraseWords, RestPhraseTokens,
+			   RawTokensOut, RestPosInfo).
 
 get_one_pos_info(MatchMap, TokenPhraseWords, PhraseTokensIn, PhraseTokensOut,
-		 % ChromosomeWordFound,
 		 RawTokensOut, [MatchingToken|RestMatchingTokens],
-		 FirstStartPos/Length) :-
+		 [FirstStartPos/FirstLength|RestPosInfo]) :-
 	% get X1 and Y1 out of the MatchMap
 	get_matchmap_indices(MatchMap, FirstMatch, LastMatch),
 	% get words X1-->Y1 from the PhraseWord List; these are the MatchingTokenPhraseWords
@@ -398,16 +400,12 @@ get_one_pos_info(MatchMap, TokenPhraseWords, PhraseTokensIn, PhraseTokensOut,
 	% get the second pos(_,_) from the tok(_,_,_,_,_) term
 	% corresponding to FirstMatchingPhraseWord;
 	% PhraseTokensNext is all subsequent tokens
- 	get_one_word_pos_info(FirstMatchingPhraseWord, PhraseTokensIn, % ChromosomeWordFound,
+ 	get_one_word_pos_info(FirstMatchingPhraseWord, PhraseTokensIn,
 			      RawTokensOut, MatchingToken, PhraseTokensNext,
-			      FirstStartPos, OneLength),
- 	% The new current Length is the sum of FirstStartPos and OneLength
- 	TempLength is FirstStartPos + OneLength,
+			      FirstStartPos, FirstLength),
  	get_rest_word_pos_info(RestMatchingTokenPhraseWords, PhraseTokensNext,
-			       FirstStartPos, % ChromosomeWordFound,
-			       RawTokensOut, TempLength, RestMatchingTokens,
- 			       PhraseTokensOut, RestLength),
- 	Length is RestLength - FirstStartPos.
+			       RawTokensOut, RestMatchingTokens,
+			       PhraseTokensOut, RestPosInfo).
 
 get_matchmap_indices([[X,Y]|_], X, Y).
 
@@ -425,23 +423,20 @@ get_matching_phrase_words(First, Last, Current, TokenPhraseWords, MatchingTokenP
 	  get_matching_phrase_words(First, Last, Next, RestTokenPhraseWords, RestMatchingTokenPhraseWords)
 	).	  
 
-get_one_word_pos_info(MatchingPhraseWord, [FirstToken|RestTokens], % ChromosomeWordFound,
+get_one_word_pos_info(MatchingPhraseWord, [FirstToken|RestTokens],
 		      RawTokensOut, MatchingToken, RemainingTokens,
 		      StartPos, Length) :-
 	% get_one_word_pos_info must be backtrackable if we want to find PosInfo for
 	% [transcription,factor] inside [nuclear,factor,kappab,transcription,factor,relb]
 	( control_option(ignore_word_order) ->
 	  select(MatchingToken, [FirstToken|RestTokens], RemainingTokens),
-	  % matching_token(lc, ChromosomeWordFound, MatchingPhraseWord, MatchingToken, _, _),
 	  matching_token(lc, MatchingPhraseWord, MatchingToken),
 	  get_pos_info_from_token(MatchingToken, StartPos, Length)
-	% ; matching_token(lc, ChromosomeWordFound, MatchingPhraseWord,
-	% 		 FirstToken, RestTokens, RemainingTokens) ->
 	; matching_token(lc, MatchingPhraseWord, FirstToken) ->
 	  get_pos_info_from_token(FirstToken, StartPos, Length),
 	  MatchingToken = FirstToken,
 	  RemainingTokens = RestTokens
-	; get_one_word_pos_info(MatchingPhraseWord, RestTokens, % ChromosomeWordFound,
+	; get_one_word_pos_info(MatchingPhraseWord, RestTokens,
 				RawTokensOut,
 				MatchingToken, RemainingTokens,
 				StartPos, Length) ->
@@ -452,23 +447,15 @@ get_one_word_pos_info(MatchingPhraseWord, [FirstToken|RestTokens], % ChromosomeW
 	  abort
 	).
 
-get_rest_word_pos_info([], PhraseTokens, _PrevStartPos, % _ChromosomeWordFound,
-		       _RawTokensOut, Length, [], PhraseTokens, Length).
+get_rest_word_pos_info([], PhraseTokens, _RawTokensOut, [], PhraseTokens, []).
 get_rest_word_pos_info([FirstMatchingPhraseWord|RestMatchingTokenPhraseWords],
-		       % PhraseTokensIn, PrevStartPos, ChromosomeWordFound, RawTokensOut,
-		       PhraseTokensIn, PrevStartPos, RawTokensOut,
-		       _CurrLength, [MatchingToken|RestMatchingTokens],
-		       PhraseTokensOut, Length) :-
-	get_one_word_pos_info(FirstMatchingPhraseWord, PhraseTokensIn, % ChromosomeWordFound,
+		       PhraseTokensIn, RawTokensOut, [MatchingToken|RestMatchingTokens],
+		       PhraseTokensOut, [ThisStartPos/ThisLength|RestPosInfo]) :-
+	get_one_word_pos_info(FirstMatchingPhraseWord, PhraseTokensIn,
 			      RawTokensOut, MatchingToken, PhraseTokensNext,
 			      ThisStartPos, ThisLength),
-	ThisStartPos > PrevStartPos,
-	NextLength is ThisStartPos + ThisLength,
 	get_rest_word_pos_info(RestMatchingTokenPhraseWords, PhraseTokensNext,
-			       % ThisStartPos, ChromosomeWordFound, RawTokensOut,
-			       ThisStartPos, RawTokensOut,
-			       NextLength, RestMatchingTokens,
-			       PhraseTokensOut, Length).
+			       RawTokensOut, RestMatchingTokens, PhraseTokensOut, RestPosInfo).
 
 get_pos_info_from_token(tok(_Type, _TokenString, _LCTokenString, _Pos1, pos(StartPos,Length)),
 			StartPos, Length).
@@ -485,15 +472,15 @@ matching_token(lc, MatchingPhraseWordAtom,
 
 compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, MetaConcept,
 			Variants, TokenPhraseWords, PhraseTokenLength,
-			RawTokensOut, AAs,
-			% ChromosomeWordFound, InputmatchPhraseWords,
-			InputmatchPhraseWords,
+			RawTokensOut, AAs, InputmatchPhraseWords,
 			TokenHeadWords, PhraseTokens, Evaluations) :-
 	% filter_out_multiple_meaning_designators(MetaWords0,MetaWords),
 	debug_message(trace, '~N### computing ALL evaluations: ~q~n', [MetaWords]),
 	compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 			     TokenPhraseWords, MetaWords, Variants, PhraseTokenLength,
-			     MatchMap, InvolvesHead, IsOvermatch),
+			     TempMatchMap, InvolvesHead, IsOvermatch),
+	TempMatchMap = [MatchMapHead|MatchMapTail],
+	consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
         % format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
 	MatchMap \== [],
 	compute_connected_components(MatchMap, MatchCCs),
@@ -507,7 +494,6 @@ compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, M
 	),
 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
 			    ExtraMetaWords, Variants, InvolvesHead, Value),
-	% compute_match_value(MatchMap,MatchCCs,NTokenPhraseWords,NMetaWords, InvolvesHead,Value),
 	( memberchk(5, DebugFlags) ->
 	  format(' <-- ~p~n',[MetaTerm])
 	; true
@@ -516,35 +502,23 @@ compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, M
 	db_get_concept_cuis(MetaConcept, CUIs),
 	form_evaluations(CUIs, NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
 			 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-			 % ChromosomeWordFound,
 			 InputmatchPhraseWords, InvolvesHead, IsOvermatch, Evaluations).
 
-
-% form_evaluations([], _, _, _, _, _, _, _, _, _, _, _, _, _, []) :- !.
-form_evaluations([], _, _, _, _, _, _, _, _, _, _, _, []) :- !.
+form_evaluations([], _, _, _, _, _, _, _, _, _, _, _, _, []) :- !.
 form_evaluations([CUI|Rest], NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
 		 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-		 % ChromosomeWordFound, InputmatchPhraseWords,
 		 InputmatchPhraseWords,
                  InvolvesHead, IsOvermatch, [FirstEvaluation|RestEvaluations]) :-
 	db_get_cui_sourceinfo(CUI, SourceInfo),
 	extract_unique_sources(SourceInfo, [], UniqueSources),
 	FirstEvaluation = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,_SemTypes,
 			     MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo),
-	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, % ChromosomeWordFound,
-			 RawTokensOut, MatchingTokensList, TempPosInfo),
-	append(MatchingTokensList, MatchingTokens),
-	calculate_aa_extra_chars(MatchingTokens, AAs, RawTokensOut, AAExtraCharCount),
-	modify_pos_info_for_aa_count(AAExtraCharCount, TempPosInfo, PosInfo),
-	% format(user_output, 'EV: ~q~n', [FirstEvaluation]),
+	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo),
 	form_evaluations(Rest, NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
 			 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-			 % ChromosomeWordFound, InputmatchPhraseWords,
 			 InputmatchPhraseWords,
 			 InvolvesHead, IsOvermatch, RestEvaluations).
 
-    % temp eval
-    %compute_extra_meta(_,_,[]).
 compute_extra_meta(MatchMap,MetaWords,ExtraMetaWords) :-
     extract_components(MatchMap,_PhraseComponents,MetaComponents),
     linearize_components(MetaComponents,LMetaComponents),
@@ -658,7 +632,7 @@ compute_phrase_match_aux([First|Rest], Label, UtteranceText, AllMetaWords, Token
 	    End is NMeta + NVariantWords,
             Variant = v(_Word,_Categories,VarLevel,_,_,_),
             MatchMapInOut = [[GeneratorPosition,[NMeta,End],VarLevel] | MatchMapIn],
-            NewNMeta is NMeta + NVariantWords + 1,
+	    NewNMeta is NMeta + NVariantWords + 1,
             append(RestVariantWords, NewRest, Rest),
             compute_phrase_match_aux(NewRest, Label, UtteranceText,
 				     AllMetaWords, TokenPhraseWords,
@@ -1211,6 +1185,3 @@ debug_compute_one_evaluation_2(DebugFlags, MetaTerm) :-
 	  format(' <-- ~p~n',[MetaTerm])
 	; true
 	).
-
-
-

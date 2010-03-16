@@ -1,58 +1,89 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:	    metamap_candidates.pl
 % Module:   MetaMap
 % Author:   Lan
 % Purpose:  MetaMap candidate search capabilities
 
 
-:- module(metamap_candidates,[
+:- module(metamap_candidates, [
 	add_candidates/7
     ]).
 
 
-:- use_module(metamap(metamap_evaluation),[
+:- use_module(metamap(metamap_evaluation), [
 	word_is_last_word_of_some_variant/2
     ]).
 
-:- use_module(skr_db(db_access),[
-	db_get_mwi_word_count/3
-    ]).
-
-:- use_module(metamap(metamap_tokenization),[
+:- use_module(metamap(metamap_tokenization), [
 	tokenize_text/2,
 	tokenize_text_mm/2
     ]).
 
-:- use_module(metamap(metamap_utilities),[
+:- use_module(metamap(metamap_utilities), [
 	wl/1
     ]).
 
-:- use_module(skr_lib(word_index),[
-	get_filtered_uscs_for_word/7
+:- use_module(skr_db(db_access), [
+	db_get_mwi_word_count/3
     ]).
 
-:- use_module(skr_lib(nls_strings),[
+:- use_module(skr_lib(nls_strings), [
 	prep_conj_det_atom/1
     ]).
 
-:- use_module(skr_lib(nls_system),[
+:- use_module(skr_lib(nls_system), [
 	control_option/1
     ]).
 
-:- use_module(skr(skr_utilities),[
+:- use_module(skr(skr_utilities), [
 	debug_message/3,
 	ensure_number/2
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
+:- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2,
 	string_size/2
     ]).
 
-:- use_module(library(avl),[
+:- use_module(skr_lib(word_index), [
+	get_filtered_uscs_for_word/7
+    ]).
+
+:- use_module(library(avl), [
 	avl_fetch/3,
 	avl_store/4
     ]).
 
-:- use_module(library(sets),[
+:- use_module(library(sets), [
 	list_to_set/2
     ]).
 
@@ -235,19 +266,24 @@ get_from_table(Word, FilterWords, Table, DebugFlags, MetaUSCs,
 	       WordDataCacheIn, USCCacheIn,
 	       WordDataCacheOut, USCCacheOut) :-
 	debug_message(trace, '~n### Looking up ~q|~q from ~q~n', [Word,FilterWords,Table]),
-	( avl_fetch(Word:Table:FilterWords, USCCacheIn, MetaUSCs) ->
+	make_avl_key_2(Word, Table, FilterWords, AVLKey),
+	( avl_fetch(AVLKey, USCCacheIn, MetaUSCs) ->
 	  debug_message(trace, '~N### USC CACHE FOUND ~q|~q from ~q~n', [Word,FilterWords,Table]),
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
 	; get_filtered_uscs_for_word(Table, Word, DebugFlags, FilterWords,
 				     WordDataCacheIn, WordDataCacheOut, MetaUSCs) ->
-	  avl_store(Word:Table:FilterWords, USCCacheIn, MetaUSCs, USCCacheOut),
-	  debug_message(trace, '~N### DONE looking up ~q|~q~n', [Word,FilterWords])
+  	  avl_store(AVLKey, USCCacheIn, MetaUSCs, USCCacheOut)
 	; MetaUSCs = [],
 	  WordDataCacheOut = WordDataCacheIn,
-	  USCCacheOut = USCCacheIn,
-	  format('~NERROR: Cannot find Meta concepts for ~p.~n', [Word])
-	).
+  	  avl_store(AVLKey, USCCacheIn, MetaUSCs, USCCacheOut)
+	),
+	debug_message(trace, '~N### DONE looking up ~q|~q~n', [Word,FilterWords]).
+
+make_avl_key_2(Word, Table, FilterWords, AVLKey) :-
+	concat_atom([Word,'-',Table], Functor),
+	functor(AVLKey, Functor, 1),
+	arg(1, AVLKey, FilterWords).
 
 /* get_meta_uscs_2(+PhraseLength, +Word, +AllVariants,
                    +FilterWords, +DebugFlags, -MetaUSCs,
@@ -306,7 +342,7 @@ frequent_first_word_pair(human,       protein).
 frequent_first_word_pair(mouse,       protein).
 frequent_first_word_pair(rat,         protein).
 frequent_first_word_pair(s,           protein).
-frequent_first_word_pair(e,           protein).
+frequent_first_word_pair(c,           protein).
 
 
 %dump_uscs(_,_,[]) :-

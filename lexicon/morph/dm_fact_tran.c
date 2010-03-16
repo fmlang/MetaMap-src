@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /* dm_fact_tran.c - translates facts from a facts file.
 */
 
@@ -9,6 +39,7 @@
 #include <malloc.h>
 #include <errno.h>
 #include "dm.h"
+#include "lexicon_types.h"
 #include <rpc/xdr.h>
 
 /*
@@ -117,8 +148,12 @@ read_facts(void)
 	if (line[i] == EOS)
 	    continue;
 
-	if ((factBuf = (DmFact *) incr_buf_alloc((void *)factBuf, sizeof(DmFact), n_factBuf,
-		&a_factBuf, (int)1, (int)(DM_DEFAULT_ALLOCATION*2))) == (DmFact *)NULL)
+	if ((factBuf = (DmFact *) incr_buf_alloc((void *)factBuf,
+						 sizeof(DmFact),
+						 n_factBuf,
+						 &a_factBuf,
+						 (int)1,
+						 (int)(DM_DEFAULT_ALLOCATION*2))) == (DmFact *)NULL)
 	    return(0);
 	fact = factBuf+n_factBuf;
 	fact->dmInTerm = fact->dmOutTerm = (-1);
@@ -141,8 +176,12 @@ read_facts(void)
 	start = sp = &line[*(fields+2*fieldNum)];
 	length = l = *(fields+2*fieldNum+1);
 
-	if ((fcharBuf = (char *) incr_buf_alloc((void *)fcharBuf, sizeof(char), n_fcharBuf,
-		&a_fcharBuf, (int)(length+1), (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+	if ((fcharBuf = (char *) incr_buf_alloc((void *)fcharBuf,
+						sizeof(char),
+						n_fcharBuf,
+						&a_fcharBuf,
+						(int)(length+1),
+						(int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 	    return(0);
 	strncpy(fcharBuf+n_fcharBuf, start, (size_t)length);
 	*(fcharBuf+n_fcharBuf+length) = EOS;
@@ -166,8 +205,12 @@ read_facts(void)
 	fieldNum++;
 	start = sp = &line[*(fields+2*fieldNum)];
 	length = l = *(fields+2*fieldNum+1);
-	if ((fcharBuf = (char *) incr_buf_alloc((void *)fcharBuf, sizeof(char), n_fcharBuf,
-		&a_fcharBuf, (int)(length+1), (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+	if ((fcharBuf = (char *) incr_buf_alloc((void *)fcharBuf,
+						sizeof(char),
+						n_fcharBuf,
+						&a_fcharBuf,
+						(int)(length+1),
+						(int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 	    return(0);
 	strncpy(fcharBuf+n_fcharBuf, start, (size_t)length);
 	*(fcharBuf+n_fcharBuf+length) = EOS;
@@ -193,8 +236,12 @@ read_facts(void)
 	n_factBuf++;
 
 /* load reverse related terms */
-	if ((factBuf = (DmFact *) incr_buf_alloc((void *)factBuf, sizeof(DmFact), n_factBuf,
-		&a_factBuf, (int)1, (int)(DM_DEFAULT_ALLOCATION*2))) == (DmFact *)NULL)
+	if ((factBuf = (DmFact *) incr_buf_alloc((void *)factBuf,
+						 sizeof(DmFact),
+						 n_factBuf,
+						 &a_factBuf,
+						 (int)1,
+						 (int)(DM_DEFAULT_ALLOCATION*2))) == (DmFact *)NULL)
 	    return(0);
 	fact = factBuf+n_factBuf;
 	oldfact = factBuf+n_factBuf-1;
@@ -249,7 +296,7 @@ write_dm_facts_xdr(void)
 	return(0);
 
     n = n_factBuf;
-    if (xdr_array(&xdrs, (caddr_t *)&factBuf, (uint_t *)&n_factBuf, (const uint_t)n, sizeof(DmFact), xdr_dm_fact) == 0)
+    if (xdr_array(&xdrs, (caddr_t *)&factBuf, (uint_t *)&n_factBuf, (const uint_t)n, sizeof(DmFact), (xdrproc_t)xdr_dm_fact) == 0)
 	return(0);
 
     n = n_fcharBuf;

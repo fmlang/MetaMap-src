@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:	    metamap_tokenization.pl
 % Module:   MetaMap
 % Author:   Lan
@@ -6,12 +36,15 @@
 
 :- module(metamap_tokenization,[
 	add_tokens_to_phrases/2,
+	% must be exported for mwi_utilities
 	ends_with_s/1,
-	extract_input_matches/4,
 	extract_tokens_with_tags/2,
+	% must be exported for mm_print
 	filter_tokens/3,
 	get_utterance_token_list/4,
+	% must be exported for mwi_utilities
 	is_ws/1,
+	% must be exported for mwi_utilities
 	is_ws_word/1,
 	linearize_phrase/4,
 	linearize_components/2,
@@ -243,131 +276,6 @@ create_word_list(Words,wdl(Words,LCWords)) :-
     lowercase_list(Words,LCWords).
 
 
-/* extract_input_matches(+PhraseItemList, +SyntaxFilter, -IMWords, -IMHeadWords)
-   extract_input_matches_aux(+PhraseItemList, +SyntaxFilter, -IMWordsList, -IMHeadWordsList)
-   extract_input_match(+PhraseItem, -IMWords, -IMHeadWords)
-   extract_input_match_aux(+SubItemList, -IMWords)
-   retokenize_input_match(+Tokens, -RetokenizedTokens)
-   filter_input_match(+PhraseItem, -IMWords, -IMHeadWords)
-   filter_input_match_1(+PhraseItem, -IMWords, -IMHeadWords)
-   filter_input_match_2(+PhraseItem, -IMWords, -IMHeadWords)
-
-The *input_match* family extracts inputmatch/1 information from
-syntactic structures:
-
-     PhraseItem ::= <tag>(<SubItemList>) | <primitivetag>(<atom>)
-
-     SubItemList ::= <list> of <SubItem>
-
-     SubItem ::= <unary term>  (e.g., inputmatch(_))
-
-extract_input_matches/4 and extract_input_matches_aux/4 are control predicates
-for either extract_input_match/3 or filter_input_match/3 depending on whether
-FilterFlag is 'unfiltered' or 'filtered', respectively.
-extract_input_match/3 finds the inputmatch/1 term, IMWords, within PhraseItem.
-If PhraseItem is a head, then IMHeadWords=ImWords.
-extract_input_match_aux/2 finds the argument of the inputmatch/1 term in
-SubItemList.
-filter_input_match/3 is similar to extract_input_match/3 except that only
-"significant" input matches survive the filtering. Phrase items with "opaque"
-tags are filtered out:
-% Tagger tags
-opaque_tags(aux).
-opaque_tags(compl).
-opaque_tags(conj).
-opaque_tags(det).
-opaque_tags(modal).
-opaque_tags(prep).
-opaque_tags(pron).
-opaque_tags(punc).
-filter_input_match/3 uses two filtering predicates,
-filter_input_match_1/3 and filter_input_match_2/2.  */
-
-extract_input_matches(PhraseItemList, SyntaxFilter, IMWords,IMHeadWords) :-
-    extract_input_matches_aux(PhraseItemList, SyntaxFilter, IMWordsList,IMHeadWordsList),
-    append(IMWordsList,IMWords),
-    append(IMHeadWordsList,IMHeadWords).
-
-extract_input_matches_aux([], _, [], []).
-extract_input_matches_aux([FirstPhraseItem|RestPhraseItems],
-                          SyntaxFilter,
-                          [FirstIMWords|RestIMWords],
-                          [FirstIMHeadWords|RestIMHeadWords]) :-
-    ( SyntaxFilter == unfiltered ->
-        extract_input_match(FirstPhraseItem, FirstIMWords, FirstIMHeadWords)
-    ;   filter_input_match(FirstPhraseItem, FirstIMWords, FirstIMHeadWords)
-    ),
-    extract_input_matches_aux(RestPhraseItems, SyntaxFilter, RestIMWords, RestIMHeadWords).
-
-extract_input_match(head(SubItemList), IMWords, IMWords) :-
-    !,
-    extract_input_match_aux(SubItemList, IMWords).
-% try this!
-extract_input_match(shapes(ShapesList,_FeatList), ShapesList, []) :-
-    !.
-%extract_input_match(shapes(ShapesList,_FeatList), [IMWord], []) :-
-%    !,
-%    append_text(ShapesList,IMWord).
-extract_input_match(PhraseItem, IMWords, []) :-
-	functor(PhraseItem, _Tag, 1),
-	arg(1,PhraseItem, SubItemList),
-	!,
-	extract_input_match_aux(SubItemList, IMWords).
-extract_input_match(PhraseItem,[],[]) :-
-    format('~NERROR: extract_input_match/3 failed for ~p.~n',[PhraseItem]),
-    !,
-    fail.
-
-extract_input_match_aux([],_) :-
-    !,
-    fail.
-extract_input_match_aux(Atom,[Atom]) :-  % for "primitive" tags
-    atom(Atom),
-    !.
-extract_input_match_aux([inputmatch(IMWords0)|_], IMWords0) :-
-    !.
-% DO NOT RETOKENIZE (for now)
-%    retokenize_input_match(IMWords0, IMWords).
-extract_input_match_aux([_|Rest], IMWords) :-
-    extract_input_match_aux(Rest, IMWords).
-filter_input_match(PhraseItem, IMWords, IMHeadWords) :-
-	filter_input_match_1(PhraseItem, IMWords0, IMHeadWords0),
-	filter_input_match_2(IMWords0, IMWords),
-	filter_input_match_2(IMHeadWords0, IMHeadWords).
-
-filter_input_match_1(head(SubItemList), IMWords, IMWords) :-
-	!,
-	extract_input_match_aux(SubItemList, IMWords).
-% try this!
-%filter_input_match_1(shapes(ShapesList,_FeatList),_,ShapesList,[]) :-
-%    !.
-%filter_input_match_1(shapes(ShapesList,_FeatList),_,[IMWord],[]) :-
-%    !,
-%    append_text(ShapesList,IMWord).
-filter_input_match_1(PhraseItem, IMWords, []) :-
-	functor(PhraseItem, Tag, 1),
-	( opaque_tags(Tag) ->        % stop
-	  IMWords = []
-	; transparent_tags(Tag) ->   % continue
-	  arg(1, PhraseItem, SubItemList),
-	  extract_input_match_aux(SubItemList, IMWords)
-	; fail                       % fail
-	),
-	!.
-filter_input_match_1(PhraseItem, [], []) :-
-	format('~NERROR: filter_input_match_1/3 failed for ~p.~n', [PhraseItem]),
-	!,
-	fail.
-
-filter_input_match_2([], []).
-filter_input_match_2([First|Rest], [First|FilteredRest]) :-
-	\+ is_all_graphic_text(First),
-	!,
-	filter_input_match_2(Rest, FilteredRest).
-filter_input_match_2([_First|Rest], FilteredRest) :-
-	filter_input_match_2(Rest, FilteredRest).
-
-
 /* opaque_tags(?Tag)
 
 opaque_tags/1 is a factual predicate of phrase tags which prevent further
@@ -472,8 +380,7 @@ extract_tokens(head(SubItemList), TokenWords, TokenWords) :-
 	!,
 	extract_tokens_aux(SubItemList, TokenWords).
 % try this!
-extract_tokens(shapes(ShapesList,_FeatList), ShapesList, []) :-
-    !.
+extract_tokens(shapes(ShapesList,_FeatList), ShapesList, []) :- !.
 extract_tokens(PhraseItem, TokenWords, []) :-
 	functor(PhraseItem, _Tag, 1),
 	arg(1,PhraseItem, SubItemList),
@@ -488,7 +395,7 @@ extract_tokens(PhraseItem, [], []) :-
 extract_tokens_aux(PhraseItems, TokenWords) :-
 	( atom(PhraseItems) ->
 	  TokenWords = [PhraseItems],
-	  format(user_input, "PRIMITIVE: ~q~n", [PhraseItems])
+	  format(user_output, "PRIMITIVE: ~q~n", [PhraseItems])
 	; % PhraseItems = [H|T],
 	  memberchk(tokens(TokenWords), PhraseItems)
 	).
@@ -545,6 +452,7 @@ filter_tokens_1(PhraseItem, TokenWords, []) :-
 	),
 	!.
 filter_tokens_1(PhraseItem, [], []) :-
+	format(user_output, '~NERROR: filter_tokens_1/3 failed for ~p.~n', [PhraseItem]),
 	format('~NERROR: filter_tokens_1/3 failed for ~p.~n', [PhraseItem]),
 	!,
 	fail.
@@ -900,45 +808,27 @@ and punctuation are not ignored here.  */
 
 tokenize_fields_utterly([], []).
 tokenize_fields_utterly([First|Rest], [TokFirst|TokRest]) :-
-	format(user_output, '~N  BEFORE tokenize_one_field_utterly ~n', []), ttyflush,
 	tokenize_one_field_utterly(First, TokFirst),
-	format(user_output, '~N  AFTER tokenize_one_field_utterly ~n', []), ttyflush,
 	tokenize_fields_utterly(Rest, TokRest).
 
 tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 	concatenate_strings(Lines, " ", FieldText),
-	format(user_output, '~N    BEFORE tokenize_text_utterly ~n', []), ttyflush,
 	tokenize_text_utterly(FieldText, TokField),
-	format(user_output, '~N    AFTER tokenize_text_utterly ~n', []), ttyflush,
 	!.
 
 tokenize_text_utterly(Text,TokText) :-
-	format(user_output, '~N      IN tokenize_text_utterly~n', []), ttyflush,
 	( atom(Text) ->
 	  atom_codes(Text,String),
 	  phrase(ttu_string(TokString),String),
 	  atom_codes_list(TokText,TokString)
-	% ; is_print_string(Text) ->
-	; format(user_output, '~N      BEFORE call to phrase on ttu_string~n', []), ttyflush,
-	  format(user_output, '~Ncalling phrase/ttu_string on "~s"~n', [Text]),
-	  call_phrase_ttu_string(TokText,Text),
-	  format(user_output, '~N      AFTER call to phrase on ttu_string~n', []), ttyflush
+	; phrase(ttu_string(TokText),Text)
 	),
 	!.
 
-call_phrase_ttu_string(TokText,Text) :-
-	( phrase(ttu_string(TokText),Text) ->
-	  true
-	; format(user_output, '~Ncall to phrase/ttu_string failed; ABORTING!~n', []),
-	  abort
-	).
-
-	  
 /*  TOKENIZE TEXT UTTERLY GRAMMAR  */
 
 ttu_string(TS) -->
 	( ttu_token(T),
-	  % { format(user_output, '~Ntoken: ~s~n', [T]), ttyflush },
 	  { T\==[] },
 	  !,
 	  ttu_string(S),
@@ -952,16 +842,12 @@ ttu_string(TS) -->
 
 ttu_token(T) -->
 	( [Char],
-	  % { format(user_output, '~NChar: ~c~n', [Char]), ttyflush },
 	  { is_alnum(Char) },
 	  !,
 	  ttu_token(S),
 	  { T=[Char|S] }
 	; { T =[] }
 	).
-
-
-
 
 /* ************************************************************************
    ************************************************************************

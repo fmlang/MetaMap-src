@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /*
 % File:	    create_bulk.c
 % Module:   Berkeley DB
@@ -48,8 +78,8 @@ int main()
 
   for(i = 0; i < NUM_TABLES; i++)
   {
-     printf("Processing Table: %s from %s\n", config_info[i]->table, 
-            database_home);
+     printf("Processing table %s (%d of %d) from %s\n",
+	    config_info[i]->table, i+1, NUM_TABLES, database_home);
 
      setup_db(database_home, config_info[i]->table);
      /* sprintf(input_file, "%s/%s\0", database_home, config_info[i]->file_name); */
@@ -57,16 +87,34 @@ int main()
      process_db(input_file);
 
      /* ----------------- Close the index ----------------- */
-
+     printf("Closing DB %s...", config_info[i]->table);
+     fflush(stdout);
      db->close(db, 0);
+     printf("DB %s closed.\n", config_info[i]->table);
+     fflush(stdout);
+     if (i < NUM_TABLES-1) {
+	printf("Sleeping for 5 seconds before processing table %s; hit Control-C to interrupt",
+	       config_info[i+1]->table);
+	fflush(stdout);
+	sleep(5);
+	printf("\n\n");
+     }
   } /* for */
 
   /* Free up the structure */
 
-  for(i = 0; i < NUM_TABLES; i++)
+  for(i = 0; i < NUM_TABLES; i++) {
+    printf("Freeing space for table %s (%d of %d)\n",
+	   config_info[i]->table, i+1, NUM_TABLES);
+    fflush(stdout);
     free((char *)config_info[i]);
+  }
 
+  printf("Freeing space for config_info\n");
+  fflush(stdout);
   free((char*) config_info);
+  printf("ALL DONE!\n");
+  fflush(stdout);
   return(0);
 } /*** End main */
 
@@ -90,7 +138,6 @@ void get_value_from_field(int pos, char *term, char *line)
 void setup_db(char *database_home, char *index_file)
 {
     char database[MAXLINE];
-    int errno;
 
     /* Remove any existing db first */
 
@@ -108,11 +155,7 @@ void setup_db(char *database_home, char *index_file)
        db->set_pagesize(db, 8 * 1024);
        db->set_cachesize(db, 0, 64*1024, 0);
        db->set_flags(db, DB_DUP);
-#ifdef BDB_3_0_55
-       if((errno = db->open(db, database, NULL, DB_BTREE, DB_CREATE, 0644))!=0)
-#else
        if((errno = db->open(db, NULL, database, NULL, DB_BTREE, DB_CREATE, 0644))!=0)
-#endif
           db->err(db, errno, "open:%s", database);
     } /* else */
 } /* setup_db */
@@ -165,7 +208,7 @@ void process_db(char *input_file)
 
            if((term_counter % 10000) == 0)
            {
-	      printf("Completed %s %ld\n", input_file, term_counter);
+	      printf("Processed %s %ld\n", input_file, term_counter);
               fflush(stdout);
            } /* fi */
 
@@ -175,7 +218,7 @@ void process_db(char *input_file)
 	      perror("insert/put");
 	      fprintf(stderr,"%s: cursor: %s\n", __FILE__, strerror(errno));
            } /* if */
-       } /* fi */
+       } /* if */
 
        /* clean everyone up for the next round */
 
@@ -184,7 +227,7 @@ void process_db(char *input_file)
        fgets(line,MAXLINE,fp) ;
        /* printf("Line %d: %s\n", term_counter, line); */
     } /* while */
-    printf("FINISHED %s %ld\n", input_file, term_counter);
+    printf("FINISHED  %s %ld\n", input_file, term_counter);
     fflush(stdout);  
 
     /* ----------------- Close the data file ----------------- */

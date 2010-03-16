@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /*==========================================================
 
 %SOURCE FILE
@@ -150,6 +180,7 @@ LexIndexKey * lex_index_keys(
   /*  int return_code = D_S_SUCCESS; */
   char *line = NULL;
   char *lp;
+  char *np;
   int i;
   int size;
   int startFlag = 0;
@@ -174,9 +205,13 @@ LexIndexKey * lex_index_keys(
 	{
 	    lp += 6;
 	    size = strlen(lp)+1;
-	    if ((charBuf = (char *) lex_reallocate_buffer((void *)charBuf, sizeof(char), n_charBuf,
-		    &a_charBuf, size, LEX_DEFAULT_ALLOCATION*4)) == (char *)NULL)
-		return((LexIndexKey *)NULL);
+	    if ((charBuf = (char *) lex_reallocate_buffer((void *)charBuf,
+							  sizeof(char),
+							  n_charBuf,
+							  &a_charBuf,
+							  size,
+							  LEX_DEFAULT_ALLOCATION*4)) == (char *)NULL)
+	    return((LexIndexKey *)NULL);
 	    (void) strcpy(&charBuf[n_charBuf], lp);
 	    baseOfs = n_charBuf;
 	    n_charBuf += size;
@@ -185,12 +220,20 @@ LexIndexKey * lex_index_keys(
 	{
 	    lp += 17;
 	    size = strlen(lp)+1;
-	    if ((charBuf = (char *) lex_reallocate_buffer((void *)charBuf, sizeof(char), n_charBuf,
-		    &a_charBuf, size, LEX_DEFAULT_ALLOCATION*4)) == (char *)NULL)
+	    if ((charBuf = (char *) lex_reallocate_buffer((void *)charBuf,
+							  sizeof(char),
+							  n_charBuf,
+							  &a_charBuf,
+							  size,
+							  LEX_DEFAULT_ALLOCATION*4)) == (char *)NULL)
 		return((LexIndexKey *)NULL);
 	    (void) strcpy(&charBuf[n_charBuf], lp);
-	    if ((svoBuf = (int *) lex_reallocate_buffer((void *)svoBuf, sizeof(int), n_svoBuf,
-		    &a_svoBuf, (int)1, LEX_DEFAULT_ALLOCATION*4)) == (int *)NULL)
+	    if ((svoBuf = (int *) lex_reallocate_buffer((void *)svoBuf,
+							sizeof(int),
+							n_svoBuf,
+							&a_svoBuf,
+							(int)1,
+							LEX_DEFAULT_ALLOCATION*4)) == (int *)NULL)
 		return((LexIndexKey *)NULL);
 	    *(svoBuf+n_svoBuf) = n_charBuf;
 	    n_svoBuf++;
@@ -274,29 +317,45 @@ LexIndexKey * lex_index_keys(
 	    else if (strncmp(lp, "group(irreg|", 12) == 0)
 	    {
 		char *tp;
+		/*fprintf(stderr, "found a group irreg= [%s]\n", lp);*/
 
 		if (inflCat == 0)
 		    continue;
 
 		lp += 12;
 
+	        if ((np = strchr(lp, PIPE)) == (char *)NULL)
+		  break;
+	        lp = np + 1;
+	        /*fprintf(stderr, "found a group irreg np = [%s]\n", np);*/
+	        /*fprintf(stderr, "found a group irreg lp = [%s]\n", lp);*/
+
 		if ((tp = strchr(lp, PIPE)) == (char *)NULL)
 		    break;
+	        /*fprintf(stderr, "found a group irreg tp = [%s]\n", tp); */
 		if ((tp-lp) > 0)
 		{
+		    /*fprintf(stderr, "size = = [%d]\n", tp-lp);*/
 		    size = (tp-lp)+1;
-		    if ((charBuf = (char *) lex_reallocate_buffer((void *)charBuf, sizeof(char), n_charBuf,
-			    &a_charBuf, size, LEX_DEFAULT_ALLOCATION*4)) == (char *)NULL)
+		    if ((charBuf = (char *) lex_reallocate_buffer((void *)charBuf,
+								  sizeof(char),
+								  n_charBuf,
+								  &a_charBuf,
+								  size,
+								  LEX_DEFAULT_ALLOCATION*4)) == (char *)NULL)
 			return((LexIndexKey *)NULL);
 		    (void) strncpy(charBuf+n_charBuf, lp, (size_t)(tp-lp));
 		    *(charBuf+n_charBuf+(tp-lp)) = EOS;
+		    /*fprintf(stderr, "the group irreg= [%s]\n",  charBuf+n_charBuf );*/
 		    if (!lex_load(charBuf+n_charBuf, (int)(lexCat|LEX_BASEINFL)))
 			return((LexIndexKey *)NULL);
 		}
+	      break;
 	    }
 	    else if (strncmp(lp, "irreg|", 6) == 0)
 	    {
 		char *tp;
+		/*fprintf(stderr, "Found a irreg = %s\n", lp ); */
 
 		if (inflCat == 0)
 		    continue;
@@ -304,10 +363,14 @@ LexIndexKey * lex_index_keys(
 		lp += 6;
 		switch (lexCat)
 		{
-		    case LEX_CAT_ADJ:
-		    case LEX_CAT_ADV:
+		case LEX_CAT_ADJ:
+		case LEX_CAT_ADV:
 
-/* get comparative */
+		  /* get Base - we are going pass over this*/
+		  if ((np = strchr(lp, PIPE)) == (char *)NULL)
+		    break;
+		  lp = np + 1;
+		  /* get comparative */
 			if ((tp = strchr(lp, PIPE)) == (char *)NULL)
 			    break;
 			if ((tp-lp) > 0)
@@ -319,12 +382,13 @@ LexIndexKey * lex_index_keys(
 			    (void) strncpy(charBuf+n_charBuf, lp, (size_t)(tp-lp));
 			    *(charBuf+n_charBuf+(tp-lp)) = EOS;
 
-/* all irreg variants are assigned as inflections of the base */
+			/* all irreg variants are assigned as inflections of the base */
 			    if (!lex_load(charBuf+n_charBuf, (int)(lexCat|LEX_BASEINFL)))
 				return((LexIndexKey *)NULL);
+		        /*fprintf(stderr, "the comparitive= [%s]\n",  charBuf+n_charBuf );*/
 			}
 			lp = tp+1;
-/* get superlative */
+			/* get superlative */
 			if ((tp = strchr(lp, PIPE )) == (char *)NULL)
 			    break;
 
@@ -339,31 +403,54 @@ LexIndexKey * lex_index_keys(
 			    *(charBuf+n_charBuf+(tp-lp)) = EOS;
 			    if (!lex_load(charBuf+n_charBuf, (int)(lexCat|LEX_BASEINFL)))
 				return((LexIndexKey *)NULL);
+		            /*fprintf(stderr, "the superlative  = [%s]\n", charBuf+n_charBuf); */
 			}
 			break;
 
 		    case LEX_CAT_NOUN:
 
-/* get plural */
+		      /* get Base - we are going pass over this*/
+		      if ((np = strchr(lp, PIPE)) == (char *)NULL) 
+		       break;
+
+		      /* get plural form */
+		      lp = np + 1;
 			if ((tp = strchr(lp, PIPE)) == (char *)NULL)
 			    break;
+
+		      /*fprintf(stderr, "irreg noun  np = |%s|\n",  np );*/
+		      /*fprintf(stderr, "irreg noun  tp = |%s|\n",  tp );*/
+		      /*fprintf(stderr, "irreg noun  lp = |%s|\n",  lp );*/
+
 			if ((tp-lp) > 0)
 			{
 			    size = (tp-lp)+1;
-			    if ((charBuf = (char *) lex_reallocate_buffer((void *)charBuf, sizeof(char), n_charBuf,
-				    &a_charBuf, size, LEX_DEFAULT_ALLOCATION*4)) == (char *)NULL)
+			    if ((charBuf = (char *) lex_reallocate_buffer((void *)charBuf,
+									  sizeof(char),
+									  n_charBuf,
+									  &a_charBuf,
+									  size,
+									  LEX_DEFAULT_ALLOCATION*4)) == (char *)NULL) {
 				return((LexIndexKey *)NULL);
+			    }
 			    (void) strncpy(charBuf+n_charBuf, lp, (size_t)(tp-lp));
 			    *(charBuf+n_charBuf+(tp-lp)) = EOS;
-			    if (!lex_load(charBuf+n_charBuf, (int)(lexCat|LEX_BASEINFL)))
+			    if (!lex_load(charBuf+n_charBuf, (int)(lexCat|LEX_BASEINFL))) {
 				return((LexIndexKey *)NULL);
+			    }
 			}
 			break;
 
 		    case LEX_CAT_AUX:
 		    case LEX_CAT_VERB:
 
-/* get present */
+		      /* get Base - we are going pass over this*/
+		      if ((np = strchr(lp, PIPE)) == (char *)NULL)
+			break;
+		      lp = np +1 ;
+
+			/* get present */
+			tp = lp ;
 			if ((tp = strchr(lp, PIPE)) == (char *)NULL)
 			    break;
 			if ((tp-lp) > 0)
@@ -885,8 +972,9 @@ static int gen_and_load(
 
 /* generate & insert variants for base */
   if ((lms = (LmStruct *)lm_variants(charBuf+baseOfs,
-				     (lm_t)inflCat, (lm_t)inflRule, (lm_t)inflInfl,
-				     &n)) == (LmStruct *)NULL)
+				     (lm_t)inflCat,
+				     (lm_t)inflRule,
+				     (lm_t)inflInfl, &n)) == (LmStruct *)NULL)
 
       {
 	return_code = 0;
@@ -905,8 +993,9 @@ static int gen_and_load(
     for (j=0; j<n_svoBuf; j++)
     {
 	if ((lms = (LmStruct *)lm_variants(charBuf+(*(svoBuf+j)),
-					   (lm_t)inflCat, (lm_t)inflRule, (lm_t)inflInfl,
-					   &n)) == (LmStruct *)NULL)
+					   (lm_t)inflCat,
+					   (lm_t)inflRule,
+					   (lm_t)inflInfl, &n)) == (LmStruct *)NULL)
 	  {
 	    return_code = 0;
 	    goto bottom;

@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /*
 % File:	    btreeQlib.c
 % Module:   Berkeley DB
@@ -32,10 +62,16 @@ static DB **db;
 
 void init_dbs(char *db_path)
 {
+
+   /* printf("In init_dbs for >%s<\n", db_path);
+    * fflush(stdout);
+    */
+
    if(strlen(db_path) > 1)
    {
      database_home = (char *)malloc((size_t)strlen(db_path) + 1);
      strcpy(database_home, db_path);
+
    } /* fi */
    else
    {
@@ -44,6 +80,7 @@ void init_dbs(char *db_path)
    } /* else */
 
    GetConfigInfo(database_home);
+
    db = (DB **)malloc(sizeof(DB *) * NUM_TABLES);
 } /* init_dbs */
 
@@ -98,12 +135,19 @@ void GetConfigInfo(char *loc_database_home)
 
         config_info[pos]->num_fields = num_fields;
 
+        /* printf("%d: line = >%s<\n", pos, line);
+	   fflush(stdout);
+	*/
+
         /* Grab the field names */
 
         for(i = 0; i < num_fields; i++)
         {
            sscanf(tmp, "%[^|]|%[^\n]", config_info[pos]->fields[i], tmp2);
            strcpy(tmp, tmp2);
+	   /* printf("%d: >%s<\n", i, tmp2);
+	      fflush(stdout);
+	   */
         } /* for */
 
         /* Now grab the Type information */
@@ -118,6 +162,9 @@ void GetConfigInfo(char *loc_database_home)
              config_info[pos]->field_types[i] = INT_TYPE;
 
            strcpy(tmp, tmp2);
+	   /* printf("%d: >%s<\n", i, tmp3);
+	      fflush(stdout);
+	   */
         } /* for */
         pos++;
       } /* fi */
@@ -133,8 +180,15 @@ void GetConfigInfo(char *loc_database_home)
 void open_dbs(int dbptr)
 {
    char database[MAXLINE + 1];
-   int i, high, low, errno;
+   int i, high, low;
+   unsigned BDB_CACHE_SIZE;
 
+   /* printf("In open_dbs\n");
+    * fflush(stdout);
+    * printf("dbptr = %d\n", dbptr);
+    * fflush(stdout);
+    */
+   
    if(dbptr < 0)
    {
       high = NUM_TABLES;
@@ -146,27 +200,45 @@ void open_dbs(int dbptr)
      low = dbptr;
    } /* else */
 
+   BDB_CACHE_SIZE = atoi(getenv("BDB_CACHE_SIZE"));
+
    for(i = low; i < high; i++)
    {
        /* sprintf(database, "%s/%s\0", database_home, config_info[i]->table); */
        sprintf(database, "%s/%s", database_home, config_info[i]->table);
-       if((errno = db_create(&db[i], NULL, 0)) != 0)
+
+       /* printf("database = >%s<\n", database);
+	  fflush(stdout);
+	  printf("i = >%d<\n", i);
+	  fflush(stdout);
+       */
+
+       if((errno = db_create(&db[i], NULL, 0)) != 0) {
+	/* printf("db_create failed\n");
+	 * fflush(stdout);
+	 */
+
          fprintf(stderr, "%s: db_create: %s\n", __FILE__, db_strerror(errno));
+       }
        else
        {
-          db[i]->set_errfile(db[i], stderr);
-          db[i]->set_errpfx(db[i], __FILE__);
-          db[i]->set_pagesize(db[i], 16 * 1024);
-          db[i]->set_cachesize(db[i], 0, 64 * 1024, 0);
-          db[i]->set_flags(db[i], DB_DUP);
+       /* printf("db_create succeeded\n");
+	  fflush(stdout);
+	  fprintf(stderr, "i = %d\n", i);
+	  fflush(stderr);
+       */
+	 db[i]->set_errfile(db[i], stderr);
+         db[i]->set_errpfx(db[i], __FILE__);
+         db[i]->set_pagesize(db[i], 64 * 1024);
+	 /*
+	   printf("For %s setting BDB cache size to %d\n", config_info[i]->table, BDB_CACHE_SIZE);
+	   fflush(stdout);
+	 */
+         db[i]->set_cachesize(db[i], 0, BDB_CACHE_SIZE, 0);
+         db[i]->set_flags(db[i], DB_DUP);
 
-#ifdef BDB_3_0_55
-          if((errno = db[i]->open(db[i], database, NULL, DB_BTREE, 
-                (DB_RDONLY), 0644)) != 0)
-#else
 	  if((errno = db[i]->open(db[i], NULL, database, NULL, DB_BTREE, 
                 (DB_RDONLY), 0644)) != 0)
-#endif
              db[i]->err(db[i], errno, "open:%s", database);
        } /* else */
    } /* for */
@@ -205,7 +277,6 @@ void btree_query(char *query,             /* Input  */
   char **results;
   int record_found = FALSE;
   int status = 0;
-  int errno;
   DBC *dbcp = NULL;
   int upper_bound = 100;
   

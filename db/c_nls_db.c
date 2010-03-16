@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /*==========================================================
  
 %SOURCE FILE
@@ -88,8 +118,12 @@
 ----------------------------*/
 #include <embed.h>
 #include <stdio.h>
-#include "sicstus/sicstus.h"
-#include "db_access_glue.h" 
+#include <stdlib.h>
+#include <string.h>
+
+#include <sicstus/sicstus.h>
+#include <db_access_glue.h>
+
 /*end of includes ----------*/
  
 /*----------------------------
@@ -122,10 +156,15 @@
  * long c_nls_db_exec_2_list_jgm(char const * sql_command,
  * 			      SP_term_ref results);
  * exec_init_dbs(char const *db_name);
- * exec_destroy_dbs();
+ * exec_destroy_dbs(void);
  */
 
-void btree_query(char *query, char ***q_results, int   *numberOfResults, int  pos);
+void btree_query(
+		 char *query,
+		 char ***q_results,
+		 int  *numberOfResults,
+		 int  pos
+		 );
 void init_dbs(char const * db_name);
 void destroy_dbs(void);
 void open_dbs(int db_id);
@@ -134,7 +173,7 @@ struct results_struct  process_special_query(const char *line);
 struct query_struct parse_query(const char *line);
 int get_config(char *tablename);
 struct res_rows_struct *parse_results(struct query_struct query,
-int config_ptr, char *result);
+				      int config_ptr, char *result);
 void get_value_from_field_jgm(int pos, char *to, char *from);
 int find_fieldpos(char *find, int config_ptr);
 struct results_struct return_results(struct query_struct query, int config_ptr);
@@ -201,13 +240,13 @@ extern struct config_struct **config_info;
 %HEADER END
 ==========================================================*/
 long c_nls_db_exec_2_list_jgm(
-			     char const * sql_command,   /* Input  */
-			     SP_term_ref results         /* Output */
-			     )
+			      char const *sql_command,   /* Input  */
+			      SP_term_ref results        /* Output */
+			      )
  
 {
   long return_code = TRUE;
-  struct results_struct  rtn_results;
+  struct results_struct rtn_results;
   int             row,col 	= 0;
   SP_term_ref     row_term 	= SP_new_term_ref();
   SP_term_ref     term_atom	= SP_new_term_ref();
@@ -215,20 +254,34 @@ long c_nls_db_exec_2_list_jgm(
   SP_atom         atom_string	= (int) NULL;
   SP_atom         pNil		= SP_atom_from_string("[]");
  
+  /* this is the narrow version */
+  /*
   if(((strstr(sql_command, "all_words") != NULL) &&
       (strstr(sql_command, "all_words_counts") == NULL)) ||
      ((strstr(sql_command, "first_words") != NULL) &&
       (strstr(sql_command, "first_words_counts") == NULL)) ||
      ((strstr(sql_command, "first_wordsb") != NULL) &&
-      (strstr(sql_command, "first_wordsb_counts") == NULL)))
+      (strstr(sql_command, "first_wordsb_counts") == NULL))) {
 	  rtn_results = process_special_query(sql_command);
-  else
+  }
+  else {
 	  rtn_results = process_normal_query(sql_command);
- 
+	 }
+  */
+
+  /* this is the wide version */
+
+  rtn_results = process_normal_query(sql_command);
+
+
   /* ---- Put the array results into a string ---- */
 
-  /*  SP_atom pNil = SP_atom_from_string("[]"); */
- 
+  /* QP_put_nil (int_term);
+   * There is no SP_put_nil function in SP4;
+   * the best way to do this is below,
+   * per Per Mildner e-mail 06/30/2009
+   */
+
   SP_put_atom( results, pNil );
 
   for(row = rtn_results.num_rows - 1; row >= 0; row--)
@@ -247,11 +300,6 @@ long c_nls_db_exec_2_list_jgm(
            break;
  
            case INT_TYPE:
-	     /* QP_put_nil (int_term);
-	      * There is no SP_put_nil function in SP4;
-	      * the best way to do this is below,
-	      * per Per Mildner e-mail 06/30/2009 */
-	
              SP_put_integer (int_term, rtn_results.rows[row]->int_result[col]);
              SP_cons_list (row_term, int_term, row_term);
            break;
@@ -289,7 +337,7 @@ void exec_init_dbs(char const * db_name)
  
 void exec_destroy_dbs(void)
 {
-	destroy_dbs();
+   destroy_dbs();
 } /* exec_destroy_dbs */
  
 /************************************************************************/
@@ -301,7 +349,15 @@ struct results_struct process_normal_query(const char *line)
    int config_ptr;
  
    query = parse_query(line);
+   /* printf("Query = >%s<\n", line);
+    * fflush(stdout);
+    * printf("query.table = >%s<\n", query.table);
+    * fflush(stdout);
+    */
    config_ptr = get_config(query.table);
+   /* printf("Got config_ptr %d\n", config_ptr);
+    * fflush(stdout);
+   */
    rtn = return_results(query, config_ptr);
    free_query(query);
    return(rtn);
@@ -329,7 +385,7 @@ struct results_struct process_special_query(const char *line)
  
    maxlen = (linelen > MAXLINE) ? linelen : MAXLINE;
 
-   tmpJ = (char *)malloc((size_t)(maxlen + 1));
+   tmpJ  = (char *)malloc((size_t)(maxlen + 1));
    tmpJ1 = (char *)malloc((size_t)(maxlen + 1));
    tmpJ2 = (char *)malloc((size_t)(maxlen + 1));
 
@@ -586,11 +642,13 @@ struct query_struct parse_query(const char *line)
    tmp2    = (char *)malloc((size_t)(maxlen + 1));
    modline = (char *)malloc((size_t)(maxlen + 1));
    field   = (char *)malloc((size_t)(maxlen + 1));
+
    memset(tmp,     0, (size_t)maxlen);
    memset(tmpf,    0, (size_t)maxlen);
    memset(tmp1,    0, (size_t)maxlen);
    memset(tmp2,    0, (size_t)maxlen);
    memset(modline, 0, (size_t)maxlen);
+   memset(field,   0, (size_t)maxlen);
  
    /* Initialize all of the structure to nulls */
  
@@ -648,7 +706,7 @@ struct query_struct parse_query(const char *line)
         rtn.query2 = parse_string(tmp2, tmp);
    } /* fi */
  
-   free(tmp); free(tmpf); free(tmp1); free(tmp2); free(field);
+   free(tmp); free(tmpf); free(tmp1); free(tmp2); free(modline); free(field);
    return(rtn);
 } /* parse_query */
  

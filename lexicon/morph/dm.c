@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /* dm.c - derivational morphology module
 */
 
@@ -10,6 +40,7 @@
 #include <unistd.h>
 #include "dm.h"
 #include "im.h"
+#include "lexicon_types.h"
 #include <rpc/xdr.h>
 
 #define is_vowel(c)  (((c)=='a')||((c)=='e')||((c)=='i')||((c)=='o')||((c)=='u'))
@@ -80,7 +111,8 @@ static char symbol_table[26];	/* for upper-case letters */
 DmStruct *
 dm_variants(const char *term, /* input term */
 	    dm_t cats,  /* cats to consider */
-	    int *numV)  /* number of variants generated */
+	    int *numV  /* number of variants generated */
+	    )
 {
     int i;
 
@@ -94,8 +126,9 @@ dm_variants(const char *term, /* input term */
     for (i=0; i<26; i++)
 	symbol_table[i] = EOS;
     n_outBuf = n_dmsBuf = n_druleBuf = n_dfactBuf = *numV = 0;
-    if (!walk_trie(trieBuf, term, cats, (int)(strlen(term)) || n_dmsBuf == 0))
+    if (!walk_trie(trieBuf, term, cats, (int)strlen(term)) || n_dmsBuf == 0) {
 	return((DmStruct *)NULL);
+    }
 /* check facts */
     if (!check_facts(term, cats))
 	return((DmStruct *)NULL);
@@ -111,7 +144,12 @@ dm_variants(const char *term, /* input term */
 
 /* walks the trie constructing inflections */
 static int
-walk_trie(DmTrie *trie, const char *term, dm_t cats, int index)
+walk_trie(
+	  DmTrie *trie,
+	  const char *term,
+	  dm_t cats,
+	  int index
+	  )
 {
     int i;
     int j;
@@ -138,7 +176,7 @@ walk_trie(DmTrie *trie, const char *term, dm_t cats, int index)
 /* any digit */
 	else if (trie->dmData == 'D')
 	{
-		if (!isdigit((int)(term+index)))
+	    if (!isdigit(*(term+index)))
 		return(try_sib(trie, term, cats, index));
 	    symbol_table[trie->dmData-'A'] = *(term+index);
 	    sFlag = 1;
@@ -146,13 +184,13 @@ walk_trie(DmTrie *trie, const char *term, dm_t cats, int index)
 /* any letter */
 	else if (trie->dmData == 'L')
 	{
-		if (!isalpha((int)(term+index)))
+	    if (!isalpha(*(term+index)))
 		return(try_sib(trie, term, cats, index));
 	    symbol_table[trie->dmData-'A'] = *(term+index);
 	    sFlag = 1;
 	}
 /* any other consonant */
-	else if (is_consonant(tolower(trie->dmData)) && is_consonant((int)(term+index)))
+	else if (is_consonant(tolower(trie->dmData)) && is_consonant(*(term+index)))
 	{
 	    symbol_table[trie->dmData-'A'] = *(term+index);
 	    sFlag = 1;
@@ -183,11 +221,19 @@ walk_trie(DmTrie *trie, const char *term, dm_t cats, int index)
 	if ((strlen(term) - strlen(charBuf+(rule->dmInSuf))) < DM_SMALLEST_STEM)
 	    continue;
 
-	if ((dmsBuf = (DmStruct *) incr_buf_alloc((void *)dmsBuf, sizeof(DmStruct), n_dmsBuf,
-		&a_dmsBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmStruct *)NULL)
+	if ((dmsBuf = (DmStruct *) incr_buf_alloc((void *)dmsBuf,
+						  sizeof(DmStruct),
+						  n_dmsBuf,
+						  &a_dmsBuf,
+						  (int)1,
+						  (int)DM_DEFAULT_ALLOCATION)) == (DmStruct *)NULL)
 	    return(0);
-	if ((druleBuf = (DmDRule *) incr_buf_alloc((void *)druleBuf, sizeof(DmDRule), n_druleBuf,
-		&a_druleBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmDRule *)NULL)
+	if ((druleBuf = (DmDRule *) incr_buf_alloc((void *)druleBuf,
+						   sizeof(DmDRule),
+						   n_druleBuf,
+						   &a_druleBuf,
+						   (int)1,
+						   (int)DM_DEFAULT_ALLOCATION)) == (DmDRule *)NULL)
 	    return(0);
 	dms = dmsBuf + n_dmsBuf;
 	dms->dmCat = rule->dmOutCat;
@@ -200,14 +246,18 @@ walk_trie(DmTrie *trie, const char *term, dm_t cats, int index)
 	drule->dmOutCat = rule->dmOutCat;
 	dms->dmRule = drule;
 	length = strlen(term) - strlen(charBuf+(rule->dmInSuf)) + strlen(charBuf+(rule->dmOutSuf)) + 1;
-	if ((outBuf = (char *) incr_buf_alloc((void *)outBuf, sizeof(char), n_outBuf,
-		&a_outBuf, (int)length, (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+	if ((outBuf = (char *) incr_buf_alloc((void *)outBuf,
+					      sizeof(char),
+					      n_outBuf,
+					      &a_outBuf,
+					      (int)length,
+					      (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 	    return(0);
 	strncpy(outBuf+n_outBuf, term, (size_t)length);
 	strcpy(outBuf+n_outBuf+strlen(term)-strlen(charBuf+(rule->dmInSuf)), charBuf+(rule->dmOutSuf));
 	dms->dmHide = n_outBuf;
 	for (j=n_outBuf; j<n_outBuf+length; j++)
-		if (isupper((int)(outBuf+j)) && symbol_table[*(outBuf+j) - 'A'] != EOS)
+	    if (isupper(*(outBuf+j)) && symbol_table[*(outBuf+j) - 'A'] != EOS)
 		*(outBuf+j) = symbol_table[*(outBuf+j) - 'A'];
 	n_outBuf += length;
 	n_dmsBuf++;
@@ -246,41 +296,41 @@ xdr_dm_t(XDR *xdrs, dm_t* val)
 bool_t
 xdr_dm_rule_header(XDR *xdrs, DmRuleHeader* ruleHeader)
 {
-	return(xdr_long(xdrs, (long *)&ruleHeader->dmMagic) &&
-	       xdr_long(xdrs, (long *)&ruleHeader->dmTrie) &&
-	       xdr_long(xdrs, (long *)&ruleHeader->dmRule) &&
-	       xdr_long(xdrs, (long *)&ruleHeader->dmXpn) &&
-	       xdr_long(xdrs, (long *)&ruleHeader->dmChar));
+	return(xdr_long(xdrs, (long *)(&ruleHeader->dmMagic)) &&
+	       xdr_long(xdrs, (long *)(&ruleHeader->dmTrie)) &&
+	       xdr_long(xdrs, (long *)(&ruleHeader->dmRule)) &&
+	       xdr_long(xdrs, (long *)(&ruleHeader->dmXpn) )&&
+	       xdr_long(xdrs, (long *)(&ruleHeader->dmChar)));
 }
 
 bool_t
 xdr_dm_rule(XDR *xdrs, DmRule* rule)
 {
-    return (xdr_int(xdrs, &rule->dmInSuf) &&
+    return (xdr_int(xdrs,  &rule->dmInSuf) &&
 	    xdr_dm_t(xdrs, &rule->dmInCat) &&
-	    xdr_int(xdrs, &rule->dmOutSuf) &&
+	    xdr_int(xdrs,  &rule->dmOutSuf) &&
 	    xdr_dm_t(xdrs, &rule->dmOutCat) &&
 	    xdr_dm_t(xdrs, &rule->dmFlags) &&
-	    xdr_dm_t(xdrs, (dm_t *)&rule->dmNumXpn) &&
-	    xdr_dm_t(xdrs, (dm_t *)&rule->dmXpn));
+	    xdr_dm_t(xdrs, (dm_t *)(&rule->dmNumXpn)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&rule->dmXpn)));
 }
 
 bool_t
 xdr_dm_trie(XDR *xdrs, DmTrie* trie)
 {
-    return (xdr_int(xdrs, &trie->dmData) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmChild) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmSib) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmNumRule) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmRule) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmHide));
+    return (xdr_int(xdrs,  &trie->dmData) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmChild)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmSib)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmNumRule)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmRule)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmHide)));
 }
 
 bool_t
 xdr_dm_xpn(XDR *xdrs, DmXpn* xpn)
 {
     return (xdr_int(xdrs, &xpn->dmInTerm) &&
-	    xdr_dm_t(xdrs, (dm_t *)&xpn->dmOutTerm));
+	    xdr_dm_t(xdrs, (dm_t *)(&xpn->dmOutTerm)));
 }
 
 /* reads in the translated rules from the rules file */
@@ -343,18 +393,34 @@ read_dm_translated_rules_xdr(void)
 	return(0);
 
     n = n_trieBuf;
-    if (xdr_array(&xdrs, (caddr_t *)&trieBuf, (uint_t *)&n_trieBuf, (const uint_t)n, sizeof(DmTrie), xdr_dm_trie) == 0)
+    if (xdr_array(&xdrs,
+		  (caddr_t *)&trieBuf,
+		  (uint_t *)&n_trieBuf,
+		  (const uint_t)n,
+		  sizeof(DmTrie),
+		  (xdrproc_t)xdr_dm_trie) == 0)
 	return(0);
     n = n_ruleBuf;
-    if (xdr_array(&xdrs, (caddr_t *)&ruleBuf, (uint_t *)&n_ruleBuf, (const uint_t)n, sizeof(DmRule), xdr_dm_rule) == 0)
+    if (xdr_array(&xdrs,
+		  (caddr_t *)&ruleBuf,
+		  (uint_t *)&n_ruleBuf,
+		  (const uint_t)n,
+		  sizeof(DmRule),
+		  (xdrproc_t)xdr_dm_rule) == 0)
 	return(0);
     n = n_xpnBuf;
-    if (xdr_array(&xdrs, (caddr_t *)&xpnBuf, (uint_t *)&n_xpnBuf, (const uint_t)n, sizeof(DmXpn), xdr_dm_xpn) == 0)
+    if (xdr_array(&xdrs,
+		  (caddr_t *)&xpnBuf,
+		  (uint_t *)&n_xpnBuf,
+		  (const uint_t)n,
+		  sizeof(DmXpn),
+		  (xdrproc_t)xdr_dm_xpn) == 0)
 	return(0);
     n = n_charBuf;
     if (xdr_bytes(&xdrs, &charBuf, (uint_t *)&n_charBuf, (const uint_t)n) == 0)
 	return(0);
 
+    xdr_destroy(&xdrs);
     return(fclose(fp) == (EOF) ? 0 : 1);
 }
 
@@ -429,12 +495,13 @@ read_dm_translated_facts_xdr(void)
 	return(0);
 
     n = n_factBuf;
-    if (xdr_array(&xdrs, (caddr_t *)&factBuf, (uint_t *)&n_factBuf, (const uint_t) n, sizeof(DmFact), xdr_dm_fact) == 0)
+    if (xdr_array(&xdrs, (caddr_t *)&factBuf, (uint_t *)&n_factBuf, (const uint_t) n, sizeof(DmFact), (xdrproc_t)xdr_dm_fact) == 0)
 	return(0);
     n = n_fcharBuf;
     if (xdr_bytes(&xdrs, &fcharBuf, (uint_t *)&n_fcharBuf, (const uint_t)n) == 0)
 	return(0);
 
+    xdr_destroy(&xdrs);
     return(fclose(fp) == (EOF) ? 0 : 1);
 }
 
@@ -475,11 +542,19 @@ check_facts(const char *term, dm_t cats)
 		{
 		    DmDFact *dfact;
 
-		    if ((dmsBuf = (DmStruct *) incr_buf_alloc((void *)dmsBuf, sizeof(DmStruct), n_dmsBuf,
-			    &a_dmsBuf, (int)1, (int)(DM_DEFAULT_ALLOCATION))) == (DmStruct *)NULL)
+		    if ((dmsBuf = (DmStruct *) incr_buf_alloc((void *)dmsBuf,
+							      sizeof(DmStruct),
+							      n_dmsBuf,
+							      &a_dmsBuf,
+							      (int)1,
+							      (int)(DM_DEFAULT_ALLOCATION))) == (DmStruct *)NULL)
 			return(0);
-		    if ((dfactBuf = (DmDFact *) incr_buf_alloc((void *)dfactBuf, sizeof(DmDFact), n_dfactBuf,
-			    &a_dfactBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmDFact *)NULL)
+		    if ((dfactBuf = (DmDFact *) incr_buf_alloc((void *)dfactBuf,
+							       sizeof(DmDFact),
+							       n_dfactBuf,
+							       &a_dfactBuf,
+							       (int)1,
+							       (int)DM_DEFAULT_ALLOCATION)) == (DmDFact *)NULL)
 			return(0);
 		    dms = dmsBuf+n_dmsBuf;
 		    dms->dmCat = fact->dmOutCat;
@@ -493,8 +568,12 @@ check_facts(const char *term, dm_t cats)
 		    dfact->dmOutCat = fact->dmOutCat;
 		    dms->dmFact = dfact;
 		    length = strlen(fcharBuf+(fact->dmOutTerm)) + 1;
-		    if ((outBuf = (char *) incr_buf_alloc((void *)outBuf, sizeof(char), n_outBuf,
-			    &a_outBuf, (int)length, (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+		    if ((outBuf = (char *) incr_buf_alloc((void *)outBuf,
+							  sizeof(char),
+							  n_outBuf,
+							  &a_outBuf,
+							  (int)length,
+							  (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 			return(0);
 		    strcpy(outBuf+n_outBuf, fcharBuf+(fact->dmOutTerm));
 		    dms->dmHide = n_outBuf;

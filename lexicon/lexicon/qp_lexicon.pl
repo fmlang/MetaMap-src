@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /* qp_lexicon.pl - all lexicon-related predicates.
 */
 
@@ -50,11 +80,11 @@
 	control_option/1
    ]).
 
-:- use_module(skr_lib(sicstus_utils), [
-	concat_atoms/2
-   ]).
+% :- dynamic lexicon_type/1.
 
-:- dynamic lexicon_type/1.
+:- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2
+   ]).
 
 :- use_module(library(file_systems), [
 	file_exists/1,
@@ -77,13 +107,13 @@
 %%% Define the foreign interface
 foreign_resource(qp_lexicon, [
 	c_lex_cit, c_lex_root, c_lex_form,
-	c_lex_cit_cats, c_lex_root_cats, c_lex_form_cats,
+	% c_lex_cit_cats, c_lex_root_cats,
+	c_lex_form_cats,
 	c_lex_is_a_root, c_lex_is_a_form,
 	c_lex_is_a_root_cats,
 	c_lex_form_input,
 	c_get_varlist
     ]).
-
 
 foreign(c_lex_cit,            c,
 	c_lex_cit(+string, +string, +integer, +integer, +integer, -term, [-integer])).
@@ -93,12 +123,6 @@ foreign(c_lex_root,           c,
 
 foreign(c_lex_form,           c,
 	c_lex_form(+string, +string, +integer, +integer, +integer, -term, [-integer])).
-
-foreign(c_lex_cit_cats,       c,
-	c_lex_cit_cats(+string, +string, +integer, +integer, -term, [-integer])).
-
-foreign(c_lex_root_cats,      c,
-	c_lex_root_cats(+string, +string, +integer, +integer, -term, [-integer])).
 
 foreign(c_lex_form_cats,      c,
 	c_lex_form_cats(+string, +string, +integer, +integer, -term, [-integer])).
@@ -124,23 +148,6 @@ foreign(c_get_varlist,        c,
 
 % :- abolish(foreign/3, [force(true)]).
 
-%% See WARNING below.
-
-%%%default_lexicon_file('/nfsvol/nls/umls/releases/1995_release/LEX/DATA/LEXU/lexicon').
-%%%default_index_file('/nfsvol/nls/umls/releases/1995_release/LEX/DATA/LEXU/lexicon.index').
-
-%%%default_lexicon_file('/nfsvol/nls/umls/releases/1996_release/LEX/lexicon96').
-%%%default_index_file('/nfsvol/nls/umls/releases/1996_release/LEX/lexicon96.index').
-
-%%%default_lexicon_file('/net/cgsb2/aux3/nls/kss/umls/releases/1996_releaseA/lex/lexicon96a').
-%%%default_index_file('/net/cgsb2/aux3/nls/kss/umls/releases/1996_releaseA/lex/lexicon96a.index').
-
-%%%default_lexicon_file('/nfsvol/nls2pub/nls/specialist/lexicon/lookup/query/tst/lex98.records').
-%%%default_index_file('/nfsvol/nls2pub/nls/specialist/lexicon/lookup/query/tst/lex98.index').
-
-%%%default_lexicon_file('/nfsvol/nls/specialist/lexicon98/query/tst/lex98.records').
-%%%default_index_file('/nfsvol/nls/specialist/lexicon98/query/tst/lex98.index').
-
 %%% lex_init(-Lexicon, -Index)
 %%% This predicate will return the names of the default location of the lexicon files
 lex_init(Lexicon, Index) :-
@@ -157,9 +164,9 @@ lex_init_quietly(Lexicon, Index) :-
 	environ('DEFAULT_LEXICON_FILE', Lexicon),
 	check_valid_lexicon_file(Lexicon),
 	environ('DEFAULT_LEXICON_INDEX_FILE', Index),
-	concat_atoms([Index, 'ByEui.dbx'], EuiIndexFile),
+	concat_atom([Index, 'ByEui.dbx'], EuiIndexFile),
 	check_valid_lexicon_file(EuiIndexFile),
-	concat_atoms([Index, 'ByInfl.dbx'], InflIndexFile),
+	concat_atom([Index, 'ByInfl.dbx'], InflIndexFile),
 	check_valid_lexicon_file(InflIndexFile),
 	retractall(default_lexicon_file(_)),
 	assert(default_lexicon_file(Lexicon)),
@@ -170,7 +177,7 @@ lex_init_quietly(Lexicon, Index) :-
 
 
 conditionally_announce_lexicon(Lexicon) :-
-	( \+ control_option(no_header_info) ->
+	( \+ control_option(silent) ->
 	  format('Accessing lexicon ~a.~n', [Lexicon])
 	; true
 	).
@@ -238,16 +245,6 @@ lex_form_ci_var_lists_4(Form, VarLists, Lexicon, Index) :-
         lex_var_lists(form, Form, VarLists, 1, Lexicon, Index).
 
 %%% generic record retrieval predicate
-lex_recs(cit, Cit, Rec, LowerFlag, FlushFlag, Lexicon, Index) :-
-	LexiconType = 0,
-	c_lex_cit(Index, Cit, LexiconType, LowerFlag, FlushFlag, OfsList, 1),
-	sort(OfsList, SortedOfsList),
-	get_records_from_offsets(SortedOfsList, Rec, Lexicon).
-lex_recs(root, Root, Rec, LowerFlag, FlushFlag, Lexicon, Index) :-
-	LexiconType = 0,
-	c_lex_root(Index, Root, LexiconType, LowerFlag, FlushFlag, OfsList, 1),
-	sort(OfsList, SortedOfsList),
-	get_records_from_offsets(SortedOfsList, Rec, Lexicon).
 lex_recs(form, Form, Rec, LowerFlag, FlushFlag, Lexicon, Index) :-
 	LexiconType = 0,
 	c_lex_form(Index, Form, LexiconType, LowerFlag, FlushFlag, OfsList, 1),
@@ -255,14 +252,6 @@ lex_recs(form, Form, Rec, LowerFlag, FlushFlag, Lexicon, Index) :-
 	get_records_from_offsets(SortedOfsList, Rec, Lexicon).
 
 %%% generic category retrieval predicate
-lex_cats(cit, Cit, Cats, LowerFlag, Index) :-
-	lexicon_type(LexiconType),
-	% LexiconType = 0,
-	c_lex_cit_cats(Index, Cit, LexiconType, LowerFlag, Cats, 1).
-lex_cats(root, Root, Cats, LowerFlag, Index) :-
-	lexicon_type(LexiconType),
-	% LexiconType = 0,
-	c_lex_root_cats(Index, Root, LexiconType, LowerFlag, Cats, 1).
 lex_cats(form, Form, Cats, LowerFlag, Index) :-
 	lexicon_type(LexiconType),
 	% LexiconType = 0,
@@ -272,11 +261,6 @@ lex_cats(form, Form, Cats, LowerFlag, Index) :-
 lex_vars(cit, Cit, Vars, LowerFlag, Lexicon, Index) :-
 	LexiconType = 0,
 	c_lex_cit(Index, Cit, LexiconType, LowerFlag, 0, OfsList, 1),
-	sort(OfsList, SortedOfsList),
-	lex_vars_aux(SortedOfsList, Vars, Lexicon).
-lex_vars(root, Root, Vars, LowerFlag, Lexicon, Index) :-
-	LexiconType = 0,
-	c_lex_root(Index, Root, LexiconType, LowerFlag, 0, OfsList, 1),
 	sort(OfsList, SortedOfsList),
 	lex_vars_aux(SortedOfsList, Vars, Lexicon).
 lex_vars(form, Form, Vars, LowerFlag, Lexicon, Index) :-
@@ -446,6 +430,11 @@ reformat_list([F|R], [X|Y]) :-
 flatten(ListOfLists, FlatList) :-
 	append(ListOfLists, FlatList).  /* from library(lists) */
 
-use_multi_word_lexicon  :-
-	retractall(lexicon_type(_)),
-	assert(lexicon_type(0)).
+% use_multi_word_lexicon  :-
+% 	retractall(lexicon_type(_)),
+% 	assert(lexicon_type(0)).
+
+use_multi_word_lexicon.
+
+% Simply hardcode this now, rather than asserting it.
+lexicon_type(0).

@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /* lm.c - inflectional morphology module for the SPECIALIST lexicon.
 */
 
@@ -8,6 +38,7 @@
 #include <malloc.h>
 #include <fcntl.h>
 #include "lm.h"
+#include "lexicon_types.h"
 #include <rpc/xdr.h>
 
 #define is_vowel(c)  (((c)=='a')||((c)=='e')||((c)=='i')||((c)=='o')||((c)=='u'))
@@ -180,11 +211,19 @@ walk_trie(trie, term, cats, rules, infls, index)
 	if ((rule->lmFlags & LM_INPUT_SOP) && (index > 0))
 	    continue;
 
-	if ((lmsBuf = (LmStruct *) incr_buf_alloc((void *)lmsBuf, sizeof(LmStruct), n_lmsBuf,
-		&a_lmsBuf, (int)1, (int)LM_DEFAULT_ALLOCATION)) == (LmStruct *)NULL)
+	if ((lmsBuf = (LmStruct *) incr_buf_alloc((void *)lmsBuf,
+						  sizeof(LmStruct),
+						  n_lmsBuf,
+						  &a_lmsBuf,
+						  (int)1,
+						  (int)LM_DEFAULT_ALLOCATION)) == (LmStruct *)NULL)
 	    return(0);
-	if ((druleBuf = (LmDRule *) incr_buf_alloc((void *)druleBuf, sizeof(LmDRule), n_druleBuf,
-		&a_druleBuf, (int)1, (int)LM_DEFAULT_ALLOCATION)) == (LmDRule *)NULL)
+	if ((druleBuf = (LmDRule *) incr_buf_alloc((void *)druleBuf,
+						   sizeof(LmDRule),
+						   n_druleBuf,
+						   &a_druleBuf,
+						   (int)1,
+						   (int)LM_DEFAULT_ALLOCATION)) == (LmDRule *)NULL)
 	    return(0);
 
 	lms = lmsBuf + n_lmsBuf;
@@ -202,8 +241,12 @@ walk_trie(trie, term, cats, rules, infls, index)
 	drule->lmOutInfl = rule->lmOutInfl;
 	lms->lmDRule = drule;
 	length = strlen(term) - strlen(charBuf+(rule->lmInSuf)) + strlen(charBuf+(rule->lmOutSuf)) + 1;
-	if ((outBuf = (char *) incr_buf_alloc((void *)outBuf, sizeof(char), n_outBuf,
-		&a_outBuf, (int)length, (int)(LM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+	if ((outBuf = (char *) incr_buf_alloc((void *)outBuf,
+					      sizeof(char),
+					      n_outBuf,
+					      &a_outBuf,
+					      (int)length,
+					      (int)(LM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 	    return(0);
 	strncpy(outBuf+n_outBuf, term, (size_t)length);
 	strcpy(outBuf+n_outBuf+strlen(term)-strlen(charBuf+(rule->lmInSuf)), charBuf+(rule->lmOutSuf));
@@ -269,18 +312,18 @@ xdr_lm_trie(XDR *xdrs, LmTrie* trie)
 	    xdr_int(xdrs, &trie->lmChild) &&
 	    xdr_int(xdrs, &trie->lmSib) &&
 	    xdr_int(xdrs, &trie->lmNumRule) &&
-	    xdr_int(xdrs, (int*)&trie->lmRule) &&
-	    xdr_int(xdrs, (int*)&trie->lmHide));
+	    xdr_int(xdrs, (int*)(&trie->lmRule)) &&
+	    xdr_int(xdrs, (int*)(&trie->lmHide)));
 }
 
 bool_t
 xdr_lm_rule(XDR *xdrs, LmRule* rule)
 {
-    return (xdr_int(xdrs, &rule->lmInSuf) &&
+    return (xdr_int(xdrs,  &rule->lmInSuf) &&
 	    xdr_lm_t(xdrs, &rule->lmInCat) &&
 	    xdr_lm_t(xdrs, &rule->lmInInfl) &&
 	    xdr_lm_t(xdrs, &rule->lmRule) &&
-	    xdr_int(xdrs, &rule->lmOutSuf) &&
+	    xdr_int(xdrs,  &rule->lmOutSuf) &&
 	    xdr_lm_t(xdrs, &rule->lmOutCat) &&
 	    xdr_lm_t(xdrs, &rule->lmOutInfl) &&
 	    xdr_lm_t(xdrs, &rule->lmFlags));
@@ -339,14 +382,24 @@ read_lm_translated_rules_xdr()
     if ((trieBuf = (LmTrie *) malloc((unsigned)(sizeof(LmTrie)*n_trieBuf))) == (LmTrie *)NULL)
 	return(0);
 
-    if (xdr_array(&xdrs, (caddr_t *)&trieBuf, (uint_t *)&n_trieBuf, (const uint_t)n, sizeof(LmTrie), xdr_lm_trie) == 0)
+    if (xdr_array(&xdrs,
+		  (caddr_t *)&trieBuf,
+		  (uint_t *)&n_trieBuf,
+		  (const uint_t)n,
+		  sizeof(LmTrie),
+		  (xdrproc_t)xdr_lm_trie) == 0)
 	return(0);
 
     n_ruleBuf = lmh.lmRule;
     n = n_ruleBuf;
     if ((ruleBuf = (LmRule *) malloc((unsigned)(sizeof(LmRule)*n_ruleBuf))) == (LmRule *)NULL)
 	return(0);
-    if (xdr_array(&xdrs, (caddr_t *)&ruleBuf, (uint_t *)&n_ruleBuf, (const uint_t)n, sizeof(LmRule), xdr_lm_rule) == 0)
+    if (xdr_array(&xdrs,
+		  (caddr_t *)&ruleBuf,
+		  (uint_t *)&n_ruleBuf,
+		  (const uint_t)n,
+		  sizeof(LmRule),
+		  (xdrproc_t)xdr_lm_rule) == 0)
 	return(0);
 
     n_charBuf = lmh.lmChar;
@@ -356,6 +409,7 @@ read_lm_translated_rules_xdr()
     if (xdr_bytes(&xdrs, &charBuf, (uint_t *)&n_charBuf, (const uint_t)n) == 0)
 	return(0);
 
+    xdr_destroy(&xdrs);
     return((fclose(fp) == EOF) ? 0 : 1);
 }
 

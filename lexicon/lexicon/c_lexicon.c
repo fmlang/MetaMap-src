@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /*==========================================================
 
 %SOURCE FILE
@@ -93,7 +123,7 @@ extern int DPR(int flag, char *msg);
  * 			  );
  */
 
-static lex_t get_cat( const char *cat );
+static lex_t get_cat(const char *cat);
 
 /*end_of_function_prototypes*/
 
@@ -132,8 +162,6 @@ typedef struct _lexHead {
 #define DF1643  1643          /* DF for get_cat() */
 #define DT1644  1644          /* DT for c_lex_form_input() */
 #define DF1645  1645          /* DF for c_lex_form_input() */
-#define DT1646  1646          /* DT for incr_buf_alloc() */
-#define DF1647  1647          /* DF for incr_buf_alloc() */
 /*end_of_debug_flags---------*/
 
 /**/
@@ -187,13 +215,15 @@ long int c_lex_cit(
   SP_atom           pNil           = SP_atom_from_string("[]");
   SP_term_ref       pOfs           = SP_new_term_ref();
   long int          ofs            = 0;
-  lex_t             flag           = (unsigned long) NULL;
+  lex_t             flag           = (unsigned long)NULL;
   WordList         *wl             = NULL;
   char             *inflected_term = NULL; 
   
 
   DFNAME("c_lex_cit");
   DENTER(DT1576);
+
+  flushFlag = 0;
 
   /* ----------------------------------------------
      Return a set of offsets for the citation form.
@@ -230,6 +260,7 @@ long int c_lex_cit(
 	  sprintf(msg,"Interested in the offsets here %d", (int)ofs );
 	  DPR(DF1577,msg);
 
+	    pOfs = SP_new_term_ref();
 	    SP_put_integer(pOfs, (long int)(ofs));
 	    SP_cons_list(pOfsList, pOfs, pOfsList);
 	    returnFlag = 1;
@@ -299,6 +330,8 @@ long int c_lex_root(
   DFNAME("c_lex_root");
   DENTER(DT1578);
 
+  flushFlag = 0;
+
   wl = query_lex_info( term, CASE_INSENSITIVE, EXACT, indexFile ); 
 
   SP_put_atom(pOfsList, pNil);
@@ -314,6 +347,7 @@ long int c_lex_root(
 	  if ((IS_LEX_BASE(flag) || IS_LEX_SV(flag)) ||
 	      (lowerFlag && (IS_LEX_BASELOWER(flag) || IS_LEX_SVLOWER(flag))))
 	    {
+	      pOfs = SP_new_term_ref();
 	      SP_put_integer(pOfs, (long int)ofs);
 	      SP_cons_list(pOfsList, pOfs, pOfsList);
 	      returnFlag = 1;
@@ -327,7 +361,7 @@ long int c_lex_root(
   return(returnFlag);
 
 } /*** End c_lex_root */
-/**/
+/**/	
 /*==========================================================
 %FUNCTION NAME
 %COMMAND NAME
@@ -362,13 +396,12 @@ long int c_lex_root(
 ==========================================================*/
 long int c_lex_form(
 		    char const  *indexFile,
-		    char const  *term,    	/* should be +string */
+		    char const  *term,    	    /* should be +string */
 		    long int    singleWordLexicon,  /* 0 if no, 1 if yes */
 		    long int    lowerFlag,
 		    long int    flushFlag,
 		    SP_term_ref pOfsList 
 		    )
-
 {
   int i			   	= 0;
   SP_atom	paNil		= SP_atom_from_string("[]");
@@ -379,9 +412,10 @@ long int c_lex_form(
   WordList	*wl		= NULL;
   char		*inflected_term = NULL; 
   
-
   DFNAME("c_lex_form");
   DENTER(DT1580);
+
+  flushFlag = 0;
   
   wl = query_lex_info( term, lowerFlag, EXACT, indexFile ); 
   
@@ -397,11 +431,12 @@ long int c_lex_form(
       if ( ( singleWordLexicon == 0 ) ||
 	   ((singleWordLexicon == 1) && (CONTAINS_ORPHAN_TOKEN( flag))) ) {
 
+	pOfs = SP_new_term_ref();
 	SP_put_integer(pOfs, (long int)ofs);
 	SP_cons_list(pOfsList, pOfs, pOfsList);
 	returnFlag = 1;
 	
-	/* printf(msg,"FML: wl->n = %d; i = %d", wl->n, i); */
+	sprintf(msg,"%s^|^%s|%ld", WLWN(wl,i), inflected_term, ofs );
 	DPR(DF1581,msg);
         
       } else {
@@ -457,7 +492,7 @@ long int c_lex_form(
 ==========================================================*/
 long int c_lex_cit_cats(
 			char const  *indexFile,
-			char const  *term,	/* should be +string */
+			char const  *term,	        /* should be +string */
 			long int    singleWordLexicon,  /* 0 if no, 1 if yes */
 			long int    lowerFlag,
 			SP_term_ref pCats 
@@ -561,7 +596,7 @@ long int c_lex_cit_cats(
 ==========================================================*/
 long int c_lex_root_cats(
 			 char const  *indexFile,
-			 char const  *term,	/* should be +string */
+			 char const  *term,	         /* should be +string */
 			 long int    singleWordLexicon,  /* 0 if no, 1 if yes */
 			 long int    lowerFlag,
 			 SP_term_ref pCats 
@@ -668,8 +703,8 @@ long int c_lex_root_cats(
 ==========================================================*/
 long int c_lex_form_cats(
 			 char const  *indexFile,
-			 char const  *term,			/* should be +string */
-			 long int    singleWordLexicon,  /* 0 if no, 1 if yes */
+			 char const  *term,		  /* should be +string */
+			 long int    singleWordLexicon,   /* 0 if no, 1 if yes */
 			 long int    lowerFlag,
 			 SP_term_ref pCats 
 			 )
@@ -779,11 +814,10 @@ long int c_lex_form_cats(
 ==========================================================*/
 long int c_lex_is_a_root(
 			 char const *indexFile,
-			 char const *term,			/* should be +string */
+			 char const *term,		  /* should be +string */
 			 long int   singleWordLexicon,    /* 0 if no, 1 if yes */
 			 long int   lowerFlag 
 			 )
-
 {
   
   long int return_code     = 0; 
@@ -867,11 +901,10 @@ long int c_lex_is_a_root(
 ==========================================================*/
 long int c_lex_is_a_form(
 			 char const *indexFile,
-			 char const *term,			/* should be +string */
-			 long int   singleWordLexicon,  /* 0 if no, 1 if yes */
-			 long int   lowerFlag 
+			 char const *term,		  /* should be +string */
+			 long int   singleWordLexicon,    /* 0 if no, 1 if yes */
+			 long int   lowerFlag
 			 )
-     
 {
   
   long int return_code     = 0; 
@@ -966,7 +999,6 @@ long int c_lex_is_a_root_cats(
 			      long int    lowerFlag,
 			      SP_term_ref pCats 		/* +term */
 			      )
-  
   {
 
     long int   return_code     = 0; 
@@ -1182,7 +1214,7 @@ long int c_lex_form_input(
     int l;
     lex_t      flag            = 0;
     long int   ofs             = 0;
-    WordList   *inputTokens   = NULL;
+    WordList   *inputTokens    = NULL;
     WordList   *wl             = NULL;
     WordList   *indexTokens    = NULL;
     char       first_term[MAXLINE];
@@ -1199,7 +1231,6 @@ long int c_lex_form_input(
     SP_term_ref prTail  = SP_new_term_ref();
     SP_term_ref prTerm  = SP_new_term_ref();
 
-    int status, sl;
     char *inputTokens_l, *indexTokens_j;
 
     DFNAME("c_lex_form_input");
@@ -1348,60 +1379,29 @@ long int c_lex_form_input(
 	  inputTokens_l = WLWN(inputTokens,l);
 	  indexTokens_j = WLWN(indexTokens,j);
 
-	  /* printf("FML : WLWN(inputTokens,l) = >%s<\n", inputTokens_l); */
-	  /* printf("FML : WLWN(indexTokens,j) = >%s<\n", indexTokens_j); */
-	  /* fflush(stdout); */
-
-	  /*
-          if (ispunct((int)(indexTokens_j[0]))) {
-		  printf("FML ispunct 1\n");
-	  	  fflush(stdout);
-	  }
-
-
-	  if (ispunct((int)(WLWN(indexTokens,j)))) {
-		  printf("FML ispunct 2\n");
-		  fflush(stdout);
-	  }
-	  */
-	  /* status = strcmp(inputTokens_l, indexTokens_j); */
-	  /* printf("status = %d\n", status); */
-
-	  /* if ( status == 0 ) { */
-
-	  /* if (strcmp(WLWN(inputTokens,l), WLWN(indexTokens,j)) == 0) { */
 	  if (strcmp( inputTokens_l, indexTokens_j ) == 0) {
 
 	    if ((IS_LEX_BASELOWER( flag ) || IS_LEX_SVLOWER(flag)) && (matchFlag == LEX_MATCH_EXACT))
 	       matchFlag = LEX_MATCH_LOWER;
-	       /* printf("FML : branch 1\n"); */
 	       l++;
 	       j++;
-	       /* } else if (strcasecmp(WLWN(inputTokens,l), WLWN(indexTokens,j)) == 0) { */
 	    } else if (strcasecmp(inputTokens_l, indexTokens_j) == 0) {
 	       matchFlag = LEX_MATCH_LOWER;
-	       /* printf("FML : branch 2\n"); */
 	       l++;
 	       j++;
-	   /* } else if (strlen(WLWN(inputTokens,l)) == 1 && ispunct((int)(WLWN(inputTokens,l)))) { */
 	   } else if (strlen(inputTokens_l) == 1 && ispunct((int)(inputTokens_l[0]))) {
 
 	       matchFlag = LEX_MATCH_PUNCT;
-	       /* printf("FML : branch 3\n"); */
 	       l++;
-	       /* } else if (strlen(WLWN(indexTokens,j)) == 1 && ispunct((int)(WLWN(indexTokens,j)))) { */
 	   } else if (strlen(indexTokens_j) == 1 && ispunct((int)(indexTokens_j[0]))) {
 
 	       matchFlag = LEX_MATCH_PUNCT;
-	       /* printf("FML : branch 4\n"); */
-	
 	       j++;
 	  } else {
-	       /* printf("FML : branch 5\n"); */
 	       break;
 	  }
+
 	} /* End for loop through the tokenized index term */ 
-	/* printf("FML 2 : l = %d, j = %d\n", l, j); */
 	CHAR_FREE( inflected_form );
         inflected_form = NULL;
 	free_wl( &indexTokens );
@@ -1424,5 +1424,3 @@ long int c_lex_form_input(
     return(returnFlag);
     
 } /*** End c_lex_form_input */
-
-/**/

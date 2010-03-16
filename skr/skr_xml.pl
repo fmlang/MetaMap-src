@@ -1,3 +1,32 @@
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:     skr_xml.pl
 % Module:   Generate XML output
 % Author:   Francois
@@ -7,12 +36,12 @@
 	conditionally_print_xml_header/2,
 	conditionally_print_xml_footer/3,
 	generate_and_print_xml/1,
+	get_xml_format_mode/2,
 	xml_header_footer_print_setting/3
     ]).
 
-:- use_module(skr(skr_utilities), [
-	replace_blanks_with_crs/4,
-	verify_xml_format/2
+:- use_module(skr(xml),[
+	xml_parse/3
    ]).
 
 :- use_module(skr_lib(negex), [
@@ -30,8 +59,14 @@
 	split_string_completely/3
    ]).
 
+:- use_module(skr(skr_utilities), [
+	replace_blanks_with_crs/4,
+	verify_xml_format/2
+   ]).
+
 :- use_module(skr_lib(sicstus_utils),[
-	concat_atoms/2
+	concat_atom/2,
+	ttyflush/0
    ]).
 
 :- use_module(library(system),[
@@ -42,9 +77,9 @@
 	delete/3
    ]).
 
-:- use_module(library(xml),[
-	xml_parse/3
-   ]).
+% :- use_module(library(xml),[
+% 	xml_parse/3
+%    ]).
 
 
 % This code creates Prolog structures that are fed to xml:xml_parse,
@@ -52,7 +87,7 @@
 
 generate_and_print_xml(AllMMO) :-
 	( control_value('XML', Format) ->
-	  verify_xml_format(Format, TrueOrFalse),
+	  map_to_true_and_false(Format, TrueOrFalse),
 	  current_output(OutputStream),
 	  XMLTerm = xml([], MMOXML),
 	  AllMMO = [ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO],
@@ -60,18 +95,28 @@ generate_and_print_xml(AllMMO) :-
 	  generate_xml_AA_term(AAsMMO,      XMLAATerm),
 	  generate_xml_negex_term(NegExMMO, XMLNegExTerm),
 	  generate_xml_utterances_term(UtteranceMMO, XMLUtterancesTerm),
-	  create_xml_element('MMO',
-			     [],
-			     [XMLArgTerm,XMLAATerm,XMLNegExTerm,XMLUtterancesTerm],
-			     MMOXML),
+	  generate_xml_MMO_term(XMLArgTerm, XMLAATerm, XMLNegExTerm, XMLUtterancesTerm, MMOXML),
 	  xml_parse(XMLChars, XMLTerm, [format(TrueOrFalse)]),
-	  conditionally_increase_indent_by_one(Format, XMLChars, XMLChars1),
+	  % format(user_output, 'Increasing indent~n', []), ttyflush,
+	  % conditionally_increase_indent_by_one(Format, XMLChars, XMLChars1),
+	  XMLChars1 = XMLChars,
 	  print_xml_output(OutputStream, XMLChars1)
 	; true
 	).
 
+generate_xml_MMO_term(XMLArgTerm, XMLAATerm, XMLNegExTerm, XMLUtterancesTerm, MMOXML) :-
+	  create_xml_element('MMO',
+			     [],
+			     [XMLArgTerm,XMLAATerm,XMLNegExTerm,XMLUtterancesTerm],
+			     MMOXML).
+
+map_to_true_and_false(noformat,  false).
+map_to_true_and_false(noformat1, false).
+map_to_true_and_false(format,    true).
+map_to_true_and_false(format1,   true).
+
 % Increase the indentation of the XML beginning with <MMO>,
-% because <MMOlist> is left justified.
+% because <MMOs> is left justified.
 
 conditionally_increase_indent_by_one(format1, XMLChars, XMLChars1) :-
 	increase_indent_by_one(XMLChars, XMLChars1).
@@ -92,14 +137,19 @@ print_xml_output(OutputStream, XMLChars) :-
 	% 0 means inner header/footer
 	xml_header_footer_print_setting(0, XMLSetting, PrintSetting),
 	conditionally_print_xml_header(PrintSetting, OutputStream),
+	flush_output(OutputStream),
 	format(OutputStream, "~s", [XMLChars]),
-	conditionally_print_xml_footer(PrintSetting, XMLSetting, OutputStream).
+	flush_output(OutputStream),
+	conditionally_print_xml_footer(PrintSetting, XMLSetting, OutputStream),
+	flush_output(OutputStream).
 
 conditionally_print_CR(Format, OutputStream) :-
 	( Format == format1 ->
-	  format(OutputStream, "~n", [])
+	  format(OutputStream, "~n", []),
+	  flush_output(OutputStream)
 	; Format == format ->
-	  format(OutputStream, "~n", [])
+	  format(OutputStream, "~n", []),
+	  flush_output(OutputStream)
 	; true
 	).
 
@@ -215,11 +265,11 @@ generate_xml_candidates_list([FirstMMOCandidate|RestMMOCandidates],
 	generate_xml_candidates_list(RestMMOCandidates, RestXMLCandidates).
 
 generate_one_xml_candidate(MMOCandidate, XMLCandidate) :-
-	MMOCandidate = ev(NegScore,CUI,ConceptName,PreferredName,MatchedWords,
+	MMOCandidate = ev(CandidateScore,CUI,CandidateMatched,PreferredName,MatchedWords,
 			  SemTypes,MatchMap,IsHead,IsOverMatch,Sources,PosInfo),
-	generate_xml_neg_score(NegScore, XMLNegScore),
+	generate_xml_candidate_score(CandidateScore, XMLCandidateScore),
 	generate_xml_CUI(CUI, XMLCUI),
-	generate_xml_concept_name(ConceptName, XMLConceptName),
+	generate_xml_concept_matched(CandidateMatched, XMLCandidateMatched),
 	generate_xml_preferred_name(PreferredName, XMLPreferredName),
 	generate_xml_matched_words(MatchedWords, XMLMatchedWords),
 	generate_xml_semtypes(SemTypes, XMLSemTypes),
@@ -227,39 +277,38 @@ generate_one_xml_candidate(MMOCandidate, XMLCandidate) :-
 	generate_xml_is_head(IsHead, XMLIsHead),	
 	generate_xml_is_overmatch(IsOverMatch, XMLIsOverMatch),	
 	generate_xml_sources(Sources, XMLSources),
-	generate_xml_pos_info(PosInfo, 'Spans', XMLPosInfo),
-	create_xml_element('Candidate',
-			   [],
-			   [XMLNegScore,XMLCUI,XMLConceptName,XMLPreferredName,
-			    XMLMatchedWords,XMLSemTypes,XMLMatchMap,XMLIsHead,
-			    XMLIsOverMatch,XMLSources,XMLPosInfo],
-			   XMLCandidate).
+	generate_xml_pos_info(PosInfo, 'ConceptPIs', 'ConceptPI', XMLPosInfo),
+        create_xml_element('Candidate',
+                           [],
+                           [XMLCandidateScore,XMLCUI,XMLCandidateMatched,XMLPreferredName,
+                            XMLMatchedWords,XMLSemTypes,XMLMatchMap,XMLIsHead,
+                            XMLIsOverMatch,XMLSources,XMLPosInfo],
+                           XMLCandidate).
 
-
-generate_xml_neg_score(NegScore, XMLNegScore) :-
-	number_codes(NegScore, NegScoreString),
-	create_xml_element('NegScore',
+generate_xml_candidate_score(CandidateScore, XMLCandidateScore) :-
+	number_codes(CandidateScore, CandidateScoreString),
+	create_xml_element('CandidateScore',
 			   [],
-			   [pcdata(NegScoreString)],
-			   XMLNegScore).
+			   [pcdata(CandidateScoreString)],
+			   XMLCandidateScore).
 
 generate_xml_CUI(CUI, XMLCUI) :-
 	atom_codes(CUI, CUIString),
-	create_xml_element('UMLSCUI',
+	create_xml_element('CandidateCUI',
 			   [],
 			   [pcdata(CUIString)],
 			   XMLCUI).
 
-generate_xml_concept_name(ConceptName, XMLConceptName) :-
-	atom_codes(ConceptName, ConceptNameString),
-	create_xml_element('UMLSConcept',
+generate_xml_concept_matched(CandidateMatched, XMLCandidateMatched) :-
+	atom_codes(CandidateMatched, CandidateMatchedString),
+	create_xml_element('CandidateMatched',
 			   [],
-			   [pcdata(ConceptNameString)],
-			   XMLConceptName).
+			   [pcdata(CandidateMatchedString)],
+			   XMLCandidateMatched).
 
 generate_xml_preferred_name(PreferredName, XMLPreferredName) :-
 	atom_codes(PreferredName, PreferredNameString),
-	create_xml_element('UMLSPreferred',
+	create_xml_element('CandidatePreferred',
 			   [],
 			   [pcdata(PreferredNameString)],
 			   XMLPreferredName).
@@ -290,7 +339,7 @@ generate_xml_semtypes(SemTypes, XMLSemTypes) :-
 	generate_xml_semtype_list(SemTypes, XMLSemTypeList),
 	length(SemTypes, Length),
 	number_codes(Length, Count),
-	create_xml_element('STs',
+	create_xml_element('SemTypes',
 			   ['Count'=Count],
 			   XMLSemTypeList,
    			   XMLSemTypes).
@@ -303,7 +352,7 @@ generate_xml_semtype_list([FirstSemTypeAtom|RestSemTypeAtoms],
 
 generate_one_xml_semtype(SemTypeAtom, SemTypeXML) :-
 	atom_codes(SemTypeAtom, SemTypeString),
-	create_xml_element('ST',
+	create_xml_element('SemType',
 			   [],
 			   [pcdata(SemTypeString)],
 			   SemTypeXML).			   
@@ -325,44 +374,42 @@ generate_xml_matchmap_list([FirstMatchMap|RestMatchMap],
 	generate_xml_matchmap_list(RestMatchMap, RestMatchMapXMLs).
 
 generate_one_xml_matchmap(MatchMap, MatchMapXML) :-
-	MatchMap = [[TWMatchPosS,TWMatchPosE],
-		    [CWMatchPosS, CWMatchPosE],
-		    Variation],
-	number_codes(TWMatchPosS, TWMatchPosSString),
-	number_codes(TWMatchPosE, TWMatchPosEString),
-	number_codes(CWMatchPosS, CWMatchPosSString),
-	number_codes(CWMatchPosE, CWMatchPosEString),
-	number_codes(Variation,   VariationString),
+	MatchMap = [[TextMatchStart,TextMatchEnd],
+		    [ConcMatchStart, ConcMatchEnd],
+		    LexVariation],
+	number_codes(TextMatchStart, TextMatchStartString),
+	number_codes(TextMatchEnd, TextMatchEndString),
+	number_codes(ConcMatchStart, ConcMatchStartString),
+	number_codes(ConcMatchEnd, ConcMatchEndString),
+	number_codes(LexVariation,   LexVariationString),
 
-	create_xml_element('TWMatchPosS',
+	create_xml_element('TextMatchStart',
 			   [],
-			   [pcdata(TWMatchPosSString)],
-			   XMLTWMatchPosS),
-	create_xml_element('TWMatchPosE',
+			   [pcdata(TextMatchStartString)],
+			   XMLTextMatchStart),
+	create_xml_element('TextMatchEnd',
 			   [],
-			   [pcdata(TWMatchPosEString)],
-			   XMLTWMatchPosE),
-	create_xml_element('CWMatchPosS',
+			   [pcdata(TextMatchEndString)],
+			   XMLTextMatchEnd),
+	create_xml_element('ConcMatchStart',
 			   [],
-			   [pcdata(CWMatchPosSString)],
-			   XMLCWMatchPosS),
-	create_xml_element('CWMatchPosE',
+			   [pcdata(ConcMatchStartString)],
+			   XMLConcMatchStart),
+	create_xml_element('ConcMatchEnd',
 			   [],
-			   [pcdata(CWMatchPosEString)],
-			   XMLCWMatchPosE),
-	create_xml_element('Variation',
+			   [pcdata(ConcMatchEndString)],
+			   XMLConcMatchEnd),
+	create_xml_element('LexVariation',
 			   [],
-			   [pcdata(VariationString)],
-			   XMLVariation),
+			   [pcdata(LexVariationString)],
+			   XMLLexVariation),
 
 	create_xml_element('MatchMap',
 			   [],
-			   [XMLTWMatchPosS,XMLTWMatchPosE,
-			    XMLCWMatchPosS,XMLCWMatchPosE,
-			    XMLVariation],
+			   [XMLTextMatchStart,XMLTextMatchEnd,
+			    XMLConcMatchStart,XMLConcMatchEnd,
+			    XMLLexVariation],
 			   MatchMapXML).
-
-
 
 generate_xml_is_head(IsHead, XMLIsHead) :-
 	atom_codes(IsHead, IsHeadString),
@@ -400,71 +447,67 @@ generate_one_xml_sources(SourceAtom, SourceXML) :-
 			   [pcdata(SourceString)],
 			   SourceXML).			   
 
-generate_xml_CUI_concept(CUIConceptList, ElementName, XMLCUIConcept) :-
-	generate_xml_CUI_concept_list(CUIConceptList, XMLCUIConceptList),
-	length(CUIConceptList, Length),
+generate_xml_NegEx_concepts(NegExConceptList, ElementName, XMLNegExConcept) :-
+	generate_xml_NegEx_concept_list(NegExConceptList, XMLNegExConceptList),
+	length(NegExConceptList, Length),
 	number_codes(Length, Count),
 	create_xml_element(ElementName,
 			   ['Count'=Count],
-			   XMLCUIConceptList,
-   			   XMLCUIConcept).
+			   XMLNegExConceptList,
+   			   XMLNegExConcept).
 
-generate_xml_CUI_concept_list([], []).
-generate_xml_CUI_concept_list([FirstCUIConcept|RestCUIConcepts],
-			      [FirstCUIConceptXML|RestCUIConceptsXML]) :-
-	generate_one_xml_CUI_concept(FirstCUIConcept, FirstCUIConceptXML),
-	generate_xml_CUI_concept_list(RestCUIConcepts, RestCUIConceptsXML).
+generate_xml_NegEx_concept_list([], []).
+generate_xml_NegEx_concept_list([FirstNegExConcept|RestNegExConcepts],
+			      [FirstNegExConceptXML|RestNegExConceptsXML]) :-
+	generate_one_xml_NegEx_concept(FirstNegExConcept, FirstNegExConceptXML),
+	generate_xml_NegEx_concept_list(RestNegExConcepts, RestNegExConceptsXML).
 
-
-generate_one_xml_CUI_concept(CUI:Concept, CUIConceptXML) :-
+generate_one_xml_NegEx_concept(CUI:Concept, NegExConceptXML) :-
 	atom_codes(CUI, CUIString),
 	atom_codes(Concept,  ConceptString),
-	create_xml_element('NegExCUI',
+	create_xml_element('NegConcCUI',
 			   [],
 			   [pcdata(CUIString)],
 			   CUIXML),
-	create_xml_element('NegExConcept',
+	create_xml_element('NegConcMatched',
 			   [],
 			   [pcdata(ConceptString)],
 			   ConceptXML),
-	create_xml_element('CUIConcept',
+	create_xml_element('NegConcept',
 			   [],
 			   [CUIXML,ConceptXML],
-			   CUIConceptXML).
+			   NegExConceptXML).
 
-
-
-
-generate_xml_pos_info(PosInfo, ElementName, XMLPosInfo) :-
-	generate_xml_pos_info_list(PosInfo, XMLPosInfoList),
+generate_xml_pos_info(PosInfo, PluralElementName, SingularElementName, XMLPosInfo) :-
+	generate_xml_pos_info_list(PosInfo, SingularElementName, XMLPosInfoList),
 	length(PosInfo, Length),
 	number_codes(Length, Count),
-	create_xml_element(ElementName,
+	create_xml_element(PluralElementName,
 			   ['Count'=Count],
 			   XMLPosInfoList,
    			   XMLPosInfo).
 
-generate_xml_pos_info_list([], []).
-generate_xml_pos_info_list([FirstPosInfo|RestPosInfos],
+generate_xml_pos_info_list([], _SingularElementName, []).
+generate_xml_pos_info_list([FirstPosInfo|RestPosInfos], SingularElementName,
 			   [FirstPosInfoXML|RestPosInfoXMLs]) :-
-	generate_one_xml_pos_info(FirstPosInfo, FirstPosInfoXML),
-	generate_xml_pos_info_list(RestPosInfos, RestPosInfoXMLs).
+	generate_one_xml_pos_info(FirstPosInfo, SingularElementName, FirstPosInfoXML),
+	generate_xml_pos_info_list(RestPosInfos, SingularElementName, RestPosInfoXMLs).
 
 
-generate_one_xml_pos_info(StartPos/Length, PosInfoXML) :-
+generate_one_xml_pos_info(StartPos/Length, SingularElementName, PosInfoXML) :-
 	number_codes(StartPos, StartPosString),
 	number_codes(Length,   LengthString),
 	create_xml_element('StartPos',
 			   [],
 			   [pcdata(StartPosString)],
 			   StartPosXML),
-	create_xml_element('SpanLen',
+	create_xml_element('Length',
 			   [],
 			   [pcdata(LengthString)],
-			   SpanLenXML),
-	create_xml_element('Span',
+			   LengthXML),
+	create_xml_element(SingularElementName,
 			   [],
-			   [StartPosXML,SpanLenXML],
+			   [StartPosXML,LengthXML],
 			   PosInfoXML).
 
 generate_xml_phrase_mappings_term(MappingsList, XMLMappingsTerm) :-
@@ -484,20 +527,23 @@ generate_xml_mappings_list([FirstMMOMapping|RestMMOMappings],
 	generate_xml_mappings_list(RestMMOMappings, RestXMLMappings).
 			       
 generate_one_xml_mapping(MMOMapping, XMLMapping) :-
-	MMOMapping = map(NegScore, CandidatesList),
-	number_codes(NegScore, NegScoreString),
-	create_xml_element('MapNegScore',
-			   [],
-			   [pcdata(NegScoreString)],
-			   XMLNegScore),
+	MMOMapping = map(MappingScore, CandidatesList),
+	generate_xml_mapping_score(MappingScore, XMLMappingScore),
 	generate_xml_phrase_candidates_term(CandidatesList, XMLCandidatesTerm),
 	create_xml_element('Mapping',
 			   [],
-			   [XMLNegScore,XMLCandidatesTerm],
+			   [XMLMappingScore,XMLCandidatesTerm],
 			   XMLMapping).
 
+generate_xml_mapping_score(MappingScore, XMLMappingScore) :-
+	number_codes(MappingScore, MappingScoreString),
+	create_xml_element('MappingScore',
+			   [],
+			   [pcdata(MappingScoreString)],
+			   XMLMappingScore).
+
 generate_xml_phrase_text(PhraseString, XMLText) :-
-	create_xml_element('PText',
+	create_xml_element('PhraseText',
 			  [],
 			  [pcdata(PhraseString)],
 			  XMLText).
@@ -505,10 +551,10 @@ generate_xml_phrase_text(PhraseString, XMLText) :-
 generate_xml_phrase_syntax(PhraseSyntax, XMLSyntax) :-
 	length(PhraseSyntax, PhraseSyntaxLength),
 	number_codes(PhraseSyntaxLength, Count),
-	generate_xml_syntax_list(PhraseSyntax, TagList),
-	create_xml_element('Tags',
+	generate_xml_syntax_list(PhraseSyntax, SyntaxUnitList),
+	create_xml_element('SyntaxUnits',
 			    ['Count'=Count],
-			    TagList,
+			    SyntaxUnitList,
 			    XMLSyntax).
 
 generate_xml_syntax_list([], []).
@@ -524,19 +570,19 @@ generate_one_xml_syntax_element(MMOSyntaxElement, XMLSyntaxElement) :-
 	generate_xml_type_term(TypeString, XMLTypeTerm),
 	generate_xml_lexmatch_term(FeatureList, XMLLexMatchTerm),
 	generate_xml_inputmatch_term(FeatureList, XMLInputMatchTerm),
-	generate_xml_POS_term(FeatureList, XMLPOSTerm),
+	generate_xml_LexCat_term(FeatureList, XMLLexCatTerm),
 	generate_xml_token_term(FeatureList, XMLTokenTerm),
-	% XMLLexMatchTerm and XMLPOSTerm are optional
+	% XMLLexMatchTerm and XMLLexCatTerm are optional
 	% and can therefore be [], so we delete them.
 	delete([XMLTypeTerm,XMLLexMatchTerm,
-		XMLInputMatchTerm,XMLPOSTerm,XMLTokenTerm], [], XMLFeatureList),
-	create_xml_element('Tag',
+		XMLInputMatchTerm,XMLLexCatTerm,XMLTokenTerm], [], XMLFeatureList),
+	create_xml_element('SyntaxUnit',
 			   [],
 			   XMLFeatureList,
 			   XMLSyntaxElement).
 
 generate_xml_type_term(TypeString, XMLType) :-
-	create_xml_element('Type',
+	create_xml_element('SyntaxType',
 			   [],
 			   [pcdata(TypeString)],
 			   XMLType).
@@ -561,14 +607,14 @@ generate_xml_inputmatch_term(FeatureList, XMLInputMatch) :-
 			   [pcdata(InputMatchString)],
 			   XMLInputMatch).
 
-generate_xml_POS_term(FeatureList, XMLPOS) :-
+generate_xml_LexCat_term(FeatureList, XMLLexCat) :-
 	( memberchk(tag(LexicalCategoryAtom), FeatureList) ->
 	  atom_codes(LexicalCategoryAtom, LexicalCategoryString),
-	  create_xml_element('POS',
+	  create_xml_element('LexCat',
 			     [],
 			     [pcdata(LexicalCategoryString)],
-			     XMLPOS)
-	; XMLPOS = []
+			     XMLLexCat)
+	; XMLLexCat = []
 	).
 
 
@@ -594,14 +640,14 @@ generate_xml_token_list([FirstMMOTokenAtom|RestMMOTokenAtoms], [FirstXMLToken|Re
 
 generate_xml_phrase_start_pos(PhraseStartPos, XMLPhraseStartPos) :-
 	number_codes(PhraseStartPos, PhraseStartPosString),
-	create_xml_element('PStartPos',
+	create_xml_element('PhraseStartPos',
 			   [],
 			   [pcdata(PhraseStartPosString)],
 			   XMLPhraseStartPos).
 
 generate_xml_phrase_length(PhraseLength, XMLPhraseLength) :-
 	number_codes(PhraseLength, PhraseLengthString),
-	create_xml_element('PSpanLen',
+	create_xml_element('PhraseLength',
 			   [],
 			   [pcdata(PhraseLengthString)],
 			   XMLPhraseLength).
@@ -647,23 +693,23 @@ generate_xml_utterance_data(UtteranceLabel,
 			   [],
 			   [pcdata(PMIDString)],
 			   XMLPMID),
-	create_xml_element('Location',
+	create_xml_element('UttSection',
 			   [],
 			   [pcdata(UtteranceTypeString)],
 			   XMLUtteranceType),
-  	create_xml_element('SeqNo',
+  	create_xml_element('UttNum',
 			   [],
 			   [pcdata(UtteranceNumberString)],
 			   XMLUtteranceNumber),
-	create_xml_element('UText',
+	create_xml_element('UttText',
 			   [],
 			   [pcdata(MMOUtteranceText)],
 			   XMLUtteranceText),
-	create_xml_element('UStartPos',
+	create_xml_element('UttStartPos',
 			   [],
 			   [pcdata(StartPosString)],
 			   XMLUtteranceStartPos),
-	create_xml_element('USpanLen',
+	create_xml_element('UttLength',
 			   [],
 			   [pcdata(LengthString)],
 			   XMLUtteranceLength).
@@ -686,53 +732,53 @@ generate_xml_AA_list([Acronym*Expansion*CountList*CUIList|RestAATerms], [XMLAA|R
 	generate_xml_AA_list(RestAATerms, RestXMLAAs).
 
 generate_one_xml_AA_term(Acronym, Expansion, CountList, MMOCUIList, XMLAA) :-
-	CountList = [NumAATokens, AALen, NumDefnTokens, DefnLen],
+	CountList = [AATokenNum, AALen, AAExpTokenNum, AAExpLen],
 	length(MMOCUIList, CUILengthAtom),
-	number_codes(CUILengthAtom, CUICount),
-	number_codes(NumAATokens, NumAATokensString),
+	number_codes(CUILengthAtom, AACUICount),
+	number_codes(AATokenNum, AATokenNumString),
 	number_codes(AALen, AALenString),
-	number_codes(NumDefnTokens, NumDefnTokensString),
-	number_codes(DefnLen, DefnLenString),
+	number_codes(AAExpTokenNum, AAExpTokenNumString),
+	number_codes(AAExpLen, AAExpLenString),
 	generate_xml_AA_CUI_list(MMOCUIList, XMLCUIList),
-	create_xml_element('AAName',
+	create_xml_element('AAText',
 			   [],
 			   [pcdata(Acronym)],
-			   AANameTerm),
-	create_xml_element('AAExpansion',
+			   AATextTerm),
+	create_xml_element('AAExp',
 			   [],
 			   [pcdata(Expansion)],
-			   AAExpansionTerm),
-	create_xml_element('NumAATokens',
+			   AAExpTerm),
+	create_xml_element('AATokenNum',
 			   [],
-			   [pcdata(NumAATokensString)],
-			   NumAATokensTerm),
+			   [pcdata(AATokenNumString)],
+			   AATokenNumTerm),
 	create_xml_element('AALen',
 			   [],
 			   [pcdata(AALenString)],
 			   AALenTerm),
-	create_xml_element('NumDefnTokens',
+	create_xml_element('AAExpTokenNum',
 			   [],
-			   [pcdata(NumDefnTokensString)],
-			   NumDefnTokensTerm),
-	create_xml_element('DefnLen',
+			   [pcdata(AAExpTokenNumString)],
+			   AAExpTokenNumTerm),
+	create_xml_element('AAExpLen',
 			   [],
-			   [pcdata(DefnLenString)],
-			   DefnLenTerm),
-	create_xml_element('CUIs',
-			   ['Count'=CUICount],
+			   [pcdata(AAExpLenString)],
+			   AAExpLenTerm),
+	create_xml_element('AACUIs',
+			   ['Count'=AACUICount],
 			   XMLCUIList,
 			   CUIListTerm),	
 	create_xml_element('AA',
 			   [],
-			   [AANameTerm,AAExpansionTerm,
-			    NumAATokensTerm,AALenTerm,
-			    NumDefnTokensTerm,DefnLenTerm,CUIListTerm],
+			   [AATextTerm,AAExpTerm,
+			    AATokenNumTerm,AALenTerm,
+			    AAExpTokenNumTerm,AAExpLenTerm,CUIListTerm],
 			   XMLAA).
 
 generate_xml_AA_CUI_list([], []).
 generate_xml_AA_CUI_list([MMOCUI|RestMMOCUIs], [XMLCUI|RestXMLCUIs]) :-
 	atom_codes(MMOCUI, CUIString),
-	create_xml_element('CUI',
+	create_xml_element('AACUI',
 			   [],
 			   [pcdata(CUIString)],
 			   XMLCUI),
@@ -753,7 +799,7 @@ generate_xml_arg_term(ArgsMMO, XMLArgTerm) :-
 			   ['Count'=CountString],
 			   OptionList,
 			   XMLOptionListTerm),	
-	create_xml_element('Args',
+	create_xml_element('CmdLine',
 			   [],
 			   [XMLCommandTerm,XMLOptionListTerm],
 			   XMLArgTerm).
@@ -820,8 +866,9 @@ generate_xml_NegEx_list([NegEx|RestNegExes], [XMLNegEx|RestXMLNegExes]) :-
 
 generate_one_xml_NegEx_term(NegEx, XMLNegEx) :-
 	final_negation_template(NegEx,
-				NegationType, NegationTrigger, TriggerPosInfo,
-				NegatedCUIConceptList,  ConceptPosInfo),
+				NegationType,
+				NegationTrigger,  TriggerPosInfo,
+				NegExConceptList, ConceptPosInfo),
 	atom_codes(NegationType, NegationTypeString),
 	create_xml_element('NegType',
 			   [],
@@ -833,20 +880,19 @@ generate_one_xml_NegEx_term(NegEx, XMLNegEx) :-
 			   [],
 			   [pcdata(NegationTriggerString)],
 			   XMLNegTrigger),
-	generate_xml_pos_info(TriggerPosInfo, 'NTSpans', XMLTriggerPosInfo),
-
-	generate_xml_CUI_concept(NegatedCUIConceptList, 'CUIConcepts', XMLCUIConceptList),
+	generate_xml_pos_info(TriggerPosInfo, 'NegTriggerPIs', 'NegTriggerPI', XMLTriggerPosInfo),
+	generate_xml_NegEx_concepts(NegExConceptList, 'NegConcepts', XMLNegExConceptList),
 	% atom_codes(NegatedConcept, NegationConceptString),
 	% create_xml_element('NegConcept',
 	% 		   [],
 	% 		   [pcdata(NegationConceptString)],
 	% 		   XMLNegConcept),
-	generate_xml_pos_info(ConceptPosInfo, 'NCSpans', XMLConceptPosInfo),
+	generate_xml_pos_info(ConceptPosInfo, 'NegConcPIs', 'NegConcPI', XMLConceptPosInfo),
 	create_xml_element('Negation',
 			   [],
 			   [XMLNegType,
-			    XMLNegTrigger,    XMLTriggerPosInfo,
-			    XMLCUIConceptList,XMLConceptPosInfo],
+			    XMLNegTrigger,       XMLTriggerPosInfo,
+			    XMLNegExConceptList, XMLConceptPosInfo],
 			   XMLNegEx).
 
 create_xml_element(ElementName, AttributeList, Components, XMLStructure) :-
@@ -867,22 +913,24 @@ conditionally_print_xml_header(PrintSetting, OutputStream) :-
 	  environ('XML_DOCTYPE', XMLDocType),
 	  environ('XML_DOCNAME', XMLDocName),
 	  environ('XML_DTD', XMLDTD),
-	  concat_atoms(['<!', XMLDocType, ' "', XMLDocName, '" "', XMLDTD, '">'], DocType),
+	  concat_atom(['<!', XMLDocType, ' "', XMLDocName, '" "', XMLDTD, '">'], DocType),
 	  format(OutputStream, '~w~n~w', [XMLVersion,DocType]),
-	  format(OutputStream, '~n<MMOlist>', [])
+	  format(OutputStream, '~n<MMOs>', []),
+	  flush_output(OutputStream)
 	; true
 	).
 
 conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream) :-
 	( PrintSetting =:= 1 ->
 	  conditionally_print_CR(XMLMode, OutputStream),
-	  format(OutputStream, '</MMOlist>~n~n', [])
+	  format(OutputStream, '</MMOs>~n', []),
+	  flush_output(OutputStream)
 	; true
 	).
 
 xml_header_footer_print_setting(InnerOrOuter, XMLMode, PrintSetting) :-
-	( control_value('XML', XMLMode) ->
-	  get_xml_format_mode(XMLMode, FormatMode),
+	( control_value('XML', XMLMode),
+	  get_xml_format_mode(XMLMode, FormatMode) ->
 	  % This is bitwise XOR
 	  PrintSetting is \(InnerOrOuter, FormatMode)
 	; PrintSetting is 0

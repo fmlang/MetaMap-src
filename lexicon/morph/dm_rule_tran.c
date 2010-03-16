@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 /* dm_rule_tran.c - creates a trie from rules in a file
 */
 
@@ -9,6 +39,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include "dm.h"
+#include "lexicon_types.h"
 #include <rpc/xdr.h>
 
 /*  Translates (suffix) rules in the rules file to a trie.
@@ -34,7 +65,7 @@
 */
 
 int *obsolete_get_fields(char *line, int sep, int *numF);
-void *incr_buf_alloc(
+extern void *incr_buf_alloc(
 		     void *buf,	/* pointer to buffer */
 		     int unit,	/* size of one of what buf points to in bytes */
 		     int size,	/* current size of buffer in units */
@@ -62,7 +93,6 @@ bool_t xdr_dm_rule(XDR *xdrs, DmRule* rule);
 bool_t xdr_dm_trie(XDR *xdrs, DmTrie* trie);
 bool_t xdr_dm_xpn(XDR *xdrs, DmXpn* xpn);
 static int write_dm_rules_xdr(void);
-
 
 /* globals */
 DmTrie *trieBuf = (DmTrie *)NULL;	/* in-memory trie */
@@ -188,8 +218,12 @@ read_rules(void)
 		    continue;
 		}
 /* add pair */
-		if ((xpnBuf = (DmXpn *) incr_buf_alloc((void *)xpnBuf, sizeof(DmXpn), n_xpnBuf,
-			&a_xpnBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmXpn *)NULL)
+		if ((xpnBuf = (DmXpn *) incr_buf_alloc((void *)xpnBuf,
+						       sizeof(DmXpn),
+						       n_xpnBuf,
+						       &a_xpnBuf,
+						       (int)1,
+						       (int)DM_DEFAULT_ALLOCATION)) == (DmXpn *)NULL)
 		    return(0);
 
 /* save old value of n_charBuf in case of errors */
@@ -197,16 +231,24 @@ read_rules(void)
 
 		xpn = xpnBuf+n_xpnBuf;
 		xpn->dmInTerm = n_charBuf;
-		if ((charBuf = (char *) incr_buf_alloc((void *)charBuf, sizeof(char), n_charBuf,
-			&a_charBuf, (int)(mp-sp+1), (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+		if ((charBuf = (char *) incr_buf_alloc((void *)charBuf,
+						       sizeof(char),
+						       n_charBuf,
+						       &a_charBuf,
+						       (int)(mp-sp+1),
+						       (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 		    return(0);
 		strncpy(charBuf+n_charBuf, sp, (size_t)(mp-sp));
 		*(charBuf+n_charBuf+(int)(mp-sp)) = EOS;
 		n_charBuf += (int)(mp-sp)+1;
 
 		xpn->dmOutTerm = n_charBuf;
-		if ((charBuf = (char *) incr_buf_alloc((void *)charBuf, sizeof(char), n_charBuf,
-			&a_charBuf, (int)(ep-mp), (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+		if ((charBuf = (char *) incr_buf_alloc((void *)charBuf,
+						       sizeof(char),
+						       n_charBuf,
+						       &a_charBuf,
+						       (int)(ep-mp),
+						       (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 		    return(0);
 		strncpy(charBuf+n_charBuf, mp+1, (size_t)(ep-mp)-1);
 		*(charBuf+n_charBuf+(int)(ep-mp)-1) = EOS;
@@ -255,21 +297,33 @@ read_rules(void)
 		if (!load_rule())
 		    return(0);
 		n_ruleBuf++;
-		if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf, sizeof(DmRule), n_ruleBuf,
-			&a_ruleBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
+		if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf,
+							 sizeof(DmRule),
+							 n_ruleBuf,
+							 &a_ruleBuf,
+							 (int)1,
+							 (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
 		    return(0);
 		if (!reverse_rule(n_ruleBuf-1))
 		    return(0);
 		if (!load_rule())
 		    return(0);
 		n_ruleBuf++;
-		if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf, sizeof(DmRule), n_ruleBuf,
-			&a_ruleBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
+		if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf,
+							 sizeof(DmRule),
+							 n_ruleBuf,
+							 &a_ruleBuf,
+							 (int)1,
+							 (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
 		    return(0);
 		startFlag = 0;
 	    }
-	    if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf, sizeof(DmRule), n_ruleBuf,
-		    &a_ruleBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
+	    if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf,
+						     sizeof(DmRule),
+						     n_ruleBuf,
+						     &a_ruleBuf,
+						     (int)1,
+						     (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
 		return(0);
 	    rule = ruleBuf+n_ruleBuf;
 	    rule->dmInSuf = rule->dmOutSuf = rule->dmXpn = (-1);
@@ -307,8 +361,12 @@ read_rules(void)
 		rule->dmFlags |= DM_INPUT_EOP;
 		length--;
 	    }
-	    if ((charBuf = (char *) incr_buf_alloc((void *)charBuf, sizeof(char), n_charBuf,
-		    &a_charBuf, (int)(length+1), (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+	    if ((charBuf = (char *) incr_buf_alloc((void *)charBuf,
+						   sizeof(char),
+						   n_charBuf,
+						   &a_charBuf,
+						   (int)(length+1),
+						   (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 		return(0);
 	    strncpy(charBuf+n_charBuf, start, (size_t)length);
 	    *(charBuf+n_charBuf+length) = EOS;
@@ -343,8 +401,12 @@ read_rules(void)
 		rule->dmFlags |= DM_OUTPUT_EOP;
 		length--;
 	    }
-	    if ((charBuf = (char *) incr_buf_alloc((void *)charBuf, sizeof(char), n_charBuf,
-		    &a_charBuf, (int)(length+1), (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
+	    if ((charBuf = (char *) incr_buf_alloc((void *)charBuf,
+						   sizeof(char),
+						   n_charBuf,
+						   &a_charBuf,
+						   (int)(length+1),
+						   (int)(DM_DEFAULT_ALLOCATION*4))) == (char *)NULL)
 		return(0);
 	    strncpy(charBuf+n_charBuf, start, (size_t)length);
 	    *(charBuf+n_charBuf+length) = EOS;
@@ -371,8 +433,12 @@ read_rules(void)
 	if (!load_rule())
 	    return(2);
 	n_ruleBuf++;
-	if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf, sizeof(DmRule), n_ruleBuf,
-		&a_ruleBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
+	if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf,
+						 sizeof(DmRule),
+						 n_ruleBuf,
+						 &a_ruleBuf,
+						 (int)1,
+						 (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
 	    return(0);
 	if (!reverse_rule(n_ruleBuf-1))
 	    return(0);
@@ -399,8 +465,12 @@ load_rule(void)
 
     if (n_trieBuf == 0)
     {
-	if ((trieBuf = (DmTrie *) incr_buf_alloc((void *)trieBuf, sizeof(DmTrie), n_trieBuf,
-		&a_trieBuf, (int)1, (int)(DM_DEFAULT_ALLOCATION*2))) == (DmTrie *)NULL)
+	if ((trieBuf = (DmTrie *) incr_buf_alloc((void *)trieBuf,
+						 sizeof(DmTrie),
+						 n_trieBuf,
+						 &a_trieBuf,
+						 (int)1,
+						 (int)(DM_DEFAULT_ALLOCATION*2))) == (DmTrie *)NULL)
 	    return(0);
 	trieBuf->dmData = (int)EOS;
 	trieBuf->dmChild = trieBuf->dmSib = (-1);
@@ -414,8 +484,12 @@ load_rule(void)
     {
 	if (cNode == (-1) || ((int)(*cp) < (trieBuf+cNode)->dmData))
 	{
-	    if ((trieBuf = (DmTrie *) incr_buf_alloc((void *)trieBuf, sizeof(DmTrie), n_trieBuf,
-		    &a_trieBuf, (int)1, (int)(DM_DEFAULT_ALLOCATION*2))) == (DmTrie *)NULL)
+	    if ((trieBuf = (DmTrie *) incr_buf_alloc((void *)trieBuf,
+						     sizeof(DmTrie),
+						     n_trieBuf,
+						     &a_trieBuf,
+						     (int)1,
+						     (int)(DM_DEFAULT_ALLOCATION*2))) == (DmTrie *)NULL)
 		return(0);
 	    new = n_trieBuf;
 	    (trieBuf+new)->dmData = (int)(*cp);
@@ -435,8 +509,12 @@ load_rule(void)
 	    }
 	    if (cNode == (-1) || (trieBuf+cNode)->dmData != (int)(*cp))
 	    {
-		if ((trieBuf = (DmTrie *) incr_buf_alloc((void *)trieBuf, sizeof(DmTrie), n_trieBuf,
-			&a_trieBuf, (int)1, (int)(DM_DEFAULT_ALLOCATION*2))) == (DmTrie *)NULL)
+		if ((trieBuf = (DmTrie *) incr_buf_alloc((void *)trieBuf,
+							 sizeof(DmTrie),
+							 n_trieBuf,
+							 &a_trieBuf,
+							 (int)1,
+							 (int)(DM_DEFAULT_ALLOCATION*2))) == (DmTrie *)NULL)
 		    return(0);
 		new = n_trieBuf;
 		(trieBuf+new)->dmData = (int)(*cp);
@@ -470,7 +548,8 @@ load_rule(void)
 	    }
 	    else
 	    {
-		fprintf(stderr, "ERROR: There were multiple rules of the type: %s|%s|%s|%s\n",			charBuf+rule->dmInSuf, cat_get(rule->dmInCat),
+		fprintf(stderr, "ERROR: There were multiple rules of the type: %s|%s|%s|%s\n",
+			charBuf+rule->dmInSuf, cat_get(rule->dmInCat),
 			charBuf+rule->dmOutSuf, cat_get(rule->dmOutCat));
 		fprintf(stderr, "\twith different exception lists\n");
 		return(0);
@@ -591,8 +670,12 @@ reverse_rule(
     DmRule *revRule;
     DmXpn *xpn;
 
-    if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf, sizeof(DmRule), n_ruleBuf,
-	    &a_ruleBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
+    if ((ruleBuf = (DmRule *) incr_buf_alloc((void *)ruleBuf,
+					     sizeof(DmRule),
+					     n_ruleBuf,
+					     &a_ruleBuf,
+					     (int)1,
+					     (int)DM_DEFAULT_ALLOCATION)) == (DmRule *)NULL)
 	return(0);
 
     rule = ruleBuf+ruleNum;
@@ -608,8 +691,12 @@ reverse_rule(
 
     for (i=0; i<rule->dmNumXpn; i++)
     {
-	if ((xpnBuf = (DmXpn *) incr_buf_alloc((void *)xpnBuf, sizeof(DmXpn), n_xpnBuf,
-		&a_xpnBuf, (int)1, (int)DM_DEFAULT_ALLOCATION)) == (DmXpn *)NULL)
+	if ((xpnBuf = (DmXpn *) incr_buf_alloc((void *)xpnBuf,
+					       sizeof(DmXpn),
+					       n_xpnBuf,
+					       &a_xpnBuf,
+					       (int)1,
+					       (int)DM_DEFAULT_ALLOCATION)) == (DmXpn *)NULL)
 	    return(0);
 	xpn = xpnBuf+(rule->dmXpn)+i;
 	(xpnBuf+n_xpnBuf)->dmInTerm = xpn->dmOutTerm;
@@ -668,31 +755,31 @@ xdr_dm_rule_header(XDR *xdrs, DmRuleHeader* ruleHeader)
 bool_t
 xdr_dm_rule(XDR *xdrs, DmRule* rule)
 {
-    return (xdr_int(xdrs, &rule->dmInSuf) &&
+    return (xdr_int(xdrs,  &rule->dmInSuf) &&
 	    xdr_dm_t(xdrs, &rule->dmInCat) &&
-	    xdr_int(xdrs, &rule->dmOutSuf) &&
+	    xdr_int(xdrs,  &rule->dmOutSuf) &&
 	    xdr_dm_t(xdrs, &rule->dmOutCat) &&
 	    xdr_dm_t(xdrs, &rule->dmFlags) &&
-	    xdr_dm_t(xdrs, (dm_t *)&rule->dmNumXpn) &&
-	    xdr_dm_t(xdrs, (dm_t *)&rule->dmXpn));
+	    xdr_dm_t(xdrs, (dm_t *)(&rule->dmNumXpn)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&rule->dmXpn)));
 }
 
 bool_t
 xdr_dm_trie(XDR *xdrs, DmTrie* trie)
 {
     return (xdr_int(xdrs, &trie->dmData) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmChild) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmSib) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmNumRule) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmRule) &&
-	    xdr_dm_t(xdrs, (dm_t *)&trie->dmHide));
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmChild)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmSib)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmNumRule)) &&
+	    xdr_dm_t(xdrs, (dm_t *)(&trie->dmRule)) &&
+	    xdr_int(xdrs,  (int *)&trie->dmHide));
 }
 
 bool_t
 xdr_dm_xpn(XDR *xdrs, DmXpn* xpn)
 {
     return (xdr_int(xdrs, &xpn->dmInTerm) &&
-	    xdr_dm_t(xdrs, (dm_t *)&xpn->dmOutTerm));
+	    xdr_dm_t(xdrs, (dm_t *)(&xpn->dmOutTerm)));
 }
 
 /* writes the rules in xdr format to standard output */
@@ -715,15 +802,30 @@ write_dm_rules_xdr(void)
 	return(0);
 
     n = n_trieBuf;
-    if (xdr_array(&xdrs, (caddr_t *)&trieBuf, (uint_t *)&n_trieBuf, (const uint_t)n, sizeof(DmTrie), xdr_dm_trie) == 0)
+    if (xdr_array(&xdrs,
+		  (caddr_t *)&trieBuf,
+		  (uint_t *)&n_trieBuf,
+		  (const uint_t)n,
+		  sizeof(DmTrie),
+		  (xdrproc_t)xdr_dm_trie) == 0)
 	return(0);
 
     n = n_ruleBuf;
-    if (xdr_array(&xdrs, (caddr_t *)&ruleBuf2, (uint_t *)&n_ruleBuf, (const uint_t)n, sizeof(DmRule), xdr_dm_rule) == 0)
+    if (xdr_array(&xdrs,
+		  (caddr_t *)&ruleBuf2,
+		  (uint_t *)&n_ruleBuf,
+		  (const uint_t)n,
+		  sizeof(DmRule),
+		  (xdrproc_t)xdr_dm_rule) == 0)
 	return(0);
 
     n = n_xpnBuf;
-    if (xdr_array(&xdrs, (caddr_t *)&xpnBuf, (uint_t *)&n_xpnBuf, (const uint_t)n, sizeof(DmXpn), xdr_dm_xpn) == 0)
+	if (xdr_array(&xdrs,
+		      (caddr_t *)&xpnBuf,
+		      (uint_t *)&n_xpnBuf,
+		      (const uint_t)n,
+		      sizeof(DmXpn),
+		      (xdrproc_t)xdr_dm_xpn) == 0)
 	return(0);
 
     n = n_charBuf;

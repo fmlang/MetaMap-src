@@ -1,3 +1,33 @@
+
+/****************************************************************************
+*
+*                          PUBLIC DOMAIN NOTICE                         
+*         Lister Hill National Center for Biomedical Communications
+*                      National Library of Medicine
+*                      National Institues of Health
+*           United States Department of Health and Human Services
+*                                                                         
+*  This software is a United States Government Work under the terms of the
+*  United States Copyright Act. It was written as part of the authors'
+*  official duties as United States Government employees and contractors
+*  and thus cannot be copyrighted. This software is freely available
+*  to the public for use. The National Library of Medicine and the
+*  United States Government have not placed any restriction on its
+*  use or reproduction.
+*                                                                        
+*  Although all reasonable efforts have been taken to ensure the accuracy 
+*  and reliability of the software and data, the National Library of Medicine
+*  and the United States Government do not and cannot warrant the performance
+*  or results that may be obtained by using this software or data.
+*  The National Library of Medicine and the U.S. Government disclaim all
+*  warranties, expressed or implied, including warranties of performance,
+*  merchantability or fitness for any particular purpose.
+*                                                                         
+*  For full details, please see the MetaMap Terms & Conditions, available at
+*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*
+***************************************************************************/
+
 % File:	    metamap_variants.pl
 % Module:   MetaMap
 % Author:   Lan
@@ -47,7 +77,7 @@
 	db_get_synonyms/2,
 	db_get_synonyms/3,
 	db_get_all_acros_abbrs/2,
-	db_get_unique_acro_abbr/2,
+	db_get_unique_acros_abbrs/2,
 	db_get_variants/3
     ]).
 
@@ -69,11 +99,11 @@
 	avl_fetch/3
     ]).
 
-:- use_module(skr_lib( nls_text),[
+:- use_module(skr_lib(nls_text),[
 	concatenate_text/3
     ]).
 
-:- use_module(skr_lib( nls_strings),[
+:- use_module(skr_lib(nls_strings),[
 	concatenate_items_to_atom/2
     ]).
 
@@ -129,7 +159,7 @@ initialize_metamap_variants(Mode) :-
 	assert(generation_mode(Mode)).
 
 conditionally_announce_generation_mode(Mode) :-
-	( \+ control_option(no_header_info) ->
+	( \+ control_option(silent) ->
 	  format('Variant generation mode: ~p.~n', [Mode])
 	; true
 	).
@@ -271,7 +301,7 @@ augment_GVCs_with_variants_aux([GVC|Rest], GenerationMode) :-
 augment_GVCs_with_variants_mode(static, [gvc(G,Vs,Cs)|Rest]) :-
 	G = v(Generator,TempCategory,_,_,_,_),
 	get_real_category(TempCategory, Category),
-	% get_variants/3 takes as second argument either
+	% db_get_variants/3 takes as second argument either
 	% a category (e.g., noun, verb, etc.), or [] (i.e., all categories)
 	db_get_variants(Generator, Category, Vs0),
 	( Vs0 == [] ->
@@ -450,7 +480,7 @@ get_acros_abbrs(Atoms, AAPairs) :-
 get_acros_abbrs_aux([], []).
 get_acros_abbrs_aux([First|Rest], AAPairs) :-
 	( control_option(unique_acros_abbrs_only) ->
-	  db_get_unique_acro_abbr(First, FirstAAPairs0)
+	  db_get_unique_acros_abbrs(First, FirstAAPairs0)
 	; db_get_all_acros_abbrs(First, FirstAAPairs0)
 	),
 	convert_aa_pairs(FirstAAPairs0, FirstAAPairs),
@@ -610,34 +640,33 @@ compute_all_syns([H|T], Ss) :-
 	append(SLists, Ss0),
 	sort(Ss0, Ss).
 
-compute_all_syns_aux([],[]).
-compute_all_syns_aux([V|Rest],[FirstSList|RestSLists]) :-
-    compute_syns(V,FirstSList),
-    compute_all_syns_aux(Rest,RestSLists).
+compute_all_syns_aux([], []).
+compute_all_syns_aux([V|Rest], [FirstSList|RestSLists]) :-
+	compute_syns(V, FirstSList),
+	compute_all_syns_aux(Rest, RestSLists).
 
-compute_syns(V,Ss) :-
-    augment_variant_with_roots(V),
-    variant_score(synonym,SynonymLevel),
-    compute_syns([V],SynonymLevel,[V],_FilterOut,[],Ss).
+compute_syns(V, Ss) :-
+	augment_variant_with_roots(V),
+	variant_score(synonym, SynonymLevel),
+	compute_syns([V], SynonymLevel, [V], _FilterOut, [], Ss).
 
-compute_syns([],_SynonymLevel,FilterIn,FilterIn,SynonymsIn,SynonymsIn).
-compute_syns([V|Rest],SynonymLevel,FilterIn,FilterOut,SynonymsIn,SynonymsOut) :-
-    augment_variant_with_roots(V),
-    V=v(Word,Categories,VarLevel,History,Roots0,_NFR),
-    (Roots0==[] ->
-        Roots=[Word]
-    ;   Roots=Roots0
-    ),
-    get_synonym_pairs(Roots,Categories,SynonymPairs),
-    NewVarLevel is VarLevel + SynonymLevel,
-    NewHistory=[0's|History],
-    convert_to_variants(SynonymPairs,NewVarLevel,NewHistory,Synonyms0),
-    filter_by_var_level(Synonyms0,Synonyms1,FilterIn,FilterInOut0),
-    append(SynonymsIn,Synonyms1,SynonymsInOut),
-    append(FilterInOut0,Synonyms1,FilterInOut),
-    append(Synonyms1,Rest,NewRest),
-    compute_syns(NewRest,SynonymLevel,FilterInOut,FilterOut,SynonymsInOut,
-                 SynonymsOut).
+compute_syns([], _SynonymLevel, FilterIn, FilterIn, SynonymsIn, SynonymsIn).
+compute_syns([V|Rest], SynonymLevel, FilterIn, FilterOut, SynonymsIn, SynonymsOut) :-
+	augment_variant_with_roots(V),
+	V = v(Word,Categories,VarLevel,History,Roots0,_NFR),
+	( Roots0 == [] ->
+	  Roots = [Word]
+	; Roots = Roots0
+	),
+	get_synonym_pairs(Roots, Categories, SynonymPairs),
+	NewVarLevel is VarLevel + SynonymLevel,
+	NewHistory=[0's|History],
+	convert_to_variants(SynonymPairs, NewVarLevel, NewHistory, Synonyms0),
+	filter_by_var_level(Synonyms0, Synonyms1, FilterIn, FilterInOut0),
+	append(SynonymsIn, Synonyms1, SynonymsInOut),
+	append(FilterInOut0, Synonyms1, FilterInOut),
+	append(Synonyms1, Rest, NewRest),
+	compute_syns(NewRest, SynonymLevel, FilterInOut, FilterOut, SynonymsInOut, SynonymsOut).
 
 
 /* get_synonym_pairs(+Atoms, +Categories, -Synonyms)
@@ -671,64 +700,62 @@ xxx
 Pairs is a list of Word-Category pairs.
 */
 
-convert_to_variants([],_VarLevel,_History,[]).
-convert_to_variants([First-Category|Rest],VarLevel,History,
+convert_to_variants([], _VarLevel, _History, []).
+convert_to_variants([First-Category|Rest], VarLevel, History,
                     [v(First,[Category],VarLevel,History,_,_)|ConvertedRest]) :-
-    convert_to_variants(Rest,VarLevel,History,ConvertedRest).
+	convert_to_variants(Rest, VarLevel, History, ConvertedRest).
 
-convert_to_variants([],_Categories,_VarLevel,_History,[]).
-convert_to_variants([First|Rest],Categories,VarLevel,History,
+convert_to_variants([], _Categories, _VarLevel, _History, []).
+convert_to_variants([First|Rest], Categories, VarLevel, History,
                     [v(First,Categories,VarLevel,History,_,_)|ConvertedRest]) :-
-    convert_to_variants(Rest,Categories,VarLevel,History,ConvertedRest).
+	convert_to_variants(Rest, Categories, VarLevel, History, ConvertedRest).
 
 
 /* filter_by_var_level(+VsIn, -VsOut, +FilterIn, -FilterOut)
-   filter_by_var_level_aux(+V, +FilterIn, -FilterOut, -Keep)
+   filter_by_var_level_aux(+FilterIn, +V, -FilterOut, -Keep)
 
 filter_by_var_level/4
 filter_by_var_level_aux/4
 xxx
 */
 % cuts?
-filter_by_var_level([],[],FilterIn,FilterIn).
-filter_by_var_level([V|Rest],FilteredResult,FilterIn,FilterOut) :-
-    filter_by_var_level_aux(V,FilterIn,FilterInOut,Keep),
-    (Keep==keep ->
-        FilteredResult=[V|FilteredRest]
-    ;   FilteredResult=FilteredRest
-    ),
-    filter_by_var_level(Rest,FilteredRest,FilterInOut,FilterOut).
+filter_by_var_level([], [], FilterIn, FilterIn).
+filter_by_var_level([V|Rest], FilteredResult, FilterIn, FilterOut) :-
+	filter_by_var_level_aux(FilterIn, V, FilterInOut, Keep),
+	( Keep == keep ->
+	  FilteredResult = [V|FilteredRest]
+	; FilteredResult = FilteredRest
+	),
+	filter_by_var_level(Rest, FilteredRest, FilterInOut, FilterOut).
 
-filter_by_var_level_aux(_V,[],[],keep) :-
-    !.
-filter_by_var_level_aux(V,[First|Rest],[NewFirst|Rest],nokeep) :-
-    % if the new variation is better than a filter variation,
-    % modify the filter list and discard the new variation
-    V=v(Word,Categories,VarLevel,History,VRoots,NFR),
-    First=v(Word,Categories,FilterVarLevel,_FirstHistory,FirstRoots,_FirstNFR),
-    VarLevel < FilterVarLevel,
-    (   \+var(FirstRoots) ->
-        Roots=FirstRoots
-    ;   \+var(VRoots) ->
-        Roots=VRoots
-    ;   true
-    ),
-    NewFirst=v(Word,Categories,VarLevel,History,Roots,NFR),
-    !.
-filter_by_var_level_aux(V,[First|Rest],[NewFirst|Rest],nokeep) :-
-    % if the new variation is not better than a filter variation,
-    % discard the new one
-    V=v(Word,_,_,_,VRoots,_),
-    First=v(Word,Categories,VarLevel,History,_,NFR),
-    (var(VRoots) ->
-        NewFirst=First
-    ;   NewFirst=v(Word,Categories,VarLevel,History,VRoots,NFR)
-    ),
-    !.
-filter_by_var_level_aux(V,[First|Rest],[First|FilteredRest],Keep) :-
-    % otherwise, continue to search for a matching filter variation
-    filter_by_var_level_aux(V,Rest,FilteredRest,Keep).
-
+filter_by_var_level_aux([], _V, [], keep).
+filter_by_var_level_aux([First|Rest], V, [NewFirst|Rest], nokeep) :-
+	% if the new variation is better than a filter variation,
+	% modify the filter list and discard the new variation
+	V = v(Word,Categories,VarLevel,History,VRoots,NFR),
+	First = v(Word,Categories,FilterVarLevel,_FirstHistory,FirstRoots,_FirstNFR),
+	VarLevel < FilterVarLevel,
+	( \+var(FirstRoots) ->
+	   Roots = FirstRoots
+	; \+var(VRoots) ->
+	  Roots = VRoots
+	; true
+	),
+	NewFirst = v(Word,Categories,VarLevel,History,Roots,NFR),
+	!.
+filter_by_var_level_aux([First|Rest], V, [NewFirst|Rest], nokeep) :-
+	% if the new variation is not better than a filter variation,
+	% discard the new one
+	V = v(Word,_,_,_,VRoots,_),
+	First = v(Word,Categories,VarLevel,History,_,NFR),
+	( var(VRoots) ->
+	  NewFirst = First
+	; NewFirst = v(Word,Categories,VarLevel,History,VRoots,NFR)
+	),
+	!.
+filter_by_var_level_aux([First|Rest], V, [First|FilteredRest], Keep) :-
+	% otherwise, continue to search for a matching filter variation
+	filter_by_var_level_aux(Rest, V, FilteredRest, Keep).
 
 /* qword_has_roots(+QWord, -Roots)
 
@@ -1674,7 +1701,7 @@ write_all_variants([]) :-
 write_all_variants([gvc(G,Vs,_Cs)|Rest]) :-
     !,
     G=v(Generator,Categories,_,_,_,_),
-    with_output_to_chars(format('~p',[Categories]),StringCats),
+    with_output_to_codes(format('~p',[Categories]),StringCats),
     concatenate_items_to_atom([Generator," ",StringCats],GeneratorLabel),
     dump_variants_labelled(GeneratorLabel,Vs),
     format('~n',[]),
