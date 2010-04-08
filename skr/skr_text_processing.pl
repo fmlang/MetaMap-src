@@ -98,8 +98,7 @@ Here, a "blank" line is one containing only whitespace characters (if any).
 get_skr_text/2 has input parameter InputStream. */
 
 get_skr_text(Lines) :-
-	prompt(Prompt, Prompt),
-	format(user_error, '~w', [Prompt]),
+	maybe_print_prompt,
 	current_input(InputStream),
 	get_skr_text_1(InputStream, Lines).
 
@@ -109,6 +108,15 @@ get_skr_text_1(InputStream, [First|Rest]) :-
 	fget_lines_until_skr_break(InputStream,Rest).
 get_skr_text_1(_, []).
 
+% print the "|:" read prompt iff MetaMap is being used interactively,
+% i.e., the user is interactively typing in input.
+% This seems to be a QP/SP difference.
+maybe_print_prompt :-
+	( seeing(user_input) ->
+	  prompt(Prompt, Prompt),
+	  format(user_error, '~w', [Prompt])
+	; true
+	).
 
 /*    extract_sentences(+Lines, -InputType, -Sentences, -CoordinateSentences, -AAs)
 
@@ -149,34 +157,21 @@ acronym/abbreviation discovery.
 
 */
 
-% This is a hack designed to allow AA-detection to detect an AA
-% at the very end of an utterance. We simply add a blank space
-% to the final string in the input.
-% The resulting final ws token is removed
-% via	append(Sentences1, [_], Sentences2),
-% in find_and_coordinate_sentences/5
-add_final_ws([], LastLine, [LastLineWithFinalWS]) :-
-	append(LastLine, " ", LastLineWithFinalWS).
-add_final_ws([Next|T], H, [H|NewT]) :-
-	add_final_ws(T, Next, NewT).
-
 extract_sentences(Lines0, InputType, Sentences, CoordinatedSentences, AAs, Lines) :-
-	Lines0 = [H|T],
-	add_final_ws(T, H, Lines1),
-	replace_tabs_in_strings(Lines1, Lines2),
-	replace_nonprints_in_strings(Lines2, Lines3),
+	replace_tabs_in_strings(Lines0, Lines1),
+	replace_nonprints_in_strings(Lines1, Lines2),
 	( is_medline_citation(Lines2) ->
-	  extract_coord_sents_from_citation(Lines3, Sentences, CoordinatedSentences, AAs),
+	  extract_coord_sents_from_citation(Lines2, Sentences, CoordinatedSentences, AAs),
 	  InputType = citation
-	; is_smart_fielded(Lines3) ->
-	  extract_coord_sents_from_smart(Lines3, Sentences, CoordinatedSentences, AAs),
+	; is_smart_fielded(Lines2) ->
+	  extract_coord_sents_from_smart(Lines2, Sentences, CoordinatedSentences, AAs),
 	  InputType = smart
-	; form_dummy_citation(Lines3, CitationLines),
+	; form_dummy_citation(Lines2, CitationLines),
 	  extract_coord_sents_from_citation(CitationLines, Sentences,
 					    CoordinatedSentences, AAs),
 	  InputType = simple
 	),
-	Lines = Lines3,
+	Lines = Lines2,
 	!.
 
 is_medline_citation([First|_]) :-
@@ -328,7 +323,6 @@ extract_all_fields_4(FieldID, FirstFieldLine, RestLines,
 	),
 	extract_all_fields_4(NewFieldID, NewFirstFieldLine, NewRestLines, RestCitationFields),
 	!.
-
 
 /* extract_rest_of_field(+CitationLines, -FieldLines, -NewFieldID,
                          -NewFirstFieldLine, -NewRestLines)

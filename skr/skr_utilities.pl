@@ -591,7 +591,9 @@ get_program_name(ProgramName) :-
 basename(File, Base) :-
         basename(File, S, S, Base).
 
-% This predicate is stolen from system3.pl in the SICStus Prolog 4.1.1 library directory
+% This predicate is stolen from system3.pl in the SICStus Prolog 4.1.1 library directory,
+% from where it is NOT exported. Rather than modify the SP library file to export basename/4,
+% I have just copied it here.
 basename([], Base, [], Base).
 basename([0'/|File], _, _, Base) :- !,
         basename(File, S, S, Base).
@@ -804,7 +806,7 @@ generate_utterance_output(Label, Text0, UttStartPos, UttLength, ReplPos, Utteran
 	  % which is needed for both MMO and XML output!
 	  UtteranceMMO = utterance(Label,Text0,UttStartPos/UttLength,ReplPos)
 	; check_generate_utterance_output_control_options_2 ->
-          format('~nProcessing ~a: ~s~n',[Label,Text0])
+          format('~NProcessing ~a: ~s~n',[Label,Text0])
 	; true
 	).
 

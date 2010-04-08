@@ -45,7 +45,7 @@
 	display_control_options_for_modules/2,
 	display_current_control_options/2,
 	display_mandatory_metamap_options/0,
-      	% called by MetaMap API -- do not change signature!
+	% called by MetaMap API -- do not change signature!
 	get_control_options_for_modules/2,
 	get_from_iargs/4,
 	% called by MetaMap API -- do not change signature!
@@ -107,8 +107,6 @@ single-character ShortControlOptions) for each Module.  It also indicates
 which options are defaults (IsDefault) and which options take an argument
 (ArgSpec, none if none).  */
 
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% MetaMap %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -120,7 +118,7 @@ is_control_option(metamap, '%', 'XML', no,
 is_control_option(metamap, '8', dynamic_variant_generation, 	no, none).
 is_control_option(metamap, '@', 'WSD', no,
                   aspec('WSD', mandatory, none, none, no_default,
-                        'Which WSD server to use.')).
+                        'Which WSD server to use')).
 is_control_option(metamap, 'A', strict_model, 			no, none).
 % is_control_option(metamap, 'B', moderate_model, 		no, none).
 is_control_option(metamap, 'C', relaxed_model, 			no, none).
@@ -132,7 +130,7 @@ is_control_option(metamap, 'G', sources,                 no, none).
 is_control_option(metamap, 'I', show_cuis, 		 no, none).
 is_control_option(metamap, 'J', restrict_to_sts, no,
                   aspec(restrict_to_sts, mandatory, list, none, no_default,
-                        'List of semantic types to use for output.')).
+                        'List of semantic types to use for output')).
 is_control_option(metamap, 'K', ignore_stop_phrases, 		no, none).
 is_control_option(metamap, 'L', lexicon_year, 	 		no, none).
 % is_control_option(metamap, 'M', mmi_output,              no, none).
@@ -142,21 +140,21 @@ is_control_option(metamap, 'P', composite_phrases, 		no, none).
 is_control_option(metamap, 'Q', quick_composite_phrases, 	no, none).
 is_control_option(metamap, 'R', restrict_to_sources, no,
                   aspec(restrict_to_sources, mandatory, list, none, no_default,
-                        'List of sources to use for output.')).
+                        'List of sources to use for output')).
 is_control_option(metamap, 'S', tagger, no,
                   aspec(tagger, mandatory, none, none, no_default,
-                        'Which tagger to use.')).
+                        'Which tagger to use')).
 is_control_option(metamap, 'T', tagger_output, 			no, none).
 is_control_option(metamap, 'U', allow_duplicate_concept_names,  no, none).
 is_control_option(metamap, 'V', mm_data_version, no,
                   aspec(mm_data_version,mandatory, none, none, no_default,
-                        'Version of MetaMap data to use.')).
+                        'Version of MetaMap data to use')).
 is_control_option(metamap, 'W', preferred_name_sources,  no, none).
 is_control_option(metamap, 'X', truncate_candidates_mappings, no, none).
 is_control_option(metamap, 'Y', prefer_multiple_concepts, 	no, none).
 is_control_option(metamap, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
-                        'Year of MetaMap data to use.')).
+                        'Year of MetaMap data to use')).
 
 is_control_option(metamap,   a, all_acros_abbrs,	        no, none).	% MetaMap default
 is_control_option(metamap,   b, compute_all_mappings,    no, none).  	% MetaMap default
@@ -164,14 +162,14 @@ is_control_option(metamap,   c, hide_candidates,	        no, none).	% MetaMap de
 is_control_option(metamap,   d, no_derivational_variants,	no, none).
 is_control_option(metamap,   e, exclude_sources, no,
                   aspec(exclude_sources, mandatory, list, none, no_default,
-                        'List of sources to exclude for output.')).
+                        'List of sources to exclude for output')).
 is_control_option(metamap,   g, allow_concept_gaps, 		no, none).
 % is_control_option(metamap,   f, fielded_output, 		no, none).
 is_control_option(metamap,   i, ignore_word_order, 		no, none).
 is_control_option(metamap,   j, dump_aas,                no, none).
 is_control_option(metamap,   k, exclude_sts, no,
                   aspec(exclude_sts, mandatory, list, none, no_default,
-                        'List of semantic types to exclude for output.')).
+                        'List of semantic types to exclude for output')).
 is_control_option(metamap,   l, allow_large_n,		        no, none).	% MetaMap default
 is_control_option(metamap,   m, hide_mappings,	         no, none).    	% MetaMap default
 is_control_option(metamap,   n, number_the_candidates, 	      no, none).
@@ -180,7 +178,7 @@ is_control_option(metamap,   q, machine_output, 		no, none).
 is_control_option(metamap,   p, hide_plain_syntax,	        no, none).  	% MetaMap default
 is_control_option(metamap,   r, threshold, no,
                   aspec(threshold, mandatory, integer, none, no_default,
-                        'Threshold for displaying candidates.')).
+                        'Threshold for displaying candidates')).
 is_control_option(metamap,   s, hide_semantic_types,	 no, none).   	% MetaMap default
 is_control_option(metamap,   t, no_tagging,		        no, none).	% MetaMap default
 is_control_option(metamap,   u, unique_acros_abbrs_only, 	no, none).
@@ -195,6 +193,21 @@ is_control_option(metamap,  '', help, 		 	 no, none).
 is_control_option(metamap,  '', longest_lexicon_match, 	 no, none).
 is_control_option(metamap,  '', negex,		 	 no, none).
 is_control_option(metamap,  '', silent,		 	 no, none).
+is_control_option(metamap,  '', max_ambiguity,	 	 no,
+                  aspec(max_ambiguity, mandatory, integer, none, 0,
+                        'Maximum allowable degree of ambiguity')).
+is_control_option(metamap,  '', min_word_length, 	 no,
+                  aspec(min_word_length, mandatory, integer, none, 0,
+                        'Minimum length of words to analyze')).
+is_control_option(metamap,  '', max_word_length, 	 no,
+                  aspec(max_word_length, mandatory, integer, none, 0,
+                        'Maximum length of words to analyze')).
+is_control_option(metamap,  '', min_concept_length, 	 no,
+                  aspec(min_concept_length, mandatory, integer, none, 0,
+                        'Minimum length of words to analyze')).
+is_control_option(metamap,  '', max_concept_length, 	 no,
+                  aspec(max_concept_length, mandatory, integer, none, 0,
+                        'Maximum length of words to analyze')).
 is_control_option(metamap,  '', phrases_only, 	 	 no, none).
 is_control_option(metamap,  '', warnings, 	 	 no, none).
 
@@ -277,7 +290,7 @@ is_control_option(document_joiner,w,warnings,no,none).
 is_control_option(document_planner,i,ignore_head,yes,none).
 is_control_option(document_planner,l,level,no,
                   aspec(level,mandatory,integer,none,no_default,
-                        'Hierarchical level at which to construct the plan.')).
+                        'Hierarchical level at which to construct the plan')).
 is_control_option(document_planner,h,help,no,none).
 is_control_option(document_planner,w,warnings,no,none).
 is_control_option(dummy,h,help,no,none).
@@ -305,10 +318,10 @@ is_control_option(extract_framerd_phrases,w,warnings,no,none).
 
 is_control_option(filter_cases,l,lower_bound,no,
                   aspec(lower_bound,mandatory,integer,none,no_default,
-                        'Lower bound of occurrence count.')).
+                        'Lower bound of occurrence count')).
 is_control_option(filter_cases,u,upper_bound,no,
                   aspec(upper_bound,mandatory,integer,none,no_default,
-                        'Upper bound of occurrence count.')).
+                        'Upper bound of occurrence count')).
 is_control_option(filter_cases,w,warnings,no,none).
 is_control_option(filter_cases,h,help,no,none).
 is_control_option(filter_mrconso,s,strict_filtering,no,none).
@@ -319,10 +332,10 @@ is_control_option(filter_mrconso,h,help,no,none).
 is_control_option(filter_mrconso,i,info,no,none).
 is_control_option(filter_mrconso,t,total_lines,no,
                   aspec(total_lines,mandatory,integer,none,no_default,
-                        'Total number of lines to process.')).
+                        'Total number of lines to process')).
 is_control_option(filter_mrconso,p,progress_bar_interval,no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
-                        'Interval of progress bar.')).
+                        'Interval of progress bar')).
 is_control_option(filter_mrconso,'N',silent,no,none).
 is_control_option(filter_mrconso,w,warnings,no,none).
 is_control_option(find_subwords,a,use_atoms,no,none).
@@ -359,7 +372,7 @@ is_control_option(inq_extract_annotations,w,warnings,no,none).
 is_control_option(inq_form_c_cits,u,uninverted_concepts,no,none).
 is_control_option(inq_form_c_cits,x,ranking_factor,no,
                   aspec(ranking_factor,mandatory,integer,none,no_default,
-                        'Weight for multiplying MMI concept factors.')).
+                        'Weight for multiplying MMI concept factors')).
 is_control_option(inq_form_c_cits,s,single_concepts_only,no,none).
 is_control_option(inq_form_c_cits,r,relation_file,no,
                   aspec(relation_file,mandatory,file,read,no_default,
@@ -383,16 +396,16 @@ is_control_option(inq_form_wpc_queries,d,concept_feedback_limit,no,
                         'Maximum number of concepts per feedback citation')).
 is_control_option(inq_form_wpc_queries,t,title_weight,no,
                   aspec(title_weight,mandatory,integer,none,no_default,
-                        'Weight for title evidence (abstract is 1).')).
+                        'Weight for title evidence (abstract is 1)')).
 is_control_option(inq_form_wpc_queries,w,wweight,no,
                   aspec(wweight,mandatory,integer,none,no_default,
-                        'Weight for bag-of-words evidence.')).
+                        'Weight for bag-of-words evidence')).
 is_control_option(inq_form_wpc_queries,p,pweight,no,
                   aspec(pweight,mandatory,integer,none,no_default,
-                        'Weight for phrase evidence.')).
+                        'Weight for phrase evidence')).
 is_control_option(inq_form_wpc_queries,c,cweight,no,
                   aspec(cweight,mandatory,integer,none,no_default,
-                        'Weight for concept evidence.')).
+                        'Weight for concept evidence')).
 is_control_option(inq_form_wpc_queries,h,help,no,none).
 is_control_option(inq_form_wpc_queries,i,info,no,none).
 is_control_option(inq_pp_ranked,h,help,no,none).
@@ -408,7 +421,7 @@ is_control_option(ll_to_umls,f,ambiguity_file,no,
                         'File of ambiguous terms')).
 is_control_option(ll_to_umls,m,max_ambiguity,no,
                   aspec(max_ambiguity,mandatory,integer,none,no_default,
-                        'The maximum degree of ambiguity allowed.')).
+                        'The maximum degree of ambiguity allowed')).
 is_control_option(ll_to_umls,h,help,no,none).
 is_control_option(ll_to_umls,i,info,no,none).
 is_control_option(ll_to_umls,w,warnings,no,none).
@@ -450,7 +463,7 @@ is_control_option(mm_print,'T',truncate_output,no,none).
 is_control_option(mm_print,f,filter_out_01,no,none).
 is_control_option(mm_print,r,threshold,no,
                   aspec(threshold,mandatory,integer,none,no_default,
-                        'Threshold for displaying candidates.')).
+                        'Threshold for displaying candidates')).
 is_control_option(mm_print,n,null_only,no,none).
 is_control_option(mm_print,'K',non_null_only,no,none).
 is_control_option(mm_print,x,syntax,no,none).
@@ -519,10 +532,10 @@ is_control_option(mm_variants,w,warnings,no,none).
 is_control_option(mm_variants,'0',debug0,no,none).
 is_control_option(mm_variants, 'V', mm_data_version, no,
                   aspec(mm_data_version,mandatory, none, none, no_default,
-                        'Version of MetaMap data to use.')).
+                        'Version of MetaMap data to use')).
 is_control_option(mm_variants, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
-                        'Year of MetaMap data to use.')).
+                        'Year of MetaMap data to use')).
 
 is_control_option(phrasex,t,tag_text,yes,none).
 is_control_option(phrasex,h,help,no,none).
@@ -551,7 +564,7 @@ is_control_option(sp_to_umls,f,ambiguity_file,no,
                         'File of ambiguous terms')).
 is_control_option(sp_to_umls,m,max_ambiguity,no,
                   aspec(max_ambiguity,mandatory,integer,none,no_default,
-                        'The maximum degree of ambiguity allowed.')).
+                        'The maximum degree of ambiguity allowed')).
 is_control_option(sp_to_umls,h,help,no,none).
 is_control_option(sp_to_umls,i,info,no,none).
 is_control_option(sp_to_umls,w,warnings,no,none).
@@ -559,16 +572,16 @@ is_control_option(spattern,x,only_non_semnet,no,none).
 is_control_option(spattern,y,no_semnet_filtering,no,none).
 is_control_option(spattern,l,left_limit,no,
                   aspec(left_limit,mandatory,integer,none,no_default,
-                        'Limit to search to the left.')).
+                        'Limit to search to the left')).
 is_control_option(spattern,r,right_limit,no,
                   aspec(right_limit,mandatory,integer,none,no_default,
-                        'Limit to search to the right.')).
+                        'Limit to search to the right')).
 is_control_option(spattern,f,filter_file,no,
                   aspec(filter_file,mandatory,file,read,no_default,
-                        'File of semantic types to filter out.')).
+                        'File of semantic types to filter out')).
 is_control_option(spattern,s,statistics_file,no,
                   aspec(statistics_file,mandatory,file,write,no_default,
-                        'File of statistics.')).
+                        'File of statistics')).
 is_control_option(spattern,i,include_relations,yes,none).
 is_control_option(spattern,o,'relational_output',no,none).
 is_control_option(spattern,m,mod_head_tuples,no,none).
@@ -585,10 +598,10 @@ is_control_option(spattern_dump,p,pattern_headers,no,none).
 is_control_option(spattern_dump,h,help,no,none).
 is_control_option(spattern_print,f,filter_file,no,
                   aspec(filter_file,mandatory,file,read,no_default,
-                        'File of filter patterns.')).
+                        'File of filter patterns')).
 is_control_option(spattern_print,m,max_to_print,no,
                   aspec(max_to_print,mandatory,integer,none,no_default,
-                        'Maximum number of examples per pattern to print.')).
+                        'Maximum number of examples per pattern to print')).
 is_control_option(spattern_print,h,help,no,none).
 is_control_option(synonym_baser,d,dump_details,no,none).
 is_control_option(synonym_baser,w,warnings,no,none).
@@ -607,7 +620,7 @@ is_control_option(text_object_explorer,'B',tfidf_h,no,none).
 
 is_control_option(text_object_explorer,l,lower_bound,no,
                   aspec(lower_bound,mandatory,integer,none,no_default,
-                        'Lower bound for various options.')).
+                        'Lower bound for various options')).
 is_control_option(text_object_explorer,'1',debug1,no,none).
 is_control_option(text_object_explorer,'2',debug2,no,none).
 is_control_option(text_object_explorer,'3',debug3,no,none).
@@ -616,7 +629,7 @@ is_control_option(text_object_explorer,h,help,no,none).
 is_control_option(text_object_explorer,i,info,no,none).
 is_control_option(text_object_explorer,w,warnings,no,
                   aspec(warnings_file,mandatory,file,write,no_default,
-                        'File of warnings.')).
+                        'File of warnings')).
 is_control_option(text_to_medline,h,help,no,none).
 is_control_option(text_to_medline,i,info,no,none).
 is_control_option(text_to_medline,w,warnings,no,none).
@@ -631,7 +644,7 @@ is_control_option(tr_to_umls,f,ambiguity_file,no,
                         'File of ambiguous terms')).
 is_control_option(tr_to_umls,m,max_ambiguity,no,
                   aspec(max_ambiguity,mandatory,integer,none,no_default,
-                        'The maximum degree of ambiguity allowed.')).
+                        'The maximum degree of ambiguity allowed')).
 is_control_option(tr_to_umls,h,help,no,none).
 is_control_option(tr_to_umls,i,info,no,none).
 is_control_option(tr_to_umls,w,warnings,no,none).
@@ -1235,7 +1248,7 @@ interpret_arg(ArgSpec, Arg, IArgsIn, [iarg(SpecName,ArgSpec,[value(Atts)])|IArgs
               StatusIn, StatusOut) :-
 	ArgSpec = aspec(SpecName,_Option,list,_SubType,_Default,_Description),
 	!,
-	( atom_chars(Arg,ArgString),
+	( atom_codes(Arg,ArgString),
 	  parse_list(ArgString,List) ->
 	  number_codes_list(Atts,List),
 	  StatusOut = StatusIn

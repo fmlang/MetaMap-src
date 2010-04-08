@@ -44,7 +44,7 @@
 	get_subitem_value/2                                    
     ]).
 
-:- use_module(skr(xml),[
+:- use_module(skr_lib(xml),[
 	xml_parse/3
    ]).
 

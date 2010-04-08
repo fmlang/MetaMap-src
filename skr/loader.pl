@@ -56,8 +56,8 @@
     ]).
 
 :- use_module(library(random), [
-        random/1,
-        setrand/1
+	random/1,
+	setrand/1
     ]).
 
 :- use_module(library(system), [

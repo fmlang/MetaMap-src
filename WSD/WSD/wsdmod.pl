@@ -90,7 +90,7 @@
    ]).
 
 :- use_module(library(lists),[
-      	last/3
+	last/3
     ]).
 
 :- use_module(library(random),[
@@ -855,10 +855,12 @@ call_WSD(MMOTermList,
 get_WSD_parameters(MethodList, BeginDelimiterChars, EndDelimiterChars) :-
 	environ('WSD_METHODS', MethodsAtom),
 	atom_codes(MethodsAtom, MethodChars),
-	read_from_codes(MethodChars, Methods),
+	append(MethodChars, ".", MethodCharsWithPeriod),
+	read_from_codes(MethodCharsWithPeriod, Methods),
 	environ('WSD_WEIGHTS', WeightsAtom),
-	atom_codes(WeightsAtom, WeightsChars),
-	read_from_codes(WeightsChars, Weights),
+	atom_codes(WeightsAtom, WeightsChars),	
+	append(WeightsChars, ".", WeightsCharsWithPeriod),
+	read_from_codes(WeightsCharsWithPeriod, Weights),
 	environ('WSD_SERVER_BEGIN_DELIMITER', BEGIN_DELIMITER),
 	atom_codes(BEGIN_DELIMITER, BeginDelimiterChars),
 	environ('WSD_SERVER_END_DELIMITER',   END_DELIMITER),
@@ -914,7 +916,6 @@ test_get_WSD_result(SocketStream, Request, StreamTerm) :-
 	  ttyflush,
 	  abort
         ).
-
 
 get_codes_WSD(Stream, Input) :-
 	get_code(Stream, Code),

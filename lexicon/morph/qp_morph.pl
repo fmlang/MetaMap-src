@@ -73,16 +73,15 @@ foreign(c_dm_variants, c, c_dm_variants(+string, +term, -term, [-integer])).
 %%% -Var is a list of Var:[cat:[Cat]] terms.
 %%%	The list is ordered (longest matching suffix first).
 dm_variants(Term, Cats, Var) :-
-	( Cats = [],
-	  AllCats = [adj, adv, noun, verb]
-	; AllCats = Cats
-	),
-	!,
+	get_all_cats_if_necessary(Cats, AllCats),
 	c_dm_variants(Term, AllCats, Var1, 1),
-	format('~q~n', [c_dm_variants(Term, AllCats, Var1, 1)]),
+	% format(user_output, '~q~n', [c_dm_variants(Term, AllCats, Var1, 1)]),
 	reformat_dm_list(Var1, Var2),
 	rev(Var2, Var).
 
+get_all_cats_if_necessary([], [adj, adv, noun, verb]).
+get_all_cats_if_necessary([Cat|RestCats], [Cat|RestCats]).
+ 
 %%% changes Term(Cat) to Term:[cat:[Cat]]
 reformat_dm_list([], []).
 reformat_dm_list([F|R], [X|Y]) :-

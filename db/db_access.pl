@@ -38,9 +38,10 @@
 	db_get_all_acros_abbrs/2,
 	db_get_concept_cui/2,
 	db_get_concept_cuis/2,
-	db_get_concept_sts/2,
+	% db_get_concept_sts/2,
 	db_get_cui_sourceinfo/2,
 	db_get_cui_sources/2,
+	db_get_cui_sts/2,
 	db_get_mesh_mh/2,
 	db_get_mesh_tc_relaxed/2,
 	db_get_meta_mesh/2,
@@ -131,15 +132,15 @@ verify_valid_dbs(Location) :-
 	( \+ directory_exists(Location) ->
 	  fatal_error('~n~nERROR: Database directory ~q does not exist!!!~n~n',
 		      [Location]),
-	  abort
+	  halt
 	;  \+ directory_exists(Location, [read]) ->
 	  fatal_error('~n~nERROR: Database directory ~q exists but is not readable!!!~n~n',
 		      [Location]),
-	  abort
+	  halt
 	;  \+ directory_exists(Location, [execute]) ->
 	  fatal_error('~n~nERROR: Database directory ~q exists but is not executable!!!~n~n',
 		      [Location]),
-	  abort
+	  halt
 	; exec_init_dbs(Location)
 	).
 
@@ -157,7 +158,7 @@ stop_db_access/0 calls exec_destroy_dbs to close them.  */
 
 default_version(normal).
 
-default_year('09').
+default_year('0910').
 
 default_full_year(2009).
 
@@ -182,7 +183,7 @@ initialize_db_access(Version, Year, Model) :-
 initialize_db_access(Version, Year, Model) :-
 	fatal_error('~NERROR: Cannot open Berkeley DB databases (~a ~a ~a model).~n',
 		    [Version,Year,Model]),
-	abort.
+	halt.
 
 conditionally_announce_database_info(Version, Year, Model, Location, VarTable) :-
 	( \+ control_option(silent) ->
@@ -250,8 +251,9 @@ db_get_concept_cui(Concept, CUIAtom) :-
 	  get_cui_from_results(Results, CUIAtom)
 	),
 	!.
-% db_get_concept_cui(Concept, []) :-
-% 	fatal_error('~NERROR: db_access: db_get_concept_cui failed for ~w~n', [Concept]).
+db_get_concept_cui(Concept, []) :-
+	fatal_error('~NERROR: db_access: db_get_concept_cui failed for ~w~n', [Concept]),
+	halt.
 
 db_get_concept_cui_aux(ConceptAtom, CUI) :-
 	form_simple_query("cui", "conceptcui", "concept", ConceptAtom, Query),
@@ -289,8 +291,9 @@ db_get_cui_sources(CUI, Sources) :-
 	  db_get_cui_sources_aux(CUIAtom, Sources)
 	),
 	!.
-% db_get_cui_sources(CUI, []) :-
-% 	fatal_error('~NERROR: db_access~w: db_get_cui_sources failed for ~p~n', [CUI]).
+db_get_cui_sources(CUI, []) :-
+	fatal_error('~NERROR: db_access~w: db_get_cui_sources failed for ~p~n', [CUI]),
+	halt.
 
 db_get_cui_sources_aux(CUIAtom, Sources) :-
 	form_simple_query("src", "cuisrc", "cui", CUIAtom, Query),
@@ -313,8 +316,9 @@ db_get_cui_sourceinfo(CUI, SourceInfo) :-
 	  db_get_cui_sourceinfo_aux(CUIString, SourceInfo)
 	),
 	!.
-% db_get_cui_sourceinfo(CUI, []) :-
-% 	fatal_error('~NERROR: db_access~w: db_get_cui_sourceinfo failed for ~p~n', [CUI]).
+db_get_cui_sourceinfo(CUI, []) :-
+	fatal_error('~NERROR: db_access~w: db_get_cui_sourceinfo failed for ~p~n', [CUI]),
+	halt.
 
 db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 	form_simple_query("i, str, src, tty", "cuisourceinfo", "cui", CUIAtom, Query),
@@ -332,11 +336,32 @@ db_get_concept_sts(Concept, SemTypes) :-
 	  db_get_concept_sts_aux(ConceptAtom, SemTypes)
 	),
 	!.
-% db_get_concept_sts(Concept, []) :-
-% 	fatal_error('~NERROR: db_access~w: db_get_concept_sts failed for ~w~n', [Concept]).
+db_get_concept_sts(Concept, []) :-
+	fatal_error('~NERROR: db_access~w: db_get_concept_sts failed for ~w~n', [Concept]),
+	halt.
 
 db_get_concept_sts_aux(ConceptAtom, SemTypes) :-
 	form_simple_query("st", "conceptst", "concept", ConceptAtom, Query),
+	run_query(Query, simple, SemTypes0, 1),
+	append(SemTypes0, SemTypes).
+
+/* db_get_cui_sts(+CUI, -SemTypes)
+
+db_get_cui_sts/2 gets the (abbreviated) semantic types, SemTypes, for Input.  */
+
+db_get_cui_sts(CUI, SemTypes) :-
+	( CUI == [] ->
+	  SemTypes = []
+	; ensure_atom(CUI, CUIAtom),
+	  db_get_cui_sts_aux(CUIAtom, SemTypes)
+	),
+	!.
+db_get_cui_sts(CUI, []) :-
+	fatal_error('~NERROR: db_access~w: db_get_cui_sts failed for ~w~n', [CUI]),
+	halt.
+
+db_get_cui_sts_aux(CUIAtom, SemTypes) :-
+	form_simple_query("st", "cuist", "concept", CUIAtom, Query),
 	run_query(Query, simple, SemTypes0, 1),
 	append(SemTypes0, SemTypes).
 
@@ -491,7 +516,7 @@ db_get_mesh_mh(MeSH, MH) :-
 	( MeSH == [] ->
 	  MH = []
 	; ensure_atom(MeSH, MeSHAtom),
-        db_get_mesh_mh_aux(MeSHAtom, MH)
+	  db_get_mesh_mh_aux(MeSHAtom, MH)
 	),
 	!.
 % db_get_mesh_mh(MeSH, []) :-
@@ -551,8 +576,9 @@ db_get_mwi_word_data(Table, Word, DebugFlags, Results) :-
 	  ),
 	!.
 db_get_mwi_word_data(Table, Word, _DebugFlags, []) :-
-       fatal_error('~NERROR: db_access: db_get_mwi_word_data failed for word ~p on table ~p.~n',
-		   [Word,Table]).
+	fatal_error('~NERROR: db_access: db_get_mwi_word_data failed for word ~p on table ~p.~n',
+		    [Word,Table]),
+	halt.
 
 % Suppose QueryString (the word being looked up) is "heart" and Table is first_wordsb.
 % The monstrous code below creates the query
@@ -570,7 +596,8 @@ db_get_mwi_word_data_aux(Table, Word, DebugFlags, RawResults) :-
 	!.
 db_get_mwi_word_data_aux(Table, Word, _DebugFlags, _RawResults) :-
 	fatal_error('~NERROR: db_access: db_get_mwi_word_data_aux failed for ~p on table ~p.~n',
-		    [Word,Table]).
+		    [Word,Table]),
+	halt.
 
 /*
 % This is the narrow version
@@ -597,7 +624,8 @@ db_get_mwi_word_data_aux(Table, Word, DebugFlags, RawResults) :-
 
 db_get_mwi_word_data_aux(Table, Word, _DebugFlags, _RawResults) :-
 	fatal_error('~NERROR: db_access: db_get_mwi_word_data_aux failed for ~p on table ~p.~n',
-		    [Word,Table]).
+		    [Word,Table]),
+	halt.
 
 
 form_uscs([], _N, []) :- !.
@@ -613,15 +641,11 @@ form_uscs([First|Rest], N, [usc(Nmstr,Str,Concept)|ModifiedRest]) :-
 form_uscs([First|_], N, _) :-
 	NewN is N + 1,
 	fatal_error('~NERROR: db_access: form_uscs failed on item ~d = ~p.~n', [NewN,First]),
-	ttyflush,
-	!,
-	fail.
+	halt.
 form_uscs(X, N, _) :-
 	fatal_error('~NERROR: db_access: form_uscs failed after item ~d; the non-list is ~p.~n',
 		    [N,X]),
-	ttyflush,
-	!,
-	fail.
+	halt.
 
 /* db_get_mwi_word_count(+Table, +Input, -Count)
 
@@ -659,7 +683,8 @@ db_get_variants(Concept, Category, Variants) :-
 	!.
 db_get_variants(Concept, Category, []) :-
 	fatal_error('~NERROR: db_access: db_get_variants/3 failed for ~p (~p).~n',
-		    [Concept,Category]).
+		    [Concept,Category]),
+	halt.
 
 % always treat adjectives as nouns, if possible
 db_get_variants_aux(Concept, Category, Variants) :-
@@ -834,4 +859,5 @@ ensure_string(AtomOrString, String) :-
 
 fatal_error(Message, Args) :-
 	format(user_output, Message, Args),
+	ttyflush,
 	format(Message, Args).

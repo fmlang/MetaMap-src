@@ -124,7 +124,8 @@
 :- use_module(skr_db(db_access),[
 	initialize_db_access/0,
 	stop_db_access/0,
-	db_get_concept_sts/2,
+	% db_get_concept_sts/2,
+	db_get_cui_sts/2,
 	db_get_cui_sourceinfo/2
     ]).
 
@@ -656,7 +657,7 @@ generate_initial_evaluations_1(Label, UtteranceText,
 	  lower(PhraseTextString, LCPhraseTextString),
 	  extract_syntactic_tags(Phrase, Tags),
 	  atom_codes(LCPhraseAtom, LCPhraseTextString),
-	  stop_phrase(LCPhraseAtom, Tags) ->
+	  stop_analysis(LCPhraseAtom, Tags) ->
 	  Evaluations0 = [],
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
@@ -674,6 +675,11 @@ generate_initial_evaluations_1(Label, UtteranceText,
 	   USCCacheOut = USCCacheIn
 	).
 
+% Short-circuit the analysis if Atom is a stop phrase whose lexical categories
+% overlap with the current phrase's Tags.
+stop_analysis(Atom, Tags) :-
+	stop_phrase(Atom, StopTags),
+	intersection(Tags, StopTags, [_|_]).
 
 refine_evaluations(Evaluations0, EvaluationsAfterSTs, Evaluations) :-
 	( control_option(truncate_candidates_mappings) ->
@@ -1222,26 +1228,15 @@ filter_evaluations_excluding_sources_aux([First|Rest], RootSources, Results) :-
 filter_evaluations_to_sts/3 removes those evaluations from EvaluationsIn
 which do not represent concepts with some ST in STs producing EvaluationsOut. */
 
-filter_evaluations_to_sts([],_,[]) :-
-    !.
-filter_evaluations_to_sts([First|Rest],STs,[First|FilteredRest]) :-
-% temp
-%    format('fets: ~p~n',[First]),
-    First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
-	       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-    intersection(SemTypes,STs,Intersection),
-% temp
-%    format(' Intersection=~p~n',[Intersection]),
-    Intersection\==[],
-    !,
-% temp
-%    format(' ok.~n',[]),
-    filter_evaluations_to_sts(Rest,STs,FilteredRest).
-filter_evaluations_to_sts([_First|Rest],STs,FilteredRest) :-
-% temp
-%    format(' filtered out.~n',[]),
-    filter_evaluations_to_sts(Rest,STs,FilteredRest).
-
+filter_evaluations_to_sts([], _, []).
+filter_evaluations_to_sts([First|Rest], STs, [First|FilteredRest]) :-
+	First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
+		   _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+	intersection(SemTypes, STs, [_|_]),
+	!,
+	filter_evaluations_to_sts(Rest, STs, FilteredRest).
+filter_evaluations_to_sts([_First|Rest], STs, FilteredRest) :-
+	filter_evaluations_to_sts(Rest, STs, FilteredRest).
 
 /* filter_evaluations_excluding_sts(+EvaluationsIn, +STs, -EvaluationsOut)
 
@@ -1249,25 +1244,15 @@ filter_evaluations_excluding_sts/3 removes those evaluations from
 EvaluationsIn which represent concepts with any ST in STs producing
 EvaluationsOut. */
 
-filter_evaluations_excluding_sts([],_,[]) :-
-    !.
-filter_evaluations_excluding_sts([First|Rest],STs,[First|FilteredRest]) :-
-% temp
-%    format('fets: ~p~n',[First]),
-    First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
-	       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-    intersection(SemTypes,STs,Intersection),
-% temp
-%    format(' Intersection=~p~n',[Intersection]),
-    Intersection==[],
-    !,
-% temp
-%    format(' ok.~n',[]),
-    filter_evaluations_excluding_sts(Rest,STs,FilteredRest).
-filter_evaluations_excluding_sts([_First|Rest],STs,FilteredRest) :-
-% temp
-%    format(' filtered out.~n',[]),
-    filter_evaluations_excluding_sts(Rest,STs,FilteredRest).
+filter_evaluations_excluding_sts([], _, []).
+filter_evaluations_excluding_sts([First|Rest], STs, [First|FilteredRest]) :-
+	First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
+		   _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+	intersection(SemTypes, STs, [_|_]),
+	!,
+	filter_evaluations_excluding_sts(Rest, STs, FilteredRest).
+filter_evaluations_excluding_sts([_First|Rest], STs, FilteredRest) :-
+	filter_evaluations_excluding_sts(Rest, STs, FilteredRest).
 
 construct_best_mappings(_Evaluations, PhraseTextString, Phrase,
 			PhraseWordInfoPair, Variants, APhrases, BestMaps) :-
@@ -2225,7 +2210,6 @@ join_phrase_items([FirstItem|RestItems],[FirstLMap|RestLMap],
                       RevLexMatch,RevInputMatch,RevTokens,RevBases,
                       JoinedRestItems,JoinedRestLMap).
 
-
 /* augment_lphrase_with_confidence_value(+LPhraseIn, +LPhraseMapIn, +Mapping,
                                         +NPhraseWords, -LPhraseOut,
                                         -LPhraseMapOut, -NegValue)
@@ -2488,8 +2472,10 @@ add_semtypes_to_evaluations/1 instantiates the SemTypes argument of ev/8 terms
 in Evaluations.  */
 
 add_semtypes_to_evaluations([]).
-add_semtypes_to_evaluations([ev(_,_,_,MetaConcept,_,SemTypes,_,_,_,_SourceInfo,_PosInfo)|Rest]) :-
-	db_get_concept_sts(MetaConcept, SemTypes),
+add_semtypes_to_evaluations([ev(_NegScore,CUI,_,_MetaConcept,_,
+				SemTypes,_,_,_,_SourceInfo,_PosInfo)|Rest]) :-
+	% db_get_concept_sts(MetaConcept, SemTypes),
+	db_get_cui_sts(CUI, SemTypes),
 	!,
 	add_semtypes_to_evaluations(Rest).
 

@@ -159,20 +159,34 @@ call_tagger(Options,
 			   ChosenTaggerServerHost, TaggerForced, TaggerServerPort,
 			   QueryAtom, TaggedTextAtom),
 	!,
-	atom_codes(TaggedTextAtom,TaggedTextString),
+	atom_codes(TaggedTextAtom, TaggedTextString),
+	escape_backslashes(TaggedTextString, EscapedString),
 	% special case when result begins with ^J
 	( TaggedTextString = [10|_] ->
 	  TaggedTextList = []
 	; with_input_from_chars(read(Stream,TaggedTextList),
 				Stream,
-				TaggedTextString)
+				EscapedString)
 	).
+
 call_tagger(_Options,
 	    _TaggerServerHosts, _TaggerForced, _TaggerServerPort,
 	    QueryAtom, _TaggedTextList) :-
 	format(user_output, '~nERROR: Tagger (call_tagger_aux) failed on "~w"~n.', [QueryAtom]),
 	format('~nERROR: Tagger (call_tagger_aux) failed on "~w"~n.', [QueryAtom]),
 	halt.
+
+
+% There's something I don't completely understand about SP's being compliant
+% with ISO escape sequences, but QP's not being so. At any rate, that means that, e.g.,
+% ['\', 'noun/4'] must be explicitly mangled to ['\\', 'noun/4'] for the string to be
+% successfully read in.
+escape_backslashes(TaggedTextString, EscapedString) :-
+	( append([Prefix,[39,92,39],Suffix], TaggedTextString) ->
+	  escape_backslashes(Suffix, EscapedSuffix),
+	  append([Prefix,[39,92,92,39],EscapedSuffix], EscapedString)
+	; EscapedString = TaggedTextString
+	).
 
 form_prolog_output([], []).
 form_prolog_output([[WordString,TypeString]|Rest],
@@ -341,7 +355,8 @@ get_tagger_server_hosts_and_port(_TaggerServerHosts, _UserChoice, _TaggerServerP
 choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost) :-
 	( TaggerForced \== 0 ->
 	  ChosenTaggerServerHost = TaggerForced
-	; repeat,
+	; length(TaggerServerHosts, NumTaggers),
+	  between(1, NumTaggers, _),	  
 	     % must be backtrackable!
 	     random_member(ChosenTaggerServerHost, TaggerServerHosts)
 	).

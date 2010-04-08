@@ -216,7 +216,7 @@ verify_neg_int(NegValue) :-
 
 verify_CUI(CUI) :-
 	atom(CUI),
-	atom_chars(CUI, [67|Rest]),
+	atom_codes(CUI, [67|Rest]),
 	number_chars(_, Rest).
 
 verify_meta_term(MetaTerm) :- atom(MetaTerm).

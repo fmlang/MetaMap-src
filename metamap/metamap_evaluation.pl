@@ -95,6 +95,10 @@
 	avl_member/3
     ]).
 
+:- use_module(library(between),[
+	between/3
+    ]).
+
 :- use_module(library(lists), [
 	append/2,
 	last/2,
@@ -168,6 +172,9 @@ evaluate_candidate_list([], _DebugFlags, _Label, _UtteranceText, _Variants, _Tok
 			_PhraseTokens, _RawTokensOut, _AAs,
 			_InputmatchPhraseWords,
 			CCsIn, CCsIn, []).
+% MetaCanonical = words forming Normalized Metathesaurus String
+% MetaString    = the actual Metathesaurus string
+% MetaConcept   = the preferred name of the concept
 evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			DebugFlags, Label, UtteranceText,
 			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
@@ -231,7 +238,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
 	% control_option(allow_duplicate_concept_names),
-	!,
+	% !,
 	( compute_all_evaluations(MetaCanonical, DebugFlags, Label, UtteranceText,
 				  MetaString, MetaConcept,
 				  Variants, TokenPhraseWords, PhraseTokenLength,
@@ -250,6 +257,37 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				PhraseTokens, RawTokensOut, AAs,
 				InputmatchPhraseWords,
 				CCsNext, CCsOut, RestEvaluations).
+
+exclude_words(Before, After) :-
+ 	( \+ control_value(min_word_length, _),
+ 	  \+ control_value(max_word_length, _) ->
+	  After = Before
+	; exclude_words_1(Before, After)
+	).
+
+exclude_words_1([], []).
+exclude_words_1([H|T], Words) :-
+	( exclude_one_word(H) ->
+	  Words = Rest
+	; Words = [H|Rest]
+	),
+	exclude_words_1(T, Rest).
+
+exclude_one_word(Atom) :-
+ 	( control_value(min_word_length, MinLength),
+ 	  control_value(max_word_length, MaxLength),
+ 	  atom_chars(Atom, String),
+ 	  length(String, StringLength),
+ 	  \+ between(MinLength, MaxLength, StringLength)
+ 	; control_value(min_word_length, MinLength),
+ 	  atom_chars(Atom, String),
+ 	  length(String, StringLength),
+ 	  StringLength < MinLength
+ 	; control_value(max_word_length, MaxLength),
+ 	  atom_chars(Atom, String),
+ 	  length(String, StringLength),
+ 	  StringLength > MaxLength
+ 	).
 
 /* 
    compute_one_evaluation(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaTerm, +MetaConcept,
@@ -305,18 +343,31 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	Evaluation = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,_SemTypes,
 			MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo),
 	% format(user_output, '~n EV:~q:~n', [Evaluation]),
+	% format(user_output, '~N~q:~q:~q~n', [MetaTerm,MetaWords,TokenPhraseWords]),
 	% This is just so the debugger will let me examine Evaluation
 	Evaluation \== [],
 	% get the positional info corresponding to this MatchMap
 	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo).
 
-consolidate_matchmap([], MatchMapHead, [MatchMapHead]).
-consolidate_matchmap([MatchMap2|RestMatchMap], MatchMap1, MatchMap) :-
+consolidate_matchmap(MatchMapTail, MatchMapHead, ConsolidatedMatchMap) :-
+	consolidate_matchmap_aux(MatchMapTail, MatchMapHead, MatchMap0),
+	ConsolidatedMatchMap = MatchMap0.
+	% force_variation_to_integer(MatchMap0, ConsolidatedMatchMap).	
+
+consolidate_matchmap_aux([], MatchMapHead, [MatchMapHead]).
+consolidate_matchmap_aux([MatchMap2|RestMatchMap], MatchMap1, MatchMap) :-
 	( merge_matchmap_components(MatchMap1, MatchMap2, MergedMatchMap) ->
-	  consolidate_matchmap(RestMatchMap, MergedMatchMap, MatchMap)
+	  consolidate_matchmap_aux(RestMatchMap, MergedMatchMap, MatchMap)
 	; MatchMap = [MatchMap1|MatchMapOut],
-	  consolidate_matchmap(RestMatchMap, MatchMap2, MatchMapOut)
+	  consolidate_matchmap_aux(RestMatchMap, MatchMap2, MatchMapOut)
 	).
+
+% force_variation_to_integer([], []).
+% force_variation_to_integer([HIn|TIn], [HOut|TOut]) :-
+% 	HIn  = [TextMatch,ConceptMatch,Variation],
+% 	HOut = [TextMatch,ConceptMatch,VariationInt],
+% 	VariationInt is round(Variation),
+% 	force_variation_to_integer(TIn, TOut).
 
 merge_matchmap_components([[Text1Start,Text1End], [Concept1Start,Concept1End], Variation1],
 			  [[Text2Start,Text2End], [Concept2Start,Concept2End], Variation2],

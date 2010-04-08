@@ -275,7 +275,6 @@ create_word_list/2 forms wdl(Words,LCWords).  */
 create_word_list(Words,wdl(Words,LCWords)) :-
     lowercase_list(Words,LCWords).
 
-
 /* opaque_tags(?Tag)
 
 opaque_tags/1 is a factual predicate of phrase tags which prevent further
@@ -452,7 +451,6 @@ filter_tokens_1(PhraseItem, TokenWords, []) :-
 	),
 	!.
 filter_tokens_1(PhraseItem, [], []) :-
-	format(user_output, '~NERROR: filter_tokens_1/3 failed for ~p.~n', [PhraseItem]),
 	format('~NERROR: filter_tokens_1/3 failed for ~p.~n', [PhraseItem]),
 	!,
 	fail.

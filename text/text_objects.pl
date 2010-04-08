@@ -2615,17 +2615,29 @@ count_an_chars_aa([aatok(word,Type,Text,_,_,_,_,_)|Rest], CountIn, CountOut) :-
 %    ),
 %    count_an_tokens_aa(Rest,NInOut,NOut).
 
+count_an_tokens(Toks, N) :-
+	count_an_tokens(Toks, 0, N).
 
-count_an_tokens(Toks,N) :-
-    count_an_tokens(Toks,0,N).
+count_an_tokens([], N, N).
+count_an_tokens([tok(Type,_,_,_)|Rest], NIn, NOut) :-
+	( an_type(Type) ->
+	  NInOut is NIn + 1
+	; NInOut=NIn
+	),
+	count_an_tokens(Rest, NInOut, NOut).
 
-count_an_tokens([],N,N).
-count_an_tokens([tok(Type,_,_,_)|Rest],NIn,NOut) :-
-    (an_type(Type) ->
-        NInOut is NIn + 1
-    ;   NInOut=NIn
-    ),
-    count_an_tokens(Rest,NInOut,NOut).
+% This is a hack designed to allow AA-detection to detect an AA
+% at the very end of an utterance. We simply add a blank space
+% to the final string in the input.
+% The resulting final ws token is removed
+% via	append(Sentences1, [_], Sentences2),
+% in find_and_coordinate_sentences/5
+add_final_ws([], LastLine, [LastLineWithFinalWS]) :-
+	LastLine = [FieldID,FieldLines],
+	append(FieldLines, [" "], FieldLinesWithFinalWS),
+	LastLineWithFinalWS = [FieldID,FieldLinesWithFinalWS].
+add_final_ws([Next|T], H, [H|NewT]) :-
+	add_final_ws(T, Next, NewT).
 
 /* 
    find_and_coordinate_sentences(+UI, +Fields, -Sentences,
@@ -2642,7 +2654,9 @@ many-to-many relationship). */
 find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences, AAs) :-
 	tokenize_fields_utterly(Fields, TokenizedFields),
 	% format(user_output, 'TokenizedFields: ~p~n', [TokenizedFields]),
-	form_field_tokens(TokenizedFields, FieldTokens0),
+	TokenizedFields = [H|T],
+	add_final_ws(T, H, TokenizedFieldsWithFinalWS),
+	form_field_tokens(TokenizedFieldsWithFinalWS, FieldTokens0),
 	% format(user_output, '~nFieldTokens0: ~p~n', [FieldTokens0]),
 	filter_out_field_comments(FieldTokens0, FieldTokens),
 	% format(user_output, '~nFieldTokens: ~p~n', [FieldTokens]),
@@ -2887,26 +2901,24 @@ conditionally_skip_over_ws_parenthetical(TypeTokens, NewRest0, NewRest) :-
 	; NewRest = NewRest0
 	).
 
-gather_tokens_for_position([First|Rest],Pos,[First|GatheredRest],NewRest) :-
-    get_token_position(First,FirstPos),
-    position_contains(Pos,FirstPos),
-    !,
-    gather_tokens_for_position(Rest,Pos,GatheredRest,NewRest).
-gather_tokens_for_position(Tokens,_Pos,[],Tokens).
+gather_tokens_for_position([First|Rest], Pos, [First|GatheredRest], NewRest) :-
+	get_token_position(First, FirstPos),
+	position_contains(Pos, FirstPos),
+	!,
+	gather_tokens_for_position(Rest, Pos, GatheredRest, NewRest).
+gather_tokens_for_position(Tokens, _Pos, [], Tokens).
 
-form_label(UI,Field,N,Label,LCLabel) :-
-    number_codes(N,NString),
-    lower(Field,LCField),
-    % use lowercased field for historical reasons
-    append([UI,".",LCField,".",NString],Label),
-    lower(Label,LCLabel).
+form_label(UI, Field, N, Label, LCLabel) :-
+	number_codes(N, NString),
+	lower(Field, LCField),
+	% use lowercased field for historical reasons
+	append([UI,".",LCField,".",NString], Label),
+	lower(Label, LCLabel).
 
-set_original_positions([],_,[]) :-
-    !.
-set_original_positions([tok(Type,Arg2,Arg3,Arg4,_Arg5)|Rest],Pos,
+set_original_positions([], _, []).
+set_original_positions([tok(Type,Arg2,Arg3,Arg4,_Arg5)|Rest], Pos,
 		       [tok(Type,Arg2,Arg3,Arg4,Pos)|ModifiedRest]) :-
-    set_original_positions(Rest,Pos,ModifiedRest).
-
+	set_original_positions(Rest, Pos, ModifiedRest).
 
 /* annotate_with_aas(+AAs, +SentencesIn, -SentencesOut)
 

@@ -102,7 +102,7 @@ final_negation_template(negation(Type, TriggerText, TriggerPosInfo,
 compute_negex(RawTokenList, Lines, DisambMMOutput, NegationTerms) :-
 	( compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) ->
 	  true
-	; format('ERROR: Negex failed on ~p.~n', [Lines]),
+	; format(user_output, 'ERROR: Negex failed on ~p.~n', [Lines]),
 	  abort
 	).
 

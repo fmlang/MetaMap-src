@@ -53,10 +53,6 @@
 	tokenize_text_utterly/2
     ]).
 
-:- use_module(skr(skr_utilities),[
-	token_template/5
-    ]).
-
 :- use_module(skr_db(db_access),[
 	get_year/1,
 	initialize_db_access/3,
@@ -67,11 +63,6 @@
 
 :- use_module(skr_lib(semtype_translation09), [
 	expand_semtypes/2
-    ]).
-
-:- use_module(skr(skr_utilities), [
-	skr_begin_write/1,
-	skr_end_write/1
     ]).
 
 :- use_module(skr_lib(ctypes),[
@@ -103,6 +94,12 @@
 	ttyflush/0,
 	upper/2
    ]).
+
+:- use_module(skr(skr_utilities), [
+	skr_begin_write/1,
+	skr_end_write/1,
+	token_template/5
+    ]).
 
 :- use_module(text(text_objects),[
 	extract_token_strings/2
@@ -512,6 +509,8 @@ process_tf_1([FirstTF|RestTFs],
 	normalize_value(NZ, Rank, NormalizedRank),
 	NegNRank is -NormalizedRank,
 	FirstAATF = aatf(NegNRank,Concept,STs,CUI,Tuples),
+	% Just to allow the debugger to examine FirstAATF
+	FirstAATF \== [],
 	process_tf_1(RestTFs,
 		     MaxFreq, NC, NF, NM, NMM, NW, NZ, WC, WD, WM, WMM, WW,
 		     RestAATFs).
@@ -610,9 +609,9 @@ dump_aatf_info_fielded([aatf(NegRank,Concept,STs,CUI,Tuples)|Rest],
 
 dump_output(Stream, UIAtom, ScaledRank, Concept, CUI, STs, TuplesNoPosInfo, FieldsAtom) :-
 	( \+ control_option(hide_semantic_types) ->
-	  format(Stream, '~a|MM|~0f|~s|~a|~p|~p|~a',
+	  format(Stream, '~a|MM|~2f|~s|~a|~p|~p|~a',
 	                 [UIAtom,ScaledRank,Concept,CUI,STs,TuplesNoPosInfo,FieldsAtom])
-	; format(Stream, '~a|MM|~0f|~s|~a|~p|~a',
+	; format(Stream, '~a|MM|~2f|~s|~a|~p|~a',
 		 	 [UIAtom,ScaledRank,Concept,CUI,TuplesNoPosInfo,FieldsAtom])
 	).
 
@@ -718,7 +717,7 @@ phrase_info(gvcs,            phrase(_,_,_,_,Value,_,_), Value).
 phrase_info(ev0,             phrase(_,_,_,_,_,Value,_), Value).
 phrase_info(aphrases,        phrase(_,_,_,_,_,_,Value), Value).
 
-% :- use_module(library(addportray)).
+% :- use_module(skr_lib(addportray)).
 % portray_mm_output(mm_output(_ExpandedUtterance,_CitationTextAtom,_ModifiedText,_Tagging,
 % 			      _AAs,_Syntax,_DisambiguatedMMOPhrases,_ExtractedPhrases)) :-
 %  	write('MM_OUTPUT').

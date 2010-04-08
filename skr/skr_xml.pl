@@ -40,10 +40,6 @@
 	xml_header_footer_print_setting/3
     ]).
 
-:- use_module(skr(xml),[
-	xml_parse/3
-   ]).
-
 :- use_module(skr_lib(negex), [
 	final_negation_template/6
    ]).
@@ -59,14 +55,18 @@
 	split_string_completely/3
    ]).
 
-:- use_module(skr(skr_utilities), [
-	replace_blanks_with_crs/4,
-	verify_xml_format/2
-   ]).
-
 :- use_module(skr_lib(sicstus_utils),[
 	concat_atom/2,
 	ttyflush/0
+   ]).
+
+:- use_module(skr_lib(xml),[
+	xml_parse/3
+   ]).
+
+:- use_module(skr(skr_utilities), [
+	replace_blanks_with_crs/4,
+	verify_xml_format/2
    ]).
 
 :- use_module(library(system),[

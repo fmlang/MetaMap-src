@@ -271,12 +271,16 @@ lex_vars(form, Form, Vars, LowerFlag, Lexicon, Index) :-
 
 %%% auxiliary
 lex_vars_aux(OfsList, Vars, Lexicon) :-
-	findall(V,
-	       (member(Ofs, OfsList), c_get_varlist(Lexicon, Ofs, V, 1)),
-	       Vs),
-	flatten(Vs, FVs),
-	reformat_list(FVs, RFVs),
-	sort(RFVs, Vars).
+	lex_vars_aux_1(OfsList, Lexicon, Vars0),
+	flatten(Vars0, FlattenedVars),
+	reformat_list(FlattenedVars, ReformattedFlattenedVars),
+	sort(ReformattedFlattenedVars, Vars).
+
+lex_vars_aux_1([], _Lexicon, []).
+lex_vars_aux_1([Ofs|RestOfsList], Lexicon, [Vars|RestVars]) :-
+	c_get_varlist(Lexicon, Ofs, Vars, 1),
+	% format(user_output, '~q~n', [c_get_varlist(lexicon, Ofs, Vars, 1)]),
+	lex_vars_aux_1(RestOfsList, Lexicon, RestVars).
 
 %%% generic variant retrieval predicate
 %%% LRA
@@ -284,15 +288,16 @@ lex_var_lists(form, Form, VarLists, LowerFlag, Lexicon, Index) :-
 	lexicon_type(LexiconType),
 	c_lex_form(Index, Form, LexiconType, LowerFlag, 0, OfsList, 1),
 	sort(OfsList, SortedOfsList),
-	lex_var_lists_aux(SortedOfsList, VarLists, Lexicon).
+	lex_var_lists_aux(SortedOfsList, Lexicon, VarLists).
 
 %%% auxiliary
-lex_var_lists_aux([],[],_).
-lex_var_lists_aux([Ofs|Rest],[V|RestV],Lexicon) :-
-	c_get_varlist(Lexicon,Ofs,V0,1),
-	reformat_list(V0,V1),
-	sort(V1,V),
-	lex_var_lists_aux(Rest,RestV,Lexicon).
+lex_var_lists_aux([], _, []).
+lex_var_lists_aux([Ofs|Rest], Lexicon, [V|RestV]) :-
+	c_get_varlist(Lexicon, Ofs, V0, 1),
+	% format(user_output, '~q~n', [c_get_varlist(lexicon, Ofs, V0, 1)]),
+	reformat_list(V0, V1),
+	sort(V1, V),
+	lex_var_lists_aux(Rest, Lexicon, RestV).
 
 /* Simple queries */
 
