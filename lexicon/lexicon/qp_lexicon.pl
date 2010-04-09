@@ -256,6 +256,7 @@ lex_cats(form, Form, Cats, LowerFlag, Index) :-
 	lexicon_type(LexiconType),
 	% LexiconType = 0,
 	c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1).
+	% format(user_output, '~q~n', [c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1)]).
 
 %%% generic variant retrieval predicate
 lex_vars(cit, Cit, Vars, LowerFlag, Lexicon, Index) :-
@@ -310,6 +311,7 @@ lex_is_a_root_ci(Root) :-
 lex_is_a_root_ci_2(Root, Index) :-
 	lexicon_type(LexiconType),
 	c_lex_is_a_root(Index, Root, LexiconType, 1, 1).
+	% format(user_output, '~q~n', [c_lex_is_a_root(Root, Return)]).
 
 %%% lex_is_a_form_ci(+Form)
 %%% Queries for a lexical item.
@@ -320,6 +322,7 @@ lex_is_a_form_ci(Form) :-
 lex_is_a_form_ci_2(Form, Index) :-
 	lexicon_type(LexiconType),
 	c_lex_is_a_form(Index, Form, LexiconType, 1, 1).
+	% format(user_output, '~q~n', [c_lex_is_a_form(Form, Return)]).
 
 %%% lex_is_a_root_ci_cats(+Root, +Cats)
 %%% succeeds if +Root is a root form in any category in +Cats
@@ -330,6 +333,8 @@ lex_is_a_root_ci_cats(Root, Cats) :-
 lex_is_a_root_ci_cats_3(Root, Cats, Index) :-
 	lexicon_type(LexiconType),
 	c_lex_is_a_root_cats(Index, Root, LexiconType, 1, Cats, 1).
+	% format(user_output, '~q~n', [c_lex_is_a_root_cats(Root, Cats, Return)]),
+	% Return =:= 1.
 
 %%% This is for retrieval of records with sensitivity to input context
 %%% for use from a parser.
@@ -337,6 +342,7 @@ lex_is_a_root_ci_cats_3(Root, Cats, Index) :-
 lex_form_ci_recs_input_5(Input, Recs, Remaining, Lexicon, Index) :-
 	lexicon_type(LexiconType),
 	c_lex_form_input(Index, LexiconType, Input, Matches, 1),
+	% format(user_output, '~q~n', [c_lex_form_input(Input, Matches, Return)]),
 	sort_matches(Matches, SortedMatches),
 	get_best_match(SortedMatches, BestMatch),
 	BestMatch = match(Term, OfsList, BestLength),
