@@ -816,7 +816,7 @@ test_valid_aa_12(AATokens) :-
 	Type \== nu,
 	Type \== pe,
 	atom_codes(LCAtom, LCString),
-	forbidden_word(aa, LCAtom),
+	forbidden_aa_word(LCAtom),
 	announce_failure('AA-12', AATokens),
 	!,
 	fail.
@@ -963,77 +963,90 @@ forbidden_first_aa_word(including).
 forbidden_first_aa_word(such).
 forbidden_first_aa_word(termed).
 
-forbidden_word(aa, apropos).
-forbidden_word(aa, daily).
-forbidden_word(aa, edu).
-forbidden_word(aa, http).
-forbidden_word(aa, html).
-forbidden_word(aa, preliminary).
-forbidden_word(aa, report).
-forbidden_word(aa, than).
-forbidden_word(aa, www).
+forbidden_aa_word(apropos).
+forbidden_aa_word(daily).
+forbidden_aa_word(edu).
+forbidden_aa_word(http).
+forbidden_aa_word(html).
+forbidden_aa_word(preliminary).
+forbidden_aa_word(report).
+forbidden_aa_word(than).
+forbidden_aa_word(www).
 
-forbidden_word(scope, almost).
-forbidden_word(scope, are).
-forbidden_word(scope, could).
-forbidden_word(scope, is).
-forbidden_word(scope, namely).
-forbidden_word(scope, respectively).
-forbidden_word(scope, significantly).
-forbidden_word(scope, that).
-forbidden_word(scope, was).
-forbidden_word(scope, we).
-forbidden_word(scope, were).
-forbidden_word(scope, which).
-forbidden_word(scope, whereas).
+forbidden_scope_word(almost).
+forbidden_scope_word(are).
+forbidden_scope_word(could).
+forbidden_scope_word(is).
+forbidden_scope_word(namely).
+forbidden_scope_word(respectively).
+forbidden_scope_word(significantly).
+forbidden_scope_word(that).
+forbidden_scope_word(was).
+forbidden_scope_word(we).
+forbidden_scope_word(were).
+forbidden_scope_word(which).
+forbidden_scope_word(whereas).
 
+forbidden_token_sequence(aa, Sequence) :-
+	Sequence = [H|T],
+	forbidden_aa_token_sequence(H, T).
+forbidden_token_sequence(scope, Sequence) :-
+	Sequence = [H|T],
+	forbidden_scope_token_sequence(H, T).
 
-forbidden_token_sequence(aa, [' ',      'usa', ' ']).
-forbidden_token_sequence(aa, ['ca',     '.']).
-forbidden_token_sequence(aa, ['higher', ' ', 'than']).
-forbidden_token_sequence(aa, ['in',     ' ',   'all']).
-forbidden_token_sequence(aa, ['study',  ' ', 'of']).
-forbidden_token_sequence(aa, ['or',     ' ', 'anti']).
+forbidden_aa_token_sequence(' ',    [usa, ' ']).
+forbidden_aa_token_sequence(ca,     ['.']).
+forbidden_aa_token_sequence(higher, [' ', than]).
+forbidden_aa_token_sequence(in,     [' ', all]).
+forbidden_aa_token_sequence(or,     [' ', anti]).
+forbidden_aa_token_sequence(study,  [' ', of]).
 
-forbidden_token_sequence(scope, ['+',          '/',   '-']).
-forbidden_token_sequence(scope, ['but', ' ',   'the']).
-forbidden_token_sequence(scope, [':',   ' ', 'comparison', ' ',   'of']).
-forbidden_token_sequence(scope, ['equal', ' ', 'to']).
-forbidden_token_sequence(scope, ['in', ' ',    'twelve']).
-forbidden_token_sequence(scope, ['isolated', ' ',    'from', ' ', 'the']).
-forbidden_token_sequence(scope, ['of', ' ',    'third']).
-forbidden_token_sequence(scope, ['production', ' ',   'in',  ' ', 'a']).
-forbidden_token_sequence(scope, ['to', ' ',    'the', ' ', 'study']).
-forbidden_token_sequence(scope, ['with', ' ',  'only']).
-forbidden_token_sequence(scope, [':',          ' ',   'the']).
-forbidden_token_sequence(scope, [':',          ' ',   'a']).
-forbidden_token_sequence(scope, [':',          ' ',   'an']).
+forbidden_scope_token_sequence('+',        ['/',  '-']).
+forbidden_scope_token_sequence(':',        [' ', an]).
+forbidden_scope_token_sequence(':',        [' ', a]).
+forbidden_scope_token_sequence(':',        [' ', comparison, ' ',   of]).
+forbidden_scope_token_sequence(':',        [' ', the]).
+forbidden_scope_token_sequence(but,        [' ', the]).
+forbidden_scope_token_sequence(equal,      [' ', to]).
+forbidden_scope_token_sequence(in,         [' ', twelve]).
+forbidden_scope_token_sequence(isolated,   [' ', from, ' ', the]).
+forbidden_scope_token_sequence(of,         [' ', third]).
+forbidden_scope_token_sequence(production, [' ', in,  ' ', a]).
+forbidden_scope_token_sequence(to,         [' ', the, ' ', study]).
+forbidden_scope_token_sequence(with,       [' ', only]).
 
-forbidden_token_coocurrence(aa, ['from',  'the']).
-forbidden_token_coocurrence(aa, ['from',  'to']).
+forbidden_token_coocurrence(aa, Tokens) :-
+	Tokens = [H|T],
+	forbidden_aa_token_coocurrence(H, T).
+forbidden_token_coocurrence(scope, Tokens) :-
+	Tokens = [H|T],
+	forbidden_scope_token_coocurrence(H, T).
 
-forbidden_token_coocurrence(scope, ['a',          'an',  'of',  'the', 'with']).
-forbidden_token_coocurrence(scope, ['a',          'an',  'of',  'for', 'with']).
-forbidden_token_coocurrence(scope, ['after',      'in',  'of',  'the']).
-forbidden_token_coocurrence(scope, ['an',         'and', 'in',  'of',  'the']).
-forbidden_token_coocurrence(scope, ['and',        'and', 'the', 'to']).
-forbidden_token_coocurrence(scope, ['and',        'seven']).
-forbidden_token_coocurrence(scope, ['and',        'this']).
-forbidden_token_coocurrence(scope, ['about',      'in',  'of',  'the']).
-forbidden_token_coocurrence(scope, ['and',        'by',  'the', 'with']).
-forbidden_token_coocurrence(scope, ['and',        'by',  'in',  'of',  'the']).
-forbidden_token_coocurrence(scope, ['and',        'its', 'of',  'with']).
-forbidden_token_coocurrence(scope, ['and',        'one', 'to',  'the']).
-forbidden_token_coocurrence(scope, ['clinical',   'outcomes']).
-forbidden_token_coocurrence(scope, ['even',       'when']).
-forbidden_token_coocurrence(scope, ['for',        'from', 'of',  'the']).
-forbidden_token_coocurrence(scope, ['in',         'of',  'the', 'to']).
-forbidden_token_coocurrence(scope, ['in',         'the', 'under']).
-forbidden_token_coocurrence(scope, ['of',         'or',  'over']).
-forbidden_token_coocurrence(scope, ['properties', 'of',  'from']).
-forbidden_token_coocurrence(scope, ['the',        'this']).
-forbidden_token_coocurrence(scope, ['the',        'this']).
-forbidden_token_coocurrence(scope, ['values',     'between']).
+forbidden_aa_token_coocurrence(from,  [the]).
+forbidden_aa_token_coocurrence(from,  [to]).
+
+forbidden_scope_token_coocurrence(a,          [an,  of,  the, with]).
+forbidden_scope_token_coocurrence(a,          [an,  of,  for, with]).
+forbidden_scope_token_coocurrence(after,      [in,  of,  the]).
+forbidden_scope_token_coocurrence(an,         [and, in,  of,  the]).
+forbidden_scope_token_coocurrence(and,        [and, the, to]).
+forbidden_scope_token_coocurrence(and,        [seven]).
+forbidden_scope_token_coocurrence(and,        [this]).
+forbidden_scope_token_coocurrence(about,      [in,  of,  the]).
+forbidden_scope_token_coocurrence(and,        [by,  the, with]).
+forbidden_scope_token_coocurrence(and,        [by,  in,  of,  the]).
+forbidden_scope_token_coocurrence(and,        [its, of,  with]).
+forbidden_scope_token_coocurrence(and,        [one, to,  the]).
+forbidden_scope_token_coocurrence(clinical,   [outcomes]).
+forbidden_scope_token_coocurrence(even,       [when]).
+forbidden_scope_token_coocurrence(for,        [from, of,  the]).
+forbidden_scope_token_coocurrence(in,         [of,   the, to]).
+forbidden_scope_token_coocurrence(in,         [the,  under]).
+forbidden_scope_token_coocurrence(of,         [or,   over]).
+forbidden_scope_token_coocurrence(properties, [of,   from]).
+forbidden_scope_token_coocurrence(the,        [this]).
+forbidden_scope_token_coocurrence(the,        [this]).
+forbidden_scope_token_coocurrence(values,     [between]).
 
 forbidden_post_comma_scope_word(we).
 forbidden_post_comma_scope_word(the).
@@ -1243,7 +1256,7 @@ test_valid_scope_06(_, _).
 % Proposed scope must not contain a forbidden scope word
 test_valid_scope_07(AATokens, ScopeTokens) :-
 	contains_specific_token(ScopeTokens, ScopeTokenLCAtom, _RestScopeTokens),
-	forbidden_word(scope, ScopeTokenLCAtom),
+	forbidden_scope_word(ScopeTokenLCAtom),
 	announce_failure('SC-07', AATokens, ScopeTokens),
 	!,
 	fail.

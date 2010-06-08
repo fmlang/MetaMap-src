@@ -193,21 +193,15 @@ is_control_option(metamap,  '', help, 		 	 no, none).
 is_control_option(metamap,  '', longest_lexicon_match, 	 no, none).
 is_control_option(metamap,  '', negex,		 	 no, none).
 is_control_option(metamap,  '', silent,		 	 no, none).
-is_control_option(metamap,  '', max_ambiguity,	 	 no,
-                  aspec(max_ambiguity, mandatory, integer, none, 0,
-                        'Maximum allowable degree of ambiguity')).
-is_control_option(metamap,  '', min_word_length, 	 no,
-                  aspec(min_word_length, mandatory, integer, none, 0,
-                        'Minimum length of words to analyze')).
-is_control_option(metamap,  '', max_word_length, 	 no,
-                  aspec(max_word_length, mandatory, integer, none, 0,
-                        'Maximum length of words to analyze')).
-is_control_option(metamap,  '', min_concept_length, 	 no,
-                  aspec(min_concept_length, mandatory, integer, none, 0,
-                        'Minimum length of words to analyze')).
-is_control_option(metamap,  '', max_concept_length, 	 no,
-                  aspec(max_concept_length, mandatory, integer, none, 0,
-                        'Maximum length of words to analyze')).
+% is_control_option(metamap,  '', max_ambiguity,	 	 no,
+%                   aspec(max_ambiguity, mandatory, integer, none, 0,
+%                         'Maximum allowable degree of ambiguity')).
+% is_control_option(metamap,  '', min_conc_length, 	 no,
+%                   aspec(min_concn_length, mandatory, integer, none, no_default,
+%                         'Must specify an integer value.')).
+is_control_option(metamap,  '', min_length, 	 no,
+                  aspec(min_length, mandatory, integer, none, no_default,
+                        'Must specify an integer value.')).
 is_control_option(metamap,  '', phrases_only, 	 	 no, none).
 is_control_option(metamap,  '', warnings, 	 	 no, none).
 

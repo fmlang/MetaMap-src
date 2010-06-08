@@ -53,7 +53,6 @@
 	db_get_variants/3,
 	default_full_year/1,
 	default_year/1,
-	get_db_access_year/1,
 	% must be exported for mwi_utilities
 	get_year/1,
 	initialize_db_access/0,
@@ -89,7 +88,8 @@
 
 :- use_module(library(file_systems), [
 	directory_exists/1,
-	directory_exists/2
+	directory_exists/2,
+file_exists/2
    ]).
 
 :- use_module(library(sets),[
@@ -158,9 +158,9 @@ stop_db_access/0 calls exec_destroy_dbs to close them.  */
 
 default_version(normal).
 
-default_year('0910').
+default_year('10').
 
-default_full_year(2009).
+default_full_year(2010).
 
 initialize_db_access :-
 	get_db_access_version(Version),
@@ -229,8 +229,10 @@ stop_db_access :-
 	exec_destroy_dbs.
 
 model_location(Version, Year, ModelName, Location) :-
-	environ('MODEL_LOCATION_BASE_DIR', PathBase),
-	concat_atom([PathBase, '/DB.', Version, '.', Year, '.', ModelName],  Location).
+	model_location_base_dir(Path),
+	concat_atom([Path, '/DB.', Version, '.', Year, '.', ModelName],  Location).
+
+model_location_base_dir(Path) :- environ('MODEL_LOCATION_BASE_DIR', Path).
 
 run_query(Query, QueryType, Results, Return) :-
 	debug_message(trace, '~N### Running ~w query ~w~n', [QueryType, Query]),
@@ -567,9 +569,10 @@ db_get_mwi_word_data(Table, Word, DebugFlags, Results) :-
 	( Word == [] ->
 	  Results = []
 	; ensure_atom(Word, WordAtom),
-	  ensure_atom(Table, TableAtom),
+	  ensure_atom(Table, TableAtomTemp),
+	  possibly_widen_table(TableAtomTemp, TableAtom, Widen),
 	  debug_db_get_mwi_data_1(DebugFlags),
-	  db_get_mwi_word_data_aux(TableAtom, WordAtom, DebugFlags, RawResults),
+	  db_get_mwi_word_data_aux(Widen, TableAtom, WordAtom, DebugFlags, RawResults),
 	  debug_db_get_mwi_data_2(DebugFlags),
 	  form_uscs(RawResults, 0, Results),
 	  debug_db_get_mwi_data_3(DebugFlags, Results)
@@ -580,6 +583,18 @@ db_get_mwi_word_data(Table, Word, _DebugFlags, []) :-
 		    [Word,Table]),
 	halt.
 
+possibly_widen_table(NarrowTable, WideTable, Widen) :-
+	db_access_status(Version, Year, Model),
+	model_location(Version, Year, Model, Location),
+	concat_atom([NarrowTable, '_WIDE'], MaybeWideTable),
+	concat_atom([Location, '/', MaybeWideTable], WideTablePath),
+	( file_exists(WideTablePath, read) ->
+	  WideTable = MaybeWideTable,
+	  Widen is 1
+	; WideTable = NarrowTable,
+	  Widen is 0
+	).
+
 % Suppose QueryString (the word being looked up) is "heart" and Table is first_wordsb.
 % The monstrous code below creates the query
 % 'select suistrings.nmstr, suistrings.str, cuiconcept.concept
@@ -588,20 +603,24 @@ db_get_mwi_word_data(Table, Word, _DebugFlags, []) :-
 %          and first_wordsb.sui = suistrings.sui
 %          and first_wordsb.cui = cuiconcept.cui'
 
+db_get_mwi_word_data_aux(0, Table, Word, DebugFlags, RawResults) :-
+	db_get_mwi_word_data_NARROW(Table, Word, DebugFlags, RawResults).
+db_get_mwi_word_data_aux(1, Table, Word, DebugFlags, RawResults) :-
+	db_get_mwi_word_data_WIDE(Table, Word, DebugFlags, RawResults).
+
 % This is the wide version
-db_get_mwi_word_data_aux(Table, Word, DebugFlags, RawResults) :-
+db_get_mwi_word_data_WIDE(Table, Word, DebugFlags, RawResults) :-
 	form_simple_query("nmstr, str, concept", Table, "word", Word, Query),	
         run_query(Query, simple, RawResults, 1),
 	debug_db_get_mwi_data_aux_2(DebugFlags, RawResults),
 	!.
-db_get_mwi_word_data_aux(Table, Word, _DebugFlags, _RawResults) :-
+db_get_mwi_word_data_WIDE(Table, Word, _DebugFlags, _RawResults) :-
 	fatal_error('~NERROR: db_access: db_get_mwi_word_data_aux failed for ~p on table ~p.~n',
 		    [Word,Table]),
 	halt.
 
-/*
 % This is the narrow version
-db_get_mwi_word_data_aux(Table, Word, DebugFlags, RawResults) :-
+db_get_mwi_word_data_NARROW(Table, Word, DebugFlags, RawResults) :-
 	% Table is one of all_words, first_words, first_wordsb,
 	% first_words_of_one, first_words_of_two
 	concatenate_items_to_string(["suistrings.nmstr, suistrings.str, ",
@@ -620,13 +639,11 @@ db_get_mwi_word_data_aux(Table, Word, DebugFlags, RawResults) :-
         run_query(Query, join, RawResults, 1),
 	debug_db_get_mwi_data_aux_2(DebugFlags, RawResults),
 	!.
-*/
 
-db_get_mwi_word_data_aux(Table, Word, _DebugFlags, _RawResults) :-
+db_get_mwi_word_data_NARROW(Table, Word, _DebugFlags, _RawResults) :-
 	fatal_error('~NERROR: db_access: db_get_mwi_word_data_aux failed for ~p on table ~p.~n',
 		    [Word,Table]),
 	halt.
-
 
 form_uscs([], _N, []) :- !.
 form_uscs([First|Rest], N, [usc(Nmstr,Str,Concept)|ModifiedRest]) :-

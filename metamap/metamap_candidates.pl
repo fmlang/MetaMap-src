@@ -38,7 +38,6 @@
 	add_candidates/7
     ]).
 
-
 :- use_module(metamap(metamap_evaluation), [
 	word_is_last_word_of_some_variant/2
     ]).
@@ -335,15 +334,17 @@ determine_first_word_index(Word, AllVariants, Index) :-
 	).
 
 frequent_first_word_pair('2',         acid).
-frequent_first_word_pair(human,       '1').
 frequent_first_word_pair(arabidopsis, protein).
+frequent_first_word_pair(c,           protein).
 frequent_first_word_pair(drosophila,  protein).
+frequent_first_word_pair(e,           protein).
+frequent_first_word_pair(human,       '1').
 frequent_first_word_pair(human,       protein).
 frequent_first_word_pair(mouse,       protein).
 frequent_first_word_pair(rat,         protein).
 frequent_first_word_pair(s,           protein).
-frequent_first_word_pair(c,           protein).
-
+frequent_first_word_pair(skin,        hand).
+frequent_first_word_pair(solution,    injection).
 
 %dump_uscs(_,_,[]) :-
 %    !.

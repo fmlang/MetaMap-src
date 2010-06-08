@@ -43,7 +43,8 @@
 :- use_module(skr_lib(nls_strings),[
 	atom_codes_list_list/2,
 	is_print_string/1,
-	split_string/4
+	split_string/4,
+	split_string_completely/3
    ]).
 
 :- use_module(skr_lib(nls_system),[
@@ -52,7 +53,7 @@
    ]).
 
 :- use_module(skr_lib(skr_tcp),[
-	establish_tcp_connection/4
+	establish_tcp_connection/5
    ]).
 
 :- use_module(skr(skr_utilities),[
@@ -153,10 +154,12 @@ tag_text_with_options(Input, _, _, _, _, _Tagger, []) :-
 call_tagger(Options,
 	    TaggerServerHosts, TaggerForced, TaggerServerPort,
 	    QueryAtom, TaggedTextList) :-
-	choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost),
+	choose_tagger_server(TaggerForced, TaggerServerHosts,
+			     ChosenTaggerServerHost, ChosenTaggerServerIP),
 	% format(user_output, 'Chose tagger ~w~n', [ChosenTaggerServerHost]),
 	call_tagger_server(Options,
-			   ChosenTaggerServerHost, TaggerForced, TaggerServerPort,
+			   ChosenTaggerServerHost, ChosenTaggerServerIP,
+			   TaggerForced, TaggerServerPort,
 			   QueryAtom, TaggedTextAtom),
 	!,
 	atom_codes(TaggedTextAtom, TaggedTextString),
@@ -253,7 +256,7 @@ form_human_readable_output([[Word,Type]|Rest],CurWords,CurTypes,RRIn,RROut) :-
     form_human_readable_output(Rest,NewCurWords,NewCurTypes,RRInOut,RROut).
 
 call_tagger_server(Options,
-		   TaggerServerHost, TaggerForced, TaggerServerPort,
+		   TaggerServerHost, TaggerServerIP, TaggerForced, TaggerServerPort,
 		   QueryAtom, TaggedTextAtom) :-
 	% GIVEN:
 	%   options <- Options (is an atom?)
@@ -272,7 +275,8 @@ call_tagger_server(Options,
 	between(1, 10, _),
 	   ServerName = 'Tagger',
 	   establish_tcp_connection(ServerName,
-				    TaggerServerHost, TaggerServerPort, SocketStream),
+				    TaggerServerHost, TaggerServerIP,
+				    TaggerServerPort, SocketStream),
 	   conditionally_announce_tagger_connection(TaggerServerMessage, TaggerServerHost),
 	   test_post_tagger_query(SocketStream, Request),
 	   test_get_tagger_result(SocketStream, Request, Response),
@@ -335,7 +339,7 @@ get_tagger_server_hosts_and_port(TaggerServerHosts, UserChoice, TaggerServerPort
 	( control_value(tagger, TaggerServerHost) ->
 	  TaggerServerHosts = [TaggerServerHost],
 	  UserChoice = TaggerServerHost
-	; environ('TAGGER_SERVER_NODENAMES', TaggerServerHostsEnv),
+	; environ('TAGGER_SERVER_HOSTS', TaggerServerHostsEnv),
 	  atom_codes(TaggerServerHostsEnv, TaggerServerHostsChars0),
 	  % SICStus Prolog's read_from_codes/2 requires a terminating period,
 	  % which Quintus Prolog's chars_to_term/2 does not!
@@ -352,13 +356,19 @@ get_tagger_server_hosts_and_port(_TaggerServerHosts, _UserChoice, _TaggerServerP
 	format(user_output, '~nCould not set Tagger Server hosts and port.~nAborting.~n', []),
 	halt.
 
-choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost) :-
+choose_tagger_server(TaggerForced, TaggerServerHosts,
+		     ChosenTaggerServerHost, ChosenTaggerServerIP) :-
 	( TaggerForced \== 0 ->
 	  ChosenTaggerServerHost = TaggerForced
 	; length(TaggerServerHosts, NumTaggers),
-	  between(1, NumTaggers, _),	  
+	  between(1, NumTaggers, _),
 	     % must be backtrackable!
-	     random_member(ChosenTaggerServerHost, TaggerServerHosts)
+	     random_member(ChosenTaggerServerHostAndIP, TaggerServerHosts),
+	     atom_codes(ChosenTaggerServerHostAndIP, ChosenTaggerServerHostAndIPString),
+	     split_string_completely(ChosenTaggerServerHostAndIPString, "|",
+				     [ChosenTaggerServerHostString, ChosenTaggerServerIPString]),
+	     atom_codes(ChosenTaggerServerHost, ChosenTaggerServerHostString),
+	     atom_codes(ChosenTaggerServerIP, ChosenTaggerServerIPString)
 	).
 
 force_to_atom(Input, QueryAtom) :-

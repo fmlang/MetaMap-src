@@ -89,6 +89,10 @@
     	collapse_pos_info/3
     ]).
 
+:- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2
+    ]).
+
 :- use_module(library(avl), [
 	avl_fetch/3,
 	avl_incr/4,
@@ -102,6 +106,7 @@
 :- use_module(library(lists), [
 	append/2,
 	last/2,
+	nth1/3,
 	prefix/2,
 	proper_prefix/2,
 	rev/2,
@@ -238,7 +243,6 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
 	% control_option(allow_duplicate_concept_names),
-	% !,
 	( compute_all_evaluations(MetaCanonical, DebugFlags, Label, UtteranceText,
 				  MetaString, MetaConcept,
 				  Variants, TokenPhraseWords, PhraseTokenLength,
@@ -257,38 +261,6 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				PhraseTokens, RawTokensOut, AAs,
 				InputmatchPhraseWords,
 				CCsNext, CCsOut, RestEvaluations).
-
-exclude_words(Before, After) :-
- 	( \+ control_value(min_word_length, _),
- 	  \+ control_value(max_word_length, _) ->
-	  After = Before
-	; exclude_words_1(Before, After)
-	).
-
-exclude_words_1([], []).
-exclude_words_1([H|T], Words) :-
-	( exclude_one_word(H) ->
-	  Words = Rest
-	; Words = [H|Rest]
-	),
-	exclude_words_1(T, Rest).
-
-exclude_one_word(Atom) :-
- 	( control_value(min_word_length, MinLength),
- 	  control_value(max_word_length, MaxLength),
- 	  atom_chars(Atom, String),
- 	  length(String, StringLength),
- 	  \+ between(MinLength, MaxLength, StringLength)
- 	; control_value(min_word_length, MinLength),
- 	  atom_chars(Atom, String),
- 	  length(String, StringLength),
- 	  StringLength < MinLength
- 	; control_value(max_word_length, MaxLength),
- 	  atom_chars(Atom, String),
- 	  length(String, StringLength),
- 	  StringLength > MaxLength
- 	).
-
 /* 
    compute_one_evaluation(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaTerm, +MetaConcept,
    			  +Variants, +TokenPhraseWords, +PhraseTokenLength,
@@ -316,14 +288,11 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 			     TempMatchMap, InvolvesHead, IsOvermatch),
 	TempMatchMap = [MatchMapHead|MatchMapTail],
 	consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
-	% ( TempMatchMap = MatchMap ->
-	%   true
-	% ; format(user_output, '~n### MetaWords  = ~q~n', [MetaWords]),
-	%   format(user_output, '### TokenWords = ~q~n', [TokenPhraseWords]),
-	%   format(user_output, '### TempMM     = ~q~n', [TempMatchMap]),
-	%   format(user_output, '### MM         = ~q~n', [MatchMap]),
-	%   debug_message(trace, '~N### computing one evaluation: ~q~n', [MetaWords])
-	% ),
+	% get_matching_phrasewords(TokenPhraseWords, MatchMap, MatchingWords),
+	% format(user_output,'MetaWords     = ~q~n', [MetaWords]),	
+	% format(user_output,'MetaTerm      = ~q~n', [MetaTerm]),	
+	% format(user_output,'MetaConcept   = ~q~n', [MetaConcept]),
+	test_minimum_length(TokenPhraseWords, MatchMap),
 	debug_message(trace, '~N### computing one evaluation: ~q~n', [MetaWords]),
 	% format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
 	MatchMap \== [],
@@ -348,6 +317,31 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	Evaluation \== [],
 	% get the positional info corresponding to this MatchMap
 	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo).
+
+test_minimum_length(PhraseWords, MatchMap) :-
+	( control_value(min_length, MinLength) ->
+	  get_matching_phrasewords(PhraseWords, MatchMap, MatchingWords),
+	  length(MatchingWords, TempMatchingWordsLength),
+	  ExtraSpaces is TempMatchingWordsLength - 1,
+	  concat_atom(MatchingWords, MatchingWordsAtom),
+	  atom_chars(MatchingWordsAtom, MatchingWordsString),
+	  length(MatchingWordsString, MatchingWordsStringLength),
+	  TotalLength is MatchingWordsStringLength + ExtraSpaces,
+	  TotalLength >= MinLength
+	; true
+	).
+
+get_matching_phrasewords(PhraseWords, MatchMap, MatchingWords) :-
+	extract_components(MatchMap, PhraseComponents, _MetaComponents),
+	linearize_components(PhraseComponents, LinearizedPhraseComponents),
+	append(LinearizedPhraseComponents, Indexes0),
+	sort(Indexes0, Indexes),
+	get_all_indexes(Indexes, PhraseWords, MatchingWords).
+
+get_all_indexes([], _PhraseWords, []).
+get_all_indexes([Index|RestIndexes], PhraseWords, [MatchingWord|RestMatchingWords]) :-
+	nth1(Index, PhraseWords, MatchingWord),
+	get_all_indexes(RestIndexes, PhraseWords, RestMatchingWords).
 
 consolidate_matchmap(MatchMapTail, MatchMapHead, ConsolidatedMatchMap) :-
 	consolidate_matchmap_aux(MatchMapTail, MatchMapHead, MatchMap0),
@@ -532,6 +526,7 @@ compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, M
 			     TempMatchMap, InvolvesHead, IsOvermatch),
 	TempMatchMap = [MatchMapHead|MatchMapTail],
 	consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
+	test_minimum_length(TokenPhraseWords, MatchMap),
         % format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
 	MatchMap \== [],
 	compute_connected_components(MatchMap, MatchCCs),
@@ -570,22 +565,21 @@ form_evaluations([CUI|Rest], NegValue, MetaTerm, MetaConcept, MetaWords, MatchMa
 			 InputmatchPhraseWords,
 			 InvolvesHead, IsOvermatch, RestEvaluations).
 
-compute_extra_meta(MatchMap,MetaWords,ExtraMetaWords) :-
-    extract_components(MatchMap,_PhraseComponents,MetaComponents),
-    linearize_components(MetaComponents,LMetaComponents),
-    append(LMetaComponents,MetaIndexes0),
-    sort(MetaIndexes0,MetaIndexes),
-    compute_extra_meta(MetaWords,1,MetaIndexes,ExtraMetaWords).
+compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords) :-
+	extract_components(MatchMap, _PhraseComponents, MetaComponents),
+	linearize_components(MetaComponents, LMetaComponents),
+	append(LMetaComponents, MetaIndexes0),
+	sort(MetaIndexes0, MetaIndexes),
+	compute_extra_meta_aux(MetaWords, 1, MetaIndexes, ExtraMetaWords).
 
-compute_extra_meta([],_,_,[]).
-compute_extra_meta([_First|Rest],N,[N|RestMetaIndexes],ComputedRest) :-
-    !,
-    M is N + 1,
-    compute_extra_meta(Rest,M,RestMetaIndexes,ComputedRest).
-compute_extra_meta([First|Rest],N,MetaIndexes,[First|ComputedRest]) :-
-    M is N + 1,
-    compute_extra_meta(Rest,M,MetaIndexes,ComputedRest).
-
+compute_extra_meta_aux([], _, _, []).
+compute_extra_meta_aux([_First|Rest], N, [N|RestMetaIndexes], ComputedRest) :-
+	!,
+	M is N + 1,
+	compute_extra_meta_aux(Rest, M, RestMetaIndexes, ComputedRest).
+compute_extra_meta_aux([First|Rest], N, MetaIndexes, [First|ComputedRest]) :-
+	M is N + 1,
+	compute_extra_meta_aux(Rest, M, MetaIndexes, ComputedRest).
 
 /* compute_phrase_match(+TokenHeadWords, +Label, +UtteranceText,
 			+TokenPhraseWords, +MetaWords,
@@ -615,13 +609,15 @@ compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 	get_gap_size_parameters(MinPhraseLength, MaxGapSize),
 	% format(user_output, 'MW:~w~n', [MetaWords]),
 	set_involves_head_in(TokenHeadWords, InvolvesHeadIn),
+	NMeta0 is 1,
+	MatchMap0 = [],
 	compute_phrase_match_aux(MetaWords, Label, UtteranceText,
 				 MetaWords, TokenPhraseWords,
-				 1, Variants, PhraseTokenLength,
+				 NMeta0, Variants, PhraseTokenLength,
 				 MinPhraseLength, MaxGapSize,
-				 [], MatchMap0,
+				 MatchMap0, MatchMap1,
 				 InvolvesHeadIn, InvolvesHead),
-	rev(MatchMap0, MatchMap),
+	rev(MatchMap1, MatchMap),
 	extract_components(MatchMap, _PhraseComponents, MetaComponents),
 	length(MetaWords, NMetaWords),
 	( component_intersects_components(MetaComponents, [1,1]),
@@ -857,8 +853,8 @@ xxx
 
 extract_components([], [], []).
 extract_components([[PhraseComponent,MetaComponent|_]|Rest],
-		       [PhraseComponent|RestPhraseComponents],
-		       [MetaComponent|RestMetaComponents]) :-
+		   [PhraseComponent|RestPhraseComponents],
+		   [MetaComponent|RestMetaComponents]) :-
 	extract_components(Rest, RestPhraseComponents, RestMetaComponents).
 
 

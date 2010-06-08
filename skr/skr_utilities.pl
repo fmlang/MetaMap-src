@@ -41,7 +41,7 @@
 	debug_call/2,
 	debug_message/3,
 	do_formal_tagger_output/0,
-	do_sanity_checking_and_housekeeping/5,
+	do_sanity_checking_and_housekeeping/4,
 	ensure_number/2,
 	force_to_atoms/2,
 	generate_aa_term/2,
@@ -119,7 +119,7 @@
 	ttyflush/0
     ]).
 
-:- use_module(skr(skr_umls_info09),[
+:- use_module(skr(skr_umls_info10),[
 	verify_sources/1,
 	verify_sts/1
     ]).
@@ -321,8 +321,7 @@ make_atom(String, Atom) :-
 	).
 
 
-do_sanity_checking_and_housekeeping(ProgramName, FullYear,
-				    InputStream, OutputStream, SavedCurrentOutput) :-
+do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputStream) :-
 	verify_tagger_output_settings(TaggerOutputSettings),
 	verify_single_output_format(SingleOutputFormat),
 	verify_xml_format_value(XMLFormatValue),
@@ -341,7 +340,7 @@ do_sanity_checking_and_housekeeping(ProgramName, FullYear,
 			    SourcesOptions, SourcesValues,
 			    SemTypeOptions, SemTypeValues, GapSizeValues,
 			    DerivationalVariantsSettings, AcrosAbbrsSettings],
-			   InputStream, OutputStream, SavedCurrentOutput),
+			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, FullYear).
 
 % Error if both tagger_output and formal_tagger_output are set
@@ -495,12 +494,11 @@ verify_derivational_variants_settings(Result) :-
 	; Result is 0
 	).			    
 
-verify_all_results(ValuesList, InputStream, OutputStream, SavedCurrentOutput) :-
+verify_all_results(ValuesList, InputStream, OutputStream) :-
 	compute_sum(ValuesList, 0, Result),
 	( Result =:= 0 ->
 	  true
-	; set_output(SavedCurrentOutput),
-	  generate_EOT_output(OutputStream),
+	; generate_EOT_output(OutputStream),
 	  close(InputStream),
 	  close(OutputStream),
 	  halt
@@ -685,7 +683,7 @@ generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length, ReplacementPos,
 	      skr_write_phrase(Phrase),
 	      skr_end_write('Syntax')
 	    ; format('~nmsu~n', []),
-	      write_list_indented(Phrase)
+		write_list_indented(Phrase)
 	    )
 	  ; true
 	    )
@@ -1140,6 +1138,6 @@ announce_tagging_mode(TagOption) :-
 	
 conditionally_print_end_info :-
 	( \+ control_option(silent) ->
-	  format('~nBatch processing is finished.~n',[])
+	  format(user_output, '~nBatch processing is finished.~n', [])
 	; true
 	).

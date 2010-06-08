@@ -1696,17 +1696,14 @@ compute_head_involvement(GeneratorPosition, HeadPosition, GeneratorInvolvesHead)
 
 write_all_variants/1 writes the variants (Vs) in GVCs. */
 
-write_all_variants([]) :-
-    !.
+write_all_variants([]).
 write_all_variants([gvc(G,Vs,_Cs)|Rest]) :-
-    !,
-    G=v(Generator,Categories,_,_,_,_),
-    with_output_to_codes(format('~p',[Categories]),StringCats),
-    concatenate_items_to_atom([Generator," ",StringCats],GeneratorLabel),
-    dump_variants_labelled(GeneratorLabel,Vs),
-    format('~n',[]),
-    write_all_variants(Rest).
-
+	G = v(Generator,Categories,_,_,_,_),
+	with_output_to_codes(format('~p', [Categories]), StringCats),
+	concatenate_items_to_atom([Generator," ",StringCats], GeneratorLabel),
+	dump_variants_labelled(GeneratorLabel, Vs),
+	format('~n', []),
+	write_all_variants(Rest).
 
 /* aao(?AA)
 

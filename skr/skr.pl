@@ -35,7 +35,6 @@
 
 
 :- module(skr,[
-	% calculate_aa_extra_chars/4,
 	extract_phrases_from_aps/2,
 	get_inputmatch_atoms_from_phrase/2,
 	get_phrase_tokens/4,
@@ -45,7 +44,6 @@
 	% called by MetaMap API -- do not change signature!
 	stop_skr/0
     ]).
-
 
 :- use_module(lexicon(lex_access),[
 	initialize_lexicon/2
@@ -138,7 +136,8 @@
     ]).
 
 :- use_module(skr_lib(nls_strings), [
-	split_string_completely/3
+	split_string_completely/3,
+	trim_and_compress_internal_whitespace/2
    ]).
 
 :- use_module(skr_lib(nls_system),[
@@ -657,7 +656,7 @@ generate_initial_evaluations_1(Label, UtteranceText,
 	  lower(PhraseTextString, LCPhraseTextString),
 	  extract_syntactic_tags(Phrase, Tags),
 	  atom_codes(LCPhraseAtom, LCPhraseTextString),
-	  stop_analysis(LCPhraseAtom, Tags) ->
+	  stop_analysis(LCPhraseAtom, LCPhraseTextString, Tags) ->
 	  Evaluations0 = [],
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
@@ -677,9 +676,15 @@ generate_initial_evaluations_1(Label, UtteranceText,
 
 % Short-circuit the analysis if Atom is a stop phrase whose lexical categories
 % overlap with the current phrase's Tags.
-stop_analysis(Atom, Tags) :-
-	stop_phrase(Atom, StopTags),
-	intersection(Tags, StopTags, [_|_]).
+stop_analysis(Atom, String, Tags) :-
+	( stop_phrase(Atom, StopTags),
+	  intersection(Tags, StopTags, [_|_]) ->
+	  true
+	; control_value(min_length, MinLength),
+	  trim_and_compress_internal_whitespace(String, StringWithNoBlanks),
+	  length(StringWithNoBlanks, Length),
+	  Length < MinLength
+	).
 
 refine_evaluations(Evaluations0, EvaluationsAfterSTs, Evaluations) :-
 	( control_option(truncate_candidates_mappings) ->
@@ -1166,30 +1171,23 @@ the name is included in curly braces.
 filter_evaluations_to_sources_aux/3 performs the actual work on the RootSources
 for Sources. */
 
-filter_evaluations_to_sources(EvaluationsIn,Sources,EvaluationsOut) :-
-    convert_to_root_sources(Sources,RootSources),
-    filter_evaluations_to_sources_aux(EvaluationsIn,RootSources,EvaluationsOut).
+filter_evaluations_to_sources(EvaluationsIn, Sources, EvaluationsOut) :-
+	convert_to_root_sources(Sources, RootSources),
+	filter_evaluations_to_sources_aux(EvaluationsIn, RootSources, EvaluationsOut).
 
-filter_evaluations_to_sources_aux([],_,[]) :-
-    !.
-filter_evaluations_to_sources_aux([First|Rest],RootSources,Results) :-
-% temp
-%    format('~p~n',[First]),
-    First = ev(NegValue,CUI,MetaTerm,_MetaConcept,MetaWords,SemTypes,
-	       MatchMap,InvolvesHead,IsOvermatch,Sources,PosInfo),
-% temp
-%    format('~p~n',[CUI]),
-    db_get_cui_sourceinfo(CUI,SourceInfo0),
-% temp
-%    wl(SourceInfo0),
-    extract_relevant_sources(SourceInfo0,RootSources,SourceInfo),
-    (SourceInfo==[] ->
-	Results=ModRest
-    ;   extract_source_name(SourceInfo,SourceName),
-	Results=[ev(NegValue,CUI,MetaTerm,SourceName,MetaWords,SemTypes,
-		    MatchMap,InvolvesHead,IsOvermatch,Sources,PosInfo)|ModRest]
-    ),
-    filter_evaluations_to_sources_aux(Rest,RootSources,ModRest).
+filter_evaluations_to_sources_aux([], _, []).
+filter_evaluations_to_sources_aux([First|Rest], RootSources, Results) :-
+	First = ev(NegValue,CUI,MetaTerm,_MetaConcept,MetaWords,SemTypes,
+		   MatchMap,InvolvesHead,IsOvermatch,Sources,PosInfo),
+	db_get_cui_sourceinfo(CUI, SourceInfo0),
+	extract_relevant_sources(SourceInfo0, RootSources, SourceInfo),
+	( SourceInfo == [] ->
+	  Results = ModRest
+	; extract_source_name(SourceInfo, SourceName),
+	  Results = [ev(NegValue,CUI,MetaTerm,SourceName,MetaWords,SemTypes,
+			MatchMap,InvolvesHead,IsOvermatch,Sources,PosInfo)|ModRest]
+	),
+	filter_evaluations_to_sources_aux(Rest, RootSources, ModRest).
 
 /* filter_evaluations_excluding_sources(+EvaluationsIn, +Sources,
                                         -EvaluationsOut)
@@ -2462,9 +2460,12 @@ matchmaps_are_equivalent(MatchMap1, MatchMap2) :-
 	extract_components(MatchMap1, PhraseCs1, _),
 	linearize_components(PhraseCs1, LPhraseCs1),
 	append(LPhraseCs1, CompactCs1),
+	sort(CompactCs1, SortedCs1),	
 	extract_components(MatchMap2, PhraseCs2, _),
 	linearize_components(PhraseCs2, LPhraseCs2),
-	append(LPhraseCs2, CompactCs1).
+	append(LPhraseCs2, CompactCs2),
+	sort(CompactCs2, SortedCs2),
+	SortedCs2 = SortedCs1.
 
 /* add_semtypes_to_evaluations(?Evaluations)
 

@@ -49,7 +49,7 @@
     ]).
 
 :- use_module(skr_lib(skr_tcp), [
-	establish_tcp_connection/4
+	establish_tcp_connection/5
    ]).
 
 :- use_module(skr(skr), [
@@ -843,10 +843,12 @@ call_WSD(MMOTermList,
 	 WSDServerHosts, WSDForced, WSDServerPort,
 	 WSDString) :-
 	get_WSD_parameters(MethodList, BeginDelimiterChars, EndDelimiterChars),
-	choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost),
+	choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost, ChosenWSDServerIP),
 	mmo_terms_to_xml_chars(MMOTermList, MethodList, XMLRequest),
 	% format(user_output, 'BEFORE call_WSD_client~n', []),
-	call_WSD_server(XMLRequest, ChosenWSDServerHost, WSDForced, WSDServerPort, Response),
+	call_WSD_server(XMLRequest,
+			ChosenWSDServerHost, ChosenWSDServerIP,
+			WSDForced, WSDServerPort, Response),
 	append([BeginDelimiterChars, WSDString, EndDelimiterChars, [10]], Response),
 	!.
 	% atom_codes(WSDAtomOut, WSDString).
@@ -868,12 +870,14 @@ get_WSD_parameters(MethodList, BeginDelimiterChars, EndDelimiterChars) :-
 	make_method_list(Methods, Weights, MethodList).
 
 call_WSD_server(XMLRequest,
-		WSDServerHost, WSDForced, WSDServerPort,
+		WSDServerHost, WSDServerIP,
+		WSDForced, WSDServerPort,
 		Response) :-
 	wsd_server_message(WSDForced, WSDServerMessage),
 	between(1, 10, _),
 	   ServerName = 'WSD',
-           establish_tcp_connection(ServerName, WSDServerHost, WSDServerPort, SocketStream),
+           establish_tcp_connection(ServerName, WSDServerHost, WSDServerIP,
+				    WSDServerPort, SocketStream),
 	   format(user_output,
 	          'Established connection to WSD Server on ~w~w.~n',
 	          [WSDServerMessage, WSDServerHost]),
@@ -935,7 +939,7 @@ get_WSD_server_hosts_and_port(WSDServerHosts, UserChoice, WSDServerPort) :-
 	( control_value('WSD', WSDServerHost) ->
 	  WSDServerHosts = [WSDServerHost],
 	  UserChoice = WSDServerHost
-	; environ('WSD_SERVER_NODENAMES', WSDServerHostsEnv),
+	; environ('WSD_SERVER_HOSTS', WSDServerHostsEnv),
 	  atom_codes(WSDServerHostsEnv, WSDServerHostsChars0),
 	  % SICStus Prolog's read_from_codes/2 requires a terminating period,
 	  % which Quintus Prolog's chars_to_term/2 does not!
@@ -952,10 +956,15 @@ get_WSD_server_hosts_and_port(_WSDServerHosts, _UserChoice, _WSDServerPort) :-
 	format(user_output, '~nCould not set WSD Server hosts and port.~nAborting.~n', []),
 	halt.
 
-choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost) :-
+choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost, ChosenWSDServerIP) :-
 	( WSDForced \== 0 ->
 	  ChosenWSDServerHost = WSDForced
 	; repeat,
 	     % must be backtrackable!
-	     random_member(ChosenWSDServerHost, WSDServerHosts)
+	     random_member(ChosenWSDServerHostAndIP, WSDServerHosts),
+	     atom_codes(ChosenWSDServerHostAndIP, ChosenWSDServerHostAndIPString),
+	     split_string_completely(ChosenWSDServerHostAndIPString, "|",
+				     [ChosenWSDServerHostString, ChosenWSDServerIPString]),
+	     atom_codes(ChosenWSDServerHost, ChosenWSDServerHostString),
+	     atom_codes(ChosenWSDServerIP, ChosenWSDServerIPString)	    
 	).

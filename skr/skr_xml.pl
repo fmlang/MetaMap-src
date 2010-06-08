@@ -57,6 +57,7 @@
 
 :- use_module(skr_lib(sicstus_utils),[
 	concat_atom/2,
+	interleave_string/3,
 	ttyflush/0
    ]).
 
@@ -69,12 +70,13 @@
 	verify_xml_format/2
    ]).
 
-:- use_module(library(system),[
-	environ/2
+:- use_module(library(lists),[
+	append/2,
+	delete/3
    ]).
 
-:- use_module(library(lists),[
-	delete/3
+:- use_module(library(system),[
+	environ/2
    ]).
 
 % :- use_module(library(xml),[
@@ -683,9 +685,10 @@ generate_xml_utterance_data(UtteranceLabel,
 			    XMLUtteranceText,
 			    XMLUtteranceStartPos, XMLUtteranceLength) :-
 	atom_codes(UtteranceLabel, LabelString),
-	split_string_completely(LabelString,
-				".",
-				[PMIDString,UtteranceTypeString,UtteranceNumberString]),
+	split_string_completely(LabelString, ".", LabelStringComponents),
+	append(PMIDComponents, [UtteranceTypeString,UtteranceNumberString], LabelStringComponents),
+	interleave_string(PMIDComponents, ".", PMIDStringList),
+	append(PMIDStringList, PMIDString),
 	number_codes(UtteranceStartPos, StartPosString),
 	number_codes(UtteranceLength,   LengthString),
 	% RealUtteranceLength is UtteranceLength - 1,

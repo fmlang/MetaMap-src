@@ -59,7 +59,6 @@
 	default_full_year/1
     ]).
 
-
 :- use_module(skr_lib(nls_system), [
     get_control_options_for_modules/2,
     reset_control_options/1,

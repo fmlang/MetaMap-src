@@ -78,11 +78,6 @@
 	concatenate_strings/3
     ]).
 
-:- use_module(skr_lib(ctypes),[
-	is_alnum/1,
-	is_space/1
-    ]).
-
 :- use_module(skr_lib(nls_lists),[
 	first_n_or_less/3
     ]).
@@ -585,37 +580,34 @@ linearize_phrase_item_7(_, PhraseItem, _, _, _, _, _) :-
 	format('~NERROR: Cannot linearize ~p (mapping/input match)~n', [PhraseItem]),
 	fail.
 
-coordinate_tokens(Tokens,IM0,[FirstIM|RestIM]) :-
-    length(Tokens,NTok),
-    length(IM0,NIM),
-    NFirst is NIM - NTok + 1,
-    first_n_or_less(IM0,NFirst,FirstIM),
-    append(FirstIM,IM1,IM0),
-    listify(IM1,RestIM).
+coordinate_tokens(Tokens, IM0, [FirstIM|RestIM]) :-
+	length(Tokens, NTok),
+	length(IM0, NIM),
+	NFirst is NIM - NTok + 1,
+	first_n_or_less(IM0, NFirst, FirstIM),
+	append(FirstIM, IM1, IM0),
+	listify(IM1, RestIM).
 
-listify([],[]).
-listify([First|Rest],[[First]|ModifiedRest]) :-
-    listify(Rest,ModifiedRest).
+listify([], []).
+listify([First|Rest], [[First]|ModifiedRest]) :-
+	listify(Rest, ModifiedRest).
 
-linearize_components([],[]).
-linearize_components([First|Rest],[LFirst|LRest]) :-
-    linearize_component(First,LFirst),
-    linearize_components(Rest,LRest).
+linearize_components([], []).
+linearize_components([First|Rest], [LFirst|LRest]) :-
+	linearize_component(First, LFirst),
+	linearize_components(Rest, LRest).
 
-linearize_component([Begin,Begin],[Begin]) :-
-    !.
-linearize_component([Begin,End],[0]) :-
-    Begin > End,
-    !.
-linearize_component([Begin,End],LComponent) :-
-    linearize_component(Begin,End,LComponent).
+linearize_component([Begin,Begin], [Begin]) :-    !.
+linearize_component([Begin,End], [0]) :-
+	Begin > End,
+	!.
+linearize_component([Begin,End], LComponent) :-
+	linearize_component_aux(Begin, End, LComponent).
 
-linearize_component(End,End,[End]) :-
-    !.
-linearize_component(Begin,End,[Begin|LComponent]) :-
-    NewBegin is Begin + 1,
-    linearize_component(NewBegin,End,LComponent).
-
+linearize_component_aux(End, End, [End]) :- !.
+linearize_component_aux(Begin, End, [Begin|LComponent]) :-
+	NewBegin is Begin + 1,
+	linearize_component_aux(NewBegin, End, LComponent).
 
 /* demote_phrase_item(+PhraseItem, -DemotedPhraseItem)
 
@@ -623,10 +615,8 @@ demote_phrase_item/2 transforms head/1 phrase items into mod/1 phrase items
 leaving all other phrase items alone.
 */
 
-demote_phrase_item(head(Subitems),mod(Subitems)) :-
-    !.
-demote_phrase_item(Item,Item).
-
+demote_phrase_item(head(Subitems), mod(Subitems)) :- !.
+demote_phrase_item(Item, Item).
 
 /* 
    tokenize_text(+Text, -TokText)
@@ -700,7 +690,7 @@ ttm_string(TS) --> ttm_token(T), {T\==[]}, !, ttm_string(S), {TS=[T|S]}
 
                ;   {TS=[]}.
 
-ttm_token(T) --> [Char], {is_alnum(Char)}, !, ttm_token(S), {T=[Char|S]}
+ttm_token(T) --> [Char], {local_alnum(Char)}, !, ttm_token(S), {T=[Char|S]}
 
              ;   {T=[]}.
 
@@ -734,47 +724,52 @@ tokenize_text_mm(Text, TokText) :-
 remove_possessives_and_nonwords/2 filters out possessives and nonwords
 from the results of tokenize_text_utterly/2. */
 
-remove_possessives_and_nonwords([],[]).
-remove_possessives_and_nonwords([NonWord|Rest],FilteredRest) :-
-    \+is_ws_word(NonWord),
-    !,
-    remove_possessives_and_nonwords(Rest,FilteredRest).
+remove_possessives_and_nonwords([], []).
+remove_possessives_and_nonwords([NonWord|Rest], FilteredRest) :-
+	\+ is_ws_word(NonWord),
+	!,
+	remove_possessives_and_nonwords(Rest,FilteredRest).
 % singular possessives
-remove_possessives_and_nonwords([Word,"'","s"],[Word]) :-
-    is_ws_word(Word),
-    !.
-remove_possessives_and_nonwords([Word,"'","s",WhiteSpace|Rest],
-				[Word|FilteredRest]) :-
-    is_ws_word(Word),
-    is_ws(WhiteSpace),
-    !,
-    remove_possessives_and_nonwords(Rest,FilteredRest).
+remove_possessives_and_nonwords([Word,"'","s"], [Word]) :- !.
+remove_possessives_and_nonwords([Word,"'","s",WhiteSpace|Rest], [Word|FilteredRest]) :-
+	is_ws(WhiteSpace),
+	!,
+	remove_possessives_and_nonwords(Rest, FilteredRest).
 % plural possessives
-remove_possessives_and_nonwords([Word,"'"],[Word]) :-
-    is_ws_word(Word),
-    ends_with_s(Word),
-    !.
-remove_possessives_and_nonwords([Word,"'",WhiteSpace|Rest],
-				[Word|FilteredRest]) :-
-    is_ws_word(Word),
-    ends_with_s(Word),
-    is_ws(WhiteSpace),
-    !,
-    remove_possessives_and_nonwords(Rest,FilteredRest).
-remove_possessives_and_nonwords([First|Rest],[First|FilteredRest]) :-
-    remove_possessives_and_nonwords(Rest,FilteredRest).
+remove_possessives_and_nonwords([Word,"'"], [Word]) :-
+	ends_with_s(Word),
+	!.
+remove_possessives_and_nonwords([Word,"'",WhiteSpace|Rest], [Word|FilteredRest]) :-
+	ends_with_s(Word),
+	is_ws(WhiteSpace),
+	!,
+	remove_possessives_and_nonwords(Rest, FilteredRest).
+remove_possessives_and_nonwords([First|Rest], [First|FilteredRest]) :-
+	remove_possessives_and_nonwords(Rest, FilteredRest).
 
+% ORIG
+% is_ws_word([]).
+% is_ws_word([AlNum|Rest]) :-
+% 	is_alnum(AlNum),
+% 	is_ws_word(Rest).
+
+% MATS
 is_ws_word([]).
 is_ws_word([AlNum|Rest]) :-
-	is_alnum(AlNum),
+	local_alnum(AlNum),
 	is_ws_word(Rest).
 
 ends_with_s(Word) :-
 	% reversed order of args from QP library version!
 	last(Word, 0's).
 
+% ORIG
+% is_ws([Char]) :-
+% 	is_space(Char).
+
+% MATS
 is_ws([Char]) :-
-	is_space(Char).
+	local_space(Char).
 
 tokenize_all_text_mm_lc([], []).
 tokenize_all_text_mm_lc([First|Rest], [TokenizedFirst|TokenizedRest]) :-
@@ -814,38 +809,223 @@ tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 	tokenize_text_utterly(FieldText, TokField),
 	!.
 
+% ORIG
+% tokenize_text_utterly(Text,TokText) :-
+% 	( atom(Text) ->
+% 	  atom_codes(Text,String),
+% 	  phrase(ttu_string(TokString),String),
+% 	  atom_codes_list(TokText,TokString)
+% 	; phrase(ttu_string(TokText),Text)
+% 	),
+% 	!.
+
+% MATS
 tokenize_text_utterly(Text,TokText) :-
 	( atom(Text) ->
 	  atom_codes(Text,String),
-	  phrase(ttu_string(TokString),String),
+	  ttu_string(TokString,String,[]),
 	  atom_codes_list(TokText,TokString)
-	; phrase(ttu_string(TokText),Text)
+	; ttu_string(TokText,Text,[])
 	),
 	!.
 
 /*  TOKENIZE TEXT UTTERLY GRAMMAR  */
 
+% ORIG
+% ttu_string(TS) -->
+% 	( ttu_token(T),
+% 	  { T\==[] },
+% 	  !,
+% 	  ttu_string(S),
+% 	  { TS=[T|S] }
+% 	; [Char],
+% 	  !,
+% 	  ttu_string(S),
+% 	  { TS = [[Char]|S] }
+% 	; { TS= [] }
+% 	).
+
+% MATS
 ttu_string(TS) -->
-	( ttu_token(T),
-	  { T\==[] },
-	  !,
-	  ttu_string(S),
-	  { TS=[T|S] }
-	; [Char],
-	  !,
-	  ttu_string(S),
-	  { TS = [[Char]|S] }
-	; { TS= [] }
+	[Char],
+	{ local_alnum(Char) }, !,
+	{ TS=[[Char|S]|R] },
+	ttu_token(S),
+	ttu_string(R).
+ttu_string(TS) -->
+	[Char], !,
+	{ TS = [[Char]|S] },
+	ttu_string(S).
+ttu_string([]) --> [].
+
+% ORIG
+% ttu_token(T) -->
+% 	( [Char],
+% 	  { is_alnum(Char) },
+% 	  !,
+% 	  ttu_token(S),
+% 	  { T=[Char|S] }
+% 	; { T =[] }
+% 	).
+
+% MATS
+% ttu_token(T) -->
+% 	[Char],
+% 	{ local_alnum(Char) }, !,
+% 	{ T=[Char|S] },
+% 	ttu_token(S).
+% ttu_token([]) --> [].
+
+% MATS 2
+ttu_token(T, S0, S) :-
+	ttu_token2(S0, T, S).
+
+ttu_token2([], [], []).
+ttu_token2([Char|S0], T, S) :-
+	ctypes:bits(Char, Bits), 
+	Mask is Bits /\ 3840,
+	(   Mask =\= 0 ->
+	    T = [Char|R],
+	    ttu_token2(S0, R, S)
+	;   T = [],
+	    S = [Char|S0]
 	).
 
-ttu_token(T) -->
-	( [Char],
-	  { is_alnum(Char) },
-	  !,
-	  ttu_token(S),
-	  { T=[Char|S] }
-	; { T =[] }
-	).
+local_space( 9).
+local_space(10).
+local_space(11).
+local_space(12).
+local_space(13).
+local_space(31).
+local_space(32).
+
+local_alnum(48).
+local_alnum(49).
+local_alnum(50).
+local_alnum(51).
+local_alnum(52).
+local_alnum(53).
+local_alnum(54).
+local_alnum(55).
+local_alnum(56).
+local_alnum(57).
+local_alnum(65).
+local_alnum(66).
+local_alnum(67).
+local_alnum(68).
+local_alnum(69).
+local_alnum(70).
+local_alnum(71).
+local_alnum(72).
+local_alnum(73).
+local_alnum(74).
+local_alnum(75).
+local_alnum(76).
+local_alnum(77).
+local_alnum(78).
+local_alnum(79).
+local_alnum(80).
+local_alnum(81).
+local_alnum(82).
+local_alnum(83).
+local_alnum(84).
+local_alnum(85).
+local_alnum(86).
+local_alnum(87).
+local_alnum(88).
+local_alnum(89).
+local_alnum(90).
+local_alnum(97).
+local_alnum(98).
+local_alnum(99).
+local_alnum(100).
+local_alnum(101).
+local_alnum(102).
+local_alnum(103).
+local_alnum(104).
+local_alnum(105).
+local_alnum(106).
+local_alnum(107).
+local_alnum(108).
+local_alnum(109).
+local_alnum(110).
+local_alnum(111).
+local_alnum(112).
+local_alnum(113).
+local_alnum(114).
+local_alnum(115).
+local_alnum(116).
+local_alnum(117).
+local_alnum(118).
+local_alnum(119).
+local_alnum(120).
+local_alnum(121).
+local_alnum(122).
+local_alnum(192).
+local_alnum(193).
+local_alnum(194).
+local_alnum(195).
+local_alnum(196).
+local_alnum(197).
+local_alnum(198).
+local_alnum(199).
+local_alnum(200).
+local_alnum(201).
+local_alnum(202).
+local_alnum(203).
+local_alnum(204).
+local_alnum(205).
+local_alnum(206).
+local_alnum(207).
+local_alnum(208).
+local_alnum(209).
+local_alnum(210).
+local_alnum(211).
+local_alnum(212).
+local_alnum(213).
+local_alnum(214).
+local_alnum(215).
+local_alnum(216).
+local_alnum(217).
+local_alnum(218).
+local_alnum(219).
+local_alnum(220).
+local_alnum(221).
+local_alnum(222).
+local_alnum(223).
+local_alnum(224).
+local_alnum(225).
+local_alnum(226).
+local_alnum(227).
+local_alnum(228).
+local_alnum(229).
+local_alnum(230).
+local_alnum(231).
+local_alnum(232).
+local_alnum(233).
+local_alnum(234).
+local_alnum(235).
+local_alnum(236).
+local_alnum(237).
+local_alnum(238).
+local_alnum(239).
+local_alnum(240).
+local_alnum(241).
+local_alnum(242).
+local_alnum(243).
+local_alnum(244).
+local_alnum(245).
+local_alnum(246).
+local_alnum(247).
+local_alnum(248).
+local_alnum(249).
+local_alnum(250).
+local_alnum(251).
+local_alnum(252).
+local_alnum(253).
+local_alnum(254).
+local_alnum(255).
+
 
 /* ************************************************************************
    ************************************************************************

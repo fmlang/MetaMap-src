@@ -254,26 +254,25 @@ long c_nls_db_exec_2_list_jgm(
   SP_atom         atom_string	= (int) NULL;
   SP_atom         pNil		= SP_atom_from_string("[]");
  
-  /* this is the narrow version */
-  /*
-  if(((strstr(sql_command, "all_words") != NULL) &&
-      (strstr(sql_command, "all_words_counts") == NULL)) ||
-     ((strstr(sql_command, "first_words") != NULL) &&
-      (strstr(sql_command, "first_words_counts") == NULL)) ||
-     ((strstr(sql_command, "first_wordsb") != NULL) &&
-      (strstr(sql_command, "first_wordsb_counts") == NULL))) {
+  /* WIDE tables require only a normal query */
+  if ( (strstr(sql_command, "all_words_WIDE") != NULL)          ||
+       (strstr(sql_command, "first_words_WIDE") != NULL)        ||
+       (strstr(sql_command, "first_wordsb_WIDE") != NULL)       ||
+       (strstr(sql_command, "first_words_of_one_WIDE") != NULL) ||
+       (strstr(sql_command, "first_words_of_two_WIDE") != NULL)) {
+	  rtn_results = process_normal_query(sql_command);
+  }
+  else if (((strstr(sql_command, "all_words") != NULL)    &&
+	    (strstr(sql_command, "all_words_counts") == NULL))   ||
+	   ((strstr(sql_command, "first_words") != NULL)  &&
+	    (strstr(sql_command, "first_words_counts") == NULL)) ||
+	   ((strstr(sql_command, "first_wordsb") != NULL) &&
+	    (strstr(sql_command, "first_wordsb_counts") == NULL))) {
 	  rtn_results = process_special_query(sql_command);
   }
   else {
 	  rtn_results = process_normal_query(sql_command);
-	 }
-  */
-
-  /* this is the wide version */
-
-  rtn_results = process_normal_query(sql_command);
-
-
+  }
   /* ---- Put the array results into a string ---- */
 
   /* QP_put_nil (int_term);
@@ -347,7 +346,9 @@ struct results_struct process_normal_query(const char *line)
    struct query_struct query;
    struct results_struct rtn;
    int config_ptr;
- 
+
+   /* printf("NORMAL QUERY\n"); fflush(stdout); */
+
    query = parse_query(line);
    /* printf("Query = >%s<\n", line);
     * fflush(stdout);
@@ -390,6 +391,8 @@ struct results_struct process_special_query(const char *line)
    tmpJ2 = (char *)malloc((size_t)(maxlen + 1));
 
    /* Initialize return structure */
+
+   /* printf("SPECIAL QUERY\n"); fflush(stdout); */
  
    rtn.rows = (struct res_rows_struct **)malloc(sizeof(struct res_rows_struct));
    rtn.num_rows = 0;

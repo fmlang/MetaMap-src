@@ -182,8 +182,7 @@ is_medline_citation([First|_]) :-
 	atom_codes(LowerAtom1, LowerString1),
 	lower_chars(String2, LowerString2),
 	atom_codes(LowerAtom2, LowerString2),
-	medline_citation_indicator(LowerAtom1, LowerAtom2),
-	!.
+	medline_citation_indicator(LowerAtom1, LowerAtom2).
 
 remove_nulls([], []).
 remove_nulls([First|Rest], Result) :-

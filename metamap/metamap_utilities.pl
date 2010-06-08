@@ -53,15 +53,14 @@
     ]).
 
 :- use_module(skr_db(db_access),[
-	db_get_cui_sources/2,
-	db_get_cui_sourceinfo/2
+	db_get_cui_sources/2
     ]).
 
-:- use_module(skr(skr_umls_info09),[
+:- use_module(skr(skr_umls_info10),[
 	convert_to_root_sources/2
     ]).
 
-:- use_module(skr_lib(semtype_translation09),[
+:- use_module(skr_lib(semtype_translation10),[
 	expand_semtypes/2
     ]).
 
@@ -223,14 +222,6 @@ build_concept_name_1_aux(SourceInfo, MetaConcept, ConceptName) :-
 	build_list(RestSources, [], RestSourceList),
 	append([[MetaConcept,' {',FirstSource],RestSourceList,['}']], ItemList),
 	concatenate_items_to_atom(ItemList, ConceptName).
-
-check_concept_name_conflict(FirstName, MetaConcept) :-
-	( FirstName == MetaConcept ->
-	  true
-	; format('WARNING: build_concept_name clash expecting ~p finding ~p.~n',
-		 [MetaConcept,FirstName])
-	; true
-	).
 
 extract_unique_sources([], SourcesIn, SourcesOut) :-
 	!,
@@ -458,11 +449,6 @@ SourceInfo should never be empty; but if it is, SourceName is set to
  % should never happen
 extract_source_name([], '<none>').
 extract_source_name([[_I,SourceName,_Source,_TTY]|_Rest], SourceName).
-
-extract_source_name_1([], '<none>').
-extract_source_name_1([[_I,SourceName,_Source,_TTY]|_Rest], SourceName).
-
-% temp, for debugging
 
 wgvcs([]).
 wgvcs([First|Rest]) :-

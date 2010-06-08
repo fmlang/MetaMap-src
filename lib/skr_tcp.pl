@@ -29,7 +29,7 @@
 ***************************************************************************/
 
 :- module(skr_tcp, [
-	establish_tcp_connection/4
+	establish_tcp_connection/5
     ]).
 
 :- use_module(library(sockets), [
@@ -40,19 +40,19 @@
 	% tcp_shutdown/1	
    ]).
 
-establish_tcp_connection(ServerName, ServerAddress, Port, Stream) :-
-	test_tcp_connect(ServerName, ServerAddress, Port, Stream).
+establish_tcp_connection(ServerName, ServerHost, ServerAddress, Port, Stream) :-
+	test_tcp_connect(ServerName, ServerHost, ServerAddress, Port, Stream).
 	% test_tcp_input_stream(Socket,  Port, ServerAddress, StreamIn),
 	% test_tcp_output_stream(Socket, Port, ServerAddress, StreamOut).
 
-test_tcp_connect(ServerName, ServerAddress, Port, Stream) :-
+test_tcp_connect(ServerName, ServerHost, ServerAddress, Port, Stream) :-
 	on_exception(ExceptionCode,
 		     socket_client_open(inet(ServerAddress,Port), Stream, [type(text)]),
 		     signal_tcp_error(socket_client_open,
-				      ServerName, ServerAddress, Port, ExceptionCode)).
+				      ServerName, ServerHost, Port, ExceptionCode)).
 
-signal_tcp_error(Predicate, ServerName, Address, Port, ExceptionCode) :-
+signal_tcp_error(Predicate, ServerName, Host, Port, ExceptionCode) :-
 	format(user_output,
 	       '~NERROR in calling ~w for ~w Server on host ~w and port ~w:~n~w~n',
-	       [Predicate, ServerName, Address, Port, ExceptionCode]),
+	       [Predicate, ServerName, Host, Port, ExceptionCode]),
 	fail.

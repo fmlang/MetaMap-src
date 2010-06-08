@@ -373,24 +373,19 @@ tokenize_strings([String|StringList], [Token|TokenList]) :-
 check_for_negation_phrase(Type, Target, WordList) :-
 	sublist(Target, WordList),
 	WordList = [H|T],
-	negation_phrase_tokens(H, Type, T).
+	negation_phrase_tokens(Type, H, T).
 
-negation_phrase_tokens(H, nega, T) :-
+negation_phrase_tokens(nega, H, T) :-
 	nega_phrase_tokens(H, T).
-
-negation_phrase_tokens(H, negb, T) :-
+negation_phrase_tokens(negb, H, T) :-
 	negb_phrase_tokens(H, T).
-
-negation_phrase_tokens(H, pnega, T) :-
+negation_phrase_tokens(pnega, H, T) :-
 	pnega_phrase_tokens(H, T).
-
-negation_phrase_tokens(H, pnegb, T) :-
+negation_phrase_tokens(pnegb, H, T) :-
 	pnegb_phrase_tokens(H, T).
-
-negation_phrase_tokens(H, pseudoneg, T) :-
+negation_phrase_tokens(pseudoneg, H, T) :-
 	pseudoneg_phrase_tokens(H, T).
-
-negation_phrase_tokens(H, conj, T) :-
+negation_phrase_tokens(conj, H, T) :-
 	conj_phrase_tokens(H, T).
 
 % Getting a list of negations using findall/3
@@ -759,8 +754,7 @@ remove_spurious_negterms([], _, _, _, []).
 remove_spurious_negterms([NegationTerm|NegationTermList],
 			 UtteranceMaxDist, ConceptMaxDist,
 			 TokenList, NegationTermsOut) :- 
-	( spurious_negterm(TokenList, UtteranceMaxDist, ConceptMaxDist, NegationTerm),
-	  
+	( spurious_negterm(TokenList, UtteranceMaxDist, ConceptMaxDist, NegationTerm) ->
 	  NegationTermsOut = RestNegationTermsOut
 	; NegationTermsOut = [NegationTerm|RestNegationTermsOut]
 	),

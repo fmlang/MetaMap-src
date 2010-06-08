@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -92,7 +91,7 @@
 	conditionally_print_header_info/4,
 	compare_utterance_lengths/2,
 	do_formal_tagger_output/0,
-	do_sanity_checking_and_housekeeping/5,
+	do_sanity_checking_and_housekeeping/4,
 	generate_bracketed_output/2,
 	generate_candidates_output/3,
 	generate_EOT_output/1,
@@ -273,10 +272,8 @@ skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions) :-
 	( InputStream = user_input,
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
-          process_all(ProgramName, FullYear,
-		      InputStream, OutputStream, OutputStream,
-		      TagOption, TaggerServerHosts,
-		      TaggerForced, TaggerServerPort,
+          process_all(ProgramName, FullYear, InputStream, OutputStream,
+		      TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      WSDServerHosts, WSDForced, WSDServerPort,
 		      InterpretedArgs, IOptions)
           % batch_skr is for batch processing
@@ -323,12 +320,9 @@ batch_skr(InterpretedArgs, ProgramName, FullYear,
 	get_from_iargs(outfile, name,   InterpretedArgs, OutputFile),
 	get_from_iargs(outfile, stream, InterpretedArgs, OutputStream),
 	conditionally_print_header_info(InputFile, TagMode, OutputFile, TagOption),
-	current_input(SavedCurrentInput),
 	set_input(InputStream),
-	current_output(SavedCurrentOutput),
 	set_output(OutputStream),
-	( process_all(ProgramName, FullYear,
-		      InputStream, OutputStream, SavedCurrentOutput,
+	( process_all(ProgramName, FullYear, InputStream, OutputStream,
 		      TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      WSDServerHosts, WSDForced, WSDServerPort,
 		      InterpretedArgs, IOptions) ->
@@ -336,8 +330,6 @@ batch_skr(InterpretedArgs, ProgramName, FullYear,
 	; true
 	),
 	!,
-	set_input(SavedCurrentInput),
-	set_output(SavedCurrentOutput),
 	conditionally_print_end_info.
 
 /* process_all(+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
@@ -349,13 +341,11 @@ processing (MetaMapping, MMI processing, Semantic interpretation).
 user_input and user_output may have been redirected to files.)
 If TagOption is 'tag', then tagging is done. */
 
-process_all(ProgramName, FullYear,
-	    InputStream, OutputStream, SavedCurrentOutput,
+process_all(ProgramName, FullYear, InputStream, OutputStream,
 	    TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	    WSDServerHosts, WSDForced, WSDServerPort,
 	    InterpretedArgs, IOptions) :-
-	do_sanity_checking_and_housekeeping(ProgramName, FullYear,
-					    InputStream, OutputStream, SavedCurrentOutput),
+	do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputStream),
 	process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      WSDServerHosts, WSDForced, WSDServerPort,
 		      InterpretedArgs, IOptions).

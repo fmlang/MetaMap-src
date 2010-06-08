@@ -61,10 +61,6 @@
 	db_get_mesh_tc_relaxed/2
     ]).
 
-:- use_module(skr_lib(semtype_translation09), [
-	expand_semtypes/2
-    ]).
-
 :- use_module(skr_lib(ctypes),[
 	is_alnum/1,
 	is_white/1

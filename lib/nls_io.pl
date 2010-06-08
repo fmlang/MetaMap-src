@@ -121,11 +121,11 @@ fget_lines_until_skr_break(Stream, Lines) :-
 % are included here as well.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%   fget_line(+Stream, ?Codes)
-%   reads a line from the given input Stream, and returns the characters in
-%   the list Codes.  It does NOT return the line terminating character, so it
-%   is useful for portable programming.  If the terminator was the end of the
-%   file, it simply fails and later calls will abort.
+% fget_line(+Stream, ?Codes)
+% reads a line from the given input Stream, and returns the characters in
+% the list Codes.  It does NOT return the line terminating character, so it
+% is useful for portable programming.  If the terminator was the end of the
+% file, it simply fails and later calls will abort.
 
 fget_line(Stream, Codes) :-
 	fget_line(Stream, Line, Terminator),
@@ -158,34 +158,3 @@ terminator_code(10).
 terminator_code(13).
 % eof in case user does not have a <CR> at the end of the file!!
 terminator_code(-1).
-
-%   get_line(?Codes)
-%   reads a line from the current input stream, and returns the characters in
-%   the list Chars.  It does NOT return the line terminating character, so it
-%   is useful for portable programming.  If the terminator was the end of the
-%   file, it simply fails and later calls will abort.
-
-get_line(Codes) :-
-        get_line_1(Line, Terminator),
-        Terminator >= 0,                % not end-of-file
-        Codes = Line.
-
-% get_line(?Codes, ?Terminator)
-% reads a line from the current input stream, and returns the characters in
-% the list Codes, and the line terminating character in Terminator.  If the
-% terminator was end of file, it just returns it like always.  When you use
-% this routine, the last line will often be ignored if not properly ended.
-
-get_line(Codes, Terminator) :-
-        get_line_1(Line, Terminator),
-        Codes = Line.
-
-get_line_1(Line, Terminator) :-         % 9 is the ASCII TAB character.
-        get_code(Code),                     % 5 is the EBCDIC TAB character.
-        (   Code < " ", Code =\= 9, Code =\= 5 ->
-            Line = [], Terminator = Code
-        ;   Line = [Code|Codes],
-            get_line_1(Codes, Terminator)
-        ).
-
-
