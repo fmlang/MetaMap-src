@@ -58,6 +58,7 @@ fget_non_ws_only_line(Stream, Line) :-
 	% At end of stream, peek_code returns -1
 	peek_code(Stream, Code),
 	Code =\= -1,
+	% \+ at_end_of_stream(Stream),
 	!,
 	fget_line(Stream, Line0),
 	( is_ws_only(Line0) ->

@@ -107,7 +107,6 @@ extern int DPR(int flag, char *msg);
  * remove all function prototypes for foreign functions.
 
  * long int c_lex_cit();
- * long int c_lex_root();
  * long int c_lex_form();
  * long int c_lex_cit_cats();
  * long int c_lex_root_cats();
@@ -142,8 +141,6 @@ typedef struct _lexHead {
 
 #define DT1576  1576          /* DT for c_lex_cit() */
 #define DF1577  1577          /* DF for c_lex_cit() */
-#define DT1578  1578          /* DT for c_lex_root() */
-#define DF1579  1579          /* DF for c_lex_root() */
 #define DT1580  1580          /* DT for c_lex_form() */
 #define DF1581  1581          /* DF for c_lex_form() */
 #define DT1582  1582          /* DT for c_lex_cit_cats() */
@@ -274,94 +271,6 @@ long int c_lex_cit(
   
 } /*** End c_lex_cit */
 /**/
-/*==========================================================
-%FUNCTION NAME
-%COMMAND NAME
-	c_lex_root
-%PURPOSE
-	gets the offsets of matching records 
-	with 'term' as base or spelling variant
-%USAGE
-%SYNTAX
-	?
-%EXAMPLE CALL
-	?ret_val = c_lex_root(arg);
-%RETURNS
-	?
-%SCOPE
-	?public | private | static
-%NEEDED INCLUDES
-	#include "?"
-%METHOD
-	?
-%FILES
-	?
-%TABLES
-	?
-%NOTES
-	?
-%BUGS
-	?
-%FLAGS  
-	TRACE DT1578
-	FULL  DF1579
-%HEADER END
-==========================================================*/
-long int c_lex_root(
-		    char const  *indexFile,
-		    char const  *term,
-		    long int    singleWordLexicon,  /* 0 if no, 1 if yes */
-		    long int    lowerFlag,
-		    long int    flushFlag,
-		    SP_term_ref pOfsList 
-		    )
-
-{
-  int i;
-  long int     returnFlag = 0;
-  SP_atom      pNil       = SP_atom_from_string("[]");
-  SP_term_ref  pOfs       = SP_new_term_ref();
-  lex_t        flag       = 0;
-  long int     ofs        = 0;
-  WordList    *wl         = NULL;
-  char        *inflected_term = NULL; 
-  
-
-  DFNAME("c_lex_root");
-  DENTER(DT1578);
-
-  flushFlag = 0;
-
-  wl = query_lex_info( term, CASE_INSENSITIVE, EXACT, indexFile ); 
-
-  SP_put_atom(pOfsList, pNil);
-
-  for (i=0; i<wl->n ; i++)
-    {
-      grab_lex_fields_from_btree_row ( WLWN(wl,i), &flag, &ofs, &inflected_term );
-      CHAR_FREE( inflected_term );
-      
-      if (( singleWordLexicon == 0 ) || 
-	  (( singleWordLexicon == 1 ) &&  (CONTAINS_ORPHAN_TOKEN( flag) )))
-	{
-	  if ((IS_LEX_BASE(flag) || IS_LEX_SV(flag)) ||
-	      (lowerFlag && (IS_LEX_BASELOWER(flag) || IS_LEX_SVLOWER(flag))))
-	    {
-	      pOfs = SP_new_term_ref();
-	      SP_put_integer(pOfs, (long int)ofs);
-	      SP_cons_list(pOfsList, pOfs, pOfsList);
-	      returnFlag = 1;
-	    }
-	}
-    }
-  
-  free_wl ( &wl );
-  
-  DEXIT(DT1578);
-  return(returnFlag);
-
-} /*** End c_lex_root */
-/**/	
 /*==========================================================
 %FUNCTION NAME
 %COMMAND NAME

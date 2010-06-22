@@ -106,7 +106,8 @@
 
 %%% Define the foreign interface
 foreign_resource(qp_lexicon, [
-	c_lex_cit, c_lex_root, c_lex_form,
+	% c_lex_cit, c_lex_root, c_lex_form,
+      	c_lex_cit, c_lex_form,
 	% c_lex_cit_cats, c_lex_root_cats,
 	c_lex_form_cats,
 	c_lex_is_a_root, c_lex_is_a_form,
@@ -118,8 +119,8 @@ foreign_resource(qp_lexicon, [
 foreign(c_lex_cit,            c,
 	c_lex_cit(+string, +string, +integer, +integer, +integer, -term, [-integer])).
 
-foreign(c_lex_root,           c,
-	c_lex_root(+string, +string, +integer, +integer, +integer, -term, [-integer])).
+% foreign(c_lex_root,           c,
+% 	c_lex_root(+string, +string, +integer, +integer, +integer, -term, [-integer])).
 
 foreign(c_lex_form,           c,
 	c_lex_form(+string, +string, +integer, +integer, +integer, -term, [-integer])).
@@ -258,13 +259,20 @@ lex_cats(form, Form, Cats, LowerFlag, Index) :-
 	c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1).
 	% format(user_output, '~q~n', [c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1)]).
 
+
 %%% generic variant retrieval predicate
 lex_vars(cit, Cit, Vars, LowerFlag, Lexicon, Index) :-
+	lex_vars_cit(Cit, Vars, LowerFlag, Lexicon, Index).
+lex_vars(form, Form, Vars, LowerFlag, Lexicon, Index) :-
+	lex_vars_form(Form, Vars, LowerFlag, Lexicon, Index).
+
+lex_vars_cit(Cit, Vars, LowerFlag, Lexicon, Index) :-
 	LexiconType = 0,
 	c_lex_cit(Index, Cit, LexiconType, LowerFlag, 0, OfsList, 1),
 	sort(OfsList, SortedOfsList),
 	lex_vars_aux(SortedOfsList, Vars, Lexicon).
-lex_vars(form, Form, Vars, LowerFlag, Lexicon, Index) :-
+
+lex_vars_form(Form, Vars, LowerFlag, Lexicon, Index) :-
 	LexiconType = 0,
 	c_lex_form(Index, Form, LexiconType, LowerFlag, 0, OfsList, 1),
 	sort(OfsList, SortedOfsList),

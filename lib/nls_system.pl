@@ -54,6 +54,8 @@
 	interpret_options/4,
 	% called by MetaMap API -- do not change signature!
 	parse_command_line/1,
+	% called by MetaMap API -- do not change signature!
+	parse_command_line/3,		      
 	pa/0,
 	pwd/0,
 	% called by MetaMap API -- do not change signature!
