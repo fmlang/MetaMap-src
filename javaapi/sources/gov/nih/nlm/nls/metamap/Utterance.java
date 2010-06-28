@@ -4,7 +4,22 @@ import java.util.List;
 
 /**
  * Representation of MetaMap Utterance elements.
- *
+ * <p>
+ *  <pre>
+ *  Utterance utterance: result.getUtteranceList().get(0);
+ *  for (PCM pcm: utterance.getPCMList()) {
+ *    String phraseText = pcm.getPhrase().getPhraseText()
+ *    for (Ev ev: pcm.getCandidateList()) {
+ *      int score = ev.getScore();
+ *      ...
+ *    }
+ *    for (gov.nih.nlm.nls.metamap.Map map: pcm.getMappings)) {
+ *      for (Ev mapEv: map.getEvList()) {
+ *        int score = ev.getScore();
+ *        ...
+ *      }
+ *    }
+ *  </pre>
  * <p>
  * Created: Mon May 11 15:17:56 2009
  *
@@ -22,10 +37,8 @@ public interface Utterance extends MetaMapElement {
   Position getPosition() throws Exception;
   /**
    * Return a list of <code>PCM</code> (Phrase/Candidate/Mapping)
-   * objects associated with the utterance.
-   * @return a list of <code>PCM</code> (Phrase/Candidate/Mapping) objects.
+   * container objects associated with the utterance.
+   * @return a list of <code>PCM</code> (Phrase/Candidate/Mapping) container objects.
    */
   List<PCM> getPCMList() throws Exception;
-  /** Get term position of the utterance in the MetaMap machine output.
-   * @return position of utterance term in machine output*/
 }

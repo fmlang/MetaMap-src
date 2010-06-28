@@ -10,7 +10,21 @@ package gov.nih.nlm.nls.metamap;
  * @version 1.0
  */
 public interface Phrase extends MetaMapElement {
+  /**
+   * Get original text of phrase.
+   * @return original text of phrase.
+   */
   String getPhraseText() throws Exception;
+  /** Get the result of the syntax analysis of the phrase by the
+   * minimal commitment parser.
+   * See  <a href="http://skr.nlm.nih.gov/papers/references/metamap.tech.pdf">
+   * MetaMap Technical Notes, Preliminary processing 
+   * (http://skr.nlm.nih.gov/papers/references/metamap.tech.pdf, pp 3-4)</a>
+   * for more information 
+   * @return Syntax analysis output of the minimal commitment parser. */
   String getMincoManAsString();
+  /** Get position of phrase in the input text. 
+   * @return position object containing position of phrase in the input text. 
+   */
   Position getPosition() throws Exception;
 }

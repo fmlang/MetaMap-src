@@ -13,25 +13,32 @@ import se.sics.prologbeans.*;
  */
 public class PositionImpl implements Position {
 
-  int x;
-  int y;
+  long x;
+  long y;
 
   /**
    * Creates a new <code>Position</code> instance.
    * @param x x coord
    * @param y y coord
    */
-  public PositionImpl(int x, int y) { this.x = x; this.y = y; }
+  public PositionImpl(int x, int y) { this.x = (long)x; this.y = (long)y; }
 
-  public PositionImpl(Term posTerm) {
+  /**
+   * Creates a new <code>Position</code> instance.
+   * @param x x coord
+   * @param y y coord
+   */
+  public PositionImpl(long x, long y) { this.x = x; this.y = y; }
+
+  public PositionImpl(PBTerm posTerm) {
     this.x = posTerm.getArgument(1).intValue();
     this.y = posTerm.getArgument(2).intValue();
   }
 
   /** @return x coord */
-  public int getX() { return this.x; }
+  public int getX() { return (int)this.x; }
   /** @return y coord */
-  public int getY() { return this.y; }
+  public int getY() { return (int)this.y; }
   /** @return string representing object */
   public String toString() { return "(" + x + ", " + y + ")"; }
 }

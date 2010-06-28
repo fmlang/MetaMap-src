@@ -1,6 +1,5 @@
 package gov.nih.nlm.nls.metamap;
 
-import java.io.*;
 import se.sics.prologbeans.*;
 
 public class AutoGen {
@@ -14,8 +13,8 @@ public class AutoGen {
    * @param aString a file of documents
    * @return a result instance
    */
-  public Term processString(String aString) {
-    Term result = null;
+  public PBTerm processString(String aString) {
+    PBTerm result = null;
     try {
       System.out.println("aString: " + aString);
       Bindings bindings = new Bindings().bind("E", aString);
@@ -35,9 +34,9 @@ public class AutoGen {
     return result;
   }
 
-  public void inspect(Term aTerm, int level) {
-    if (aTerm.isList()) {
-      this.traverselist((PBList)aTerm, level+1);
+  public void inspect(PBTerm aTerm, int level) {
+    if (aTerm.isListCell()) {
+      this.traverselist(aTerm, level+1);
     } else if (aTerm.isString()) {
       System.out.print( aTerm.getName());
     } else if (aTerm.isAtom()) {
@@ -47,7 +46,7 @@ public class AutoGen {
     } else if (aTerm.isCompound()) {
       System.out.print( aTerm.getName() + "(");
       for (int i = 1; i < aTerm.getArity(); i++) {
-	Term subTerm = aTerm.getArgument(i);
+	PBTerm subTerm = aTerm.getArgument(i);
 	this.inspect(subTerm, level+1);
 	if (i < aTerm.getArity()) System.out.print( "," ) ;
       }
@@ -55,13 +54,13 @@ public class AutoGen {
     }
   }
 
-  public void traverselist(PBList pbList, int level)
+  public void traverselist(PBTerm pbList, int level)
   {
     System.out.print( "[");
-    for (int i = 1; i< pbList.getLength(); i++) {
-      Term aTerm = pbList.getTermAt(i);
+    for (int i = 1; i< pbList.length(); i++) {
+      PBTerm aTerm = TermUtils.getListElement(pbList, i);
       this.inspect(aTerm, level+1);
-      if (i < pbList.getLength()) System.out.print( "," ) ;
+      if (i < pbList.length()) System.out.print( "," ) ;
     }
     System.out.print("]");
   }
@@ -79,7 +78,7 @@ public class AutoGen {
     for (String arg: args) {
       sb.append(arg).append(" ");
     }
-    Term mmoTerm = frontEnd.processString(sb.toString());
+    PBTerm mmoTerm = frontEnd.processString(sb.toString());
     System.out.println("mmoTerm: " + mmoTerm);
     frontEnd.inspect(mmoTerm, 0);
   }
