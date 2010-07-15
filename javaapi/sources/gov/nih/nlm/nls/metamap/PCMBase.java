@@ -14,17 +14,17 @@ import se.sics.prologbeans.*;
  * @version 1.0
  */
 public class PCMBase implements PCM {
-  Term phraseTerm;
-  Term candidatesTerm;
-  Term mappingsTerm;
+  PBTerm phraseTerm;
+  PBTerm candidatesTerm;
+  PBTerm mappingsTerm;
 
   /**
    * Creates a new <code>PCMBase</code> instance.
    *
    */
-  public PCMBase(Term aPhraseTerm,
-		 Term aCandidatesTerm,
-		 Term aMappingsTerm) {
+  public PCMBase(PBTerm aPhraseTerm,
+		 PBTerm aCandidatesTerm,
+		 PBTerm aMappingsTerm) {
     this.phraseTerm      = aPhraseTerm;
     this.candidatesTerm  = aCandidatesTerm;
     this.mappingsTerm    = aMappingsTerm;
@@ -48,9 +48,23 @@ public class PCMBase implements PCM {
    */
   public final List<Ev> getCandidates() throws Exception  {
     List<Ev> evList = new ArrayList<Ev>();
-    PBList prologList = (PBList)this.candidatesTerm.getArgument(1);
-    for (int i = 1; i <= prologList.getLength(); i++) {
-      evList.add(new EvImpl(prologList.getTermAt(i)));
+    PBTerm prologList = this.candidatesTerm.getArgument(1);
+    for (int i = 1; i <= prologList.length(); i++) {
+      evList.add(new EvImpl(TermUtils.getListElement(prologList, i)));
+    }
+    return evList;
+  }
+
+  /**
+   * Describe <code>getCandidateList</code> method here.
+   *
+   * @return a <code>List</code> value
+   */
+  public final List<Ev> getCandidateList() throws Exception  {
+    List<Ev> evList = new ArrayList<Ev>();
+    PBTerm prologList = this.candidatesTerm.getArgument(1);
+    for (int i = 1; i <= prologList.length(); i++) {
+      evList.add(new EvImpl(TermUtils.getListElement(prologList,i)));
     }
     return evList;
   }
@@ -63,23 +77,121 @@ public class PCMBase implements PCM {
    */
   public final List<Map> getMappings() throws Exception {
     List<Map> mapList = new ArrayList<Map>();
-    PBList prologList = (PBList)this.mappingsTerm.getArgument(1);
-    for (int i = 1; i <= prologList.getLength(); i++) {
-      mapList.add(new MapImpl(prologList.getTermAt(i)));
+    PBTerm prologList = this.mappingsTerm.getArgument(1);
+    for (int i = 1; i <= prologList.length(); i++) {
+      mapList.add(new MappingImpl(TermUtils.getListElement(prologList,i)));
     }
     return mapList;
   }
 
+  /**
+   * Describe <code>getMappingList</code> method here.
+   *
+   * @return a <code>List</code> value
+   * @exception Exception if an error occurs
+   */
+  public final List<Mapping> getMappingList() throws Exception {
+    List<Mapping> mapList = new ArrayList<Mapping>();
+    PBTerm prologList = this.mappingsTerm.getArgument(1);
+    for (int i = 1; i <= prologList.length(); i++) {
+      mapList.add(new MappingImpl(TermUtils.getListElement(prologList,i)));
+    }
+    return mapList;
+  }
+
+  class MatchMapImpl implements MatchMap {
+    // The match map is represented in prolog result as a set of nested lists:
+    // organization:
+    //      [[[phrase-match-start, phrase-match-end],[concept-match-start,concept-match-end], lexical-variation]]
+    //  Example 1.: This mapping shows word 1 of the phrase maps to word 1 of the concept with 0 lexical variation
+    //
+    // [[[1,1],[1,1],0]]
+    //    ^^^ Match up of words in TEXT
+    //           ^^^ Match up of words in STRING
+    //                 ^ Variation
+    //
+    //
+    // Example 2.: This shows word 2 of the phrase maps to word 1 of the concept with 0 lexical variation and word 3
+    //              of the text maps to word 2 of the concept with 0 lexical variation.
+    //
+    // [[2,2],[1,1],0],[[3,3],[2,2],0]
+
+    // this class is actually the sublist of the match map of the form [[pms,pme],[cms,cme],lv]
+
+    public PBTerm prologList;
+    
+    public MatchMapImpl(PBTerm prologList) {
+      this.prologList = prologList;
+    }
+
+    /** The position within the phrase words of the first matching word
+     * @return word position */
+    public int getPhraseMatchStart() {
+      PBTerm matchPBList = TermUtils.getListElement(prologList, 1);
+      return (int)TermUtils.getListElement(matchPBList, 1).intValue();
+    }
+    /** The position within the phrase words of the last matching word
+     * @return word position */
+    public int getPhraseMatchEnd() {
+      PBTerm matchPBList = TermUtils.getListElement(prologList, 1);
+      return (int)TermUtils.getListElement(matchPBList, 2).intValue();
+    }
+    /** The position within the concept words of the first matching word
+     * @return word position */
+    public int getConceptMatchStart() {
+      PBTerm matchPBList = TermUtils.getListElement(prologList, 2);
+      return (int)TermUtils.getListElement(matchPBList, 1).intValue();
+    }
+    /** The position within the concept words of the last matching word
+     * @return word position
+     */
+    public int getConceptMatchEnd() {
+      PBTerm matchPBList = TermUtils.getListElement(prologList, 2);
+      return (int)TermUtils.getListElement(matchPBList, 2).intValue();
+    }
+    /** The degree of lexical variation between the words in the
+     * candidate concept and the words in the phrase; the computation
+     * of this value is explained on pp. 2-3 of MetaMap Evaluation.
+     * @return lexical variation of match
+     */
+    public int getLexMatchVariation() {
+      if (this.prologList.length() > 2) {
+	if (TermUtils.getListElement(prologList, 3).isInteger())
+	  return (int)TermUtils.getListElement(prologList, 3).intValue();
+	else 
+	  return 0;
+      } else {
+	return 0;
+      }
+    }
+
+    /** 
+     * This returns a list of representation of match map.
+     * @return List of Objects.
+     */
+    public List<Object> getListRepr() throws Exception {
+      return TermUtils.getMatchMapTree(this.prologList);
+    }
+
+    public String toString() {
+      return "[[phrase start: " + this.getPhraseMatchStart() +
+	", phrase end: " + this.getPhraseMatchEnd() +
+	"], [concept start: " + this.getPhraseMatchStart() +
+	", concept end: " + this.getPhraseMatchEnd() +
+	"], lexical variation: " + this.getLexMatchVariation() + "]";
+    }
+  }
+
   class EvImpl implements Ev {
-    Term evTerm;
-    public EvImpl(Term newEvTerm) throws Exception {
+    PBTerm evTerm;
+    public EvImpl(PBTerm newEvTerm) throws Exception {
       if (newEvTerm.isCompound())
 	this.evTerm = newEvTerm;
       else
 	throw new Exception("supplied term is not a compound term.");
     }
     public int getScore() throws Exception { 
-      return TermUtils.getIntegerArgument(this.evTerm, 1);
+      return (int)TermUtils.getIntegerArgument(this.evTerm, 1);
     }
     public String getConceptId() throws Exception {
       return TermUtils.getAtomArgument(this.evTerm, 2);
@@ -96,6 +208,32 @@ public class PCMBase implements PCM {
     public List<String> getSemanticTypes() throws Exception  {
       return TermUtils.getAtomStringListArgument(this.evTerm, 6);
     }
+
+  /** 
+   * This returns a recursive list of objects where the elements can
+   * be Integer classes or List classes containing Lists or Integers.
+   * @return List of Objects.
+   */
+    public List<Object> getMatchMap() throws Exception {
+      PBTerm prologList = this.evTerm.getArgument(7);
+      return TermUtils.getMatchMapTree(prologList);
+    }
+
+    /** 
+     * This returns a list of MatchMap objects
+     * @return List of MatchMap.
+     */
+    public List<MatchMap> getMatchMapList() throws Exception {
+      PBTerm prologList = this.evTerm.getArgument(7);
+      List<MatchMap> matchMapList = new ArrayList<MatchMap>();
+      for (int i = 1; i <= prologList.length(); i++) {
+	if (TermUtils.getListElement(prologList,i).isListCell()) {
+	  matchMapList.add(new MatchMapImpl(TermUtils.getListElement(prologList,i)));
+	}
+      }
+      return matchMapList;
+    }
+
     public boolean isHead() throws Exception  { 
       return TermUtils.getAtomArgument(this.evTerm, 8).equals("yes");
     }
@@ -108,26 +246,47 @@ public class PCMBase implements PCM {
     public List<Position> getPositionalInfo() throws Exception  { 
       return TermUtils.getPositionListArgument(this.evTerm, 11);
     }
+    /** get underlying Prolog Term */
+    public PBTerm getTerm() {
+      return this.evTerm;
+    }
+    public String toString() {
+      try {
+      return this.getScore() + ","
+	+ this.getConceptId() + ","
+	+ this.getConceptName() + ","
+	+ this.getPreferredName() + ","
+	+ this.getMatchedWords() + ","
+	+ this.getSemanticTypes() 
+	// + this.getMatchMap() + ","
+	+ ", isHead: " + this.isHead()
+	+ ", isOverMatch: " + this.isOvermatch()
+	+ "," + this.getSources()
+	+ "," + this.getPositionalInfo() + ".";
+      } catch (Exception e) {
+	throw new RuntimeException(e);
+      }
+    }
   }
 
-  class MapImpl implements Map {
-    Term mapTerm;
-    public MapImpl(Term newMapTerm) throws Exception {
+  class MappingImpl implements Map, Mapping {
+    PBTerm mapTerm;
+    public MappingImpl(PBTerm newMapTerm) throws Exception {
       if (newMapTerm.isCompound())
 	this.mapTerm = newMapTerm;
       else
 	throw new Exception("supplied term is not a compound term.");
     }
     public int getScore() throws Exception { 
-      return TermUtils.getIntegerArgument(this.mapTerm, 1);
+      return (int)TermUtils.getIntegerArgument(this.mapTerm, 1);
     }
     public List<Ev> getEvList() 
       throws Exception 
     {
       List<Ev> evList = new ArrayList<Ev>();
-      PBList prologList = (PBList)this.mapTerm.getArgument(2);
-      for (int i = 1; i <= prologList.getLength(); i++) {
-	evList.add(new EvImpl(prologList.getTermAt(i)));
+      PBTerm prologList = this.mapTerm.getArgument(2);
+      for (int i = 1; i <= prologList.length(); i++) {
+	evList.add(new EvImpl(TermUtils.getListElement(prologList, i)));
       }
       return evList;
     }

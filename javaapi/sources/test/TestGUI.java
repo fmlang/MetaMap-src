@@ -5,6 +5,8 @@ import java.awt.event.*;
 import javax.swing.*;
 import se.sics.prologbeans.*;
 
+/** A prologbeans test program */
+
 public class TestGUI implements ActionListener {
 
   private JTextArea text = new JTextArea(20, 40);
@@ -37,7 +39,7 @@ public class TestGUI implements ActionListener {
       
       QueryAnswer answer =
         session.executeQuery("process_string(E,Output)", bindings);
-      Term result = answer.getValue("Output");
+      PBTerm result = answer.getValue("Output");
       if (result != null) {
         text.append(input.getText() + " = " + result + '\n');
         input.setText("");

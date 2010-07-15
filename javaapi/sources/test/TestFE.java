@@ -1,12 +1,14 @@
 package test;
 
-import se.sics.prologbeans.*;
+import gov.nih.nlm.nls.metamap.*;
 import java.io.*;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
- * Describe class TestFE here.
- *
- *
+ * An example of using the api to read an input file and then writing
+ * the result to an output file.
+ * <p>
  * Created: Tue May 19 09:42:22 2009
  *
  * @author <a href="mailto:wrogers@nlm.nih.gov">Willie Rogers</a>
@@ -14,40 +16,30 @@ import java.io.*;
  */
 public class TestFE {
 
-  private PrologSession session = new PrologSession();
 
   /**
    * Creates a new <code>TestFE</code> instance.
    *
    */
   public TestFE() {
-    session.setTimeout(320000);
+
   }
   
-  void process(String inputFilename, String outputFilename)
+  void process(String inputFilename, String outputFilename /*, List theOptions*/)
   {
+    List<String> theOptions = new ArrayList<String>();
     try {
-      StringBuffer sb = new StringBuffer();
-      BufferedReader br = new BufferedReader(new FileReader(inputFilename));
-      String line;
-      while ((line = br.readLine()) != null) {
-	sb.append(line).append("\n");
-      }
-      br.close();
-      String input = sb.toString();
-      System.out.println("input: " + input);
-      Bindings bindings = new Bindings().bind("Input",
-					      "\"" + input + "\".");
-      QueryAnswer answer =
-        session.executeQuery("process_string(Input,Output)", bindings);
-      Term result = answer.getValue("Output");
-      if (result != null) {
-        System.out.println(input + " = " + result + '\n');
-	PrintWriter pw = new PrintWriter(outputFilename);
-	pw.println(input + " = " + result + '\n');
-	pw.close();
-      } else {
-	System.out.println("Error: " + answer.getError() + "\n");
+      MetaMapApi api = new MetaMapApiImpl();
+      api.setTimeout(0);
+      String options = api.getOptions();
+      System.out.println("Options: " + options);
+      List<Result> resultList = api.processCitationsFromFile(inputFilename);
+      for (Result result: resultList) {
+	if (result != null) {
+	  PrintWriter pw = new PrintWriter(outputFilename);
+	  pw.println("result: " + result.getMachineOutput());
+	  pw.close();
+	}
       }
     } catch (Exception e) {
       System.out.println("Error when querying Prolog Server: " +

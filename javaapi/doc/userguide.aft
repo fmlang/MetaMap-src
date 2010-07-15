@@ -10,11 +10,11 @@ the text to the best matching UMLS concept or set of concepts that
 best cover each phrase.  The MetaMap Java API provides java programs
 with programmatic access to MetaMap mapping engine.
 
-* MetaMap API's underlying Architecture
+* MetaMap API's Underlying Architecture
 
-MetaMap mapping engine is written primarily in Quintus Prolog, to
-facilitate its use by Java programs system uses PrologBeans to provide a
-loose coupling between the Java API and the mapping engine. 
+MetaMap mapping engine is written primarily in Quintus Prolog; to
+facilitate its use by Java programs, the system uses PrologBeans to
+provide a loose coupling between the Java API and the mapping engine.
 See the Quintus Prolog PrologBeans documentation for more information
 (http://www.sics.se/isl/quintus/html/quintus/pbn.html).
 
@@ -27,11 +27,11 @@ has not been tested with Java 1.5)
 
 * Downloading, Extracting and Installing the API distribution
 
-In the directory where you install the Public Metamap (the directory
+In the directory where you installed the Public Metamap (the directory
 containing the public__mm directory) extract the javaapi archive:
 
 ^<<
-$ bzip2 -dc /nfsvol/nlsaux15/public_mm_dist/workingdir/public_mm_linux_javaapi_2009.tar.bz2 | tar xvf -
+$ bzip2 -dc /home/piro/public_mm_linux_javaapi_2009.tar.bz2 | tar xvf -
 ^>>
 
 If you plan on modifying the sources to the prolog-based MetaMap
@@ -41,7 +41,7 @@ archive
 well:
 
 ^<<
-$ bzip2 -dc /nfsvol/nlsaux15/public_mm_dist/workingdir/public_mm_src_2009.tar.bz2 | tar xvf -
+$ bzip2 -dc /home/piro/public_mm_src_2009.tar.bz2 | tar xvf -
 ^>>
 
 You will need to re-run ./bin/install.sh from the public__mm directory
@@ -51,7 +51,9 @@ to setup the files for javaapi.
 $ ./bin/install.sh
 ^>>
 
-* Running the metamap server
+* Using the metamap server
+
+** Starting supporting servers
 
 The metamap server (mmserver) must first be running to use the Java
 API.  If the SKR/Medpost Tagger is not already running start it using
@@ -68,20 +70,19 @@ start it also.
 $ ./bin/wsdserverctl start
 ^>>
 
+** Running the metamap server
+
 Then start the metamap server:
 
 ^<<
-$ ./bin/mmserver
-
-MetaMap (2008)
-
-
-Control options:
-  machine_output
-Berkeley DB databases (normal strict 09 model) are open.
-Static variants will come from table varsan in /nfsvol/nls3aux18/DB//DB.normal.09.strict.
+$ ./bin/mmserver09
+/home/piro/public_mm/bin/SKRrun -L 2009 -M /DATA/XDR -B /BDB4 \
+     -w /home/piro/public_mm/lexicon /home/piro/public_mm/bin/mmserver09.BINARY.Linux -Z 09
+Server options: [port(8888),accepted_hosts(['127.0.0.1','130.14.111.76','130.14.110.82'])]
+Berkeley DB databases (normal 09 strict model) are open.
+Static variants will come from table varsan in /home/piro/public_mm/DB/BDB4/DB.normal.09.strict.
 Derivational Variants: Adj/noun ONLY.
-Accessing lexicon /nfsvol/nls/specialist/SKR/src/lexicon//data/lexiconStatic2009.
+Accessing lexicon /home/piro/public_mm/lexicon/data/BDB4/lexiconStatic2009.
 Variant generation mode: static.
 ^>>
 
@@ -91,21 +92,18 @@ Using another terminal, you can verify that api is running using the
 program |testapi.sh| which takes a query as an argument:
 
 ^<<
-$ ./bin/testapi.sh laboratory culture
-aString: laboratory culture 
-bindings: [E="laboratory culture "]
-answer: [args(MetaMap ,[-(infile,user_input),-(outfile,user_output)]),aas([]),neg_list([]),utterance(00000000.tx.1,laboratory culture ,/(0,19),[]),phrase(laboratory culture,[head([lexmatch([laboratory culture]),inputmatch([laboratory,culture]),tag(noun),tokens([laboratory,culture])])],/(0,18),[]),candidates([ev(-1000,C0430400,Laboratory culture,Laboratory culture,[laboratory,culture],[lbpr],[[^A^B,^A^B,0]],yes,no,[MTH,LNC,MDR,NCI,RCD,MEDCIN,CCPSS,SNOMEDCT],[/(0,18)]),ev(-861,C0010453,Culture,Anthropological Culture,[culture],[idcn],[[^B^B,^A^A,0]],yes,no,[MTH,PSY,ICNP,LCH,MSH,NCI,CSP],[/(11,7)]),ev(-861,C0022877,Laboratory,Laboratory,[laboratory],[mnob,orgt],[[^A^A,^A^A,0]],yes,no,[LNC,MSH,MTH,NCI,RCD,SNOMEDCT,OMIM,LCH,ALT],[/(0,10)]),ev(-861,C0220814,culture,Cultural aspects,[culture],[ftcn],[[^B^B,^A^A,0]],yes,no,[MTH,MSH],[/(11,7)]),ev(-861,C0430400,Culture,Laboratory culture,[culture],[lbpr],[[^B^B,^A^A,0]],yes,no,[MTH,LNC,MDR,NCI,RCD,MEDCIN,CCPSS,SNOMEDCT],[/(11,7)]),ev(-861,C1706355,CULTURE,Culture Dose Form,[culture],[bodm],[[^B^B,^A^A,0]],yes,no,[MTH,NCI],[/(11,7)]),ev(-861,C2242979,Culture,Microbial culture (procedure),[culture],[lbpr],[[^B^B,^A^A,0]],yes,no,[MTH,SNOMEDCT,SNM,SNMI],[/(11,7)]),ev(-827,C1619828,Laboratories,Laboratories - NUCCProvider Codes,[laboratories],[inpr],[[^A^A,^A^A|^A]],yes,no,[MTH,HL7V3.0],[/(0,10)])]),mappings([map(-1000,[ev(-1000,C0430400,Laboratory culture,Laboratory culture,[laboratory,culture],[lbpr],[[^A^B,^A^B,0]],yes,no,[MTH,LNC,MDR,NCI,RCD,MEDCIN,CCPSS,SNOMEDCT],[/(0,18)])])])]
-Acronyms and Abbreviations:
- None.
-Negations:
- None.
+$ ./testapi.sh laboratory culture
+options: []
+terms: laboratory culture 
+input text: 
+ laboratory culture 
 Utterance:
  Id: 00000000.tx.1
  Utterance text: laboratory culture 
  Position: (0, 19)
- Position in Machine Output: 4
 Phrase:
  text: laboratory culture
+ Minimal Commitment Parse: [head([lexmatch([laboratory culture]),inputmatch([laboratory,culture]),tag(noun),tokens([laboratory,culture])])]
 Candidates:
  Candidate:
   Score: -1000
@@ -114,6 +112,8 @@ Candidates:
   Preferred Name: Laboratory culture
   Matched Words: [laboratory, culture]
   Semantic Types: [lbpr]
+  MatchMap: [[[1, 2], [1, 2], 0]]
+  MatchMap alt. repr.: [[[phrase start: 1, phrase end: 2], [concept start: 1, concept end: 2], lexical variation: 0]]
   is Head?: true
   is Overmatch?: false
   Sources: [MTH, LNC, MDR, NCI, RCD, MEDCIN, CCPSS, SNOMEDCT]
@@ -125,6 +125,8 @@ Candidates:
   Preferred Name: Anthropological Culture
   Matched Words: [culture]
   Semantic Types: [idcn]
+  MatchMap: [[[2, 2], [1, 1], 0]]
+  MatchMap alt. repr.: [[[phrase start: 2, phrase end: 2], [concept start: 2, concept end: 2], lexical variation: 0]]
   is Head?: true
   is Overmatch?: false
   Sources: [MTH, PSY, ICNP, LCH, MSH, NCI, CSP]
@@ -136,6 +138,8 @@ Candidates:
   Preferred Name: Laboratory
   Matched Words: [laboratory]
   Semantic Types: [mnob, orgt]
+  MatchMap: [[[1, 1], [1, 1], 0]]
+  MatchMap alt. repr.: [[[phrase start: 1, phrase end: 1], [concept start: 1, concept end: 1], lexical variation: 0]]
   is Head?: true
   is Overmatch?: false
   Sources: [LNC, MSH, MTH, NCI, RCD, SNOMEDCT, OMIM, LCH, ALT]
@@ -147,6 +151,8 @@ Candidates:
   Preferred Name: Cultural aspects
   Matched Words: [culture]
   Semantic Types: [ftcn]
+  MatchMap: [[[2, 2], [1, 1], 0]]
+  MatchMap alt. repr.: [[[phrase start: 2, phrase end: 2], [concept start: 2, concept end: 2], lexical variation: 0]]
   is Head?: true
   is Overmatch?: false
   Sources: [MTH, MSH]
@@ -158,6 +164,8 @@ Candidates:
   Preferred Name: Laboratory culture
   Matched Words: [culture]
   Semantic Types: [lbpr]
+  MatchMap: [[[2, 2], [1, 1], 0]]
+  MatchMap alt. repr.: [[[phrase start: 2, phrase end: 2], [concept start: 2, concept end: 2], lexical variation: 0]]
   is Head?: true
   is Overmatch?: false
   Sources: [MTH, LNC, MDR, NCI, RCD, MEDCIN, CCPSS, SNOMEDCT]
@@ -169,6 +177,8 @@ Candidates:
   Preferred Name: Culture Dose Form
   Matched Words: [culture]
   Semantic Types: [bodm]
+  MatchMap: [[[2, 2], [1, 1], 0]]
+  MatchMap alt. repr.: [[[phrase start: 2, phrase end: 2], [concept start: 2, concept end: 2], lexical variation: 0]]
   is Head?: true
   is Overmatch?: false
   Sources: [MTH, NCI]
@@ -177,9 +187,11 @@ Candidates:
   Score: -861
   Concept Id: C2242979
   Concept Name: Culture
-  Preferred Name: Microbial culture (procedure)
+  Preferred Name: Culture
   Matched Words: [culture]
   Semantic Types: [lbpr]
+  MatchMap: [[[2, 2], [1, 1], 0]]
+  MatchMap alt. repr.: [[[phrase start: 2, phrase end: 2], [concept start: 2, concept end: 2], lexical variation: 0]]
   is Head?: true
   is Overmatch?: false
   Sources: [MTH, SNOMEDCT, SNM, SNMI]
@@ -188,9 +200,11 @@ Candidates:
   Score: -827
   Concept Id: C1619828
   Concept Name: Laboratories
-  Preferred Name: Laboratories - NUCCProvider Codes
+  Preferred Name: Laboratories
   Matched Words: [laboratories]
   Semantic Types: [inpr]
+  MatchMap: [[[1, 1], [1, 1]]]
+  MatchMap alt. repr.: [[[phrase start: 1, phrase end: 1], [concept start: 1, concept end: 1], lexical variation: 0]]
   is Head?: true
   is Overmatch?: false
   Sources: [MTH, HL7V3.0]
@@ -203,11 +217,13 @@ Mappings:
    Preferred Name: Laboratory culture
    Matched Words: [laboratory, culture]
    Semantic Types: [lbpr]
+   MatchMap: [[[1, 2], [1, 2], 0]]
+   MatchMap alt. repr.: [[[phrase start: 1, phrase end: 2], [concept start: 1, concept end: 2], lexical variation: 0]]
    is Head?: true
    is Overmatch?: false
    Sources: [MTH, LNC, MDR, NCI, RCD, MEDCIN, CCPSS, SNOMEDCT]
    Positional Info: [(0, 18)]
-$ 
+$
 ^>>
 
 The source to java class used |testapi.sh| is in
@@ -217,19 +233,73 @@ The source to java class used |testapi.sh| is in
 
 ** Instantiating the API
 
-The following sections expose the source code used to produce the example output shown in previous section
+The following sections expose the source code used to produce the
+example output shown in previous section
 
 ^<<
 MetaMapApi api = new MetaMapApiImpl();
-^>>	
+^>>
+
+If one is running the MetaMap server (mmserver) of a machine other
+than the one the Java api client is running, one can specify the
+hostname of the MetaMap server when instantiating the api:
+
+If the MetaMap server is running on the host: "resource.example.org"
+then the instantiation would be as follows:
+
+^<<
+MetaMapApi api = new MetaMapApiImpl("resource.example.org");
+^>>
+
+** Setting MetaMap options
+
+^<<
+    List<String> theOptions = new ArrayList<String>();
+    theOptions.append("-y");  // turn on Word Sense Disambiguation
+    if (theOptions.size() > 0) {
+      api.setOptions(theOptions);
+    }
+^>>
+
+
+Metamap options available in the api: 
+
+^<<
+   -@ --WSD <hostname>                   : Which WSD server to use.
+   -8 --dynamic_variant_generation       : dynamic variant generation
+   -A --strict_model                     : use strict model 
+   -C --relaxed_model                    : use relaxed model 
+   -D --all_derivational_variants        : all derivational variants
+   -J --restrict_to_sts <semtypelist>    : restrict to semantic types
+   -K --ignore_stop_phrases              : ignore stop phrases.
+   -R --restrict_to_sources <sourcelist> : restrict to sources
+   -S --tagger <sourcelist>              : Which tagger to use.
+   -V --mm_data_version <name>           : version of MetaMap data to use.
+   -X --truncate_candidates_mappings     : truncate candidates mapping
+   -Y --prefer_multiple_concepts         : prefer multiple concepts
+   -Z --mm_data_year <name>              : year of MetaMap data to use.
+   -a --all_acros_abbrs                  : allow Acronym/Abbreviation variants
+   -b --compute_all_mappings             : compute/display all mappings
+   -d --no_derivational_variants         : no derivational variants
+   -e --exclude_sources <sourcelist>     : exclude semantic types
+   -g --allow_concept_gaps               : allow concept gaps
+   -i --ignore_word_order                : ignore word order
+   -k --exclude_sts <semtypelist>        : exclude semantic types
+   -l --allow_large_n                    : allow Large N
+   -o --allow_overmatches                : allow overmatches 
+   -r --threshold <integer>              : Threshold for displaying candidates. 
+   -y --word_sense_disambiguation        : use WSD 
+   -z --term_processing                  : use term processing 
+^>>
+
 
 ** Performing a query using the api
 
 ^<<
-Result result = api.processString(terms);
+List<Result> resultList = api.processCitationsFromString(terms);
 ^>>
 
-** Interrogating to result
+** Interrogating the result
 
 *** Getting Acronyms and Abbreviations
 
@@ -237,9 +307,10 @@ To get a list of all the acronyms and abbreviations occurring in the
 input text use the instance method |Result.getAcronymsAbbrevs|:
 
 ^<<
+Result result = resultList.get(0);
 List<AcronymsAbbrevs> aaList = result.getAcronymsAbbrevs();
-System.out.println("Acronyms and Abbreviations:");
 if (aaList.size() > 0) {
+  System.out.println("Acronyms and Abbreviations:");
   for (AcronymsAbbrevs e: aaList) {
     System.out.println("Acronym: " + e.getAcronym());
     System.out.println("Expansion: " + e.getExpansion());
@@ -257,9 +328,9 @@ To get a list of all the negated concepts in the input text use the
 instance method |Result.getNegations|:
 
 ^<<
-System.out.println("Negations:");
 List<Negation> negList = result.getNegations();
 if (negList.size() > 0) {
+  System.out.println("Negations:");
   for (Negation e: negList) {
     System.out.println("type: " + e.getType());
     System.out.print("Trigger: " + e.getTrigger() + ": [");
@@ -312,44 +383,48 @@ to get the phrase instance residing within the PCM instance:
 	  System.out.println(" text: " + pcm.getPhrase().getPhraseText());
 ^>>
 
-Similarly, get the candidate list using |PCM.getCandidates()|:
+Similarly, get the candidate list using |PCM.getCandidateList()|:
 
 ^<<
-	  System.out.println("Candidates:");
-	  for (Ev ev: pcm.getCandidates()) {
-	    System.out.println(" Candidate:");
-	    System.out.println("  Score: " + ev.getScore());
-	    System.out.println("  Concept Id: " + ev.getConceptId());
-	    System.out.println("  Concept Name: " + ev.getConceptName());
-	    System.out.println("  Preferred Name: " + ev.getPreferredName());
-	    System.out.println("  Matched Words: " + ev.getMatchedWords());
-	    System.out.println("  Semantic Types: " + ev.getSemanticTypes());
-	    System.out.println("  is Head?: " + ev.isHead());
-	    System.out.println("  is Overmatch?: " + ev.isOvermatch());
-	    System.out.println("  Sources: " + ev.getSources());
-	    System.out.println("  Positional Info: " + ev.getPositionalInfo());
-	  }
+          System.out.println("Candidates:");
+          for (Ev ev: pcm.getCandidateList()) {
+            System.out.println(" Candidate:");
+            System.out.println("  Score: " + ev.getScore());
+            System.out.println("  Concept Id: " + ev.getConceptId());
+            System.out.println("  Concept Name: " + ev.getConceptName());
+            System.out.println("  Preferred Name: " + ev.getPreferredName());
+            System.out.println("  Matched Words: " + ev.getMatchedWords());
+            System.out.println("  Semantic Types: " + ev.getSemanticTypes());
+            System.out.println("  MatchMap: " + ev.getMatchMap());
+            System.out.println("  MatchMap alt. repr.: " + ev.getMatchMapList());
+            System.out.println("  is Head?: " + ev.isHead());
+            System.out.println("  is Overmatch?: " + ev.isOvermatch());
+            System.out.println("  Sources: " + ev.getSources());
+            System.out.println("  Positional Info: " + ev.getPositionalInfo());
+          }
 ^>>
 
-One can get the mappings list from the PCM instance using |PCM.getMappings|:
+One can get the mappings list from the PCM instance using |PCM.getMappingList|:
 
 ^<<
-	  System.out.println("Mappings:");
-	  for (Map map: pcm.getMappings()) {
-	    System.out.println(" Map Score: " + map.getScore());
-	    for (Ev mapEv: map.getEvList()) {
-	      System.out.println("   Score: " + mapEv.getScore());
-	      System.out.println("   Concept Id: " + mapEv.getConceptId());
-	      System.out.println("   Concept Name: " + mapEv.getConceptName());
-	      System.out.println("   Preferred Name: " + mapEv.getPreferredName());
-	      System.out.println("   Matched Words: " + mapEv.getMatchedWords());
-	      System.out.println("   Semantic Types: " + mapEv.getSemanticTypes());
-	      System.out.println("   is Head?: " + mapEv.isHead());
-	      System.out.println("   is Overmatch?: " + mapEv.isOvermatch());
-	      System.out.println("   Sources: " + mapEv.getSources());
-	      System.out.println("   Positional Info: " + mapEv.getPositionalInfo());
-	    }
-	  }
+          System.out.println("Mappings:");
+          for (Mapping map: pcm.getMappingList()) {
+            System.out.println(" Map Score: " + map.getScore());
+            for (Ev mapEv: map.getEvList()) {
+              System.out.println("   Score: " + mapEv.getScore());
+              System.out.println("   Concept Id: " + mapEv.getConceptId());
+              System.out.println("   Concept Name: " + mapEv.getConceptName());
+              System.out.println("   Preferred Name: " + mapEv.getPreferredName());
+              System.out.println("   Matched Words: " + mapEv.getMatchedWords());
+              System.out.println("   Semantic Types: " + mapEv.getSemanticTypes());
+              System.out.println("   MatchMap: " + mapEv.getMatchMap());
+              System.out.println("   MatchMap alt. repr.: " + mapEv.getMatchMapList());
+              System.out.println("   is Head?: " + mapEv.isHead());
+              System.out.println("   is Overmatch?: " + mapEv.isOvermatch());
+              System.out.println("   Sources: " + mapEv.getSources());
+              System.out.println("   Positional Info: " + mapEv.getPositionalInfo());
+            }
+          }
     }
 }
 ^>>
@@ -368,9 +443,72 @@ A copy of the raw MetaMap machine output can be obtained by using the
 instance method |Result.getMachineOutput|:
 
 ^<<
-Result result = api.processString(terms);
+List<Result> resultList = api.processCitationsFromString(terms);
+Result result = resultList.get(0);
 String machineOutput = result.getMachineOutput();
 ^>>
+
+* Advanced Configuration
+
+** Running the metamap server on an alternate host
+
+To run the metamap server on a host other than localhost (127.0.0.1),
+the default modify the environment variable ACCEPTED_HOSTS the script
+/bin/mmserver09 to contain all of the clients you wish to have access
+to the MetaMap server.
+
+For example, change the entry:
+
+^<<
+ACCEPTED_HOSTS="['127.0.0.1']"
+export ACCEPTED_HOSTS
+^>>
+
+to:
+
+^<<
+ACCEPTED_HOSTS="['127.0.0.1','192.168.111.27','192.168.111.61','192.168.111.76']"
+export ACCEPTED_HOSTS
+^>>
+
+all of the entries must be ip-addresses, hostnames will not work.
+
+** Running the  metamap server on an alternate port
+
+To run the metamap server on a port other than the default port (8066)
+modify the environment variable "MMSERVER_PORT" in the script bin/mmserver09.
+
+E.G. to change the port to 8888:
+
+^<<
+MMSERVER_PORT=8888
+export MMSERVER_PORT
+^>>
+
+** Specifying alternate MetaMap Server hosts and ports in the API
+
+The MetaMap Java API now includes the methods |setHost| and |setPort|
+to specify the host and port locations of the MetaMap server.  The
+source to the class gov.nih.nlm.nls.metamap.MetaMapApiTest
+(public_mm/src/javaapi/sources/gov/nih/nlm/nls/metamap/
+MetaMapApiTest.java) contains an example of the use of these methods.
+
+
+* Possible enhancements
+
+Possible enchancments include providing a UIMA module that uses an
+underlying MetaMapApi instance, providing a factory method for
+instantiating MetaMapApi instances, and providing instantiation of
+instances through JNDI.
+
+* Differences compared to MMTx API
+
+The MetaMap Java API only provides access to components available
+through machine output.  That includes The Final mappings, the
+Candidates, Phrases, Utterances, Negated Concepts, and Acronyms and
+Abbreviations.  Access to structures such as lexical elements and
+tokenization that were available in the eariler MMTx API are not
+currently available in the MetaMap API.
 
 * For more information
 

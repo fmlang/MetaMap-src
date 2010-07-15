@@ -15,5 +15,7 @@ import java.util.List;
 public interface PCM extends MetaMapElement {
    Phrase getPhrase() throws Exception ;
    List<Ev> getCandidates() throws Exception ;
+   List<Ev> getCandidateList() throws Exception ;
    List<Map> getMappings() throws Exception ;
+   List<Mapping> getMappingList() throws Exception ;
 }

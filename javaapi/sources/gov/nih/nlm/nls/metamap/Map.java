@@ -11,7 +11,5 @@ import java.util.List;
  * @author <a href="mailto:wrogers@nlm.nih.gov">Willie Rogers</a>
  * @version 1.0
  */
-public interface Map extends MetaMapElement {
-  int getScore() throws Exception;
-  List<Ev> getEvList() throws Exception;
+public interface Map extends MetaMapElement, Mapping {
 }
