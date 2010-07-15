@@ -48,18 +48,18 @@ MISCUTIL=../miscutil
 QUERYSRC=../query
 INC=../include 
 DEBUGSRC=../../debug
-DEBUGGINC=$(DEBUGSRC)/include
+DEBUGINC=$(DEBUGSRC)/include
 FUNCTIONS=../functions
 
 BDBLIB=$(BERKELEY)/lib
 
 # Include paths
-INCLUDES = -I$(INC) -I$(DEBUGGINC) -I$(FUNCTIONS)
+INCLUDES = -I$(INC) -I$(DEBUGINC) -I$(FUNCTIONS)
 
 # Libraries
 LIBRARIES = \
 	$(QUERYSRC)/lex_btree.a \
-	$(LEXICONSRC)/lexicon.a \
+	$(FUNCTIONS)/lexicon.a \
 	$(SPLIBDIR)/liblm.a \
 	$(MISCUTIL)/miscutil.a \
 	$(FUNCTIONS)/lexicon.a \

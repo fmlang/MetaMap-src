@@ -464,7 +464,7 @@ db_get_synonyms(Word, WordCategory, []) :-
 
 db_get_synonyms_aux(WordAtom, WordCategoryAtom, Synonyms) :-
 	form_complex_query("syn, scat", "syns", "word", WordAtom, "wcat", WordCategoryAtom, Query),
-	run_query(Query, commplex, Synonyms0, 1),
+	run_query(Query, complex, Synonyms0, 1),
 	normalize_synonyms(Synonyms0, Synonyms1),
 	remove_dups(Synonyms1, Synonyms).
 

@@ -342,23 +342,130 @@ extract_rest_of_field([First|Rest],[First|RestFieldLines], NewFieldID,
 
 /*  BEGINS FIELD GRAMMAR  */
 
-f_begins_field(FR) --> f_dense_token(F), {medline_field_data(F,_,_)},
-                       f_separator(_), f_any(R),
-                        {FR=[F,R]}.
+% Non-DCG version
+% f_begins_field(FR,A,B) :-
+% 	f_dense_token(Field,A,C),
+% 	medline_field_data(Field,_D,_E),
+% 	f_separator(_F,C,G),
+% 	% format(user_output, 'BEFORE f_any~n', []),
+% 	format(user_output, 'BEFORE f_any(~w,~w,~w)~n', [R,G,H]),
+% 	f_any(R,G,H),
+% 	% format(user_output, 'AFTER f_any~n', []),
+% 	format(user_output, 'AFTER f_any(~w,~w,~w)~n', [R,G,H]),
+% 	FR = [Field,R],
+% 	B = H.
 
-f_dense_token(T) --> [Char], {\+Char==0' }, {\+Char==0'-}, f_dense_token(U),
-                     {T=[Char|U]}
-                 |   [Char], {\+Char==0' }, {\+Char==0'-}, {T=[Char]}.
+% Cleaned-up DCG version
+f_begins_field(FR) -->
+	f_dense_token(F),
+	{ medline_field_data(F,_,_) },
+	f_separator(_),
+	f_any(R),
+	{ FR = [F,R] }.
 
-f_separator(S) --> [0' ,0'-,0' ], f_blanks(B), !, {S=[0' ,0'-,0' |B]}
-               |   [0'-,0' ], f_blanks(B), !, {S=[0'-,0' |B]}
-               |   [0' ], !, f_separator(V), {S=[0' |V]}.
+% Original DCG version
+% f_begins_field(FR) --> f_dense_token(F), {medline_field_data(F,_,_)},
+%                        f_separator(_), f_any(R),
+%                         {FR=[F,R]}.
 
-f_blanks(B) --> [0' ], !, f_blanks(C), {B=[0' |C]}
-            |   {B=[]}.
+% Non-DCG version
+% f_dense_token(T,A,B) :-
+% 	A = [Char|C],
+% 	\+ Char == 32,
+% 	\+ Char == 45,
+% 	( f_dense_token(U,C,D) ->
+% 	  T = [Char|U],
+% 	  B = D
+% 	; T = [Char],
+% 	  B = C
+% 	).
 
-f_any(T) --> [Char], !, f_any(U), {T=[Char|U]}
-         |    {T=[]}.
+% Cleaned-up DCG version
+f_dense_token(T) -->
+	[Char], { \+ Char == 0' }, { \+ Char == 0'- },
+	( f_dense_token(U) ->
+	  { T = [Char|U] }
+	; { T = [Char] }
+	).
+
+% Original DCG version
+% f_dense_token(T) --> [Char], {\+Char==0' }, {\+Char==0'-}, f_dense_token(U),
+%                      {T = [Char|U]}
+%                  |   [Char], {\+Char==0' }, {\+Char==0'-}, {T = [Char]}.
+
+% Non-DCG version
+% f_separator(S,A,B) :-
+% 	( A = [32,45,32|C],
+% 	  f_blanks(Blanks,C,D) ->
+% 	  S = [32,45,32|Blanks],
+% 	  B = D
+% 	; A = [45,32|E],
+% 	  f_blanks(Blanks,E,F) ->
+% 	  S = [45,32|Blanks],
+% 	  B = F
+% 	; A = [32|G],
+% 	  f_separator(V,G,H) ->
+% 	  S = [32|V],
+% 	  B = H
+% 	).
+
+% Cleaned-up DCG version
+f_separator(S) -->
+	( " - ", f_blanks(B) ->
+	  { S = [32,45,32|B] }
+	; "- ",  f_blanks(B) ->
+	  { S = [45,32|B] }
+	; " ",   f_separator(V) ->
+	  { S = [32|V] }
+	).
+
+% Original DCG version
+% f_separator(S) --> [0' ,0'-,0' ], f_blanks(B), !, {S = [0' ,0'-,0' |B]}
+%                |   [0'-,0' ], f_blanks(B), !, {S = [0'-,0' |B]}
+%                |   [0' ], !, f_separator(V), {S = [0' |V]}.
+% 
+
+% Non-DCG version
+% f_blanks(Blanks,A,B) :-
+% 	( A = [32|C] ->
+% 	  f_blanks(C,C,D),
+% 	  Blanks = [32|C],
+% 	  B = D
+% 	; Blanks = [] ->
+% 	  B = A
+% 	 ).
+
+% Cleaned-up DCG version
+f_blanks(B) -->
+	( " " ->
+	  f_blanks(C), { B = [32|C] }
+	; { B = [] }
+	).
+
+% Original DCG version
+% f_blanks(B) --> [0' ], !, f_blanks(C), {B = [0' |C]}
+%             |   {B = []}.
+
+% Non-DCG version
+% f_any(T,A,B) :-
+% 	( A = [Char|C] ->
+% 	  f_any(U,C,D),
+% 	  T = [Char|U],
+% 	  B = D
+% 	; T = [] ->
+% 	  B = A
+% 	).
+	
+% Cleaned-up DCG version
+f_any(T) -->
+	( [Char] ->
+	   f_any(U), { T = [Char|U] }
+	; { T = [] }
+	).
+
+% Original DCG version
+% f_any(T) --> [Char], !, f_any(U), {T=[Char|U]}
+%          |    {T=[]}.
 
 
 /* medline_field(?Field, ?ShortDescription, ?LongDescription)
@@ -605,7 +712,7 @@ concatenate_broken_lines([First,Second|Rest],Result) :-
     \+append(".",_,Second),
     !,
     rev(First,RevFirst),
-    (RevFirst=[0'!|RestRevFirst] ->
+    (RevFirst = [0'!|RestRevFirst] ->
         rev(RestRevFirst,RestFirst),
 	append(RestFirst,Second,NewFirst)
     ;   append(First,Second,NewFirst) % maybe should warn when ! is missing
@@ -621,8 +728,8 @@ extract_each_smart_field([],[]) :-
     !.
 extract_each_smart_field([FirstLine|RestLines],
 			 [[CitID,[Field]]|RestCitationFields]) :-
-    FirstLine=[0'.,FieldChar|Field],
-    FieldID=[FieldChar],
+    FirstLine = [0'.,FieldChar|Field],
+    FieldID = [FieldChar],
     !,
     % temp; this is awful
     ( FieldID=="I" ->
