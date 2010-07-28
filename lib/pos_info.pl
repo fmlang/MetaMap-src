@@ -491,6 +491,7 @@ remove_aa_tokens([NextAAToken|RestAATokens], AAToken, [NextTokenIn|RestTokensIn]
 	  remove_aa_tokens(RestAATokens, NextAAToken, RestTokensNext, RestTokensOut)
 	).
 
+remove_next_whitespace_tokens([], _RestTokensOut).
 remove_next_whitespace_tokens([FirstToken|RestTokensIn], RestTokensOut) :-
 	( ws_tok(FirstToken) ->
 	  remove_next_whitespace_tokens(RestTokensIn, RestTokensOut)
