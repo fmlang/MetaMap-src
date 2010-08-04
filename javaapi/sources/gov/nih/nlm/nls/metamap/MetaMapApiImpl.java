@@ -18,55 +18,26 @@ import se.sics.prologbeans.*;
 public class MetaMapApiImpl implements MetaMapApi {
 
   private PrologSession session = new PrologSession();
+  protected boolean connected = false;
 
   /** Instantiate api using the default timeout. */
   public MetaMapApiImpl() {
-    try {
-      this.session.setTimeout(DEFAULT_TIMEOUT);
-      this.session.connect();
-      /* only -q should set initially */
-      this.resetOptions();
-      // this.unsetOptions(this.getOptions());
-      // this.setOptions("['-q']");
-    } catch (IOException e) {
-      System.err.println("Error when communicating with Prolog Server: " +
-			 e.getMessage() + '\n');
-    }
+    this.session.setTimeout(DEFAULT_TIMEOUT);
   }
 
   /** Instantiate api using specified timeout.
    * @param timeout time in milliseconds to wait for prolog server before timing out.
    */
   public MetaMapApiImpl(int timeout) {
-    try {
       this.session.setTimeout(timeout);
-      // /* only -q should set initially */
-      this.session.connect();
-      this.resetOptions();
-      // // this.unsetOptions(this.getOptions());
-      // this.setOptions("['-q']");
-    } catch (IOException e) {
-      System.err.println("Error when communicating with Prolog Server: " +
-			 e.getMessage() + '\n');
-    }
   }
 
   /** Instantiate api using MetaMap server specified by hostname 
    * @param serverHostname hostname of metamap server
    */
   public MetaMapApiImpl(String serverHostname) {
-    try {
       this.session.setTimeout(DEFAULT_TIMEOUT);
-      this.session.connect();
-      /* only -q should set initially */
-      this.resetOptions();
-      // this.unsetOptions(this.getOptions());
-      // this.setOptions("['-q']");
       session.setHost(serverHostname);
-    } catch (IOException e) {
-      System.err.println("Error when communicating with Prolog Server: " +
-			 e.getMessage() + '\n');
-    }
   }
 
   /** Instantiate api using MetaMap server specified by hostname 
@@ -74,18 +45,8 @@ public class MetaMapApiImpl implements MetaMapApi {
    * @param port port of metamap server
    */
   public MetaMapApiImpl(String serverHostname, int port) {
-    try {
       this.session.setTimeout(DEFAULT_TIMEOUT);
-      this.session.connect();
-      /* only -q should set initially */
-      this.resetOptions();
-      // this.unsetOptions(this.getOptions());
-      // this.setOptions("['-q']");
       session.setPort(port);
-    } catch (IOException e) {
-      System.err.println("Error when communicating with Prolog Server: " +
-			 e.getMessage() + '\n');
-    }
   }
 
   /**
@@ -95,19 +56,9 @@ public class MetaMapApiImpl implements MetaMapApi {
    * @param timeout time in milliseconds to wait for prolog server before timing out.
    */
   public MetaMapApiImpl(String serverHostname, int port, int timeout) {
-    try {
       this.session.setTimeout(timeout);
-      this.session.connect();
-      // /* only -q should set initially */
-      this.resetOptions();
-      // // this.unsetOptions(this.getOptions());
-      // this.setOptions("['-q']");
       session.setHost(serverHostname);
       session.setPort(port);
-    } catch (IOException e) {
-      System.err.println("Error when communicating with Prolog Server: " +
-			 e.getMessage() + '\n');
-    }
   }
 
   /** 
@@ -148,6 +99,10 @@ public class MetaMapApiImpl implements MetaMapApi {
   public String getOptions() {
     PBTerm options = null;
     try {
+      if (! this.connected) {
+	this.session.connect();
+	this.connected = true;
+      }
       QueryAnswer answer =
         session.executeQuery("get_options(AllOptions)");
       options = answer.getValue("AllOptions");
@@ -237,11 +192,13 @@ public class MetaMapApiImpl implements MetaMapApi {
    */
   public void invokeSetOptions(String optionListString) {
   try {
+      if (! this.connected) {
+	this.session.connect();
+	this.connected = true;
+      }
       Bindings bindings = new Bindings().bind("Options", optionListString);
-      // System.out.println("bindings: " + bindings.toString());
       QueryAnswer answer =
         session.executeQuery("set_options(Options)", bindings);
-      // System.out.println("answer: " + answer.toString());
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
@@ -262,11 +219,13 @@ public class MetaMapApiImpl implements MetaMapApi {
    */
   public void unsetOptions(String optionString) {
     try {
+      if (! this.connected) {
+	this.session.connect();
+	this.connected = true;
+      }
       Bindings bindings = new Bindings().bind("Options", optionString);
-      // System.out.println("bindings: " + bindings.toString());
       QueryAnswer answer =
         session.executeQuery("unset_options(Options)", bindings);
-      // System.out.println("answer: " + answer.toString());
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
@@ -284,6 +243,10 @@ public class MetaMapApiImpl implements MetaMapApi {
    */
   public void unsetOptions(List<String> options) {
     try {
+      if (! this.connected) {
+	this.session.connect();
+	this.connected = true;
+      }
       StringBuffer sb = new StringBuffer();
       sb.append("[");
       for (Iterator<String> optIter = options.iterator(); optIter.hasNext(); ) {
@@ -292,10 +255,8 @@ public class MetaMapApiImpl implements MetaMapApi {
       }
       sb.append("]");
       Bindings bindings = new Bindings().bind("Options", sb.toString());
-      // System.out.println("bindings: " + bindings.toString());
       QueryAnswer answer =
         session.executeQuery("unset_options(Options)", bindings);
-      // System.out.println("answer: " + answer.toString());
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
@@ -306,9 +267,12 @@ public class MetaMapApiImpl implements MetaMapApi {
  public
  void resetOptions() {
     try {
+      if (! this.connected) {
+	this.session.connect();
+	this.connected = true;
+      }
       QueryAnswer answer =
         session.executeQuery("reset_options");
-      // System.out.println("answer: " + answer.toString());
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
@@ -326,15 +290,16 @@ public class MetaMapApiImpl implements MetaMapApi {
     for (int i = 0; i < citations.length; i++) {
       Result newResult = null;
       try {
-	// System.out.println("\n*** citation[" + i + "]: " + citations[i]);
+	if (! this.connected) {
+	  this.session.connect();
+	  this.connected = true;
+	}
 	Bindings bindings = new Bindings().bind("E", citations[i]);
-	// System.out.println("bindings: " + bindings.toString());
 	QueryAnswer answer =
 	  session.executeQuery("process_string(E,Output)", bindings);
 	PBTerm result = answer.getValue("Output");
 	
 	if (result != null) {
-	  // System.out.println("answer: " + result.toString());
 	  newResult = new ResultImpl(result, citations[i]);
 	  newResultList.add(newResult);
 	} else {
@@ -387,6 +352,5 @@ public class MetaMapApiImpl implements MetaMapApi {
   protected void finalize() {
     System.err.println("finalize");
     System.err.flush();
-    resetOptions();
   }
 }

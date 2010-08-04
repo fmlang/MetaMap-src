@@ -19,14 +19,14 @@ import se.sics.prologbeans.PrologSession;
  */
 public class MetaMapApiTest {
   /** MetaMap api instance */
-  MetaMapApi api = new MetaMapApiImpl();
+  MetaMapApi api;
 
   /**
    * Creates a new <code>MetaMapApiTest</code> instance.
    *
    */
   public MetaMapApiTest() {
-
+    this.api = new MetaMapApiImpl();
   }
 
   /**
@@ -36,6 +36,7 @@ public class MetaMapApiTest {
    * @param serverPort     listening port used by MetaMap server.
    */
   public MetaMapApiTest(String serverHostname, int serverPort) {
+    this.api = new MetaMapApiImpl();
     this.api.setHost(serverHostname);
     this.api.setPort(serverPort);
   }
@@ -249,13 +250,16 @@ public class MetaMapApiTest {
 	} else if (args[i].equals("--output") ) {
           i++;
           output = new PrintStream(args[i]);
-	System.out.println("output file: " + args[i]);
-	} 
+	  System.out.println("output file: " + args[i]);
+	} else {
+	  options.add(args[i]); i++;
+	}
       } else {
 	termBuf.append(args[i]).append(" "); 
       }
       i++;
     }
+    System.out.println("serverport: " + serverport);
     MetaMapApiTest frontEnd = new MetaMapApiTest(serverhost, serverport);
     System.out.println("options: " + options);
     System.out.println("terms: " + termBuf);
