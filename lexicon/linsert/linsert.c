@@ -47,6 +47,7 @@
 ----------------------------*/
 #include <debug.h>
 #include <unistd.h>
+#include <stdio.h>
 
 /*----------------------------
 %SCCS Version Flag
@@ -132,7 +133,7 @@ int main(
   debug_init(__FILE__);
   
   dfname("main");
-  DENTER(DT118);
+  // DENTER(DT118);
   
 
   strcpy(version,"2008");
@@ -240,7 +241,7 @@ int main(
   
  bottom:
 
-   DEXIT(DT118);
+  //  DEXIT(DT118);
    debug_term();
 
    return ( return_code );
