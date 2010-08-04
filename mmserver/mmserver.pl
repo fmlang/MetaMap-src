@@ -1,6 +1,5 @@
 :- module(mmserver,[ main/0 ]).
 
-% :- use_module(library(basics),      [ member/2 ]).
 :- use_module(library(prologbeans), [ register_query/2, start/0, start/1 ]).
 :- use_module(library(codesio),     [ read_from_codes/2 ]).
 :- use_module(library(system),      [ environ/2 ]).
@@ -75,7 +74,8 @@ main :-
     % 	      ],
     parse_command_line(CLTerm),
     CLTerm=command_line(Options,Args),
-    initialize_skr(Options, Args, _IArgs, IOptions),
+    ( \+ member(q,Options) -> append([q], Options, OptionsFinal) ; Options=OptionsFinal),
+    initialize_skr(OptionsFinal, Args, _IArgs, IOptions),
     add_to_control_options(IOptions),
     start(ServerOptions).
 
@@ -94,7 +94,8 @@ set_options(OptionString) :-
 	      ],
     interpret_args(IOptions, ArgSpecs, Args, IArgs),
     ( \+ member(iopt(machine_output,none),IOptions) -> 
-	append([iopt(machine_output,none)], IOptions, IOptionsFinal)),
+	append([iopt(machine_output,none)], IOptions, IOptionsFinal) ;
+	IOptions=IOptionsFinal ),
     add_to_control_options(IOptionsFinal),
     set_control_values(IOptionsFinal,IArgs).
 
@@ -114,8 +115,11 @@ unset_options(OptionString) :-
     interpret_args(IOptions, ArgSpecs, Args, _IArgs),
     subtract_from_control_options(IOptions).
 
+control_option_as_iopt(iopt(X,none)) :-
+	nls_system:control_option(X).		      
+
 get_options(AllOptions) :-
-	setof(X,nls_system:control_option(X),AllOptions).
+	setof(X,control_option_as_iopt(X),AllOptions).
 
 reset_options :-
 	reset_control_options([metamap]),
@@ -136,10 +140,13 @@ process_string(Input,Output) :-
 		     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		     WSDServerHosts, WSDForced, WSDServerPort,
 		     ExpRawTokenList, AAs, MMResults),
-	IOptions=[iopt(machine_output,none)],
+	get_options(IOptions),
+	( \+ member(iopt(machine_output,none),IOptions) -> 
+	    append([iopt(machine_output,none)], IOptions, IOptionsFinal) ;
+	    IOptions=IOptionsFinal ),
 	output_should_be_bracketed(BracketedOutput),
 	postprocess_text_mmserver(Strings, BracketedOutput, InterpretedArgs,
-		 IOptions,  ExpRawTokenList, AAs, MMResults, Output).
+		 IOptionsFinal,  ExpRawTokenList, AAs, MMResults, Output).
 
 postprocess_text_mmserver(Lines0, BracketedOutput, InterpretedArgs,
 			  IOptions,  ExpRawTokenList, AAs, MMResults, AllMMO) :-
