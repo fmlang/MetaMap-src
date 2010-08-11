@@ -41,6 +41,7 @@
 #include "dm.h"
 #include "im.h"
 #include "lexicon_types.h"
+#include <rpc/types.h>
 #include <rpc/xdr.h>
 
 #define is_vowel(c)  (((c)=='a')||((c)=='e')||((c)=='i')||((c)=='o')||((c)=='u'))

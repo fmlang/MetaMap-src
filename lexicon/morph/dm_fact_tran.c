@@ -40,6 +40,7 @@
 #include <errno.h>
 #include "dm.h"
 #include "lexicon_types.h"
+#include <rpc/types.h>
 #include <rpc/xdr.h>
 
 /*

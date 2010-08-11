@@ -46,6 +46,10 @@ else
   ifeq '$(O_SYSTEM)' "Linux"
     LIBS = -lpthread
     DBLIBS = $(DBLIBS1) -lnsl -lrt
+  else 
+    ifeq '$(O_SYSTEM)' "Darwin"
+        DBLIBS = $(DBLIBS1)
+    endif
   endif
 endif
 

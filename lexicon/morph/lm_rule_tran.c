@@ -39,6 +39,7 @@
 #include <errno.h>
 #include "lm.h"
 #include "lexicon_types.h"
+#include <rpc/types.h>
 #include <rpc/xdr.h>
 
 /*  Translates (suffix) rules in the rules file to a trie.

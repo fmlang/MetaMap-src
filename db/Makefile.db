@@ -44,13 +44,23 @@
 
 O_SYSTEM = $(shell uname)
 
+C_NLS_DB_STATIC_LIB=c_nls_db.a
+SPINCDIR=${SICSTUS_HOME}/include/sicstus
 ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
   LIBS = #-lsocket -lnsl -lrt
+  C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LDFLAGS=-m32 -shared
     LIBS = -lpthread
+    C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
+  else 
+    ifeq '$(O_SYSTEM)' "Darwin"
+        LDFLAGS=-m32
+        LIBS = 
+        C_NLS_DB_DYNAMIC_LIB=c_nls_db.dylib
+    endif
   endif
 endif
 
@@ -73,14 +83,14 @@ SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=,
 
 # all:		c_nls_db.so c_nls_db.a ${BTREE_QLIB}
 
-all:		BDB splfr_STATIC splfr_DYNAMIC c_nls_db.a c_nls_db.so
+all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
 
 # all:
 # 		@echo NOTHING TO DO HERE
 
 BDB:
 		cd berkeley_db ; make -f Makefile.berkeley_db
-				
+
 ${BTREE_QLIB_A}:
 		cd berkeley_db ; make -f Makefile.berkeley_db
 
@@ -90,9 +100,9 @@ ${BTREE_QLIB_A}:
 c_nls_db.a:	c_nls_db.o ${BTREE_QLIB_O} ${BTREE_QLIB_A}
 		${AR} ${ARFLAGS} $@ $?
 
-c_nls_db.so:	c_nls_db.o
+${C_NLS_DB_DYNAMIC_LIB} :	c_nls_db.o
 		-${RM} $@
-		${LD} ${LDFLAGS} -o c_nls_db.so c_nls_db.o -I${SPINCDIR} ${DBLIBS} -lm ${LIBS}
+		${LD} ${LDFLAGS} -o ${C_NLS_DB_DYNAMIC_LIB} c_nls_db.o -I${SPINCDIR} ${DBLIBS} -lm ${LIBS}
 
 c_nls_db.o:	c_nls_db.c ${BTREE_QLIB} ${SKR_BERKELEY_DB}/embed.h
 		${CC} ${WARNINGS} ${CFLAGS} c_nls_db.c -I${SKR_BERKELEY_DB} -I${SPINCDIR}

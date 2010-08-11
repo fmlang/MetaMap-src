@@ -48,6 +48,11 @@ else
     LD = gcc
     LDFLAGS=-m32 -shared
     LIBS = -lpthread -llm  -lm
+  else 
+    ifeq '$(O_SYSTEM)' "Darwin"
+        LDFLAGS=-m32
+        LIBS = 
+    endif
   endif
 endif
 

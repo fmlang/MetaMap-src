@@ -32,7 +32,7 @@
 */
 
 #include <ctype.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 #define MUTIL_DEFAULT_ALLOCATION 64
 #define EOS '\0'
