@@ -264,8 +264,7 @@ public class MetaMapApiImpl implements MetaMapApi {
  }
 
   /** Reset options to defaults */
- public
- void resetOptions() {
+ public void resetOptions() {
     try {
       if (! this.connected) {
 	this.session.connect();

@@ -1,6 +1,9 @@
 :- module(mmserver,[ main/0 ]).
 
-:- use_module(library(prologbeans), [ register_query/2, start/0, start/1 ]).
+:- use_module(library(prologbeans), [ register_query/2,
+				      register_event_listener/2,
+				      get_server_property/1,
+				      start/0, start/1, shutdown/1 ]).
 :- use_module(library(codesio),     [ read_from_codes/2 ]).
 :- use_module(library(system),      [ environ/2 ]).
 
@@ -40,7 +43,7 @@
 	parse_command_line/1,
 	parse_command_line/3,
 	interpret_options/4,
-	interpret_args/4		   
+	interpret_args/4
     ]).
 
 :- use_module(skr_lib(nls_strings), [
@@ -65,6 +68,9 @@ main :-
     register_query(reset_options, reset_options),
     register_query(set_options(Options), set_options(Options)),
     register_query(unset_options(Options), unset_options(Options)),
+    register_query(shutdown, shutdown_server),
+    register_event_listener(server_started, server_started_listener),
+    register_event_listener(server_shutdown, server_shutdown_listener),
     % ArgSpecs=[aspec(infile,mandatory,file,read,
     % 		    user_input,
     % 		    'Input file containing labelled utterances'),
@@ -78,6 +84,20 @@ main :-
     initialize_skr(OptionsFinal, Args, _IArgs, IOptions),
     add_to_control_options(IOptions),
     start(ServerOptions).
+
+%% Event listener callbacks
+server_started_listener :-
+    get_server_property(port(Port)),
+%    format(user_error, 'port:~w\n', [Port]),
+    format(user_error, 'port:~w~n', [Port]), % [PD]
+    flush_output(user_error).
+
+server_shutdown_listener :-
+   format(user_error, '~Npbtest.pl: Shutdown server~n', []),
+   flush_output(user_error).
+
+shutdown_server :-
+    shutdown(now).
 
 set_options(OptionString) :-
     append(OptionString, ".", OptionStringWithPeriod),
@@ -115,32 +135,33 @@ unset_options(OptionString) :-
     interpret_args(IOptions, ArgSpecs, Args, _IArgs),
     subtract_from_control_options(IOptions).
 
+control_option_as_iopt(iopt(X,Value)) :-
+	nls_system:control_value(X,Value).
 control_option_as_iopt(iopt(X,none)) :-
-	nls_system:control_option(X).		      
+	nls_system:control_option(X),
+	\+ nls_system:control_value(X, _).
 
 get_options(AllOptions) :-
 	setof(X,control_option_as_iopt(X),AllOptions).
 
 reset_options :-
-	reset_control_options([metamap]),
-	IOptions=[iopt(machine_output,none)],
-	add_to_control_options(IOptions).
+ 	reset_control_options([metamap]),
+ 	IOptions=[iopt(machine_output,none)],
+ 	add_to_control_options(IOptions).
 
 process_string(Input,Output) :-
 	TagOption = tag,
 	split_string_completely(Input,"\n",Strings),
-	InterpretedArgs = [iarg(infile,aspec(infile,mandatory,file,read,no_default,
-					     'Input file containing labelled utterances'),
-				[name(user_input),stream(user_input)]),
-			   iarg(outfile,aspec(outfile,mandatory,file,write,no_default,'Output file'),
-				[name(user_output),stream(user_output)])],
 	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
 	get_WSD_server_hosts_and_port(WSDServerHosts, WSDForced, WSDServerPort),
 	process_text(Strings,
 		     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		     WSDServerHosts, WSDForced, WSDServerPort,
 		     ExpRawTokenList, AAs, MMResults),
-	get_options(IOptions),
+	parse_command_line(CLTerm),
+	CLTerm=command_line(Options,Args),
+	initialize_skr(Options, Args, InterpretedArgs, IOptions),
+	% get_options(IOptions),
 	( \+ member(iopt(machine_output,none),IOptions) -> 
 	    append([iopt(machine_output,none)], IOptions, IOptionsFinal) ;
 	    IOptions=IOptionsFinal ),

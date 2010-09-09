@@ -146,6 +146,7 @@ public class MetaMapApiTest {
 	out.println("NULL result instance! ");
       }
     }
+    this.api.resetOptions();
   }
 
   /** print information about server options */
