@@ -40,8 +40,6 @@
 	add_to_control_options/1,
 	control_option/1,
 	control_value/2,
-	% must be exported for various tools
-	control_value/3,
 	display_control_options_for_modules/2,
 	display_current_control_options/2,
 	display_mandatory_metamap_options/0,
@@ -100,7 +98,7 @@
 % called by MetaMap API -- do not change signature!
 :- dynamic control_option/1.
 :- dynamic control_value/2.
-:- dynamic control_value/3.
+% :- dynamic control_value/3.
 
 /* is_control_option(?Module, ?ShortControlOption, ?ControlOption, ?IsDefault, ?ArgSpec)
 
@@ -677,19 +675,18 @@ set_control_options/0 retracts all control_option/1 clauses and sets the
 defaults for Module(s).  */
 
 reset_control_options(ModuleOrModules) :-
-    retractall(control_option(_)),
-    retractall(control_value(_,_)),
-    retractall(control_value(_,_,_)),
-    (atom(ModuleOrModules) ->
-        reset_control_options_aux([ModuleOrModules])
-    ;   reset_control_options_aux(ModuleOrModules)
-    ).
+	retractall(control_option(_)),
+	retractall(control_value(_,_)),
+	% retractall(control_value(_,_,_)),
+	( atom(ModuleOrModules) ->
+	  reset_control_options_aux([ModuleOrModules])
+	; reset_control_options_aux(ModuleOrModules)
+	).
 
 reset_control_options_aux([]).
 reset_control_options_aux([Module|Rest]) :-
-    toggle_default_control_options(Module),
-    reset_control_options_aux(Rest).
-
+	toggle_default_control_options(Module),
+	reset_control_options_aux(Rest).
 
 /* toggle_default_control_options(+Module)
 
@@ -725,45 +722,27 @@ toggle_control_options([Option0|Rest]) :-
         ),
 	( retract(control_option(Option)) ->
 	  true
-        ; assert(control_option(Option))
+        ; assert_control_option(Option)
         ),
 	toggle_control_options(Rest).
 
 set_control_options([]).
 set_control_options([iopt(Option,_)|Rest]) :-
 	!,
-	( control_option(Option) ->
-	  true
-        ; assert(control_option(Option))
-        ),
+	assert_control_option(Option),
 	set_control_options(Rest).
-set_control_options([optval(Option,Attribute,Value)|Rest]) :-
+set_control_options([optval(Option,_Attribute,Value)|Rest]) :-
 	!,
-	( control_value(Option,Attribute,Value) ->
-	  true
-	; assert(control_value(Option,Attribute,Value))
-	),
-	( control_value(Option,Value) ->
-	  true
-	; assert(control_value(Option,Value))
-	),
+	% assert_control_value(Option,Attribute,Value),
+	assert_control_value(Option,Value),
 	set_control_options(Rest).
 set_control_options([Option-Value|Rest]) :-
 	!,
-	( control_option(Option) ->
-	  true
-        ; assert(control_option(Option))
-        ),
-	( control_value(Option,Value) ->
-	  true
-        ; assert(control_value(Option,Value))
-        ),
+	assert_control_option(Option),
+	assert_control_value(Option,Value),
 	set_control_options(Rest).
 set_control_options([Option|Rest]) :-
-	( control_option(Option) ->
-	  true
-        ; assert(control_option(Option))
-        ),
+	assert_control_option(Option),
 	set_control_options(Rest).
 
 add_to_control_options([]).
@@ -772,7 +751,7 @@ add_to_control_options([Option0|Rest]) :-
 	  true
         ; Option=Option0
         ),
-	assert(control_option(Option)),
+	assert_control_option(Option),
 	add_to_control_options(Rest).
 
 subtract_from_control_options([]).
@@ -807,12 +786,13 @@ set_control_values([iopt(Option,_)|Rest],IArgs) :-
 	  true
 	; Value = '<none>'
 	),
-	assert(control_value(Option,Value)),
+	assert_control_value(Option,Value),
 	set_control_values(Rest,IArgs).
 
 set_all_control_values(Option, IArgs) :-
-	get_from_iargs(Option, Attribute, IArgs, Value),
-	assert(control_value(Option,Attribute,Value)),
+	get_from_iargs(Option, _Attribute, IArgs, Value),
+	% assert_control_value(Option, Attribute, Value),
+	assert_control_value(Option, Value),
 	fail.
 set_all_control_values(_, _).
 
@@ -834,7 +814,8 @@ display_current_control_options_aux :-
 display_current_control_options_aux.
 
 display_one_control_option(Option) :-
-	( control_value(Option,_Any,Value) ->
+	% ( control_value(Option,_Any,Value) ->
+	( control_value(Option,Value) ->
 	  format(user_output, '  ~a=~p~n',[Option,Value])
 	; format(user_output, '  ~a~n',[Option])
 	).
@@ -1353,3 +1334,22 @@ conditionally_announce_program_name(ProgramName, FullYear) :-
 	  format(user_output, '~n~w (~d)~n~n',[ProgramName,FullYear])
 	; true
 	).
+
+% Assert if not already asserted!
+assert_control_option(Option) :-
+	( control_option(Option) ->
+	  true
+	; assert(control_option(Option))
+	).
+
+assert_control_value(Option, Value) :-
+	( control_value(Option, Value) ->
+	  true
+	; assert(control_value(Option, Value))
+	).
+
+% assert_control_value(Option, Attribute, Value) :-
+% 	( control_value(Option, Attribute, Value) ->
+% 	  true
+% 	; assert(control_value(Option, Attribute, Value))
+% 	).
