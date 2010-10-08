@@ -57,8 +57,8 @@ else
     C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32
-        LIBS = 
+        LDFLAGS=-m32 -shared
+	LIBS=db_access_glue.o
         C_NLS_DB_DYNAMIC_LIB=c_nls_db.dylib
     endif
   endif
