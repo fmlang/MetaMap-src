@@ -83,7 +83,8 @@
 
 :- use_module(skr(skr_utilities),[
 	debug_call/2,
-	debug_message/3
+	debug_message/3,
+	ensure_atom/2
     ]).
 
 :- use_module(library(file_systems), [
@@ -207,9 +208,6 @@ variant_generation_mode(Mode) :-
 	).
 
 
-warn_about_model(Model) :-
-	format('WARNING: The additional request for the ~a has been ignored.~n', [Model]).
-
 set_var_table(VarTable) :-
 	retractall(db_access_var_table(_)),
 	( control_option(unique_acros_abbrs_only) ->
@@ -327,25 +325,25 @@ db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 	run_query(Query, simple, SourceInfo0, 1),
 	sort(SourceInfo0, SourceInfo).
 
-/* db_get_concept_sts(+Concept, -SemTypes)
-
-db_get_concept_sts/2 gets the (abbreviated) semantic types, SemTypes, for Input.  */
-
-db_get_concept_sts(Concept, SemTypes) :-
-	( Concept == [] ->
-	  SemTypes = []
-	; ensure_atom(Concept, ConceptAtom),
-	  db_get_concept_sts_aux(ConceptAtom, SemTypes)
-	),
-	!.
-db_get_concept_sts(Concept, []) :-
-	fatal_error('~NERROR: db_access~w: db_get_concept_sts failed for ~w~n', [Concept]),
-	halt.
-
-db_get_concept_sts_aux(ConceptAtom, SemTypes) :-
-	form_simple_query("st", "conceptst", "concept", ConceptAtom, Query),
-	run_query(Query, simple, SemTypes0, 1),
-	append(SemTypes0, SemTypes).
+%%% /* db_get_concept_sts(+Concept, -SemTypes)
+%%% 
+%%% db_get_concept_sts/2 gets the (abbreviated) semantic types, SemTypes, for Input.  */
+%%% 
+%%% db_get_concept_sts(Concept, SemTypes) :-
+%%% 	( Concept == [] ->
+%%% 	  SemTypes = []
+%%% 	; ensure_atom(Concept, ConceptAtom),
+%%% 	  db_get_concept_sts_aux(ConceptAtom, SemTypes)
+%%% 	),
+%%% 	!.
+%%% db_get_concept_sts(Concept, []) :-
+%%% 	fatal_error('~NERROR: db_access~w: db_get_concept_sts failed for ~w~n', [Concept]),
+%%% 	halt.
+%%% 
+%%% db_get_concept_sts_aux(ConceptAtom, SemTypes) :-
+%%% 	form_simple_query("st", "conceptst", "concept", ConceptAtom, Query),
+%%% 	run_query(Query, simple, SemTypes0, 1),
+%%% 	append(SemTypes0, SemTypes).
 
 /* db_get_cui_sts(+CUI, -SemTypes)
 
@@ -727,7 +725,7 @@ get_variants_from_db(Concept, Category, Variants) :-
 
 convert_to_variant_terms([], []).
 % temp  to handle null values until they're removed
-%convert_to_variant_terms([[]|Rest],ConvertedRest) :-
+% convert_to_variant_terms([[]|Rest],ConvertedRest) :-
 %    !,
 %    convert_to_variant_terms(Rest,ConvertedRest).
 convert_to_variant_terms([[Var,VCat0,Distance,Hist0,Roots]|Rest],
@@ -811,7 +809,6 @@ get_db_access_model(Model) :-
 	( control_option(strict_model) ->
 	  Model = strict
 	; control_option(relaxed_model) ->
-	  warn_about_model('relaxed model'),
 	  Model = relaxed
 	; Model = strict
 	).
@@ -858,16 +855,6 @@ debug_db_get_mwi_data_aux_2(DebugFlags, RawResults) :-
 	; true
 	).
 
-ensure_atom(Input, InputAtom) :-
-	( atom(Input) ->
-	  InputAtom = Input
-	; number(Input) ->
-	  number_codes(Input, InputCodes),
-	  atom_codes(InputAtom, InputCodes)
-	; is_print_string(Input) ->
-	  atom_codes(InputAtom, Input)
-	).
-	
 ensure_string(AtomOrString, String) :-
         ( is_print_string(AtomOrString) ->
           String = AtomOrString

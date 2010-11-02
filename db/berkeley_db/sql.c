@@ -49,9 +49,9 @@ extern void destroy_dbs(void);
 extern void open_dbs(int dbptr);
 
 int main(void);
-struct results_struct process_normal_query(char *line);
-struct results_struct  process_special_query(char *line);
-struct query_struct parse_query(char *line);
+struct results_struct process_normal_query(const char *line);
+struct results_struct  process_special_query(const char *line);
+struct query_struct parse_query(const char *line);
 int get_config(char *tablename);
 struct res_rows_struct *parse_results(struct query_struct query,
 				      int config_ptr, char *result);
@@ -111,27 +111,38 @@ int main(void)
 
 /************************************************************************/
 
-struct results_struct process_normal_query(char *line)
+struct results_struct process_normal_query(const char *line)
 {
    struct query_struct query;
    struct results_struct rtn;
    int config_ptr;
 
+   /* printf("NORMAL QUERY\n"); fflush(stdout); */
+
    query = parse_query(line);
+   /* printf("Query = >%s<\n", line);
+    * fflush(stdout);
+    * printf("query.table = >%s<\n", query.table);
+    * fflush(stdout);
+    */
    config_ptr = get_config(query.table);
+   /* printf("Got config_ptr %d\n", config_ptr);
+    * fflush(stdout);
+   */
    rtn = return_results(query, config_ptr);
    free_query(query);
    return(rtn);
-} /* process_normal_query */
- 
+} /* process_normal_query */ 
+
 /************************************************************************/
  
-struct results_struct process_special_query(char *line)
+struct results_struct process_special_query(const char *line)
 {
    /* Known information -
       suistrings - Will always test sui & request nmstr, str
       cuiconcept - Will always test cui & request concept
-      Use ONE of -- all_words, first_words_of_one, or first_words_of_two
+      Use ONE of -- all_words, first_words_of_one, first_words_of_two,
+                    first_wordsb or first_words
         requesting sui & cui fields where word = some query string.
    */
  
@@ -144,12 +155,14 @@ struct results_struct process_special_query(char *line)
    long maxlen;
  
    maxlen = (linelen > MAXLINE) ? linelen : MAXLINE;
- 
-   tmpJ = (char *)malloc((size_t)(maxlen + 1));
+
+   tmpJ  = (char *)malloc((size_t)(maxlen + 1));
    tmpJ1 = (char *)malloc((size_t)(maxlen + 1));
    tmpJ2 = (char *)malloc((size_t)(maxlen + 1));
 
    /* Initialize return structure */
+
+   /* printf("SPECIAL QUERY\n"); fflush(stdout); */
  
    rtn.rows = (struct res_rows_struct **)malloc(sizeof(struct res_rows_struct));
    rtn.num_rows = 0;
@@ -158,18 +171,19 @@ struct results_struct process_special_query(char *line)
    /* Initialize the query_strings structure based on strings table needs */
  
    query_strings.num_fields = 2;
-   query_strings.fields[0] = strdup("nmstr");
-   query_strings.fields[1] = strdup("str");
-   query_strings.table = strdup("suistrings");
+   query_strings.fields[0] = (char *)strdup("nmstr");
+   query_strings.fields[1] = (char *)strdup("str");
+   query_strings.table = (char *)strdup("suistrings");
    query_strings.query = (char *)malloc((size_t)MAXLINE);
    query_strings.where2 = NULL;
    query_strings.query2 = NULL;
    strings_ptr = get_config(query_strings.table);
+ 
    /* Initialize the query_concepts structure based on concept table needs */
  
    query_concepts.num_fields = 1;
-   query_concepts.fields[0] = strdup("concept");
-   query_concepts.table = strdup("cuiconcept");
+   query_concepts.fields[0] = (char *)strdup("concept");
+   query_concepts.table = (char *)strdup("cuiconcept");
    query_concepts.query = (char *)malloc((size_t)MAXLINE);
    query_concepts.where2 = NULL;
    query_concepts.query2 = NULL;
@@ -178,20 +192,25 @@ struct results_struct process_special_query(char *line)
    /* --- Based on known/anticipated reasons for entering this routine --- */
  
    if(strstr(line, "all_words") != NULL)
-     query.table = strdup("all_words");
+     query.table = (char *)strdup("all_words");
    else if(strstr(line, "first_words_of_one") != NULL)
-     query.table = strdup("first_words_of_one");
+     query.table = (char *)strdup("first_words_of_one");
    else if(strstr(line, "first_words_of_two") != NULL)
-     query.table = strdup("first_words_of_two");
+     query.table = (char *)strdup("first_words_of_two");
+   else if(strstr(line, "first_wordsb") != NULL)
+     query.table = (char *)strdup("first_wordsb");
    else
-     query.table = strdup("first_words");
+     query.table = (char *)strdup("first_words");
  
    query_ptr = get_config(query.table);
+
+   strcpy(tmpJ1, "");
+   strcpy(tmpJ2, "");
    sscanf(line, "%s %*s %*[^=]='%[^\n]", tmpJ1, tmpJ2);
    query.query = parse_string(tmpJ2, tmpJ);
    query.num_fields = 2;
-   query.fields[0] = strdup("sui");
-   query.fields[1] = strdup("cui");
+   query.fields[0] = (char *)strdup("sui");
+   query.fields[1] = (char *)strdup("cui");
    query.where2 = NULL;
    query.query2 = NULL;
  
@@ -211,7 +230,7 @@ struct results_struct process_special_query(char *line)
       {
           free(query_strings.query);
           query_strings.query = 
-	      (char *)malloc((size_t)strlen(outer_results.rows[i]->str_result[0]) + 1);
+             (char *)malloc(strlen(outer_results.rows[i]->str_result[0]) + 1);
           strcpy(query_strings.query, outer_results.rows[i]->str_result[0]);
           free(outer_results.rows[i]->str_result[0]);
           res1 = return_result(query_strings, strings_ptr);
@@ -224,9 +243,9 @@ struct results_struct process_special_query(char *line)
                rtn.rows[rtn.num_rows]->col_type[k] = TXT_TYPE;
  
              rtn.rows[rtn.num_rows]->str_result[0] =
-                                        strdup(res1.rows[0]->str_result[0]);
+                                  (char *)strdup(res1.rows[0]->str_result[0]);
              rtn.rows[rtn.num_rows]->str_result[1] =
-                                        strdup(res1.rows[0]->str_result[1]);
+                                  (char *)strdup(res1.rows[0]->str_result[1]);
              rtn.num_rows++;
  
              free(res1.rows[0]->str_result[0]);
@@ -242,19 +261,21 @@ struct results_struct process_special_query(char *line)
       for (i = 0; i < outer_results.num_rows; i++)
       {
           if(strcmp("C.......", outer_results.rows[i]->str_result[1]) == 0)
-            rtn.rows[j++]->str_result[2] = strdup("X");
+            rtn.rows[j++]->str_result[2] = (char *)strdup("X");
           else
           {                                                /* cui */
              free(query_concepts.query);
              query_concepts.query = 
-		     (char *)malloc((size_t)strlen(outer_results.rows[i]->str_result[1]) + 1);
+               (char *)malloc(strlen(outer_results.rows[i]->str_result[1]) + 1);
              strcpy(query_concepts.query, outer_results.rows[i]->str_result[1]);
              res1 = return_result(query_concepts, concepts_ptr);
 
              if(res1.num_rows > 0)
-               rtn.rows[j++]->str_result[2] = strdup(res1.rows[0]->str_result[0]);
+               rtn.rows[j++]->str_result[2] = 
+                      (char *)strdup(res1.rows[0]->str_result[0]);
              else
-               rtn.rows[j++]->str_result[2] = strdup("");
+               rtn.rows[j++]->str_result[2] = (char *)strdup("");
+
              free(res1.rows[0]->str_result[0]);
              free((char *)res1.rows[0]);
              free((char *)res1.rows);
@@ -266,18 +287,17 @@ struct results_struct process_special_query(char *line)
  
       if(outer_results.num_rows <= 0)
         free((char *)outer_results.rows[0]);
-      free((char *)outer_results.rows);
    } /* fi */
    else
-   {
-      rtn.num_rows = 0;
-   } /* else */
- 
+     rtn.num_rows = 0;
+   free((char *)outer_results.rows);
+
    free_query(query); free_query(query_strings);free_query(query_concepts);
    free(tmpJ); free(tmpJ1); free(tmpJ2);
    return(rtn);
 } /* process_special_query */
- 
+
+
 /************************************************************************/
  
 struct results_struct return_results(struct query_struct query, int config_ptr)
@@ -306,7 +326,7 @@ struct results_struct return_results(struct query_struct query, int config_ptr)
    } /* fi */
 
    btree_query(query.query, &rows, &numrows, db_id);
- 
+
    if (numrows > 0)
    {
       rtn.rows = (struct res_rows_struct **) malloc(sizeof(struct res_rows_struct) * numrows);
@@ -317,9 +337,13 @@ struct results_struct return_results(struct query_struct query, int config_ptr)
             rtn.rows[rtn.num_rows] = parse_results(query, config_ptr, rows[i]);
             if(rtn.rows[rtn.num_rows]->num_cols > 0)
               rtn.num_rows++;
+            else
+               free((char *)rtn.rows[rtn.num_rows]);
+
             free(rows[i]);
          } /* fi */
       } /* for */
+
       free(rows);
       rows = NULL;
    } /* fi */
@@ -345,7 +369,6 @@ struct results_struct return_result(struct query_struct query, int config_ptr)
    rtn.num_rows = 0;
    rtn.config_ptr = config_ptr;
    rtn.rows = (struct res_rows_struct **)malloc(sizeof(struct res_rows_struct));
- 
  
    db_id = get_config(query.table);
 
@@ -377,37 +400,40 @@ struct results_struct return_result(struct query_struct query, int config_ptr)
  
 /************************************************************************/
  
-struct query_struct parse_query(char *line)
+struct query_struct parse_query(const char *line)
 {
    struct query_struct rtn;
    int cnt, done;
-   char *tmp, *tmpf, *tmp1, *tmp2, *field;
-    long linelen = (long)strlen(line);
+   char *tmp, *tmpf, *tmp1, *tmp2, *modline, *field;
+   long linelen = (long)strlen(line);
    long maxlen;
  
    maxlen = (linelen > MAXLINE) ? linelen : MAXLINE;
  
-   tmp = (char *)malloc((size_t)(maxlen + 1));
-   tmpf = (char *)malloc((size_t)(maxlen + 1));
-   tmp1 = (char *)malloc((size_t)(maxlen + 1));
-   tmp2 = (char *)malloc((size_t)(maxlen + 1));
-   field = (char *)malloc((size_t)(maxlen + 1));
-   memset(tmp, 0, (size_t)maxlen);
-   memset(tmpf, 0, (size_t)maxlen);
-   memset(tmp1, 0, (size_t)maxlen);
-   memset(tmp2, 0, (size_t)maxlen);
+   tmp     = (char *)malloc((size_t)(maxlen + 1));
+   tmpf    = (char *)malloc((size_t)(maxlen + 1));
+   tmp1    = (char *)malloc((size_t)(maxlen + 1));
+   tmp2    = (char *)malloc((size_t)(maxlen + 1));
+   modline = (char *)malloc((size_t)(maxlen + 1));
+   field   = (char *)malloc((size_t)(maxlen + 1));
+
+   memset(tmp,     0, (size_t)maxlen);
+   memset(tmpf,    0, (size_t)maxlen);
+   memset(tmp1,    0, (size_t)maxlen);
+   memset(tmp2,    0, (size_t)maxlen);
+   memset(modline, 0, (size_t)maxlen);
+   memset(field,   0, (size_t)maxlen);
  
    /* Initialize all of the structure to nulls */
  
    rtn.num_fields = 0;
    rtn.where2 = NULL;
    rtn.query2 = NULL;
-
+ 
    /* SELECT fields FROM  */
  
    strcpy(tmp, ""); 
    sscanf(line, "%*s %[^\n]", tmp);
-
    cnt = 0;
    done = FALSE;
    while(!done && (cnt < MAXCOLS))
@@ -420,7 +446,7 @@ struct query_struct parse_query(char *line)
         done = TRUE;
       else /* Parse out the field we have and store it */
       {
-	      rtn.fields[cnt] = (char *)malloc((size_t)(strlen(field) + 1));
+         rtn.fields[cnt] = (char *)malloc(strlen(field) + 1);
          strcpy(rtn.fields[cnt], "");
          sscanf(field, "%[^,]", rtn.fields[cnt]);
          cnt++;
@@ -429,7 +455,7 @@ struct query_struct parse_query(char *line)
       strcpy(tmp, tmpf);
    } /* while */
    rtn.num_fields = cnt;
-   strcpy(line, tmp);
+   strcpy(modline, tmp);
  
    /* table WHERE field='querystring' */
  
@@ -437,11 +463,10 @@ struct query_struct parse_query(char *line)
    strcpy(tmp1, "");
    strcpy(tmp2, "");
  
-   strcpy(tmp1, "");
-   strcpy(tmp2, "");
-   sscanf(line, "%s %*s %*[^=]='%[^\n]", tmp1, tmp2);
-   rtn.table = strdup(tmp1);
+   sscanf(modline, "%s %*s %*[^=]='%[^\n]", tmp1, tmp2);
+   rtn.table = (char *)strdup(tmp1);
    rtn.query = parse_string(tmp2, tmp);
+ 
    if((int)strlen(tmp) > 0) /* we have a query with an "and" clause */
    {
       /* AND field2='querystring2' */
@@ -450,12 +475,12 @@ struct query_struct parse_query(char *line)
       strcpy(tmp2, "");
       sscanf(tmp, "%[^=]='%[^\n]'", tmp1, tmp2);
       if(strlen(tmp1) > 0)
-        rtn.where2 = strdup(tmp1);
+        rtn.where2 = (char *)strdup(tmp1);
       if(strlen(tmp2) > 0)
         rtn.query2 = parse_string(tmp2, tmp);
    } /* fi */
  
-   free(tmp); free(tmpf); free(tmp1); free(tmp2); free(field);
+   free(tmp); free(tmpf); free(tmp1); free(tmp2); free(modline); free(field);
    return(rtn);
 } /* parse_query */
  
@@ -464,9 +489,8 @@ struct query_struct parse_query(char *line)
 int get_config(char *tablename)
 {
    /* Given a tablename - Open the config DB file and search for the requested
-      table.  If we find the tablename, parse out the field information so
-      we can use it later to provide the results in the user requested
-      format.
+      table.  If we find the tablename, return the position in the table, 
+      otherwise, return -1.
    */
  
    int i, done, rtn = -1;
@@ -506,7 +530,6 @@ struct res_rows_struct *parse_results(struct query_struct query,
  
    rtn = (struct res_rows_struct *)malloc(sizeof(struct res_rows_struct));
    rtn->num_cols = -1;
- 
    tmp = (char *)malloc((size_t)(MAXLINE + 1));
  
    if(query.query2 != NULL) /* AND clause to check */
@@ -515,7 +538,7 @@ struct res_rows_struct *parse_results(struct query_struct query,
       pos = find_fieldpos(query.where2, config_ptr);
       if(pos > 0)
       {
-         get_value_from_field(pos, tmp, result);
+         get_value_from_field_jgm(pos, tmp, result);
          if(strcmp(tmp, query.query2) == 0)
            cont = TRUE;
       } /* fi */
@@ -532,7 +555,7 @@ struct res_rows_struct *parse_results(struct query_struct query,
          if(pos > 0)
          {
             strcpy(tmp, "");
-            get_value_from_field(pos, tmp, result);
+            get_value_from_field_jgm(pos, tmp, result);
             if(rtn->col_type[i] == INT_TYPE)
             {
                sscanf(tmp, "%d", &rtn->int_result[i]);
@@ -541,9 +564,11 @@ struct res_rows_struct *parse_results(struct query_struct query,
             else
             {
                rtn->int_result[i] = -1;
-               rtn->str_result[i] = strdup(tmp);
+               rtn->str_result[i] = (char *)strdup(tmp);
             } /* else */
          } /* if */
+         else
+           rtn->str_result[i] = NULL;
      } /* for */
    } /* if */
  
@@ -553,41 +578,42 @@ struct res_rows_struct *parse_results(struct query_struct query,
  
 /************************************************************************/
  
-void get_value_from_field(int pos, char *to, char *from)
+void get_value_from_field_jgm(int pos, char *to, char *from)
 {
     /* Given a position, result variable, and from string - Assume that
        the bar "|" is used to separate the fields.  Cycle through the from
        string until the requested position is found.  Then copy the findings
        into the result variable (to).
+
+       to is assumed to have already been malloc/assigned memory.
     */
  
-    int i;
-    char *tmp1, *tmp2;
- 
-    tmp1 = (char *)malloc((size_t)(strlen(from) + 1));
-    tmp2 = (char *)malloc((size_t)(strlen(from) + 1));
- 
-    strcpy(tmp1, from);
+    int i, j;
+    int current_field  = 1;
+    int char_len = 0;
+    char tmpvalue[MAXLINE];
+
+    char_len = (int)strlen(from);
+
     i = 0;
-    while(i < pos)
+    while((current_field < pos) && (i < char_len))
     {
-       sscanf(tmp1, "%[^|]|%[^\n]", to, tmp2);
-       if(tmp2[0] == '|') /* blank field */
-       {
-          if(i + 1 < pos)
-          {
-             strcpy(tmp1, tmp2 + 1);
-             i++;
-             strcpy(to, "");
-          } /* fi */
-       } /* fi */
-       else
-         strcpy(tmp1, tmp2);
+       if(from[i] == '|')
+         current_field++;
        i++;
-    } /* for */
+    } /* while */
+
+    j = 0;
+    strcpy(tmpvalue, "");
+
+    while((from[i] != '|') && ((i + 1) < char_len))
+      tmpvalue[j++] = from[i++];
+    
+    tmpvalue[j] = '\0';
+
+    strcpy(to, tmpvalue);
+} /* get_value_from_field_jgm */
  
-    free(tmp1); free(tmp2);
-} /* get_value_from_field */
  
 /************************************************************************/
  
@@ -618,7 +644,7 @@ int find_fieldpos(char *find, int config_ptr)
 } /* find_fieldpos */
  
 /************************************************************************/
- 
+
 void free_query(struct query_struct query)
 {
    int i;
@@ -636,6 +662,7 @@ void free_query(struct query_struct query)
 } /* free_query */
  
 /************************************************************************/
+ 
  
 char *parse_string(char *str, char *leftover)
 {
@@ -657,6 +684,7 @@ char *parse_string(char *str, char *leftover)
       We also want to strip out any dual embedded single quotes so that the
       end string is readable for DB.
    */
+ 
    if((strstr(str, "' and ") != NULL) && (strstr(str, "=") != NULL))
    {
       /* Find the equal sign */
@@ -696,7 +724,7 @@ char *parse_string(char *str, char *leftover)
          pos++;
          rtn[lpos++] = str[pos++];
       } /* else */
-      else if((str[pos + 1] == '\n') || (str[pos + 1] == '\0'))
+      else if((str[pos + 1] == '\n') || (str[pos + 1] == (int)NULL))
         done = TRUE;
       else
         rtn[lpos++] = str[pos++];

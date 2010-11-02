@@ -42,7 +42,8 @@
 	debug_message/3,
 	do_formal_tagger_output/0,
 	do_sanity_checking_and_housekeeping/4,
-	ensure_number/2,
+	ensure_atom/2,
+ 	ensure_number/2,
 	force_to_atoms/2,
 	generate_aa_term/2,
 	generate_bracketed_output/2,
@@ -1093,6 +1094,16 @@ debug_message(Flag, Control, Arguments) :-
 	; true
 	).
 
+ensure_atom(Input, InputAtom) :-
+	( atom(Input) ->
+	  InputAtom = Input
+	; number(Input) ->
+	  number_codes(Input, InputCodes),
+	  atom_codes(InputAtom, InputCodes)
+	; is_print_string(Input) ->
+	  atom_codes(InputAtom, Input)
+	).
+	
 ensure_number(Atom, Number) :-
 	( number(Atom) ->
 	  Number is Atom

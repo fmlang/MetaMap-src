@@ -60,7 +60,7 @@
 
 :- use_module(skr(skr_utilities), [
 	debug_message/3,
-	force_to_atoms/2,
+	ensure_number/2,
 	generate_aa_term/2
    ]).
 
@@ -936,22 +936,19 @@ make_method_list([Method0|Methods], [Weight|Weights], [MethodElement|MethodList]
 	make_method_list(Methods, Weights, MethodList).
 
 get_WSD_server_hosts_and_port(WSDServerHosts, UserChoice, WSDServerPort) :-
+	environ('WSD_SERVER_HOSTS', WSDServerHostsEnv),
+	atom_codes(WSDServerHostsEnv, WSDServerHostsChars0),
+	% SICStus Prolog's read_from_codes/2 requires a terminating period,
+	% which Quintus Prolog's chars_to_term/2 does not!
+	append(WSDServerHostsChars0, ".", WSDServerHostsChars),
+	read_from_codes(WSDServerHostsChars, WSDServerHosts),
 	( control_value('WSD', WSDServerHost) ->
-	  WSDServerHosts = [WSDServerHost],
 	  UserChoice = WSDServerHost
-	; environ('WSD_SERVER_HOSTS', WSDServerHostsEnv),
-	  atom_codes(WSDServerHostsEnv, WSDServerHostsChars0),
-	  % SICStus Prolog's read_from_codes/2 requires a terminating period,
-	  % which Quintus Prolog's chars_to_term/2 does not!
-	  append(WSDServerHostsChars0, ".", WSDServerHostsChars),
-	  read_from_codes(WSDServerHostsChars, WSDServerHosts0),
-	  force_to_atoms(WSDServerHosts0, WSDServerHosts),
-	  UserChoice is 0
+	; UserChoice is 0
 	),
         environ('WSD_SERVER_PORT', WSDServerPortAtom),
 	!,
-	atom_codes(WSDServerPortAtom, WSDServerPortChars),
-	number_codes(WSDServerPort, WSDServerPortChars).
+	ensure_number(WSDServerPortAtom, WSDServerPort).
 get_WSD_server_hosts_and_port(_WSDServerHosts, _UserChoice, _WSDServerPort) :-
 	format(user_output, '~nCould not set WSD Server hosts and port.~nAborting.~n', []),
 	halt.
@@ -959,12 +956,13 @@ get_WSD_server_hosts_and_port(_WSDServerHosts, _UserChoice, _WSDServerPort) :-
 choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost, ChosenWSDServerIP) :-
 	( WSDForced \== 0 ->
 	  ChosenWSDServerHost = WSDForced
-	; repeat,
+	; true
+	),
+	repeat,
 	     % must be backtrackable!
 	     random_member(ChosenWSDServerHostAndIP, WSDServerHosts),
 	     atom_codes(ChosenWSDServerHostAndIP, ChosenWSDServerHostAndIPString),
 	     split_string_completely(ChosenWSDServerHostAndIPString, "|",
 				     [ChosenWSDServerHostString, ChosenWSDServerIPString]),
 	     atom_codes(ChosenWSDServerHost, ChosenWSDServerHostString),
-	     atom_codes(ChosenWSDServerIP, ChosenWSDServerIPString)	    
-	).
+	     atom_codes(ChosenWSDServerIP, ChosenWSDServerIPString).

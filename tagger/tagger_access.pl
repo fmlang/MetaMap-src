@@ -57,7 +57,8 @@
    ]).
 
 :- use_module(skr(skr_utilities),[
-	force_to_atoms/2
+	ensure_atom/2,
+	ensure_number/2
    ]).
 
 :- use_module(skr_lib(sicstus_utils),[
@@ -136,7 +137,7 @@ tag_text_with_options(Input, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	atom_codes(PrologOption, POString),
 	append([MOString,"|",POString], OptionsString),
 	atom_codes(Options, OptionsString),
-	force_to_atom(Input, QueryAtom),
+	ensure_atom(Input, QueryAtom),
 	call_tagger(Options,
 		    TaggerServerHosts, TaggerForced, TaggerServerPort,
 		    QueryAtom, TaggedTextList),
@@ -344,14 +345,12 @@ get_tagger_server_hosts_and_port(TaggerServerHosts, UserChoice, TaggerServerPort
 	  % SICStus Prolog's read_from_codes/2 requires a terminating period,
 	  % which Quintus Prolog's chars_to_term/2 does not!
 	  append(TaggerServerHostsChars0, ".", TaggerServerHostsChars),
-	  read_from_codes(TaggerServerHostsChars, TaggerServerHosts0),
-	  force_to_atoms(TaggerServerHosts0, TaggerServerHosts),
+	  read_from_codes(TaggerServerHostsChars, TaggerServerHosts),
 	  UserChoice is 0
 	),
         environ('TAGGER_SERVER_PORT', TaggerServerPortAtom),
 	!,
-	atom_codes(TaggerServerPortAtom, TaggerServerPortChars),
-	number_codes(TaggerServerPort, TaggerServerPortChars).
+	ensure_number(TaggerServerPortAtom, TaggerServerPort).
 get_tagger_server_hosts_and_port(_TaggerServerHosts, _UserChoice, _TaggerServerPort) :-
 	format(user_output, '~nCould not set Tagger Server hosts and port.~nAborting.~n', []),
 	halt.
@@ -360,19 +359,13 @@ choose_tagger_server(TaggerForced, TaggerServerHosts,
 		     ChosenTaggerServerHost, ChosenTaggerServerIP) :-
 	( TaggerForced \== 0 ->
 	  ChosenTaggerServerHost = TaggerForced
-	; length(TaggerServerHosts, NumTaggers),
-	  between(1, NumTaggers, _),
+	; true
+	),
+	repeat,
 	     % must be backtrackable!
 	     random_member(ChosenTaggerServerHostAndIP, TaggerServerHosts),
 	     atom_codes(ChosenTaggerServerHostAndIP, ChosenTaggerServerHostAndIPString),
 	     split_string_completely(ChosenTaggerServerHostAndIPString, "|",
 				     [ChosenTaggerServerHostString, ChosenTaggerServerIPString]),
 	     atom_codes(ChosenTaggerServerHost, ChosenTaggerServerHostString),
-	     atom_codes(ChosenTaggerServerIP, ChosenTaggerServerIPString)
-	).
-
-force_to_atom(Input, QueryAtom) :-
-	( atom(Input) ->
-	  QueryAtom = Input
-	; atom_codes(QueryAtom, Input)
-	).
+	     atom_codes(ChosenTaggerServerIP, ChosenTaggerServerIPString).

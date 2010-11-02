@@ -629,7 +629,7 @@ struct results_struct return_result(struct query_struct query, int config_ptr)
  
 /************************************************************************/
  
-struct query_struct parse_query(const char *line)
+struct query_struct parse_query(const char *line )
 {
    struct query_struct rtn;
    int cnt, done;
@@ -923,7 +923,7 @@ char *parse_string(char *str, char *leftover)
       while((epos > 0) && (str[--epos]!= ' '));
  
       /* Now copy into leftover field='query' so we can send back */
- 
+
       j = 0;
       for(i = epos + 1; i < len; i++)
         leftover[j++] = str[i];

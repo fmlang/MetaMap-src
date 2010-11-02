@@ -798,13 +798,12 @@ prep_conj_det(String) :-
 replace_all_substrings/4 replaces all occurrences of OldSubString to
 NewSubString in String producing NewString. */
 
-replace_all_substrings(String,OldSubString,NewSubString,NewString) :-
-    split_string(String,OldSubString,Left,Right),
-    replace_all_substrings(Right,OldSubString,NewSubString,NewRight),
-    split_string(NewString,NewSubString,Left,NewRight),
-    !.
-replace_all_substrings(String,_,_,String).
-
+replace_all_substrings(String,OldSubString, NewSubString, NewString) :-
+	split_string(String, OldSubString, Left, Right),
+	replace_all_substrings(Right, OldSubString, NewSubString, NewRight),
+	split_string(NewString, NewSubString, Left, NewRight),
+	!.
+replace_all_substrings(String, _, _, String).
 
 /* replace_nonprints_in_strings/2(+Strings, -ModifiedStrings)
    replace_nonprints/2(+String, -ModifiedString)
@@ -812,24 +811,19 @@ replace_all_substrings(String,_,_,String).
 replace_nonprints_in_strings/2 uses replace_nonprints/2 to replace each
 nonprint character with a space in each String.  */
 
-replace_nonprints_in_strings([],[]).
-replace_nonprints_in_strings([First|Rest],[ModifiedFirst|ModifiedRest]) :-
-    replace_nonprints(First,ModifiedFirst),
-    replace_nonprints_in_strings(Rest,ModifiedRest).
+replace_nonprints_in_strings([], []).
+replace_nonprints_in_strings([First|Rest], [ModifiedFirst|ModifiedRest]) :-
+	replace_nonprints(First, ModifiedFirst),
+	replace_nonprints_in_strings(Rest, ModifiedRest).
 
-replace_nonprints([],[]) :-
-    !.
-replace_nonprints([Char|Rest],[Char|ModifiedRest]) :-
-    Char < 127,
-    is_print(Char),
-    !,
-%    S=[Char],
-%    format('--~s=~d~n',[S,Char]),
-    replace_nonprints(Rest,ModifiedRest).
-replace_nonprints([_Char|Rest],[0' |ModifiedRest]) :-
-%    format('--<~d>~n',[Char]),
-    replace_nonprints(Rest,ModifiedRest).
-
+replace_nonprints([], []).
+replace_nonprints([Char|Rest], [ModifiedChar|ModifiedRest]) :-
+	( Char < 127,
+	  is_print(Char) ->
+	  ModifiedChar = Char
+	; ModifiedChar = 32
+	),
+	replace_nonprints(Rest, ModifiedRest).
 
 /* replace_tabs_in_strings/2(+Strings, -ModifiedStrings)
    replace_tabs/2(+String, -ModifiedString)
@@ -837,13 +831,13 @@ replace_nonprints([_Char|Rest],[0' |ModifiedRest]) :-
 replace_tabs_in_strings/2 uses replace_tabs/2 to replace each tab character
 with a space in each String.  */
 
-replace_tabs_in_strings([],[]).
-replace_tabs_in_strings([First|Rest],[ModifiedFirst|ModifiedRest]) :-
-    replace_tabs(First,ModifiedFirst),
-    replace_tabs_in_strings(Rest,ModifiedRest).
+replace_tabs_in_strings([], []).
+replace_tabs_in_strings([First|Rest], [ModifiedFirst|ModifiedRest]) :-
+	replace_tabs(First, ModifiedFirst),
+	replace_tabs_in_strings(Rest, ModifiedRest).
 
-replace_tabs(String,ModifiedString) :-
-    replace_all_substrings(String,[9]," ",ModifiedString).
+replace_tabs(String, ModifiedString) :-
+	replace_all_substrings(String, [9], " ", ModifiedString).
 
 /* split_string(?String, +Substring, ?Left, ?Right)
 split_string/4 embodies the property that String is the concatenation of
