@@ -237,7 +237,7 @@ public class MetaMapApiTest {
 	  options.add(args[i]); i++;
 	  options.add(args[i]);
 	} else if ( args[i].equals("-r") || args[i].equals("--threshold") ) {
-	  options.add(args[i]);
+	  options.add(args[i]); i++;
 	  options.add(args[i]);
 	} else if ( args[i].equals("--metamap_server_host") ) {
           i++;
@@ -253,7 +253,7 @@ public class MetaMapApiTest {
           output = new PrintStream(args[i]);
 	  System.out.println("output file: " + args[i]);
 	} else {
-	  options.add(args[i]); i++;
+	  options.add(args[i]);
 	}
       } else {
 	termBuf.append(args[i]).append(" "); 
