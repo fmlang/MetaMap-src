@@ -943,26 +943,45 @@ get_WSD_server_hosts_and_port(WSDServerHosts, UserChoice, WSDServerPort) :-
 	append(WSDServerHostsChars0, ".", WSDServerHostsChars),
 	read_from_codes(WSDServerHostsChars, WSDServerHosts),
 	( control_value('WSD', WSDServerHost) ->
-	  UserChoice = WSDServerHost
+	  UserChoice = WSDServerHost,
+	  member(ChosenWSDServerHostAndIP, WSDServerHosts),
+	  get_WSD_server_name_and_IP_address(ChosenWSDServerHostAndIP,
+					     WSDServerHost,
+					     _ChosenWSDServerIP)
 	; UserChoice is 0
 	),
         environ('WSD_SERVER_PORT', WSDServerPortAtom),
 	!,
 	ensure_number(WSDServerPortAtom, WSDServerPort).
-get_WSD_server_hosts_and_port(_WSDServerHosts, _UserChoice, _WSDServerPort) :-
-	format(user_output, '~nCould not set WSD Server hosts and port.~nAborting.~n', []),
+get_WSD_server_hosts_and_port(_WSDServerHosts, UserChoice, _WSDServerPort) :-
+	( control_value('WSD', UserChoice) ->
+	  format(user_output,
+		 '~nCould not set WSD Server hosts and port for ~q.~nAborting.~n', [UserChoice])
+	; format(user_output,
+		 '~nCould not set WSD Server hosts and port.~nAborting.~n', [])
+	),
 	halt.
 
 choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost, ChosenWSDServerIP) :-
 	( WSDForced \== 0 ->
-	  ChosenWSDServerHost = WSDForced
-	; true
-	),
-	repeat,
+	  ChosenWSDServerHost = WSDForced,
+	  member(ChosenWSDServerHostAndIP, WSDServerHosts),
+	  get_WSD_server_name_and_IP_address(ChosenWSDServerHostAndIP,
+					     ChosenWSDServerHost,
+					     ChosenWSDServerIP)
+	; repeat,
 	     % must be backtrackable!
 	     random_member(ChosenWSDServerHostAndIP, WSDServerHosts),
-	     atom_codes(ChosenWSDServerHostAndIP, ChosenWSDServerHostAndIPString),
-	     split_string_completely(ChosenWSDServerHostAndIPString, "|",
-				     [ChosenWSDServerHostString, ChosenWSDServerIPString]),
-	     atom_codes(ChosenWSDServerHost, ChosenWSDServerHostString),
-	     atom_codes(ChosenWSDServerIP, ChosenWSDServerIPString).
+	     get_WSD_server_name_and_IP_address(ChosenWSDServerHostAndIP,
+						ChosenWSDServerHost,
+						ChosenWSDServerIP)
+       ).
+
+get_WSD_server_name_and_IP_address(ChosenWSDServerHostAndIP,
+				   ChosenWSDServerHost,
+				   ChosenWSDServerIP) :-
+	atom_codes(ChosenWSDServerHostAndIP, ChosenWSDServerHostAndIPString),
+	split_string_completely(ChosenWSDServerHostAndIPString, "|",
+				[ChosenWSDServerHostString, ChosenWSDServerIPString]),
+	atom_codes(ChosenWSDServerHost, ChosenWSDServerHostString),
+	atom_codes(ChosenWSDServerIP, ChosenWSDServerIPString).

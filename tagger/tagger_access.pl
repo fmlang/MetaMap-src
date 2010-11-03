@@ -313,7 +313,7 @@ test_post_tagger_query(SocketStream, Request) :-
 	  halt
         ).
 
-% get_Tagger_result/2
+% get_tagger_result/2
 test_get_tagger_result(SocketStream, Request, StreamTerm) :-
 	( get_chars_tagger(SocketStream, StreamTerm) ->
 	  true
@@ -337,35 +337,55 @@ get_chars_tagger(Stream, Input) :-
 	).
 
 get_tagger_server_hosts_and_port(TaggerServerHosts, UserChoice, TaggerServerPort) :-
+	environ('TAGGER_SERVER_HOSTS', TaggerServerHostsEnv),
+	atom_codes(TaggerServerHostsEnv, TaggerServerHostsChars0),
+	% SICStus Prolog's read_from_codes/2 requires a terminating period,
+	% which Quintus Prolog's chars_to_term/2 does not!
+	append(TaggerServerHostsChars0, ".", TaggerServerHostsChars),
+	read_from_codes(TaggerServerHostsChars, TaggerServerHosts),
 	( control_value(tagger, TaggerServerHost) ->
-	  TaggerServerHosts = [TaggerServerHost],
-	  UserChoice = TaggerServerHost
-	; environ('TAGGER_SERVER_HOSTS', TaggerServerHostsEnv),
-	  atom_codes(TaggerServerHostsEnv, TaggerServerHostsChars0),
-	  % SICStus Prolog's read_from_codes/2 requires a terminating period,
-	  % which Quintus Prolog's chars_to_term/2 does not!
-	  append(TaggerServerHostsChars0, ".", TaggerServerHostsChars),
-	  read_from_codes(TaggerServerHostsChars, TaggerServerHosts),
-	  UserChoice is 0
+	  UserChoice = TaggerServerHost,
+	  member(ChosenTaggerServerHostAndIP, TaggerServerHosts),
+	  get_tagger_server_name_and_IP_address(ChosenTaggerServerHostAndIP,
+						TaggerServerHost,
+						_ChosenTaggerServerIP)
+	; UserChoice is 0
 	),
         environ('TAGGER_SERVER_PORT', TaggerServerPortAtom),
 	!,
 	ensure_number(TaggerServerPortAtom, TaggerServerPort).
 get_tagger_server_hosts_and_port(_TaggerServerHosts, _UserChoice, _TaggerServerPort) :-
-	format(user_output, '~nCould not set Tagger Server hosts and port.~nAborting.~n', []),
+	( control_value(tagger, UserChoice) ->
+	  format(user_output,
+		 '~nCould not set tagger Server hosts and port for ~q.~nAborting.~n', [UserChoice])
+	; format(user_output,
+		 '~nCould not set tagger Server hosts and port.~nAborting.~n', [])
+	),
 	halt.
 
 choose_tagger_server(TaggerForced, TaggerServerHosts,
 		     ChosenTaggerServerHost, ChosenTaggerServerIP) :-
 	( TaggerForced \== 0 ->
-	  ChosenTaggerServerHost = TaggerForced
-	; true
-	),
-	repeat,
+	  ChosenTaggerServerHost = TaggerForced,
+	  member(ChosenTaggerServerHostAndIP, TaggerServerHosts),
+	  get_tagger_server_name_and_IP_address(ChosenTaggerServerHostAndIP,
+						ChosenTaggerServerHost,
+						ChosenTaggerServerIP)
+	; repeat,
 	     % must be backtrackable!
 	     random_member(ChosenTaggerServerHostAndIP, TaggerServerHosts),
 	     atom_codes(ChosenTaggerServerHostAndIP, ChosenTaggerServerHostAndIPString),
 	     split_string_completely(ChosenTaggerServerHostAndIPString, "|",
 				     [ChosenTaggerServerHostString, ChosenTaggerServerIPString]),
 	     atom_codes(ChosenTaggerServerHost, ChosenTaggerServerHostString),
-	     atom_codes(ChosenTaggerServerIP, ChosenTaggerServerIPString).
+	     atom_codes(ChosenTaggerServerIP, ChosenTaggerServerIPString)
+	).
+
+get_tagger_server_name_and_IP_address(ChosenTaggerServerHostAndIP,
+				      ChosenTaggerServerHost,
+				      ChosenTaggerServerIP) :-
+	atom_codes(ChosenTaggerServerHostAndIP, ChosenTaggerServerHostAndIPString),
+	split_string_completely(ChosenTaggerServerHostAndIPString, "|",
+				[ChosenTaggerServerHostString, ChosenTaggerServerIPString]),
+	atom_codes(ChosenTaggerServerHost, ChosenTaggerServerHostString),
+	atom_codes(ChosenTaggerServerIP, ChosenTaggerServerIPString).
