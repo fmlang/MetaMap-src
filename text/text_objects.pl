@@ -1667,8 +1667,11 @@ find_aa(AATokens, ScopeWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut, _Ou
 	% an AA expansion can't be immediately preceeded by a punc tok;
 	% This prevents in e.g., "the effect of 20K-hGH on human PRL receptor (hPRLR)."
 	% The expansion from beginning with "hGH", because it should begin with "human".
-	RestTokens = [FirstRestToken|_],
-	\+ punc_tok(FirstRestToken),
+	% This rule has been disabled.
+	% ( RestTokens = [FirstRestToken|_] ->
+	%   \+ punc_tok(FirstRestToken)
+	% ; true
+	% ),
 	Scope \== [],
 	\+ deconstructing_known_AA(Scope, PE_Token, ScopeWithParens, AAsIn),
 	\+ proposed_AA_overlaps_prev_scope(ScopeWithParens, AAsIn),
