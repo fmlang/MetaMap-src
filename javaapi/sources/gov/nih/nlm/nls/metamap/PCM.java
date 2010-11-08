@@ -13,9 +13,18 @@ import java.util.List;
  * @version 1.0
  */
 public interface PCM extends MetaMapElement {
+  /** Return the {@link Phrase} associated with set of Mappings and Candidates.
+   * @return the {@link Phrase} instance.
+   */
    Phrase getPhrase() throws Exception ;
    List<Ev> getCandidates() throws Exception ;
+  /** Return the Candidate ({@link Ev}) list associated with the {@link Phrase}.
+   * @return a List of {@link Ev} candidate instances.
+   */
    List<Ev> getCandidateList() throws Exception ;
-   List<Map> getMappings() throws Exception ;
+   List<gov.nih.nlm.nls.metamap.Map> getMappings() throws Exception ;
+  /** Return the {@link Mapping} list associated with the {@link Phrase}.
+   * @return a List of {@link Mapping} instances.
+   */
    List<Mapping> getMappingList() throws Exception ;
 }

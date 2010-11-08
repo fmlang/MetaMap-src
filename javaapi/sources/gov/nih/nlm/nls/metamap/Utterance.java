@@ -36,9 +36,9 @@ public interface Utterance extends MetaMapElement {
    * @return position of utterance in input text */
   Position getPosition() throws Exception;
   /**
-   * Return a list of <code>PCM</code> (Phrase/Candidate/Mapping)
+   * Return a list of {@link PCM} (Phrase/Candidate/Mapping)
    * container objects associated with the utterance.
-   * @return a list of <code>PCM</code> (Phrase/Candidate/Mapping) container objects.
+   * @return a list of {@link PCM} (Phrase/Candidate/Mapping) container objects.
    */
   List<PCM> getPCMList() throws Exception;
 }
