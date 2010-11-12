@@ -1523,6 +1523,7 @@ gather_variants_pos/8
 gather_variants(GVCs, PhraseWords, HeadWords, VariantsAVL) :-
 	empty_avl(EmptyVariantsAVL),
 	empty_avl(EmptyPositionAVL),
+	% format("~nHEAD:   ~q~nPHRASE: ~q~n", [HeadWords,PhraseWords]),
 	compute_all_subsequence_positions(HeadWords, PhraseWords, PossibleHeadPositions),
 	concatenate_text(HeadWords, ' ', HeadWordsAtom),
 	add_to_avl_once(HeadWordsAtom, PossibleHeadPositions,
@@ -1581,10 +1582,10 @@ gather_variants_var([Variant|RestVariants], NFR, Generator,
 % 	% compute_all_subsequence_positions(SubWords, Words, Res).
 % 	compute_all_positions(SubWords, Words, Res).
 
-% compute_all_subsequence_positions(SubWords, Words, Positions) :-
+% compute_all_subsequence_positions_OLD(SubWords, Words, Positions) :-
 % 	( findall(Position,
 % 		  compute_one_subsequence_position(SubWords,Words,Position),
-% 		  Positions),f
+% 		  Positions),
 % 	  Positions \== [] ->
 % 	  true
 % 	; format('~NERROR: compute_all_subsequence_positions/3 failed for ~p and ~p~n',
@@ -1623,10 +1624,11 @@ compute_all_subsequence_positions(SubWords, Words, AllPositions) :-
 compute_all_subsequence_positions_1([], _Words, [[0,-1]]).
 compute_all_subsequence_positions_1([FirstSubWord|RestSubWords], Words, AllPositions) :-
 	% reversed order of args from QP library version!
+	length([FirstSubWord|RestSubWords], SubWordsLength),
 	last([FirstSubWord|RestSubWords], LastSubWord),
 	all_positions(Words, FirstSubWord, 1, FirstPositions),
 	all_positions(Words, LastSubWord,  1, LastPositions),
-	all_pairs(FirstPositions, LastPositions, AllPositions, []).	
+	all_pairs(FirstPositions, LastPositions, SubWordsLength, AllPositions, []).
 
 % Given a list L and an element X, generate all index positions of X in L.
 % E.g., calling
@@ -1645,23 +1647,29 @@ all_positions([H|T], SubWord, Index, AllPositions) :-
 
 % Given two lists L1 and L2, generate all pairs X1-X2
 % (each pair is currently represented as a 2-element list -- this MUST change!!)
-% such that X1 is a member of L1 and X2 is a member of L2 and X1 =< X2.
+% such that
+% * X1 is a member of L1,
+% * X2 is a member of L2,
+% * X1 =< X2, and
+% * (X2 - X1) + 1 == SubWordsLength
 % E.g., calling
-% all_pairs([1,3,5], [2,4,6], AllPairs, [])
-% instantiates AllPairs to [[1,2],[1,4],[1,6],[3,4],[3,6],[5,6]].
+% all_pairs([1,3,5], [2,4,6], SubWordsLength, AllPairs, [])
+% instantiates AllPairs to [[1,2],[1,4],[1,6],[3,4],[3,6],[5,6]]
+% subject to the constraint that 
 
-all_pairs([], _List2, AllPairs, AllPairs).
-all_pairs([H|T], List2, AllPairs, Tail) :-
-	all_pairs_1(List2, H, AllPairs, Rest),
-	all_pairs(T, List2, Rest, Tail).
+all_pairs([], _List2, _DesiredLength, AllPairs, AllPairs).
+all_pairs([H|T], List2, DesiredLength, AllPairs, Tail) :-
+	all_pairs_1(List2, H, DesiredLength, AllPairs, Rest),
+	all_pairs(T, List2, DesiredLength, Rest, Tail).
 
-all_pairs_1([], _X, Tail, Tail).
-all_pairs_1([H|T], X, AllPairs, Tail) :-
-	( X =< H ->
+all_pairs_1([], _X, _DesiredLength, Tail, Tail).
+all_pairs_1([H|T], X, DesiredLength, AllPairs, Tail) :-
+	( X =< H,
+	  (H - X) + 1 =:= DesiredLength ->
 	  AllPairs = [[X,H]|RestAllPairs]
 	; RestAllPairs = AllPairs
 	),
-	all_pairs_1(T, X, RestAllPairs, Tail).
+	all_pairs_1(T, X, DesiredLength, RestAllPairs, Tail).
 
 
 % Old version:
