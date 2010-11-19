@@ -64,7 +64,7 @@ else
   endif
 endif
 
-CFLAGS= ${DEFAULT_CFLAGS} -c
+CFLAGS= ${BASIC_CFLAGS} -c
 
 SKR_BERKELEY_DB=./berkeley_db
 
