@@ -55,6 +55,11 @@
 	ttyflush/0
     ]).
 
+:- use_module(library(file_systems), [
+	file_exists/1,
+	file_property/3
+    ]).
+
 :- use_module(library(random), [
 	random/1,
 	setrand/1
@@ -104,3 +109,28 @@ runtime_entry(abort) :-
 	ttyflush,
 	stop_skr,
 	format(user_output,'Done.~n',[]).
+
+pl_to_po :-
+	source_file(FilePL),
+	compile_to_PO_if_necessary(FilePL),
+	fail
+      ; true.
+
+compile_to_PO_if_necessary(FilePL) :-
+	sub_atom('SKR', FilePL),
+	atom_codes(FilePL, CodesPL),
+	append(Prefix, ".pl", CodesPL),
+	append(Prefix, ".po", CodesPO),
+	atom_codes(FilePO, CodesPO),
+	% UNLESS the PO file exists and is more recent than the PL file,
+	% compile the PL file to PO
+	( file_exists(FilePO),
+	  file_property(FilePL, modify_timestamp, TimeStampPL),
+	  file_property(FilePO, modify_timestamp, TimeStampPO),
+	  TimeStampPO > TimeStampPL ->
+	  true
+	; format(user_output, 'Saving ~w to ~w~n', [FilePL,FilePO]),
+	  save_files(FilePL, FilePO)
+	).
+	   
+:- pl_to_po.

@@ -1665,13 +1665,12 @@ find_aa(AATokens, ScopeWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut, _Ou
 	ensure_first_letter_match(TempScope, AlphaNumericChar),
  	push_back_unwanted_tokens(TempScope, TempRestTokens, Scope, RestTokens),
 	% an AA expansion can't be immediately preceeded by a punc tok;
-	% This prevents in e.g., "the effect of 20K-hGH on human PRL receptor (hPRLR)."
-	% The expansion from beginning with "hGH", because it should begin with "human".
-	% This rule has been disabled.
-	% ( RestTokens = [FirstRestToken|_] ->
-	%   \+ punc_tok(FirstRestToken)
-	% ; true
-	% ),
+	% E.g., in "the effect of 20K-hGH on human PRL receptor (hPRLR).",
+	% the expansion shouldn't begin with "hGH", but with "human".
+	( RestTokens = [FirstRestToken|_] ->
+	  \+ punc_tok(FirstRestToken)
+	; true
+	),
 	Scope \== [],
 	\+ deconstructing_known_AA(Scope, PE_Token, ScopeWithParens, AAsIn),
 	\+ proposed_AA_overlaps_prev_scope(ScopeWithParens, AAsIn),
@@ -1702,6 +1701,10 @@ find_aa(AATokens, ScopeWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut, _Ou
 	evaluate_aa_match(AATokens1, AAScope1, AAMatch1, AATokens0, AAScope0,
 			  _NT, _NT0, _NS, _NS0, _T, _S, _V, YN, _OutputStream),
 	YN == yes,
+	% format(user_output, 'AAT: ', []),
+	% skr_utilities:write_token_list(AATokens, 0, 1),
+	% format(user_output, 'SCO: ', []),
+	% skr_utilities:write_token_list(Scope, 0, 1),	
 	store_aa(AATokens, Scope, AAsIn, AAsOut),
 	!.
 
@@ -1933,13 +1936,12 @@ match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
 	  \+ prep_conj_det(LCText),
 	  MatchingTokens = [Token],
 	  RestMatchingTokens = [],
-	  LeftOverTokens = []
+	  LeftOverTokens = RestTokens
 	  % match_initial_to_char(1, NextDepth, AALength, RestTokens, Char, LCText,
 	  % 			  RestMatchingTokens, LeftOverTokens)
-	  ; % Tokens == [],
-	  \+ prep_conj_det(PreviousMatchingText),
-	  MatchingTokens = [],
-	  LeftOverTokens = Tokens
+	  ; \+ prep_conj_det(PreviousMatchingText),
+	    MatchingTokens = [],
+	    LeftOverTokens = Tokens
 	).
 
 %	; % Token does not match, so quit.

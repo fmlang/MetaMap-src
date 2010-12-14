@@ -411,11 +411,14 @@ is_integer_string_aux([First|Rest]) :-
 
 is_print_string/1 succeeds if String is a string of printable characters.  */
 
-is_print_string([]).
-is_print_string([First|Rest]) :-
+is_print_string(String) :-
+	nonvar(String),
+	is_print_string_aux(String).
+is_print_string_aux([]).
+is_print_string_aux([First|Rest]) :-
 	nonvar(First),
 	is_print(First),
-	is_print_string(Rest).
+	is_print_string_aux(Rest).
 
 /* uninvert_string(+String, -UninvString)
    normalize_string(+String, -NormString)
