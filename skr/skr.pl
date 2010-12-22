@@ -1227,13 +1227,14 @@ filter_evaluations_to_sts/3 removes those evaluations from EvaluationsIn
 which do not represent concepts with some ST in STs producing EvaluationsOut. */
 
 filter_evaluations_to_sts([], _, []).
-filter_evaluations_to_sts([First|Rest], STs, [First|FilteredRest]) :-
+filter_evaluations_to_sts([First|Rest], STs, Filtered) :-
 	First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
 		   _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-	intersection(SemTypes, STs, [_|_]),
-	!,
-	filter_evaluations_to_sts(Rest, STs, FilteredRest).
-filter_evaluations_to_sts([_First|Rest], STs, FilteredRest) :-
+	intersection(SemTypes, STs, Intersection),
+	( Intersection == [] ->
+	  Filtered = FilteredRest
+	; Filtered = [First|FilteredRest]
+	),
 	filter_evaluations_to_sts(Rest, STs, FilteredRest).
 
 /* filter_evaluations_excluding_sts(+EvaluationsIn, +STs, -EvaluationsOut)
@@ -1243,13 +1244,14 @@ EvaluationsIn which represent concepts with any ST in STs producing
 EvaluationsOut. */
 
 filter_evaluations_excluding_sts([], _, []).
-filter_evaluations_excluding_sts([First|Rest], STs, [First|FilteredRest]) :-
+filter_evaluations_excluding_sts([First|Rest], STs, Filtered) :-
 	First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
 		   _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-	intersection(SemTypes, STs, [_|_]),
-	!,
-	filter_evaluations_excluding_sts(Rest, STs, FilteredRest).
-filter_evaluations_excluding_sts([_First|Rest], STs, FilteredRest) :-
+	intersection(SemTypes, STs, Intersection),
+	( Intersection == [] ->
+	  Filtered = [First|FilteredRest]
+	; Filtered = FilteredRest
+	),
 	filter_evaluations_excluding_sts(Rest, STs, FilteredRest).
 
 construct_best_mappings(_Evaluations, PhraseTextString, Phrase,
@@ -1397,8 +1399,8 @@ filter_best_aphrases([], _BestValue, []).
 filter_best_aphrases([First|Rest], BestValue, Filtered) :-
 	First = ap(Value,_,_,_),
 	( Value =:= BestValue ->
-	  Filtered = [First|RestFiltered],
-	  filter_best_aphrases(Rest, BestValue, RestFiltered)
+	  Filtered = [First|FilteredRest],
+	  filter_best_aphrases(Rest, BestValue, FilteredRest)
 	; Filtered = []
 	).
 
@@ -1542,7 +1544,7 @@ expand_one_mapping([H|T], [ChosenAEv], ExpandedMappings-[ChosenAEv]) :-
         expand_aevs([H|T], 0, ExpandedMappings).
 
 
-% :- use_module(library(addportray)).
+% :- use_module(skr_lib(addportray)).
 % portray_aev([]-[aev(_,_,_,_,CUI,_,_,_,_,_,_,_,_,_)]) :- write(final(CUI)).
 % portray_aev(aev(_,_,_,_,CUI,_,_,_,_,_,_,_,_,_)) :- write(aev(CUI)).
 % :- add_portray(portray_aev).
