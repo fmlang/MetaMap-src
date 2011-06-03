@@ -36,7 +36,7 @@
 % Note that MetaMap is now subsumed by SKR.
 % In particular, metamap_fe and metamap have been replaced by skr_fe and skr.
 
-:- use_module(skr_fe, [
+:- use_module(skr(skr_fe), [
 	go/0,
 	go/1,
 	go/2
@@ -133,4 +133,4 @@ compile_to_PO_if_necessary(FilePL) :-
 	  save_files(FilePL, FilePO)
 	).
 	   
-:- pl_to_po.
+% :- pl_to_po.
