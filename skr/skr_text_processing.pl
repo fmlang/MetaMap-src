@@ -35,7 +35,7 @@
 
 
 :- module(skr_text_processing,[
-	extract_sentences/6,
+	extract_sentences/8,
 	get_skr_text/1,
 	text_field/1
 	% is_sgml_text/1,
@@ -112,11 +112,20 @@ get_skr_text_1(_, []).
 % i.e., the user is interactively typing in input.
 % This seems to be a QP/SP difference.
 maybe_print_prompt :-
-	( seeing(user_input) ->
+	( seeing_user_input ->
 	  prompt(Prompt, Prompt),
 	  format(user_error, '~w', [Prompt])
 	; true
 	).
+
+seeing_user_input :-
+	% user_input is for SP 4.1.3
+	( seeing(user_input) ->
+	  true
+	% user is for SP 4.2
+	; seeing(user)
+	).
+
 
 /*    extract_sentences(+Lines, -InputType, -Sentences, -CoordinateSentences, -AAs)
 
@@ -157,21 +166,26 @@ acronym/abbreviation discovery.
 
 */
 
-extract_sentences(Lines0, InputType, Sentences, CoordinatedSentences, AAs, Lines) :-
+extract_sentences(Lines0, InputType, TextFields, NonTextFields,
+		  Sentences, CoordinatedSentences, AAs, Lines) :-
 	replace_tabs_in_strings(Lines0, Lines1),
 	replace_nonprints_in_strings(Lines1, Lines2),
 	( is_medline_citation(Lines2) ->
-	  extract_coord_sents_from_citation(Lines2, Sentences, CoordinatedSentences, AAs),
+	  extract_coord_sents_from_citation(Lines2, TextFields, NonTextFields,
+					    Sentences, CoordinatedSentences, AAs),
 	  InputType = citation
 	; is_smart_fielded(Lines2) ->
-	  extract_coord_sents_from_smart(Lines2, Sentences, CoordinatedSentences, AAs),
-	  InputType = smart
+	  extract_coord_sents_from_smart(Lines2, TextFields, NonTextFields,
+					 Sentences, CoordinatedSentences, AAs),
+	  InputType = smart,
+	  NonTextFields = []
 	; form_dummy_citation(Lines2, CitationLines),
-	  extract_coord_sents_from_citation(CitationLines, Sentences,
-					    CoordinatedSentences, AAs),
+	  extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
+					    Sentences, CoordinatedSentences, AAs),
 	  InputType = simple
 	),
 	Lines = Lines2,
+	
 	!.
 
 is_medline_citation([First|_]) :-
@@ -219,12 +233,12 @@ pad_lines([First|Rest], Padding, [PaddedFirst|PaddedRest]) :-
 padding_string("      ").
 
 /* 
-   extract_coord_sents_from_citation(+CitationLines, -Sentences,
-                                     -CoordinatedSentences, AAs)
+   extract_coord_sents_from_citation(+CitationLines, -TextFields, -NonTextFields,
+   				     -Sentences, -CoordinatedSentences, AAs)
 */
 
-extract_coord_sents_from_citation(CitationLines, Sentences,
-				  CoordinatedSentences, AAs) :-
+extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
+				  Sentences, CoordinatedSentences, AAs) :-
     extract_all_fields(CitationLines, CitationFields),
     (   member([FieldIDString,Field], CitationFields),
 	lower_chars(FieldIDString, LowerFieldIDString),
@@ -233,8 +247,8 @@ extract_coord_sents_from_citation(CitationLines, Sentences,
         extract_ui(Field, UI)
     ;   UI="00000000"
     ),
-    extract_coord_sents_from_fields(UI, CitationFields, Sentences,
-				    CoordinatedSentences, AAs),
+    extract_coord_sents_from_fields(UI, CitationFields, TextFields, NonTextFields,
+				    Sentences, CoordinatedSentences, AAs),
     !.
 
 %%% /* extract_utterances_from_sgml(+CitationLines, -Utterances)
@@ -335,7 +349,8 @@ extract_rest_of_field([First|Rest], [], NewFieldID, NewFirstFieldLine, Rest) :-
 	phrase(f_begins_field([NewFieldID,NewFirstFieldLine]), First),
 	!.
 extract_rest_of_field([""|Rest],RestFieldLines, NewFieldID, NewFirstFieldLine, NewRestLines) :-
-	extract_rest_of_field(Rest, RestFieldLines, NewFieldID, NewFirstFieldLine, NewRestLines).
+	extract_rest_of_field(Rest, RestFieldLines, NewFieldID, NewFirstFieldLine, NewRestLines),
+	!.
 extract_rest_of_field([First|Rest],[First|RestFieldLines], NewFieldID,
 		      NewFirstFieldLine, NewRestLines) :-
 	extract_rest_of_field(Rest, RestFieldLines, NewFieldID, NewFirstFieldLine, NewRestLines).
@@ -679,14 +694,15 @@ medline_field('UOF',
 medline_field('VI',
 	      'Volume', 'Journal volume').
 
-extract_coord_sents_from_smart(SmartLines,Sentences,CoordinatedSentences, AAs) :-
+extract_coord_sents_from_smart(SmartLines, TextFields, NonTextFields,
+			       Sentences, CoordinatedSentences, AAs) :-
     extract_all_smart_fields(SmartLines,CitationFields),
     (select_field("UI",CitationFields,UIField) ->
         extract_ui(UIField,UI)
     ;   UI="00000000"
     ),
-    extract_coord_sents_from_fields(UI, CitationFields, Sentences,
-				    CoordinatedSentences, AAs),
+    extract_coord_sents_from_fields(UI, CitationFields, TextFields, NonTextFields,
+				    Sentences, CoordinatedSentences, AAs),
     !.
 
 /* extract_all_smart_fields(+SmartLines, -CitationFields)
@@ -775,8 +791,9 @@ extract_ui(Field, UI) :-
 	; UI  = "00000000"
 	).
 
-extract_coord_sents_from_fields(UI, Fields, Sentences, CoordinatedSentences, AAs) :-
-	extract_text_fields(Fields,TextFields0),
+extract_coord_sents_from_fields(UI, Fields, TextFields0, NonTextFields,
+				Sentences, CoordinatedSentences, AAs) :-
+	extract_text_fields(Fields, TextFields0, NonTextFields),
 	padding_string(Padding),
 	unpad_fields(TextFields0, Padding, TextFields1),
 	TextFields = TextFields1,
@@ -802,19 +819,21 @@ text_field('HX').
 text_field('TX').
 
 
-/* extract_text_fields(+FieldsIn, -FieldsOut)
+/* extract_text_fields(+FieldsIn, -TextFields, -NonTextFields)
 
-extract_text_fields/2 computes FieldsOut, those fields in FieldsIn which
-satisfy text_field/1. */
+extract_text_fields/3 computes
+ * TextFields, those fields in FieldsIn which satisfy text_field/1, and
+ * NonTextFields, those fields in FieldsIn which no not.
+*/
 
-extract_text_fields([], []).
-extract_text_fields([[Field,Lines]|Rest], [[Field,Lines]|ExtractedRest]) :-
+extract_text_fields([], [], []).
+extract_text_fields([[Field,Lines]|Rest], [[Field,Lines]|RestTextFields], NonTextFields) :-
 	atom_codes(FieldAtom, Field),
 	text_field(FieldAtom),
 	!,
-	extract_text_fields(Rest,ExtractedRest).
-extract_text_fields([_First|Rest], ExtractedRest) :-
-	extract_text_fields(Rest, ExtractedRest).
+	extract_text_fields(Rest, RestTextFields, NonTextFields).
+extract_text_fields([First|Rest], TextFields, [First|RestNonTextFields]) :-
+	extract_text_fields(Rest, TextFields, RestNonTextFields).
 
 
 unpad_fields([], _Padding, []).

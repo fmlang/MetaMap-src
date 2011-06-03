@@ -52,6 +52,7 @@
 	portray_strings_double_quoted/1,
 	prep_conj_det/1,
 	prep_conj_det_atom/1,
+	remove_all_whitespace/2,
 	% must be exported for mm_print and mwi_utilities 
 	replace_all_substrings/4,
 	replace_nonprints_in_strings/2,
@@ -62,7 +63,7 @@
 	split_string_backtrack/4,
 	% must be exported for mm_print and mwi_utilities
 	syntactic_uninvert_string/2,
-	trim_and_compress_internal_whitespace/2,
+	trim_and_compress_whitespace/2,
 	trim_whitespace/2,
 	% must be exported for mwi_utilities
 	trim_whitespace_left/2,
@@ -417,8 +418,8 @@ is_print_string(String) :-
 is_print_string_aux([]).
 is_print_string_aux([First|Rest]) :-
 	nonvar(First),
-	is_print(First),
-	is_print_string_aux(Rest).
+ 	is_print(First),
+ 	is_print_string_aux(Rest).
 
 /* uninvert_string(+String, -UninvString)
    normalize_string(+String, -NormString)
@@ -458,16 +459,12 @@ contains_prep_or_conj(String) :-
     tokenize_text_more_lc(String,LCTokens),
     contains_prep_or_conj_aux(LCTokens).
 
-contains_prep_or_conj_aux([]) :-
-    !,
-    fail.
-contains_prep_or_conj_aux([FirstString|_]) :-
+contains_prep_or_conj_aux([FirstString|Rest]) :-
 	atom_codes(FirstAtom, FirstString),
-	prep_or_conj(FirstAtom),
-	!.
-contains_prep_or_conj_aux([_|Rest]) :-
-    contains_prep_or_conj_aux(Rest).
-
+	( prep_or_conj(FirstAtom) ->
+	  true
+	; contains_prep_or_conj_aux(Rest)
+	).
 
 /* prep_or_conj(?PrepOrConj)
 
@@ -923,46 +920,53 @@ trim_whitespace_left(String, TrimmedString) :-
 trim_whitespace_left_1([FirstChar|RestString], TempNumBlanksTrimmed,
 		       TrimmedString, NumBlanksTrimmed) :-
 	is_white(FirstChar),
+	!,
 	NextNumBlanksTrimmed is TempNumBlanksTrimmed + 1,
-	trim_whitespace_left_1(RestString, NextNumBlanksTrimmed, TrimmedString, NumBlanksTrimmed),
-	!.
+	trim_whitespace_left_1(RestString, NextNumBlanksTrimmed, TrimmedString, NumBlanksTrimmed).
 trim_whitespace_left_1(String, NumBlanksTrimmed, String, NumBlanksTrimmed) :-
 	!.
 
 trim_whitespace_right(String, TrimmedString) :-
-	trim_whitespace_right_1(String, TrimmedString, _NumBlanksTrimmed).
+	trim_whitespace_right(String, TrimmedString, _NumBlanksTrimmed).
 
-trim_whitespace_right_1(String, TrimmedString, NumBlanksTrimmed) :-
+trim_whitespace_right(String, TrimmedString, NumBlanksTrimmed) :-
 	rev(String, [FirstChar|RevString]),
 	is_white(FirstChar),
+	!,
 	trim_whitespace_left_1(RevString, 0, TrimmedRevString, NumBlanksTrimmed),
-	rev(TrimmedRevString, TrimmedString),
-	!.
-trim_whitespace_right_1(String, String, 0) :-
-	!.
+	rev(TrimmedRevString, TrimmedString).
+trim_whitespace_right(String, String, 0) :- !.
 
 trim_whitespace_both(String, TrimmedString) :-
 	trim_whitespace_both(String, TrimmedString, _NumLeftBlanksTrimmed, _NumRightBlanksTrimmed).
 	
 trim_whitespace_both(String, TrimmedString, NumLeftBlanksTrimmed, NumRightBlanksTrimmed) :-
 	trim_whitespace_left_1(String, 0, String0, NumLeftBlanksTrimmed),
-	trim_whitespace_right_1(String0, TrimmedString, NumRightBlanksTrimmed),
+	trim_whitespace_right(String0, TrimmedString, NumRightBlanksTrimmed),
 	!.
 
-trim_and_compress_internal_whitespace([], []).
-trim_and_compress_internal_whitespace([H|T], Compressed) :-
+trim_and_compress_whitespace([], []).
+trim_and_compress_whitespace([H|T], Compressed) :-
 	trim_whitespace_both([H|T], Trimmed),
 	Trimmed = [TrimmedH|TrimmedT],
-	trim_and_compress_internal_whitespace_1(TrimmedT, TrimmedH, Compressed).
+	trim_and_compress_whitespace_1(TrimmedT, TrimmedH, Compressed).
 
-trim_and_compress_internal_whitespace_1([], H, [H]).
-trim_and_compress_internal_whitespace_1([Next|Rest], First, Trimmed) :-
+trim_and_compress_whitespace_1([], H, [H]).
+trim_and_compress_whitespace_1([Next|Rest], First, Trimmed) :-
 	( is_white(First),
 	  is_white(Next) ->
 	  RestTrimmed = Trimmed
 	; Trimmed = [First|RestTrimmed]
 	),
-	trim_and_compress_internal_whitespace_1(Rest, Next, RestTrimmed).
+	trim_and_compress_whitespace_1(Rest, Next, RestTrimmed).
+
+remove_all_whitespace([], []).
+remove_all_whitespace([H|T], NoWhiteSpaceChars) :-
+	( is_white(H) ->
+	  RestNoWhiteSpaceChars = NoWhiteSpaceChars
+	; NoWhiteSpaceChars = [H|RestNoWhiteSpaceChars]
+	),
+	remove_all_whitespace(T, RestNoWhiteSpaceChars).
 
 % safe_number_codes(?Number, +Codes)
 % The SICStus version of number_codes/2 and number_chars/2 raises an error

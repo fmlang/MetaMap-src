@@ -34,7 +34,7 @@
 % Purpose:  MetaMap utility predicates
 
 
-:- module(metamap_utilities,[
+:- module(metamap_utilities, [
 	% must be exported for mm_print
 	build_concept_name_1/4,
 	dump_aphrase_mappings/2,
@@ -52,29 +52,29 @@
 	write_list_indented/1
     ]).
 
-:- use_module(skr_db(db_access),[
+:- use_module(skr_db(db_access), [
 	db_get_cui_sources/2
     ]).
 
-:- use_module(skr(skr_umls_info10),[
+:- use_module(skr(skr_umls_info_2011AA), [
 	convert_to_root_sources/2
     ]).
 
-:- use_module(skr_lib(semtype_translation10),[
+:- use_module(skr_lib(semtype_translation_2011AA), [
 	expand_semtypes/2
     ]).
 
-:- use_module(skr_lib(nls_system),[
+:- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
     ]).
 
-:- use_module(skr_lib(nls_strings),[
+:- use_module(skr_lib(nls_strings), [
 	concatenate_items_to_atom/2,
 	trim_whitespace/2
     ]).
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	append/2,
 	is_list/1,
 	rev/2

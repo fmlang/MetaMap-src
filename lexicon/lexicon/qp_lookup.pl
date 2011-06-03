@@ -45,6 +45,11 @@
 	shapes/3
    ]).
 
+:- use_module(skr_lib(ctypes), [
+	is_alpha/1,
+	is_punct/1
+   ]).
+
 :- use_module(library(lists), [
 	append/2
    ]).
@@ -73,7 +78,6 @@ assembledefns_aux([Token|MoreTokens], _PreviousToken, [Recs|MoreRecs], Rest, Lex
 	!,
 	assembledefns_aux(Remaining, Token, MoreRecs, Rest, Lexicon, Index).
 
-
 %%% punctuation
 assembledefns_aux([Token|MoreTokens], _PreviousToken, [R|MoreRecs], Rest, Lexicon, Index) :-
 	punct_token(Token, R),
@@ -98,18 +102,37 @@ assembledefns_aux([Token|MoreTokens], _PreviousToken, [R|MoreRecs], Rest, Lexico
 
 
 %%% punctuation records
-punct_token('.', punctuation:[lexmatch:['.'], inputmatch:['.'], records:[punct:[period]]]).
-punct_token(',', punctuation:[lexmatch:[','], inputmatch:[','], records:[punct:[comma]]]).
-punct_token(':', punctuation:[lexmatch:[':'], inputmatch:[':'], records:[punct:[colon]]]).
-punct_token(';', punctuation:[lexmatch:[';'], inputmatch:[';'], records:[punct:[semicolon]]]).
-punct_token('(', punctuation:[lexmatch:['('], inputmatch:['('], records:[punct:[lparen]]]).
-punct_token(')', punctuation:[lexmatch:[')'], inputmatch:[')'], records:[punct:[rparen]]]).
-punct_token('[', punctuation:[lexmatch:['['], inputmatch:['['], records:[punct:[lparen]]]).
-punct_token(']', punctuation:[lexmatch:[']'], inputmatch:[']'], records:[punct:[rparen]]]).
-punct_token('/', punctuation:[lexmatch:['/'], inputmatch:['/'], records:[punct:[slash]]]).
-punct_token('?', punctuation:[lexmatch:['?'], inputmatch:['?'], records:[punct:[question]]]).
-punct_token('!', punctuation:[lexmatch:['!'], inputmatch:['!'], records:[punct:[exclaim]]]).
-punct_token('-', punctuation:[lexmatch:['-'], inputmatch:['-'], records:[punct:[dash, hyphen]]]).
+punct_token(Token, punctuation:[lexmatch:[Token], inputmatch:[Token], records:[punct:PunctName]]) :-
+	atom_codes(Token, [C]),
+	is_punct(C),
+	punct_name(Token, PunctName).
+
+% punct_token('.', punctuation:[lexmatch:['.'], inputmatch:['.'], records:[punct:[period]]]).
+% punct_token(',', punctuation:[lexmatch:[','], inputmatch:[','], records:[punct:[comma]]]).
+% punct_token(':', punctuation:[lexmatch:[':'], inputmatch:[':'], records:[punct:[colon]]]).
+% punct_token(';', punctuation:[lexmatch:[';'], inputmatch:[';'], records:[punct:[semicolon]]]).
+% punct_token('(', punctuation:[lexmatch:['('], inputmatch:['('], records:[punct:[lparen]]]).
+% punct_token(')', punctuation:[lexmatch:[')'], inputmatch:[')'], records:[punct:[rparen]]]).
+% punct_token('[', punctuation:[lexmatch:['['], inputmatch:['['], records:[punct:[lparen]]]).
+% punct_token(']', punctuation:[lexmatch:[']'], inputmatch:[']'], records:[punct:[rparen]]]).
+% punct_token('/', punctuation:[lexmatch:['/'], inputmatch:['/'], records:[punct:[slash]]]).
+% punct_token('?', punctuation:[lexmatch:['?'], inputmatch:['?'], records:[punct:[question]]]).
+% punct_token('!', punctuation:[lexmatch:['!'], inputmatch:['!'], records:[punct:[exclaim]]]).
+% punct_token('-', punctuation:[lexmatch:['-'], inputmatch:['-'], records:[punct:[dash, hyphen]]]).
+
+punct_name('.', [period])       :- !.
+punct_name(',', [comma])        :- !.
+punct_name(':', [colon])        :- !.
+punct_name(';', [semicolon])    :- !.
+punct_name('(', [lparen])       :- !.
+punct_name(')', [rparen])       :- !.
+punct_name('[', [lparen])       :- !.
+punct_name(']', [rparen])       :- !.
+punct_name('/', [slash])        :- !.
+punct_name('?', [question])     :- !.
+punct_name('!', [exclaim])      :- !.
+punct_name('-', [dash, hyphen]) :- !.
+punct_name(_,   [otherpunct]).
 
 %%%%%% ------------------------
 

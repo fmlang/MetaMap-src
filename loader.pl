@@ -133,4 +133,4 @@ compile_to_PO_if_necessary(FilePL) :-
 	  save_files(FilePL, FilePO)
 	).
 	   
-% :- pl_to_po.
+:- pl_to_po.

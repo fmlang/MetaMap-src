@@ -35,7 +35,7 @@
 
 
 :- module(metamap_candidates, [
-	add_candidates/7
+	add_candidates/8
     ]).
 
 :- use_module(metamap(metamap_evaluation), [
@@ -96,7 +96,7 @@
    ************************************************************************ */
 
 
-/* add_candidates(?GVCs, +AllVariants, +DebugFlags,
+/* add_candidates(?GVCs, +AllVariants, +IgnoreSingleChars, +DebugFlags,
    		  +WordDataCacheIn, +USCCacheIn,
 		  -WordDataCacheOut, -USCCacheOut)
 
@@ -107,19 +107,42 @@ AllVariants is an AVL tree used for determining which index to use in some cases
 WordDataCacheIn and WordDataCacheOut are used to cache results to avoid recomputation.
 USCCacheIn and USCCacheOut are also used to cache results to avoid recomputation. */
 
-add_candidates([], _AllVariants, _DebugFlags, WordDataCache, USCCache, WordDataCache, USCCache).
-add_candidates([gvc(_Generator,Variants,Candidates)|Rest],
-	       AllVariants, DebugFlags,
+add_candidates([], _AllVariants, _IgnoreSingleChars, _DebugFlags,
+	       WordDataCache, USCCache, WordDataCache, USCCache).
+add_candidates([gvc(Generator,Variants,Candidates)|RestGVCs],
+	       AllVariants, IgnoreSingleChars, DebugFlags,
 	       WordDataCacheIn, USCCacheIn,
 	       WordDataCacheOut, USCCacheOut) :-
-	extract_simple_variants(Variants, SimpleVariants),
-	debug_message(trace, '~n### Generating candidates for ~q~n', [SimpleVariants]),
-	get_meta_candidates_for_variants(SimpleVariants, AllVariants, Candidates, DebugFlags,
-					 WordDataCacheIn, USCCacheIn,
-					 WordDataCacheNext, USCCacheNext),
-	add_candidates(Rest, AllVariants, DebugFlags,
-		       WordDataCacheNext, USCCacheNext,
-		       WordDataCacheOut, USCCacheOut).
+	% If IgnoreSingleChars == 1, then don't generate candidates
+	% for single-character tokens
+	Generator = v(Token,_,_,_,_Roots0,_WordCount),
+	% add_wordcount_to_roots(Roots0, WordCount, Roots),
+	( IgnoreSingleChars =:= 1,
+	  atom_codes(Token, [_SingleChar]) ->
+	  Candidates = [],
+	  WordDataCacheNext = WordDataCacheIn,
+	  USCCacheNext = USCCacheIn
+	; % format(user_output, 'G:~q~n', [Generator]),
+	  % format(user_output, 'V:~q~n', [Variants]),
+	  % format(user_output, 'C:~q~n~n', [Candidates]),
+	  extract_simple_variants(Variants, SimpleVariants),
+	  % append(SimpleVariants, Roots, VariantsWithRoots),
+	  debug_message(trace, '~n### Generating candidates for ~q~n', [SimpleVariants]),
+	  % get_meta_candidates_for_variants(SimpleVariants, AllVariants, Candidates, DebugFlags,
+	  % get_meta_candidates_for_variants(VariantsWithRoots, AllVariants, Candidates, DebugFlags,
+	  get_meta_candidates_for_variants(SimpleVariants, AllVariants, Candidates, DebugFlags,
+					   WordDataCacheIn, USCCacheIn,
+					   WordDataCacheNext, USCCacheNext)
+	),
+	add_candidates(RestGVCs, AllVariants, IgnoreSingleChars, DebugFlags,
+		       WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut).
+	
+add_wordcount_to_roots(Roots0, WordCount, Roots) :-
+	(  foreach(R0, Roots0),
+	   foreach(R, Roots),
+	   param(WordCount)
+	do R = R0-WordCount
+	).    
 
 
 /* extract_simple_variants(+Variants, -SimpleVariants)
@@ -264,10 +287,10 @@ determine_table(Word, AllVariants, PhraseLength, Table) :-
 get_from_table(Word, FilterWords, Table, DebugFlags, MetaUSCs,
 	       WordDataCacheIn, USCCacheIn,
 	       WordDataCacheOut, USCCacheOut) :-
-	debug_message(trace, '~n### Looking up ~q|~q from ~q~n', [Word,FilterWords,Table]),
+	debug_message(db, '~n### Looking up ~q|~q from ~q~n', [Word,FilterWords,Table]),
 	make_avl_key_2(Word, Table, FilterWords, AVLKey),
 	( avl_fetch(AVLKey, USCCacheIn, MetaUSCs) ->
-	  debug_message(trace, '~N### USC CACHE FOUND ~q|~q from ~q~n', [Word,FilterWords,Table]),
+	  debug_message(db, '~N### USC CACHE FOUND ~q|~q from ~q~n', [Word,FilterWords,Table]),
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
 	; get_filtered_uscs_for_word(Table, Word, DebugFlags, FilterWords,
@@ -277,7 +300,7 @@ get_from_table(Word, FilterWords, Table, DebugFlags, MetaUSCs,
 	  WordDataCacheOut = WordDataCacheIn,
   	  avl_store(AVLKey, USCCacheIn, MetaUSCs, USCCacheOut)
 	),
-	debug_message(trace, '~N### DONE looking up ~q|~q~n', [Word,FilterWords]).
+	debug_message(db, '~N### DONE looking up ~q|~q~n', [Word,FilterWords]).
 
 make_avl_key_2(Word, Table, FilterWords, AVLKey) :-
 	concat_atom([Word,'-',Table], Functor),
@@ -313,7 +336,6 @@ get_meta_uscs_2(PhraseLength, Word, AllVariants, FilterWords,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut),
 	debug_get_uscs(DebugFlags, WordDataCacheIn, WordDataCacheOut).
-
 
 /* determine_first_word_index(+Word, +AllVariants, -FirstWordIndex)
    frequent_first_word_pair(?Word1, ?Word2)
@@ -387,3 +409,9 @@ maybe_warn_get_meta_uscs(Text) :-
 	  format('~NWARNING: No subword of ~p being searched.~n',[Text])
 	; true
 	).
+
+% :- use_module(skr_lib(addportray)).
+% portray_node(Node) :-
+% 	Node = node(_,_,_,_,_),
+% 	writeq('NODE').
+% :- add_portray(portray_node).

@@ -199,7 +199,8 @@ form_simple_tokens([Text|RestText], [LCText|RestLCText], Start,
 % ws is space, tab or newline
 set_token_type(Token, ws) :-
 	Token = [Char],
-	ws_char(Char).
+	ws_char(Char),
+	!.
 
 % token_type(" ",ws) :-
 %     !.
@@ -209,15 +210,17 @@ set_token_type(Token, ws) :-
 % ",ws) :-
 %     !.
 
-set_token_type([Char], pn) :-
+set_token_type([Char], Type) :-
 	is_punct(Char),
-	!.
+	!,
+	Type = pn.
 set_token_type(Token, Type) :-
 	Token \== "",
 	all_alnum(Token),
 	!,
 	set_alnum_token_type(Token, Type).
 
+% This should happen only for tokens ending in apostrophe-s, as far as I know.
 set_token_type(Token, xx) :-
 	( control_option(warnings) ->
 	  write_warning(Token,wxx,'<unavailable>','Unknown token')

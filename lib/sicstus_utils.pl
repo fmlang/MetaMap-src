@@ -43,10 +43,12 @@
 	can_open_file/2,
 	concat_atom/2,
 	concat_atom/3,
+	concat_atoms_intelligently/2,
 	concat_strings_with_separator/3,
 	index/3,
   	interleave_string/3,
 	lower/2,
+	lower_all/2,
 	lower_chars/2,
 	midstring/4,
 	midstring/5,
@@ -66,6 +68,7 @@
 
 
 :- use_module(skr_lib(ctypes),[
+	is_punct/1,
 	to_lower/2,
 	to_upper/2
     ]).
@@ -83,6 +86,28 @@
 
 can_open_file(RelativeFileName, Mode) :-
 	absolute_file_name(RelativeFileName, _AbsoluteFileName, [access(Mode)]).
+
+concat_atoms_intelligently(AtomList, Result) :-
+	AtomList = [H|T],
+	insert_white_space_between_alnums(T, H, TokensWithWhiteSpace),
+	concat_atom(TokensWithWhiteSpace, Result).	
+
+% insert_white_space_between_alnums:
+% Create a single atom from the input atoms,
+% inserting whitespace between only alphanumeric tokens
+insert_white_space_between_alnums([], LastToken, [LastToken]).
+insert_white_space_between_alnums([NextToken|RestTokens], FirstToken, [FirstToken|NewTokens]) :-
+	( atom_codes(FirstToken, FirstTokenCodes),
+	  FirstTokenCodes = [FirstTokenCode],
+	  is_punct(FirstTokenCode) ->
+	  NewTokens = RestNewTokens
+	; atom_codes(NextToken, NextTokenCodes),
+	  NextTokenCodes = [NextTokenCode],
+	  is_punct(NextTokenCode) ->
+	  NewTokens = RestNewTokens
+	; NewTokens = [' '|RestNewTokens]
+	),
+	insert_white_space_between_alnums(RestTokens,NextToken, RestNewTokens).
 
 concat_atom([], '').
 concat_atom([H|T], Atom) :-
@@ -120,6 +145,13 @@ atoms_to_strings([FirstAtom|RestAtoms], [FirstString|RestStrings]) :-
 
 index(Pattern, String, Offset) :-
         substring(String, Pattern, Offset, _).
+
+lower_all(List, ListLC) :-
+	(  foreach(Element, List),
+	   foreach(ElementLC, ListLC)
+	do lower(Element, ElementLC)
+	).		  
+
 
 %   lower(+Text, ?Lower)
 %   converts an atom, [XQP] string, or non-empty list of character codes

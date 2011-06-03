@@ -260,7 +260,6 @@ is_at_parenthetical_sentence_boundary(Tokens,RevPre,RBWSs,NewTokens) :-
 	)
     ),
     !.
-
 rb_ws_seq(TokensIn, RBs, WSs, RBWSs, TokensOut) :-
 	rb_seq(TokensIn, RBs, TokensInOut),
 	ws_seq(TokensInOut, WSs, TokensOut),
@@ -326,12 +325,12 @@ can_begin_sentence_1([Token], n) :-
 	token_template(Token, lc, _String, _LCString, _PosInfo),
 	!.
 % can_begin_sentence_1([tok(lc,_,_,_), tok(ws,_,_,_)|_], n) :- !.
-can_begin_sentence_1([Token1, Token2], n) :-
+can_begin_sentence_1([Token1,Token2|_], n) :-
 	token_template(Token1, lc, _Token1String, _Token1LCString, _Token1PosInfo_),
 	token_template(Token2, ws, _Token2String, _Token2LCString, _Token2PosInfo_),
 	!.
 % can_begin_sentence_1([tok(lc,_,_,_), tok(pn,PN,_,_)|_], n) :-
-can_begin_sentence_1([Token1, Token2], n) :-
+can_begin_sentence_1([Token1, Token2|_], n) :-
 	token_template(Token1, lc, _Token1String, _Token1LCString, _Token1PosInfo_),
 	token_template(Token2, pn,  PN,           _Token2LCString, _Token2PosInfo_),
 	( sentence_punc(PN) ->
@@ -363,6 +362,8 @@ can_begin_sentence_1(_Tokens, y).
    find_bracketing(+TokensIn, +RevPre, +Level, +LBList, +Label,
                    -LBToClear, -RevBExpr, -TokensOut)
 */
+
+
 
 find_field_sentences([],[]) :-
     !.
@@ -397,7 +398,8 @@ find_sentences([Token|Rest], RevPre, Level, Label, Sentences) :-
 	% Token=tok(pn,LB,LB,_),
 	token_template(Token, pn, LB, LB, _PosInfo),
 	NewLevel is Level + 1,
-	find_bracketing(Rest,[Token], NewLevel, [LB], Label, _, RevPE, NewRest),
+	NumTokensConsumed is 0,
+	find_bracketing(Rest, NumTokensConsumed,[Token], NewLevel, [LB], Label, _, RevPE, NewRest),
 	% make sure the bracketing doesn't skip ahead more than 2000 characters;
 	% analying > 90,000 citations revealed no gap > 1371 chars.
 	Rest = [FirstRest|_],
@@ -408,7 +410,7 @@ find_sentences([Token|Rest], RevPre, Level, Label, Sentences) :-
 	token_template(FirstNewRest, _NewType, _NewString, _NewLCString, pos(Start2,_End2)),
 	Diff is Start2 - Start1,
 	Diff < 2000,
-	% format(user_output, '### Bracketing Diff ~w = ~d~n', [Label, Diff]),
+	% format(user_output, '### Bracketing Diff ~w  ~d~n', [Label, Diff]),
 	% skr_fe:write_token_list([FirstRest], 0, 1),
 	% skr_fe:write_token_list([FirstNewRest], 0, 1),
 	% nl(user_output),
@@ -441,7 +443,7 @@ find_sentences([Token|Rest], RevPre, Level, Label, Sentences) :-
 find_sentences([First|Rest], RevPre, Level, Label, Sentences) :-
 	find_sentences(Rest, [First|RevPre], Level, Label, Sentences).
 
-find_bracketing([], RevPre, Level, LBList, Label, "", RevPre, []) :-
+find_bracketing([], _NumTokensConsumed, RevPre, Level, LBList, Label, "", RevPre, []) :-
 	% out of input
 	( control_option(warnings) ->
 	  rev(RevPre, Pre),
@@ -453,7 +455,8 @@ find_bracketing([], RevPre, Level, LBList, Label, "", RevPre, []) :-
 	; true
 	),
 	fail.
-find_bracketing([Token|Rest], RevPre, Level, [LB|RestLB], Label, LBToClear, [Token|RevPre], Rest) :-
+find_bracketing([Token|Rest], _NumTokensConsumed, RevPre, Level,
+		[LB|RestLB], Label, LBToClear, [Token|RevPre], Rest) :-
 	% look for closing bracket (BEFORE looking for another opening bracket)
 	rbracket_tok(Token),
 	% if it's non-exclusive, we must NOT be at whitespace
@@ -489,7 +492,8 @@ find_bracketing([Token|Rest], RevPre, Level, [LB|RestLB], Label, LBToClear, [Tok
 	; true
 	),
 	!.
-find_bracketing([Token|RestIn], RevPre, Level, LBList, Label, LBToClearOut, RevBExpr, RestOut) :-
+find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
+		LBList, Label, LBToClearOut, RevBExpr, RestOut) :-
 	% look for nested bracketing expression (AFTER looking for closing bracket)
 	lbracket_tok(Token),
 	% if it's non-exclusive, we must be at whitespace or an exclusive lb
@@ -500,7 +504,7 @@ find_bracketing([Token|RestIn], RevPre, Level, LBList, Label, LBToClearOut, RevB
 	% Token=tok(pn,LB,LB,_),
 	token_template(Token, pn, LB, LB, _PosInfo),
 	NewLevel is Level + 1,
-	find_bracketing(RestIn,[Token], NewLevel, [LB|LBList], Label,
+	find_bracketing(RestIn, 0, [Token], NewLevel, [LB|LBList], Label,
 			LBToClear, RevSubBExpr, RestInOut),
 	construct_parenthetical_token(RevSubBExpr, NewLevel, BETok, _SubBExpr),
 	% do not allow this subbracketing to be "undone", i.e. fail rather than
@@ -529,11 +533,18 @@ find_bracketing([Token|RestIn], RevPre, Level, LBList, Label, LBToClearOut, RevB
 	  append([RevSubBExpr, [BETok],RevPre], RevBExpr),
 	  RestOut = RestInOut
 	; append([RevSubBExpr, [BETok],RevPre], NewRevPre),
-          find_bracketing(RestInOut, NewRevPre, Level, LBList, Label,
+	  length([Token|RestIn], OrigTokenListLength),
+	  length(RestInOut, NewTokenListLength),
+	  NumTokensConsumedNext is NumTokensConsumed + OrigTokenListLength - NewTokenListLength,
+          find_bracketing(RestInOut, NumTokensConsumedNext, NewRevPre, Level, LBList, Label,
 			  LBToClearOut, RevBExpr, RestOut)
 	).
-find_bracketing([Token|RestIn], RevPre, Level, LBList, Label, LBToClear, RevBExpr, RestOut) :-
-	find_bracketing(RestIn, [Token|RevPre], Level, LBList, Label, LBToClear, RevBExpr, RestOut).
+find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
+		LBList, Label, LBToClear, RevBExpr, RestOut) :-
+	NumTokensConsumed < 100,
+	NumTokensConsumed1 is NumTokensConsumed + 1,
+ 	find_bracketing(RestIn, NumTokensConsumed1, [Token|RevPre], Level,
+			LBList, Label, LBToClear, RevBExpr, RestOut).
 
 
 construct_sentence_token(RevPre, Level, Token, Pre) :-
@@ -578,6 +589,10 @@ find_all_aas/4 simply has an in/out AVL tree.
 find_aas_1/5 is an auxiliary for processing a single sentence.  */
 
 find_all_aas(Sentences, UIString, OutputStream, AAs) :-
+	add_final_ws_token(Sentences, Sentences1),
+	find_all_aas_aux(Sentences1, UIString, OutputStream, AAs).
+
+find_all_aas_aux(Sentences, UIString, OutputStream, AAs) :-
 	empty_avl(AAs0),
 	% reversed order of args from QP library version!
 	last(Sentences, LastToken),
@@ -590,6 +605,16 @@ find_all_aas(Sentences, UIString, OutputStream, AAs) :-
 	; true
 	),
 	!.
+
+add_final_ws_token(Sentences, Sentences1) :-
+	last(Sentences, LastToken),
+	token_template(LastToken, _Type, _TokenString, _LCTokenString, LastPos),
+	LastPos = pos(_StartPos,EndPos),
+	EndPosPlus1 is EndPos + 1,
+	ExtraPos = pos(EndPos,EndPosPlus1),
+	token_template(ExtraWSToken, ws, " " , " ", ExtraPos),
+	append(Sentences, [ExtraWSToken], Sentences1).
+
 
 dump_all_avl(AVL, UI, OutputStream) :-
 	% Key is e.g., "HA"
@@ -1667,10 +1692,10 @@ find_aa(AATokens, ScopeWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut, _Ou
 	% an AA expansion can't be immediately preceeded by a punc tok;
 	% E.g., in "the effect of 20K-hGH on human PRL receptor (hPRLR).",
 	% the expansion shouldn't begin with "hGH", but with "human".
-	( RestTokens = [FirstRestToken|_] ->
-	  \+ punc_tok(FirstRestToken)
-	; true
-	),
+%	( RestTokens = [FirstRestToken|_] ->
+%	  \+ punc_tok(FirstRestToken)
+%	; true
+%	),
 	Scope \== [],
 	\+ deconstructing_known_AA(Scope, PE_Token, ScopeWithParens, AAsIn),
 	\+ proposed_AA_overlaps_prev_scope(ScopeWithParens, AAsIn),
@@ -2258,6 +2283,7 @@ aa_match_initials_aux([AATok|RestAAIn], ScopeIn, [AATok|RestAAOut], ScopeOut, Ma
 aa_match_initial_single_token([ScopeTok|RestScopeIn], RestScopeIn, AATok, LCCh,
 			      [match(init,AATok,ScopeTok)|MatchIn], MatchIn) :-
 	ScopeTok = aatok(char,_,_,LCCh,_,_,1,_).
+	% must be nondeterminate
 	% !.
 aa_match_initial_single_token([ScopeTok|RestScopeIn], [ScopeTok|RestScopeOut],
 			      AATok, LCCh, MatchIn, MatchOut) :-
@@ -2649,19 +2675,6 @@ count_an_tokens([tok(Type,_,_,_)|Rest], NIn, NOut) :-
 	),
 	count_an_tokens(Rest, NInOut, NOut).
 
-% This is a hack designed to allow AA-detection to detect an AA
-% at the very end of an utterance. We simply add a blank space
-% to the final string in the input.
-% The resulting final ws token is removed
-% via	append(Sentences1, [_], Sentences2),
-% in find_and_coordinate_sentences/5
-add_final_ws([], LastLine, [LastLineWithFinalWS]) :-
-	LastLine = [FieldID,FieldLines],
-	append(FieldLines, [" "], FieldLinesWithFinalWS),
-	LastLineWithFinalWS = [FieldID,FieldLinesWithFinalWS].
-add_final_ws([Next|T], H, [H|NewT]) :-
-	add_final_ws(T, Next, NewT).
-
 /* 
    find_and_coordinate_sentences(+UI, +Fields, -Sentences,
                                  -CoordinatedSentences, +AAs)
@@ -2677,9 +2690,7 @@ many-to-many relationship). */
 find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences, AAs) :-
 	tokenize_fields_utterly(Fields, TokenizedFields),
 	% format(user_output, 'TokenizedFields: ~p~n', [TokenizedFields]),
-	TokenizedFields = [H|T],
-	add_final_ws(T, H, TokenizedFieldsWithFinalWS),
-	form_field_tokens(TokenizedFieldsWithFinalWS, FieldTokens0),
+	form_field_tokens(TokenizedFields, FieldTokens0),
 	% format(user_output, '~nFieldTokens0: ~p~n', [FieldTokens0]),
 	filter_out_field_comments(FieldTokens0, FieldTokens),
 	% format(user_output, '~nFieldTokens: ~p~n', [FieldTokens]),
@@ -2692,10 +2703,7 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences, AAs) 
 	% format(user_output, '~nAAs:~p~n', [AAs]),
 	annotate_with_aas(AAs, Sentences0, Sentences1),
 	% format(user_output, '~nSentences1:~n', []),
-	% remove the spurious final ws token that was added
-	% to allow AA-detection to find an utterance-final AA
-	append(Sentences2, [_], Sentences1),
-	add_sentence_labels(Sentences2, UI, Sentences),
+	add_sentence_labels(Sentences1, UI, Sentences),
 	% format(user_output, '~nSentences:~n', []),
 	coordinate_sentences(Sentences, UI, TempCoordinatedSentences),
 	CoordinatedSentences  = TempCoordinatedSentences,

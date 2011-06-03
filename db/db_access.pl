@@ -123,7 +123,7 @@ foreign(exec_init_dbs, c, exec_init_dbs(+string)).
 
 foreign(exec_destroy_dbs, c, exec_destroy_dbs).
 
-:- load_foreign_resource(db_access).
+:- load_foreign_resource('../db_access').
 
 % :- abolish(foreign_resource/2, [force(true)]).
 
@@ -131,15 +131,15 @@ foreign(exec_destroy_dbs, c, exec_destroy_dbs).
 
 verify_valid_dbs(Location) :-
 	( \+ directory_exists(Location) ->
-	  fatal_error('~n~nERROR: Database directory ~q does not exist!!!~n~n',
+	  fatal_error('~n~nERROR: Database directory ~q does not exist.~n',
 		      [Location]),
 	  halt
 	;  \+ directory_exists(Location, [read]) ->
-	  fatal_error('~n~nERROR: Database directory ~q exists but is not readable!!!~n~n',
+	  fatal_error('~n~nERROR: Database directory ~q exists but is not readable.~n',
 		      [Location]),
 	  halt
 	;  \+ directory_exists(Location, [execute]) ->
-	  fatal_error('~n~nERROR: Database directory ~q exists but is not executable!!!~n~n',
+	  fatal_error('~n~nERROR: Database directory ~q exists but is not executable.~n',
 		      [Location]),
 	  halt
 	; exec_init_dbs(Location)
@@ -233,10 +233,10 @@ model_location(Version, Year, ModelName, Location) :-
 model_location_base_dir(Path) :- environ('MODEL_LOCATION_BASE_DIR', Path).
 
 run_query(Query, QueryType, Results, Return) :-
-	debug_message(trace, '~N### Running ~w query ~w~n', [QueryType, Query]),
+	debug_message(db, '~N### Running ~w query ~w~n', [QueryType, Query]),
 	c_nls_db_exec_2_list_jgm(Query, Results, Return),
-	debug_call(trace, length(Results, Length)),
-	debug_message(trace, '~N### Query returned ~d result(s)~n', [Length]).
+	debug_call(db, length(Results, Length)),
+	debug_message(db, '~N### Query returned ~d result(s)~n', [Length]).
 
 /* db_get_concept_cui(+Concept, -CUI)
 
@@ -444,6 +444,7 @@ db_get_synonyms_aux(WordAtom, Synonyms) :-
 
 remove_input([], _, []).
 remove_input([Input-_|Rest], Input, ModifiedRest) :-
+	!,
 	remove_input(Rest, Input, ModifiedRest).
 remove_input([First|Rest],Input, [First|ModifiedRest]) :-
 	remove_input(Rest, Input, ModifiedRest).
@@ -654,6 +655,7 @@ form_uscs([First|Rest], N, [usc(Nmstr,Str,Concept)|ModifiedRest]) :-
 	NewN is N + 1,
 	form_uscs(Rest, NewN, ModifiedRest).
 form_uscs([First|_], N, _) :-
+	!,
 	NewN is N + 1,
 	fatal_error('~NERROR: db_access: form_uscs failed on item ~d = ~p.~n', [NewN,First]),
 	halt.
@@ -729,7 +731,7 @@ convert_to_variant_terms([], []).
 %    !,
 %    convert_to_variant_terms(Rest,ConvertedRest).
 convert_to_variant_terms([[Var,VCat0,Distance,Hist0,Roots]|Rest],
-                         [v(Var,VCat, DistInteger,Hist, Roots,_)|ConvertedRest]) :-
+                         [v(Var,VCat,DistInteger,Hist,Roots,_)|ConvertedRest]) :-
 	ensure_atom(Distance, DistAtom),
 	atom_codes(DistAtom, DistCodes),
 	number_codes(DistInteger, DistCodes),
@@ -864,4 +866,10 @@ ensure_string(AtomOrString, String) :-
 fatal_error(Message, Args) :-
 	format(user_output, Message, Args),
 	ttyflush,
-	format(Message, Args).
+	current_output(OutputStream),
+	% don't duplicate message if the default output stream is user_output!
+	( stream_property(OutputStream, alias(user_output)) ->
+	  true
+	; format(Message, Args)
+	).
+

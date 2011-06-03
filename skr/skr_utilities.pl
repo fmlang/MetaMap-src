@@ -33,7 +33,7 @@
 % Author:   Lan
 % Purpose:  Utilities
 
-:- module(skr_utilities,[
+:- module(skr_utilities, [
 	compare_utterance_lengths/2,
 	compute_sum/3,
 	conditionally_print_end_info/0,
@@ -44,6 +44,7 @@
 	do_sanity_checking_and_housekeeping/4,
 	ensure_atom/2,
  	ensure_number/2,
+ 	expand_split_word_list/2,
 	force_to_atoms/2,
 	generate_aa_term/2,
 	generate_bracketed_output/2,
@@ -65,47 +66,42 @@
 	% must be exported for mm_print
 	skr_write_phrase/1,
 	skr_write_string/1,
+	split_word/3,
 	token_template/5,
 	token_template/6,
 	usage/0,
 	verify_xml_format/2,
 	write_MMO_terms/1,
-	write_raw_token_lists/3,
-	write_sentences/3,
+	write_raw_token_lists/2,
+	write_sentences/2,
 	write_token_list/3
     ]).
 
-:- use_module(lexicon(lexical),[
+:- use_module(lexicon(lexical), [
 	concatenate_strings/3
     ]).
 
-
-:- use_module(metamap(metamap_variants),[
+:- use_module(metamap(metamap_variants), [
 	write_all_variants/1
     ]).
 
-:- use_module(metamap(metamap_tokenization),[
+:- use_module(metamap(metamap_tokenization), [
 	tokenize_text_utterly/2
     ]).
 
-:- use_module(metamap(metamap_utilities),[
+:- use_module(metamap(metamap_utilities), [
 	dump_aphrase_mappings/2,
 	dump_evaluations_indented/2,
 	num_dump_evaluations_indented/2,
 	write_list_indented/1
     ]).
 
-:- use_module(skr(skr_xml),[
-	get_xml_format_mode/2
-    ]).
-
-:- use_module(skr_lib(nls_strings),[
+:- use_module(skr_lib(nls_strings), [
 	atom_codes_list/2,
-	is_print_string/1,
-	trim_and_compress_internal_whitespace/2
+	is_print_string/1
     ]).
 
-:- use_module(skr_lib(nls_system),[
+:- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2,
 	display_control_options_for_modules/2,
@@ -113,19 +109,31 @@
 	display_current_control_options/2
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
+:- use_module(skr_lib(sicstus_utils), [
 	concat_atom/2,
 	concat_atom/3,
 	concat_strings_with_separator/3,
 	ttyflush/0
     ]).
 
-:- use_module(skr(skr_umls_info10),[
+:- use_module(skr(skr_umls_info_2011AA), [
 	verify_sources/1,
 	verify_sts/1
     ]).
 
-:- use_module(text(text_object_util),[
+:- use_module(skr(skr), [
+	print_all_aevs/1,
+	% print_duplicate_info/4 is not explicitly called here,
+	% but it must still be imported because it's called via debug_call.
+	print_duplicate_info/4
+    ]).
+
+
+:- use_module(skr(skr_xml), [
+	xml_output_format/1
+    ]).
+
+:- use_module(text(text_object_util), [
 	annotation_type/1,
 	ex_lbracket_char/1,
 	ex_rbracket_char/1,
@@ -139,34 +147,32 @@
 	ws_tok/1
    ]).		     
 
-
-:- use_module(text(text_objects),[
+:- use_module(text(text_objects), [
 	extract_an_lc_strings/2,
 	extract_token_strings/2
    ]).		     
 
-:- use_module(library(avl),[
+:- use_module(library(avl), [
 	avl_member/3,
 	avl_to_list/2
     ]).
 
-:- use_module(library(codesio),[
+:- use_module(library(codesio), [
 	with_output_to_codes/2
     ]).
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	append/2,
 	last/2,
-	prefix/2,
 	selectchk/3
     ]).
 
-:- use_module(library(system),[
+:- use_module(library(system), [
 	environ/2
     ]).
 
 skr_begin_write(Label) :-
-    format('>>>>> ~p~n',[Label]).
+	format('>>>>> ~p~n', [Label]).
 
 skr_write_list(List) :-
 	format('[~n', []),
@@ -203,25 +209,25 @@ skr_end_write(Label) :-
 
 % Output routines for debugging
 
-write_sentences(PMID, CoordSentences, Sentences) :-
+write_sentences(CoordSentences, Sentences) :-
 	( control_value(debug, DebugFlags),
 	  memberchk(sentences, DebugFlags) ->
-	  format(user_output, '#### ~w CoordSentences:~n', [PMID]),
+	  format(user_output, '#### CoordSentences:~n', []),
 	  write_token_list(CoordSentences, 0, 1),
 	  ttyflush,
-	  format(user_output, '#### ~w Sentences:~n', [PMID]),
+	  format(user_output, '#### Sentences:~n', []),
 	  write_token_list(Sentences, 0, 1),
 	  ttyflush
 	; true
 	).
 
-write_raw_token_lists(PMID, ExpRawTokenList, UnExpRawTokenList) :-
+write_raw_token_lists(ExpRawTokenList, UnExpRawTokenList) :-
 	( control_value(debug, DebugFlags),
 	  memberchk(tokens, DebugFlags) ->
-	  format(user_output, '~n~n#### ~w ExpRawTokenList:~n', [PMID]),
+	  format(user_output, '~n~n#### ExpRawTokenList:~n', []),
 	  write_token_list(ExpRawTokenList, 0, 1),
 	  ttyflush,
-	  format(user_output, '~n~n#### ~w UnExpRawTokenList:~n', [PMID]),
+	  format(user_output, '~n~n#### UnExpRawTokenList:~n', []),
 	  write_token_list(UnExpRawTokenList, 0, 1),
 	  ttyflush
 	; true
@@ -325,7 +331,6 @@ make_atom(String, Atom) :-
 do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputStream) :-
 	verify_tagger_output_settings(TaggerOutputSettings),
 	verify_single_output_format(SingleOutputFormat),
-	verify_xml_format_value(XMLFormatValue),
         verify_xml_settings(XMLSettings),
         verify_mmo_settings(MMOSettings),
         verify_mmi_settings(MMISettings),
@@ -336,11 +341,14 @@ do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputSt
 	verify_gap_size_values(GapSizeValues),
 	verify_acros_abbrs_settings(AcrosAbbrsSettings),
 	verify_derivational_variants_settings(DerivationalVariantsSettings),
+	verify_tagger_server_settings(TaggerServerSettings),
+	verify_WSD_server_settings(WSDServerSettings),
 	verify_all_results([TaggerOutputSettings, SingleOutputFormat,
-			    XMLFormatValue, XMLSettings, MMOSettings, MMISettings,
+			    XMLSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
 			    SemTypeOptions, SemTypeValues, GapSizeValues,
-			    DerivationalVariantsSettings, AcrosAbbrsSettings],
+			    AcrosAbbrsSettings, DerivationalVariantsSettings,
+			    TaggerServerSettings, WSDServerSettings],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, FullYear).
 
@@ -357,38 +365,20 @@ verify_tagger_output_settings(Result) :-
 % Error if both XML and machine_output are set
 verify_single_output_format(Result) :-
 	( control_option(machine_output),
-	  control_value('XML', _) ->
+	  xml_output_format(XMLFormat) ->
 	  send_message('FATAL ERROR: Only one of --machine_output and~n', []),
-	  send_message('                         --xml_format     can be specified.~n', []),
+	  send_message('                         --~w can be specified.~n', [XMLFormat]),
 	  Result is 1
 	; Result is 0
 	).
 
-% Error if XML option is specified as anything other than format, format1, noformat, or noformat1
-verify_xml_format_value(Result) :-
-	control_value('XML', Format),
-	!,
-	( verify_xml_format(Format, _) ->
-	  Result is 0
-	; Result is 1
-	).
-verify_xml_format_value(0).
-
-% verify_xml_format/2 predicate assumes that the XML option is in fact on.
-verify_xml_format(Format, TrueOrFalse) :-
-	( get_xml_format_mode(Format, TrueOrFalse) ->
-	  true 
-	; send_message('~nFATAL ERROR: XML option must be one of format1/format/noformat1/noformat.~n', []),
-	  fail
-	).
-
 verify_xml_settings(Result) :-
-	control_option('XML'),
+	xml_output_format(XMLFormat),
 	!,
-	warning_check([syntax, show_cuis, negex, sources, dump_aas], 'XML'),
+	warning_check([syntax, show_cuis, negex, sources, dump_aas], XMLFormat),
 	fatal_error_check([hide_plain_syntax, hide_candidates, number_the_candidates,
 			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
-			  'XML', 0, Result).
+			  XMLFormat, 0, Result).
 verify_xml_settings(0).
 
 verify_mmo_settings(Result) :-
@@ -494,6 +484,29 @@ verify_derivational_variants_settings(Result) :-
 	  Result is 1
 	; Result is 0
 	).			    
+
+% Error if no_tagging is specified, but a specific tagger server is specified
+verify_tagger_server_settings(Result) :-
+	( control_option(no_tagging),
+	  control_value(tagger, ChosenTaggerServer) ->
+	  send_message('FATAL ERROR: If no_tagging is specified~n', []),
+	  send_message('             a specific tagger (~s) cannot be chosen.~n',
+		       [ChosenTaggerServer]),
+	  Result is 1
+	; Result is 0
+	).
+
+% Error if WSD is not specified, but a specific WSD server is specified
+verify_WSD_server_settings(Result) :-
+	( \+ control_option(word_sense_disambiguation),
+	  control_value('WSD', ChosenWSDServer) ->
+	  send_message('FATAL ERROR: If WSD is not specified,~n', []),
+	  send_message('             a specific WSD server (~s) cannot be chosen.~n',
+		       [ChosenWSDServer]),
+	  Result is 1
+	; Result is 0
+	).			    
+
 
 verify_all_results(ValuesList, InputStream, OutputStream) :-
 	compute_sum(ValuesList, 0, Result),
@@ -651,7 +664,7 @@ generate_EOT_output(OutputStream) :-
 	).
 
 do_formal_tagger_output :-
-	( control_value('XML', _) ->
+	( xml_output_format(_XMLFormat) ->
 	  true
 	; control_option(machine_output) ->
 	  true
@@ -666,7 +679,7 @@ generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length, ReplacementPos,
 		       BracketedOutput, PhraseMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
         ( ( control_option(machine_output)
-	  ; control_option('XML')
+	  ; xml_output_format(_XMLFormat)
 	  ; control_option(fielded_mmi_output)
 	  ) ->
 	  % Genrerate the MMO for the Phrase term
@@ -741,7 +754,7 @@ generate_candidates_output(Evaluations3, BracketedOutput, CandidatesMMO) :-
 test_generate_candidate_output_control_options :-
 	( control_option(machine_output) ->
 	  true
-	; control_option('XML') ->
+	; xml_output_format(_XMLFormat) ->
 	  true
 	; control_option(fielded_mmi_output)
 	).
@@ -768,7 +781,7 @@ conditionally_dump_evals(Evaluations3) :-
 generate_mappings_output(Mappings, Evaluations, APhrases, BracketedOutput, MappingsMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
 	( ( control_option(machine_output)
-	  ; control_option('XML')
+	  ; xml_output_format(_XMLFormat)
 	  ; control_option(fielded_mmi_output)
 	  ) ->
 	  % Generate the MMO for the Mappings,
@@ -1008,7 +1021,7 @@ token_template(tok(TokenType,TokenString,LCTokenString,PosInfo),
 	% format(user_output, 'TT/5: ~q~n', [tok(TokenType,TokenString,LCTokenString,PosInfo)]).
 
 token_template(tok(TokenType,TokenString,LCTokenString,PosInfo1,PosInfo2),
-	       TokenType, TokenString, LCTokenString, PosInfo1,PosInfo2).
+	       TokenType, TokenString, LCTokenString, PosInfo1, PosInfo2).
 
 compare_utterance_lengths([], []).
 compare_utterance_lengths([FirstOrigUtterance|RestOrigUtterances],
@@ -1081,16 +1094,30 @@ compute_sum([First|Rest], SumIn, SumOut) :-
 	compute_sum(Rest, SumInOut, SumOut).
 
 debug_call(Flag, Goal) :-
-	( control_value(debug, DebugFlags),
-	  memberchk(Flag, DebugFlags) ->
+	( control_value(debug, DebugFlags) ->
+	  debug_call_1(Flag, DebugFlags, Goal)
+	; true
+	).
+
+debug_call_1(Flag, DebugFlags, Goal) :-
+	( memberchk(Flag, DebugFlags) ->
+	  call(Goal)
+	; memberchk('ALL', DebugFlags) ->
 	  call(Goal)
 	; true
 	).
 
-debug_message(Flag, Control, Arguments) :-
-	( control_value(debug, DebugFlags),
-	  memberchk(Flag, DebugFlags) ->
-	  format(user_output, Control, Arguments)
+debug_message(Flag, String, Arguments) :-
+	( control_value(debug, DebugFlags) ->
+	  debug_message_1(Flag, String, DebugFlags, Arguments)
+	; true
+	).
+
+debug_message_1(Flag, String, DebugFlags, Arguments) :-
+	( memberchk(Flag, DebugFlags) ->
+	  format(user_output, String, Arguments)
+	; memberchk('ALL', DebugFlags) ->
+	  format(user_output, String, Arguments)
 	; true
 	).
 
@@ -1122,7 +1149,7 @@ force_to_atoms([H|T], [AtomH|AtomsT]) :-
 check_generate_utterance_output_control_options_1 :-
 	( control_option(machine_output)     -> true
 	; control_option(fielded_mmi_output) -> true
-	; control_option('XML')
+	; xml_output_format(_XMLFormat)
 	).
 
 check_generate_utterance_output_control_options_2 :-
@@ -1152,3 +1179,18 @@ conditionally_print_end_info :-
 	  format(user_output, '~nBatch processing is finished.~n', [])
 	; true
 	).
+
+% Expand, e.g., [doctor,breastfeeding,patients]
+%            to [doctor,breast,feeding,patients]
+expand_split_word_list([], []).
+expand_split_word_list([H|T], ExpandedList) :-
+	( split_word(H, Word1, Word2) ->
+	  ExpandedList = [Word1,Word2|RestExpanded]
+	; ExpandedList = [H|RestExpanded]
+	),
+	expand_split_word_list(T, RestExpanded).
+
+split_word('', '', '').
+% split_word(breastfeeding, breast, feeding).
+% split_word(heartrate,     heart, rate).
+

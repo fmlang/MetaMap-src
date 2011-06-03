@@ -68,6 +68,7 @@
 	ne_rbracket_tok/1,
 	nu_tok/1,
 	pe_tok/1,
+	pn_tok/1,
 	punc_tok/1,
 	rb_closes_one_of/5,
 	rbracket/1,

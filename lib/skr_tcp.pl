@@ -29,7 +29,7 @@
 ***************************************************************************/
 
 :- module(skr_tcp, [
-	establish_tcp_connection/5
+	establish_tcp_connection/4
     ]).
 
 :- use_module(library(sockets), [
@@ -40,14 +40,14 @@
 	% tcp_shutdown/1	
    ]).
 
-establish_tcp_connection(ServerName, ServerHost, ServerAddress, Port, Stream) :-
-	test_tcp_connect(ServerName, ServerHost, ServerAddress, Port, Stream).
+establish_tcp_connection(ServerName, ServerHost, Port, Stream) :-
+	test_tcp_connect(ServerName, ServerHost, Port, Stream).
 	% test_tcp_input_stream(Socket,  Port, ServerAddress, StreamIn),
 	% test_tcp_output_stream(Socket, Port, ServerAddress, StreamOut).
 
-test_tcp_connect(ServerName, ServerHost, ServerAddress, Port, Stream) :-
+test_tcp_connect(ServerName, ServerHost, Port, Stream) :-
 	on_exception(ExceptionCode,
-		     socket_client_open(inet(ServerAddress,Port), Stream, [type(text)]),
+		     socket_client_open(inet(ServerHost,Port), Stream, [type(text)]),
 		     signal_tcp_error(socket_client_open,
 				      ServerName, ServerHost, Port, ExceptionCode)).
 

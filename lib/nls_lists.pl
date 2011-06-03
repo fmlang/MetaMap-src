@@ -89,6 +89,8 @@ first_n_or_less_aux([First|Rest],N,[First|ModifiedRest]) :-
 % The semantics of the original get_from_list have not changed, because this predicate
 % simply calls get_from_list_nd, and then immediately cuts.
 
+% :- nondet get_from_list_nd/3.
+
 get_from_list_nd(Target, [Target|_More], Target).
 get_from_list_nd(Target, [Target:TargetList|_More], TargetList).
 

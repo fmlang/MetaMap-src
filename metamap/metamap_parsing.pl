@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -60,14 +59,14 @@
 	minimal_commitment_analysis/5
     ]).
 
+:- use_module(skr_lib(nls_system),[
+	control_option/1
+   ]).
+
 :- use_module(skr_lib(retokenize),[
 	remove_null_atom_defns/2,
 	retokenize/2
     ]).
-
-:- use_module(library(lists), [
-	prefix/2
-   ]).
 
 :- use_module(library(lists),[
 	append/2
@@ -91,20 +90,56 @@ generate_syntactic_analysis_plus(ListOfAscii, SyntAnalysis, Definitions) :-
 	minimal_commitment_analysis(notag, Definitions, VarInfoList,
 				    _LabeledText, SyntAnalysis).
 
-generate_syntactic_analysis_plus(ListOfAscii, TempTagList, SyntAnalysis, Definitions) :-
+generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions) :-
 	once(tokenize_string_for_lexical_lookup(ListOfAscii, Words0)),
-	retokenize(Words0, Words),
+	re_attach_apostrophe_s_syntax(Words0, TagList, Words1),
+	retokenize(Words1, Words),
 	assemble_definitions(Words, Definitions0),
 	remove_null_atom_defns(Definitions0, Definitions),
 	once(generate_variant_info(Definitions, VarInfoList)),
 	% ChromosomeFound is 0,
 	% LeftOverWords = [],
 	% PrevTagWord = '',
-	% update_taglist(TempTagList, Definitions, PrevTagWord,
+	% update_taglist(TagList, Definitions, PrevTagWord,
 	% 	       ChromosomeFound, LeftOverWords, TagList),
-	TagList = TempTagList,
+	TagList = TagList,
 	consult_tagged_text(Definitions, VarInfoList, TagList, LabeledText, 1),
 	minimal_commitment_analysis(tag, Definitions, VarInfoList, LabeledText, SyntAnalysis).
+
+% The call to tokenize_string_for_lexical_lookup(ListOfAscii, Words0)
+% will parse words ending in "'s" (apostrophe + s) into three tokens, e.g.,
+% tokenize_string_for_lexical_lookup("finkelstein's test positive", Words0)
+% will instantiate Words0 to [[finkelstein,'\'',s,test,positive]].
+% MetaMap's (new!) default behavior is to reattach the "'s"  to the previous token.
+
+% WordListsIn is a list of lists of tokens, e.g.,
+% [[finkelstein, '\'', s, test, positive]]
+re_attach_apostrophe_s_syntax(WordListsIn, TagList, WordListsOut) :-
+	( control_option(separate_apostrophe_s) ->
+	  WordListsOut = WordListsIn
+	; (  foreach(ListIn,  WordListsIn),
+	     foreach(ListOut, WordListsOut),
+	     param(TagList)
+	  do re_attach_apostrophe_s_to_prev_word(ListIn, TagList, ListOut)
+	  )
+	).
+
+% Given a list of tokens, transform the sequence of atoms <any token>, <apostrophe>, <s>
+% to the atom <any token apostrophe s>, e.g.,
+% [finkelstein, '\'', s, test, positive] --> [finkelstein's, test, positive]
+re_attach_apostrophe_s_to_prev_word([], _TagList, []).
+re_attach_apostrophe_s_to_prev_word(WordListIn, TagList, WordListOut) :-
+	WordListIn = [OrigWord, '''', s | RestWordsIn],
+	atom_chars(OrigWord, OrigWordChars),
+	append(OrigWordChars, ['''', s], WordWithApostropheSChars),
+	atom_chars(WordWithApostropheS, WordWithApostropheSChars),
+	member(TagElement, TagList),
+	TagElement = [WordWithApostropheS,_LexCat],
+	!,
+	WordListOut = [WordWithApostropheS|RestWordsOut],
+	re_attach_apostrophe_s_to_prev_word(RestWordsIn, TagList, RestWordsOut).
+re_attach_apostrophe_s_to_prev_word([H|RestIn], TagList, [H|RestOut]) :-
+	re_attach_apostrophe_s_to_prev_word(RestIn, TagList, RestOut).
 
 /* collapse_syntactic_analysis(+SyntAnalysis, -CollapsedSyntAnalysis)
 

@@ -135,21 +135,24 @@ concatenate(List,Insert_string,Concatenated) :-
 Takes a list of prolog atoms and converts them into one long string,
 with the atoms separated by the string provided. */
 
-get_strings([num(X)],_,Xstring) :-    % suresh 8/30/88
-  name(X,Xstring).                
-get_strings([X],_,Xstring) :-
-  name(X,Xstring).
-get_strings([num(Atom)|List],Insert_string,Concat_list) :-    % suresh 8/30/88
-  name(Atom,Concat),
-  append(Concat,Insert_string,Concat_string),
-  append(Concat_string,Sub_concat,Concat_list),
-  get_strings(List,Insert_string,Sub_concat).
-get_strings([Atom|List],Insert_string,Concat_list) :-
-  name(Atom,Concat),
-  append(Concat,Insert_string,Concat_string),
-  append(Concat_string,Sub_concat,Concat_list),
-  get_strings(List,Insert_string,Sub_concat).
-get_strings([],_,[]).
+get_strings([num(X)], _, Xstring) :-    % suresh 8/30/88
+	!,
+	atom_codes(X, Xstring).
+get_strings([X], _, Xstring) :-
+	!,
+	name(X, Xstring).
+get_strings([num(Atom)|List], Insert_string, Concat_list) :-    % suresh 8/30/88
+	!,
+	atom_codes(Atom, Concat),
+	append(Concat, Insert_string, Concat_string),
+	append(Concat_string, Sub_concat, Concat_list),
+	get_strings(List, Insert_string, Sub_concat).
+get_strings([Atom|List], Insert_string, Concat_list) :-
+	atom_codes(Atom, Concat),
+	append(Concat, Insert_string, Concat_string),
+	append(Concat_string, Sub_concat, Concat_list),
+	get_strings(List, Insert_string, Sub_concat).
+get_strings([], _, []).
 
 
 /* concatenate_strings(+List, +InsertString, -NewList)

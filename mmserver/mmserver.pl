@@ -31,6 +31,10 @@
 	output_should_be_bracketed/1
     ]).
 
+:- use_module(skr_lib(nls_strings),[
+	trim_whitespace_right/2
+    ]).
+
 :- use_module(skr_lib(nls_system), [
 	add_to_control_options/1,
 	subtract_from_control_options/1,
@@ -150,8 +154,9 @@ reset_options :-
  	add_to_control_options(IOptions).
 
 process_string(Input,Output) :-
+	trim_whitespace_right(Input, TrimmedInput),
 	TagOption = tag,
-	split_string_completely(Input,"\n",Strings),
+	split_string_completely(TrimmedInput,"\n",Strings),
 	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
 	get_WSD_server_hosts_and_port(WSDServerHosts, WSDForced, WSDServerPort),
 	process_text(Strings,

@@ -34,20 +34,50 @@
 
 :- module(qp_morph, [
 	dm_variants/3
-]).
+   ]).
+
+
+% :- use_module(skr(testlvg),[
+% 	lexAccess_get_dm_variants_by_category_init/3
+%    ]).
+
+:- use_module(skr_lib(nls_system), [
+        control_option/1,
+        control_value/2
+   ]).
+
+:- use_module(skr_lib(sicstus_utils),[
+	concat_atom/2
+   ]).
+
+% :- use_module(lexicon(lex_access),[
+% 	compare_lexAccess/3
+% ]).
+
+:- use_module(library(system), [
+	environ/2
+   ]).
 
 :- use_module(library(lists), [
 	rev/2
    ]).
 
 % foreign_file(morph('morph'), [
+
 foreign_resource(qp_morph, [
 	c_dm_variants
    ]).
 
 foreign(c_dm_variants, c, c_dm_variants(+string, +term, -term, [-integer])).
 
-:- load_foreign_resource(qp_morph).
+:- load_foreign_resource('../../qp_morph').
+ 
+% :- environ('SKR_MORPH', LexiconMorphDir),
+%    concat_atom([LexiconMorphDir,'/qp_morph'], ForeignResourcePath),
+%    format(user_output, 'LOADING FOREIGN RESOURCE ~w~n', [ForeignResourcePath]),
+%    load_foreign_resource(ForeignResourcePath).
+
+% :- load_foreign_resource('/nfsvol/nls/lib/qp_morph').
 
 % :- abolish(foreign_resource/2, [force(true)]).
 
@@ -73,9 +103,17 @@ foreign(c_dm_variants, c, c_dm_variants(+string, +term, -term, [-integer])).
 %%% -Var is a list of Var:[cat:[Cat]] terms.
 %%%	The list is ordered (longest matching suffix first).
 dm_variants(Term, Cats, Var) :-
-	get_all_cats_if_necessary(Cats, AllCats),
-	c_dm_variants(Term, AllCats, Var1, 1),
-	% format(user_output, '~q~n', [c_dm_variants(Term, AllCats, Var1, 1)]),
+	dm_variants_LEXACCESS_TOGGLE(Term, Cats, Var).
+
+dm_variants_LEXACCESS_TOGGLE(Term, Cats, Var) :-
+%	( control_value(lexicon, c) ->
+	  get_all_cats_if_necessary(Cats, AllCats),
+	  c_dm_variants(Term, AllCats, Var1, 1),
+% 	; control_value(lexicon, java) ->
+% 	  lexAccess_get_dm_variants_by_category_init(Term, Cats, Var1)
+%	; format(user_error, '### ERROR: lexicon setting must be either c or java!~n', []),
+%	  abort
+%	),
 	reformat_dm_list(Var1, Var2),
 	rev(Var2, Var).
 

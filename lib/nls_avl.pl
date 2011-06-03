@@ -52,8 +52,16 @@ add_to_avl/4 adds Value to the list of values for Key in AVLIn producing
 AVLOut.  */
 
 add_to_avl(Key, Value, AVLIn, AVLOut) :-
+	% First check if Key is an existing key in the AVL tree.
 	( avl_fetch(Key, AVLIn, Values) ->
-	  avl_change(Key, AVLIn, Values, AVLOut, [Value|Values])
+	  % Next, if Key is an existing key, check if Value is an existing value stored under Key.
+	  ( memberchk(Value, Values) ->
+	    % If Value is an existing value stored under Key, don't change anything.
+	    AVLOut = AVLIn
+	  % If Value is NOT an existing value stored under Key, add it.
+	  ; avl_change(Key, AVLIn, Values, AVLOut, [Value|Values])
+	  )
+	% If Key is NOT an exising key in the AVL tree, add it.
 	; avl_store(Key, AVLIn, [Value], AVLOut)
 	).
 

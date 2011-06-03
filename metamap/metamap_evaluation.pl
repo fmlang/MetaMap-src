@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -35,7 +34,7 @@
 
 
 :- module(metamap_evaluation, [
-	consolidate_matchmap/3,
+	% consolidate_matchmap/3,
 	evaluate_all_GVCs/16,
 	extract_components/3,
 	component_intersects_components/2,
@@ -63,7 +62,8 @@
 
 :- use_module(skr(skr_utilities), [
     	compute_sum/3,
-    	debug_message/3
+    	debug_message/3,
+	split_word/3
     ]).
 
 :- use_module(skr_db(db_access), [
@@ -107,8 +107,6 @@
 	append/2,
 	last/2,
 	nth1/3,
-	prefix/2,
-	proper_prefix/2,
 	rev/2,
 	select/3
     ]).
@@ -186,7 +184,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			PhraseTokens, RawTokensOut, AAs,
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
-	debug_evaluate_candidate_list_1(DebugFlags, MetaCanonical,MetaString,MetaConcept),
+	debug_evaluate_candidate_list_1(DebugFlags, MetaCanonical,MetaString, MetaConcept),
 	% avl_size(CCsIn, CCsInSize),
 	% format(user_output,'~N### CCsIn Length: ~w~n', [CCsInSize]),
 	avl_fetch(MetaCanonical, CCsIn, SavedValues),
@@ -224,8 +222,11 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]) ->
 
 	  debug_evaluate_candidate_list_3(DebugFlags, Evaluation),
+	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
+	  % format(user_output, '     ~q~n', [Evaluation]),	    
 	  Evaluations = [Evaluation|RestEvaluations]
 	; Evaluations = RestEvaluations,
+	  % format(user_output, ' NO: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
 	  debug_evaluate_candidate_list_4(DebugFlags)
 	),
 	% format('~N### Eval 2: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
@@ -285,9 +286,9 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 			     TokenPhraseWords, MetaWords,
 			     Variants, PhraseTokenLength,
-			     TempMatchMap, InvolvesHead, IsOvermatch),
-	TempMatchMap = [MatchMapHead|MatchMapTail],
-	consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
+			     MatchMap, InvolvesHead, IsOvermatch),
+	% TempMatchMap = [MatchMapHead|MatchMapTail],
+	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
 	% get_matching_phrasewords(TokenPhraseWords, MatchMap, MatchingWords),
 	% format(user_output,'MetaWords     = ~q~n', [MetaWords]),	
 	% format(user_output,'MetaTerm      = ~q~n', [MetaTerm]),	
@@ -343,18 +344,23 @@ get_all_indexes([Index|RestIndexes], PhraseWords, [MatchingWord|RestMatchingWord
 	nth1(Index, PhraseWords, MatchingWord),
 	get_all_indexes(RestIndexes, PhraseWords, RestMatchingWords).
 
-consolidate_matchmap(MatchMapTail, MatchMapHead, ConsolidatedMatchMap) :-
-	consolidate_matchmap_aux(MatchMapTail, MatchMapHead, MatchMap0),
-	ConsolidatedMatchMap = MatchMap0.
-	% force_variation_to_integer(MatchMap0, ConsolidatedMatchMap).	
+% We no longer consolidate MatchMaps because of
+% the thorny issue of combining lexical variation scores
+% consolidate_matchmap(MatchMapTail, MatchMapHead, ConsolidatedMatchMap) :-
+%	ConsolidatedMatchMap = [MatchMapHead|MatchMapTail].
 
-consolidate_matchmap_aux([], MatchMapHead, [MatchMapHead]).
-consolidate_matchmap_aux([MatchMap2|RestMatchMap], MatchMap1, MatchMap) :-
-	( merge_matchmap_components(MatchMap1, MatchMap2, MergedMatchMap) ->
-	  consolidate_matchmap_aux(RestMatchMap, MergedMatchMap, MatchMap)
-	; MatchMap = [MatchMap1|MatchMapOut],
-	  consolidate_matchmap_aux(RestMatchMap, MatchMap2, MatchMapOut)
-	).
+% consolidate_matchmap(MatchMapTail, MatchMapHead, ConsolidatedMatchMap) :-
+% 	consolidate_matchmap_aux(MatchMapTail, MatchMapHead, MatchMap0),
+% 	ConsolidatedMatchMap = MatchMap0.
+% 	% force_variation_to_integer(MatchMap0, ConsolidatedMatchMap).	
+
+% consolidate_matchmap_aux([], MatchMapHead, [MatchMapHead]).
+% consolidate_matchmap_aux([MatchMap2|RestMatchMap], MatchMap1, MatchMap) :-
+% 	( merge_matchmap_components(MatchMap1, MatchMap2, MergedMatchMap) ->
+% 	  consolidate_matchmap_aux(RestMatchMap, MergedMatchMap, MatchMap)
+% 	; MatchMap = [MatchMap1|MatchMapOut],
+% 	  consolidate_matchmap_aux(RestMatchMap, MatchMap2, MatchMapOut)
+% 	).
 
 % force_variation_to_integer([], []).
 % force_variation_to_integer([HIn|TIn], [HOut|TOut]) :-
@@ -368,8 +374,7 @@ merge_matchmap_components([[Text1Start,Text1End], [Concept1Start,Concept1End], V
 			  [[Text1Start,Text2End], [Concept1Start,Concept2End], Variation3]) :-
 	Text2Start is Text1End + 1,
 	Concept2Start is Concept1End + 1,
-	% Average
-	Variation3 is (Variation1 + Variation2)/2.
+	Variation3 is Variation1 + Variation2.
 
 	% Sum
 	% Variation3 is Variation1 + Variation2.
@@ -487,7 +492,7 @@ get_one_word_pos_info(MatchingPhraseWord, [FirstToken|RestTokens],
 				StartPos, Length) ->
 	  true
 	; format(user_output,
-		 '~n### ERROR: get_one_word_pos_info failed on ~q/~q~n',
+		 '~n### ERROR: get_one_word_pos_info failed on ~q/~p~n',
 		 [MatchingPhraseWord, [FirstToken|RestTokens]]),
 	  abort
 	).
@@ -512,8 +517,14 @@ matching_token(mc, MatchingPhraseWordAtom,
 
 % Lower-Case token match
 matching_token(lc, MatchingPhraseWordAtom,
-               tok(_Type, _TokenString, LCTokenString, _Pos1, _Pos2)) :-
-        atom_codes(MatchingPhraseWordAtom, LCTokenString).
+               tok(Type, _TokenString, LCTokenString, _Pos1, _Pos2)) :-
+        atom_codes(MatchingPhraseWordAtom, MatchingPhraseWordCodes),
+	% apostrophe-s token should match the token w/o the apostrophe-s
+	( Type = xx ->
+	  append(MatchingPhraseWordCodes, [39,0's], LCTokenString) % 39 is apostrophe
+	; MatchingPhraseWordCodes = LCTokenString
+	).	  
+
 
 compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, MetaConcept,
 			Variants, TokenPhraseWords, PhraseTokenLength,
@@ -523,9 +534,9 @@ compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, M
 	debug_message(trace, '~N### computing ALL evaluations: ~q~n', [MetaWords]),
 	compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 			     TokenPhraseWords, MetaWords, Variants, PhraseTokenLength,
-			     TempMatchMap, InvolvesHead, IsOvermatch),
-	TempMatchMap = [MatchMapHead|MatchMapTail],
-	consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
+			     MatchMap, InvolvesHead, IsOvermatch),
+	% TempMatchMap = [MatchMapHead|MatchMapTail],
+	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
 	test_minimum_length(TokenPhraseWords, MatchMap),
         % format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
 	MatchMap \== [],
@@ -587,7 +598,7 @@ compute_extra_meta_aux([First|Rest], N, MetaIndexes, [First|ComputedRest]) :-
                         -MatchMap,-InvolvesHead, -IsOvermatch)
    compute_phrase_match_aux(+MetaWords, +Label, +UtteranceText,
    			    +MetaWords, +TokenPhraseWords,
-   			    +NMeta, +Variants, +PhraseTokenLength,
+    			    +NMeta, +Variants, +PhraseTokenLength,
                             +MatchMapIn, -MatchMapOut,
                             +InvolvesHeadIn, -InvolvesHeadOut)
 */
@@ -600,7 +611,13 @@ compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 	  true
 	  % reversed order of args from QP library version!
 	; last(MetaWords, Last),
-          word_is_last_word_of_some_variant(Last, Variants)
+	  word_is_last_word_of_some_variant(Last, Variants) ->
+	  true
+	; MetaWords = [Word1,Word2],
+	  concat_atom(MetaWords, SingleAtom),
+	  split_word(SingleAtom, Word1, Word2),
+	  word_is_last_word_of_some_variant(SingleAtom, Variants) ->
+	  true
 	),
 	!,
 	% Note: Whether InvolvesHead is yes if TokenHeadWords==[] has varied over time
@@ -687,7 +704,8 @@ compute_phrase_match_aux([First|Rest], Label, UtteranceText, AllMetaWords, Token
 				     MinPhraseLength, MaxGapSize,
 				     MatchMapInOut, MatchMapOut,
 				     InvolvesHeadInOut, InvolvesHeadOut)
-	  )
+	  ),
+	!
 	).
 compute_phrase_match_aux([_First|Rest], Label, UtteranceText, AllMetaWords, TokenPhraseWords,
 			 NMeta, Variants, PhraseTokenLength,

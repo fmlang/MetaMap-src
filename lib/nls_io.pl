@@ -45,6 +45,7 @@
 
 
 :- use_module(skr_lib(ctypes),[
+	is_ascii/1,
 	is_space/1
     ]).
 
@@ -102,8 +103,10 @@ fget_lines_until_skr_break(Stream, []) :-
 	Code is -1,
 	!.
 fget_lines_until_skr_break(Stream, Lines) :-
-	fget_line(Stream,Line),
-	( is_ws_only(Line) ->
+	fget_line(Stream, Line, Terminator),
+	( Terminator =:= -1,
+	  Lines = [Line]
+	; is_ws_only(Line) ->
 	  Lines = []
 	; Lines = [Line|Rest],
           fget_lines_until_skr_break(Stream, Rest)
@@ -131,7 +134,9 @@ fget_lines_until_skr_break(Stream, Lines) :-
 fget_line(Stream, Codes) :-
 	fget_line(Stream, Line, Terminator),
 	Terminator >= 0,		% not end-of-file
-	Codes = Line.
+	Codes = Line,
+	% format(user_output, 'Read in line "~s"~n', [Codes]),
+	halt_if_non_ASCII(Codes).
 
 % fget_line(+Stream, ?Codes, ?Terminator)
 % reads a line from the given input Stream, and returns the characters in
@@ -159,3 +164,33 @@ terminator_code(10).
 terminator_code(13).
 % eof in case user does not have a <CR> at the end of the file!!
 terminator_code(-1).
+
+halt_if_non_ASCII(Codes) :-
+	( member(C, Codes),
+	  \+ is_ascii(C) ->
+	  get_non_ASCII_codes(Codes, NonASCIICodes),
+	  length(NonASCIICodes, NonASCIILength),
+	  get_plural_marker(NonASCIILength, Plural),
+	  format(user_error, 'ERROR: MetaMap supports ASCII-only input; the input line~n', []),
+	  format(user_error, '       ~s~n', [Codes]),
+	  format(user_error, 'contains ~d non-ASCII char~w: "~s".~n',
+		 [NonASCIILength,Plural,NonASCIICodes]),
+	  format(user_error, 'Remove all non-ASCII chars from input before trying again!~n', []),
+	  abort
+	; true
+	).
+
+get_non_ASCII_codes(Codes, NonASCIICodes) :-
+	(  foreach(C, Codes),
+	   fromto(NonASCIICodes, S0, S, [])
+	do ( \+ is_ascii(C) ->
+	     S0 = [C|S]
+	   ; S0 = S
+	   )
+	).
+
+get_plural_marker(NonASCIILength, Plural) :-
+	( NonASCIILength is 1 ->
+	  Plural = ''
+	; Plural = 's'
+	).

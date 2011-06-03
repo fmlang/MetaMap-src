@@ -78,14 +78,21 @@
 	concatenate_strings/3
     ]).
 
+:- use_module(skr_lib(ctypes),[
+	ctypes_bits/2
+    ]).
+
 :- use_module(skr_lib(nls_lists),[
 	first_n_or_less/3
     ]).
 
 :- use_module(skr_lib(nls_strings),[
 	atom_codes_list/2
-	% is_print_string/1
     ]).
+
+:- use_module(skr_lib(nls_system),[
+	control_option/1
+   ]).
 
 :- use_module(skr_lib(nls_text),[
 	is_all_graphic_text/1
@@ -632,7 +639,6 @@ tokenize_text(Text,TokText) :-
         atom_codes(Text,String),
         phrase(tt_string(TokString),String),
         atom_codes_list(TokText,TokString)
-%    ;   is_print_string(Text) ->
     ;   phrase(tt_string(TokText),Text)
     ),
     !.
@@ -713,7 +719,6 @@ tokenize_text_mm(Text, TokText) :-
 	  tokenize_text_utterly(String, StringToks0),
 	  remove_possessives_and_nonwords(StringToks0, StringToks),
 	  atom_codes_list(TokText, StringToks)
-	% ;is_print_string(Text) ->
 	; tokenize_text_utterly(Text, TokText0),
 	  remove_possessives_and_nonwords(TokText0, TokText)
 	).
@@ -806,8 +811,41 @@ tokenize_fields_utterly([First|Rest], [TokFirst|TokRest]) :-
 
 tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 	concatenate_strings(Lines, " ", FieldText),
-	tokenize_text_utterly(FieldText, TokField),
+	tokenize_text_utterly(FieldText, TokField0),
+	re_attach_apostrophe_s_tokens(TokField0, TokField),
 	!.
+
+% The call to tokenize_text_utterly(FieldText, TokField0)
+% will parse words ending in "'s" (apostrophe + s) into multiple tokens, e.g.,
+% tokenize_text_utterly("finkelstein's test positive", TokField0)
+% will instantiate TokField0 to ["finkelstein", "'", "s", " ", "test", " ", "positive"].
+% MetaMap's (new!) default behavior is to reattach the "'s"  to the previous token.
+
+re_attach_apostrophe_s_tokens(FieldsIn, FieldsOut) :-
+	( control_option(separate_apostrophe_s) ->
+	  FieldsOut = FieldsIn
+	; re_attach_apostrophe_s_tokens_aux(FieldsIn, FieldsOut)
+	).
+
+re_attach_apostrophe_s_tokens_aux([], []).
+re_attach_apostrophe_s_tokens_aux(TokField0, TokField) :-
+	TokField0 = [OrigString, "'", "s", " " | Rest],
+	\+ pronoun_string(OrigString),
+	!,
+	append([OrigString, "'", "s"], StringWithApostropheS),
+	TokField = [StringWithApostropheS, " " | RestTokField],
+	re_attach_apostrophe_s_tokens_aux(Rest, RestTokField).
+re_attach_apostrophe_s_tokens_aux([H|Rest], [H|NewRest]) :-
+	re_attach_apostrophe_s_tokens_aux(Rest, NewRest).
+
+pronoun_string(OrigString) :-
+	atom_codes(Atom, OrigString),
+	no_combine_pronoun(Atom).
+
+no_combine_pronoun(he).
+no_combine_pronoun(she).
+no_combine_pronoun(it).
+
 
 % ORIG
 % tokenize_text_utterly(Text,TokText) :-
@@ -882,7 +920,7 @@ ttu_token(T, S0, S) :-
 
 ttu_token2([], [], []).
 ttu_token2([Char|S0], T, S) :-
-	ctypes:bits(Char, Bits), 
+	ctypes_bits(Char, Bits), 
 	Mask is Bits /\ 3840,
 	(   Mask =\= 0 ->
 	    T = [Char|R],

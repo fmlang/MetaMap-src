@@ -64,8 +64,6 @@
 	prefix/2
     ]).
 
-
-
 /* get_filtered_uscs_for_word(+Table, +Word, +DebugFlags, +FilterWordStrings,
    			      +WordDataCacheIn, -WordDataCacheOut, -USCs)
 
@@ -84,20 +82,20 @@ Legal values for Table are
 
 get_filtered_uscs_for_word(Table, Word, DebugFlags, FilterWordStrings,
 			   WordDataCacheIn, WordDataCacheOut, USCs) :-
-	debug_message(trace, '~N### Calling db_get_mwi_word_data for ~q~n', [Word]),
+	debug_message(db, '~N### Calling db_get_mwi_word_data for ~q~n', [Word]),
 	make_avl_key_1(Word, Table, AVLKey),
 	( avl_fetch(AVLKey, WordDataCacheIn, USCs0) ->
 	  WordDataCacheOut = WordDataCacheIn,
-	  debug_message(trace, '~N### WordData CACHE FOUND ~q from ~q~n', [Word,Table])
+	  debug_message(db, '~N### WordData CACHE FOUND ~q from ~q~n', [Word,Table])
 	; db_get_mwi_word_data(Table, Word, DebugFlags, USCs0) ->
 	  avl_store(AVLKey, WordDataCacheIn, USCs0, WordDataCacheOut)
 	; USCs0 = [],
 	  avl_store(AVLKey, WordDataCacheIn, USCs0, WordDataCacheOut)
 	),
-	debug_message(trace, '~N### db_get_mwi_word_data DONE~n', []),
-	debug_message(trace, '~N### Calling filter_uscs for ~q|~q~n', [Word,FilterWordStrings]),
+	debug_message(db, '~N### db_get_mwi_word_data DONE~n', []),
+	debug_message(db, '~N### Calling filter_uscs for ~q|~q~n', [Word,FilterWordStrings]),
 	filter_uscs(Table, USCs0, FilterWordStrings, USCs),
-	debug_message(trace, '~N### filter_uscs DONE~n', []).
+	debug_message(db, '~N### filter_uscs DONE~n', []).
 
 make_avl_key_1(Word, Table, AVLKey) :-
 	concat_atom([Word,'-',Table], AVLKey).

@@ -72,7 +72,7 @@
 append_text/2 is analogous to append/2 for text (atoms) except that at least
 one of its arguments MUST be instantiated.*/
 
-append_text([], '').
+append_text([], '') :- !.
 append_text([Text], Text) :- !.
 append_text(TextList, Text) :-
 	atom_codes_list(TextList, StringList),
