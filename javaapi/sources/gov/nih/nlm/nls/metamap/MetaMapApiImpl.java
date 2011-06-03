@@ -1,6 +1,7 @@
 package gov.nih.nlm.nls.metamap;
 
 import java.io.*;
+import java.net.ConnectException;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -29,15 +30,15 @@ public class MetaMapApiImpl implements MetaMapApi {
    * @param timeout time in milliseconds to wait for prolog server before timing out.
    */
   public MetaMapApiImpl(int timeout) {
-      this.session.setTimeout(timeout);
+    this.session.setTimeout(timeout);
   }
 
   /** Instantiate api using MetaMap server specified by hostname 
    * @param serverHostname hostname of metamap server
    */
   public MetaMapApiImpl(String serverHostname) {
-      this.session.setTimeout(DEFAULT_TIMEOUT);
-      session.setHost(serverHostname);
+    this.session.setTimeout(DEFAULT_TIMEOUT);
+    session.setHost(serverHostname);
   }
 
   /** Instantiate api using MetaMap server specified by hostname 
@@ -45,8 +46,8 @@ public class MetaMapApiImpl implements MetaMapApi {
    * @param port port of metamap server
    */
   public MetaMapApiImpl(String serverHostname, int port) {
-      this.session.setTimeout(DEFAULT_TIMEOUT);
-      session.setPort(port);
+    this.session.setTimeout(DEFAULT_TIMEOUT);
+    session.setPort(port);
   }
 
   /**
@@ -56,9 +57,9 @@ public class MetaMapApiImpl implements MetaMapApi {
    * @param timeout time in milliseconds to wait for prolog server before timing out.
    */
   public MetaMapApiImpl(String serverHostname, int port, int timeout) {
-      this.session.setTimeout(timeout);
-      session.setHost(serverHostname);
-      session.setPort(port);
+    this.session.setTimeout(timeout);
+    session.setHost(serverHostname);
+    session.setPort(port);
   }
 
   /** 
@@ -109,6 +110,7 @@ public class MetaMapApiImpl implements MetaMapApi {
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
+      throw new RuntimeException(e);
     }
     return options.toString();
   }
@@ -191,7 +193,7 @@ public class MetaMapApiImpl implements MetaMapApi {
    * @param optionListString a string of MetaMap options
    */
   public void invokeSetOptions(String optionListString) {
-  try {
+    try {
       if (! this.connected) {
 	this.session.connect();
 	this.connected = true;
@@ -199,9 +201,15 @@ public class MetaMapApiImpl implements MetaMapApi {
       Bindings bindings = new Bindings().bind("Options", optionListString);
       QueryAnswer answer =
         session.executeQuery("set_options(Options)", bindings);
+    } catch (ConnectException e) {
+      System.err.println("Error when querying Prolog Server: " +
+			 e.getMessage() + '\n');
+      throw new RuntimeException(e.getMessage() + 
+				 ": Check to see if mmserver is running, or if port and hostname specified for the mmserver are correct.", e);
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
+      throw new RuntimeException(e);
     }
   }
 
@@ -226,9 +234,15 @@ public class MetaMapApiImpl implements MetaMapApi {
       Bindings bindings = new Bindings().bind("Options", optionString);
       QueryAnswer answer =
         session.executeQuery("unset_options(Options)", bindings);
+    } catch (ConnectException e) {
+      System.err.println("Error when querying Prolog Server: " +
+			 e.getMessage() + '\n');
+      throw new RuntimeException(e.getMessage() + 
+				 ": Check to see if mmserver is running, or if port and hostname specified for the mmserver are correct.", e);
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
+      throw new RuntimeException(e);
     }
   }
 
@@ -251,20 +265,26 @@ public class MetaMapApiImpl implements MetaMapApi {
       sb.append("[");
       for (Iterator<String> optIter = options.iterator(); optIter.hasNext(); ) {
 	sb.append("'").append(optIter.next()).append("'");
-	  if (optIter.hasNext()) sb.append(",");
+	if (optIter.hasNext()) sb.append(",");
       }
       sb.append("]");
       Bindings bindings = new Bindings().bind("Options", sb.toString());
       QueryAnswer answer =
         session.executeQuery("unset_options(Options)", bindings);
+    } catch (ConnectException e) {
+      System.err.println("Error when querying Prolog Server: " +
+			 e.getMessage() + '\n');
+      throw new RuntimeException(e.getMessage() + 
+				 ": Check to see if mmserver is running, or if port and hostname specified for the mmserver are correct.", e);
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
+      throw new RuntimeException(e);
     }
- }
+  }
 
   /** Reset options to defaults */
- public void resetOptions() {
+  public void resetOptions() {
     try {
       if (! this.connected) {
 	this.session.connect();
@@ -272,9 +292,15 @@ public class MetaMapApiImpl implements MetaMapApi {
       }
       QueryAnswer answer =
         session.executeQuery("reset_options");
+    } catch (ConnectException e) {
+      System.err.println("Error when querying Prolog Server: " +
+			 e.getMessage() + '\n');
+      throw new RuntimeException(e.getMessage() + 
+				 ": Check to see if mmserver is running, or if port and hostname specified for the mmserver are correct.", e);
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
+      throw new RuntimeException(e);
     }
   }
 
@@ -304,10 +330,16 @@ public class MetaMapApiImpl implements MetaMapApi {
 	} else {
 	  System.err.println("Error: " + answer.getError() + "\n");
 	}
+      } catch (ConnectException e) {
+	System.err.println("Error when querying Prolog Server: " +
+			   e.getMessage() + '\n');
+	throw new RuntimeException(e.getMessage() + 
+				   ": Check to see if mmserver is running, or if port and hostname specified for the mmserver are correct.", e);
       } catch (Exception e) {
 	System.err.println("Error when querying Prolog Server: " +
 			   e.getMessage() + '\n');
 	e.printStackTrace();
+	throw new RuntimeException(e);
       }
     }
     return newResultList;
@@ -329,8 +361,8 @@ public class MetaMapApiImpl implements MetaMapApi {
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
+      throw new RuntimeException(e);
     }
-    return null;
   }
   
   /** Process a ASCII text file of one or more documents - unicode (utf8) is not supported
@@ -343,8 +375,8 @@ public class MetaMapApiImpl implements MetaMapApi {
     } catch (Exception e) {
       System.err.println("Error when querying Prolog Server: " +
 			 e.getMessage() + '\n');
+      throw new RuntimeException(e);
     }
-    return null;
   }
   
 
