@@ -31,17 +31,17 @@ In the directory where you installed the Public Metamap (the directory
 containing the public__mm directory) extract the javaapi archive:
 
 ^<<
-$ bzip2 -dc /home/piro/public_mm_linux_javaapi_2010.tar.bz2 | tar xvf -
+$ bzip2 -dc /home/piro/public_mm_linux_javaapi_{year}.tar.bz2 | tar xvf -
 ^>>
 
 If you plan on modifying the sources to the prolog-based MetaMap
 server (mmserver) you will need to download and extract the source
 archive
-(http://metamap.nlm.nih.gov/download/public__mm__src__2010.tar.bz2) as
+(http://metamap.nlm.nih.gov/download/public__mm__src__{year}.tar.bz2) as
 well:
 
 ^<<
-$ bzip2 -dc /home/piro/public_mm_src_2010.tar.bz2 | tar xvf -
+$ bzip2 -dc /home/piro/public_mm_src_{year}.tar.bz2 | tar xvf -
 ^>>
 
 You will need to re-run ./bin/install.sh from the public__mm directory
@@ -75,15 +75,15 @@ $ ./bin/wsdserverctl start
 Then start the metamap server:
 
 ^<<
-$ ./bin/mmserver10
-/home/piro/public_mm/bin/SKRrun -L 2010 \
-     -w /home/piro/public_mm/lexicon /home/piro/public_mm/bin/mmserver10.BINARY.Linux -Z 10
+$ ./bin/mmserver{year}
+/home/piro/public_mm/bin/SKRrun -L {year} \
+     -w /home/piro/public_mm/lexicon /home/piro/public_mm/bin/mmserver{year}.BINARY.Linux -Z {year}
 Server options: [port(8888),accepted_hosts(['127.0.0.1','130.14.111.76','130.14.110.82'])]
-Berkeley DB databases (normal 10 strict model) are open.
-Static variants will come from table varsan in /home/piro/public_mm/DB/BDB4/DB.normal.10.strict.
+Berkeley DB databases (normal {year} strict model) are open.
+Static variants will come from table varsan in /home/piro/public_mm/DB/BDB4/DB.normal.{year}.strict.
 Derivational Variants: Adj/noun ONLY.
-Accessing lexicon /home/piro/public_mm/lexicon/data/BDB4/lexiconStatic2010.
-Variant generation mode: stat>ic.
+Accessing lexicon /home/piro/public_mm/lexicon/data/BDB4/lexiconStatic{year}.
+Variant generation mode: static.
 ^>>
 
 * Testing the API 
@@ -454,7 +454,7 @@ String machineOutput = result.getMachineOutput();
 
 To run the metamap server on a host other than localhost (127.0.0.1),
 the default modify the environment variable ACCEPTED_HOSTS the script
-/bin/mmserver10 to contain all of the clients you wish to have access
+/bin/mmserver{year} to contain all of the clients you wish to have access
 to the MetaMap server.
 
 For example, change the entry:
@@ -476,7 +476,7 @@ all of the entries must be ip-addresses, hostnames will not work.
 ** Running the  metamap server on an alternate port
 
 To run the metamap server on a port other than the default port (8066)
-modify the environment variable "MMSERVER_PORT" in the script bin/mmserver10.
+modify the environment variable "MMSERVER_PORT" in the script bin/mmserver{year}.
 
 E.G. to change the port to 8888:
 
@@ -512,6 +512,7 @@ currently available in the MetaMap API.
 
 * For more information
 
-	[Quintus Prolog] http://www.sics.se/isl/quintus/html/quintus/
+	[SICStus Prolog] http://www.sics.se/sicstus/
+	[Quintus Prolog] http://www.sics.se/quintus/
 	[PrologBeans] http://www.sics.se/sicstus/docs/3.12.9/html/prologbeans/
 	[MetaMap] http://metamap.nlm.nih.gov/
