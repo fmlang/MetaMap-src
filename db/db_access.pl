@@ -34,7 +34,7 @@
 % Purpose:  Provide access to the NLS DBs (Berkeley DB version)
 
 
-:- module(db_access,[
+:- module(db_access, [
 	db_get_all_acros_abbrs/2,
 	db_get_concept_cui/2,
 	db_get_concept_cuis/2,
@@ -50,11 +50,12 @@
 	db_get_synonyms/2,
 	db_get_synonyms/3,
 	db_get_unique_acros_abbrs/2,
+	db_get_root_source_name/2,
 	db_get_variants/3,
-	default_full_year/1,
-	default_year/1,
-	% must be exported for mwi_utilities
-	get_year/1,
+	db_get_versioned_source_name/2,
+	default_release/1,
+	get_data_version/1,
+	get_data_year/1,
 	initialize_db_access/0,
 	initialize_db_access/3,
 	stop_db_access/0
@@ -64,6 +65,10 @@
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
+    ]).
+
+:- use_module(skr_lib(ctypes), [
+	is_digit/1
     ]).
 
 :- use_module(skr_lib(nls_strings),[
@@ -84,13 +89,14 @@
 :- use_module(skr(skr_utilities),[
 	debug_call/2,
 	debug_message/3,
-	ensure_atom/2
+	ensure_atom/2,
+	send_message/2
     ]).
 
 :- use_module(library(file_systems), [
 	directory_exists/1,
 	directory_exists/2,
-file_exists/2
+	file_exists/2
    ]).
 
 :- use_module(library(sets),[
@@ -157,16 +163,14 @@ The default version is "normal".
 Current models for each version are: relaxed or strict.
 stop_db_access/0 calls exec_destroy_dbs to close them.  */
 
-default_version(normal).
+default_version('NLM').
 
-default_year('10').
-
-default_full_year(2010).
+default_release('2011AA').
 
 initialize_db_access :-
-	get_db_access_version(Version),
-	get_db_access_model(Model),
-	get_db_access_year(Year),
+	get_data_year(Year),
+	get_data_version(Version),
+	get_data_model(Model),
 	initialize_db_access(Version, Year, Model).
 
 initialize_db_access(Version, Year, Model) :-
@@ -262,6 +266,31 @@ db_get_concept_cui_aux(ConceptAtom, CUI) :-
 
 get_cui_from_results([],      'C0000000').
 get_cui_from_results([CUI|_], CUI).
+
+db_get_versioned_source_name(RootSourceName, VersionedSourceName) :-
+	ensure_string(RootSourceName, RootSourceNameString),
+	db_get_versioned_source_name_aux(RootSourceNameString, VersionedSourceName),
+	!.
+db_get_versioned_source_name(RootSourceName, []) :-
+	fatal_error('~NERROR: db_access: db_get_versioned_source_name failed for ~w~n', [RootSourceName]),
+	halt.
+
+db_get_versioned_source_name_aux(RootSourceName, VersionedSourceNames) :-
+	form_simple_query("versioned, exists", "sab_rv", "root", RootSourceName, Query),
+	run_query(Query, simple, VersionedSourceNames, 1).
+
+db_get_root_source_name(VersionedSourceName, RootSourceName) :-
+	ensure_string(VersionedSourceName, VersionedSourceNameString),
+	db_get_root_source_name_aux(VersionedSourceNameString, RootSourceName),
+	!.
+db_get_root_source_name(VersionedSourceName, []) :-
+	fatal_error('~NERROR: db_access: db_get_root_source_name failed for ~w~n', [VersionedSourceName]),
+	halt.
+
+db_get_root_source_name_aux(VersionedSourceName, RootSourceNames) :-
+	form_simple_query("root, exists", "sab_vr", "versioned", VersionedSourceName, Query),
+	run_query(Query, simple, RootSourceNames0, 1),
+	append(RootSourceNames0, RootSourceNames).
 
 /* db_get_concept_cuis(+Concept, -CUIs)
 
@@ -794,31 +823,78 @@ double_quotes([39|Rest], [39,39|ModifiedRest]) :-
 double_quotes([First|Rest], [First|ModifiedRest]) :-
 	double_quotes(Rest, ModifiedRest).
 
-get_db_access_version(Version) :-
-	( control_value(mm_data_version,Version) ->
+get_data_version(Version) :-
+	( control_value(mm_data_version, Version) ->
 	  true
         ; default_version(Version)
         ).
 
-get_db_access_year(Year) :-
-	( control_value(mm_data_year,Year) ->
-	  true
-	; default_year(Year)
+% 2008AA, 2009AB, etc.
+get_data_year(NormalizedYear) :-
+	default_release(DefaultYear),
+	normalize_db_access_year(DefaultYear, NormalizedDefaultYear),
+	% Is the model year explicitly specified on the command line?
+	( control_value(mm_data_year, SpecifiedYear),
+	  normalize_db_access_year(SpecifiedYear, NormalizedSpecifiedYear),
+	  NormalizedDefaultYear \== NormalizedSpecifiedYear ->
+	  send_message('##### WARNING: Overriding default model ~w with ~w.~n',
+		       [NormalizedDefaultYear, SpecifiedYear]),
+	  NormalizedYear = NormalizedSpecifiedYear
+	; NormalizedYear = NormalizedDefaultYear
 	).
 
-get_db_access_model(Model) :-
+normalize_db_access_year(Year, NormalizedYear) :-
+	( Year = '99' ->
+	  NormalizedYear = '1999AA'
+	; Year = '1999' ->
+	  NormalizedYear = '1999AA'
+	; atom_length(Year, YearLength),
+	  ( % e.g., 08, 09, 10, etc.
+	    YearLength =:= 2,
+	    all_digits(Codes) ->
+	    concat_atom(['20', Year, 'AA'], NormalizedYear)
+	    % e.g., 2008, 2009, 2010, etc.
+	  ; YearLength =:= 4,
+	    all_digits(Codes) ->
+	    concat_atom([Year, 'AA'], NormalizedYear)
+	  ; YearLength =:= 4,
+	    % Nonstandard, e.g., 08AA, 09AB, 10AA, etc.
+	    Codes = [D1, D2, AB1, AB2],
+	    is_digit(D1),
+	    is_digit(D2),
+	    is_A_or_B(AB1),
+	    is_A_or_B(AB2) ->
+	    concat_atom(['20', Year], NormalizedYear)
+	  ; YearLength =:= 6,
+	    % e.g., 2008AA, 2009AB, 2010AA, etc.
+	    Codes = [D1, D2, D3, D4, AB1, AB2],
+	    all_digits([D1,D2,D3,D4]),
+	    is_A_or_B(AB1),
+	    is_A_or_B(AB2) ->
+	    NormalizedYear = Year
+	  )
+	),
+	!.
+
+normalize_db_access_year(Year, _NormalizedYear) :-
+	format(user_output, 'ERROR in specifying Model Year (~w)~n', [Year]),
+	fail.
+
+
+all_digits([]).
+all_digits([H|T]) :- is_digit(H), all_digits(T).
+
+is_A_or_B(0'A).
+is_A_or_B(0'B).
+
+
+get_data_model(Model) :-
 	% This is more complex than it need be.
 	( control_option(strict_model) ->
 	  Model = strict
 	; control_option(relaxed_model) ->
 	  Model = relaxed
 	; Model = strict
-	).
-
-get_year(Year) :-
-	( control_value(mm_data_year,Year) ->
-	  true
-	; default_year(Year)
 	).
 
 debug_db_get_mwi_data_1(DebugFlags) :-
@@ -872,4 +948,3 @@ fatal_error(Message, Args) :-
 	  true
 	; format(Message, Args)
 	).
-
