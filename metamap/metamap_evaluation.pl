@@ -56,10 +56,6 @@
 	linearize_components/2
     ]).
 
-% :- use_module(skr(skr), [
-%     	calculate_aa_extra_chars/4
-%     ]).
-
 :- use_module(skr(skr_utilities), [
     	compute_sum/3,
     	debug_message/3,
@@ -325,9 +321,8 @@ test_minimum_length(PhraseWords, MatchMap) :-
 	  length(MatchingWords, TempMatchingWordsLength),
 	  ExtraSpaces is TempMatchingWordsLength - 1,
 	  concat_atom(MatchingWords, MatchingWordsAtom),
-	  atom_chars(MatchingWordsAtom, MatchingWordsString),
-	  length(MatchingWordsString, MatchingWordsStringLength),
-	  TotalLength is MatchingWordsStringLength + ExtraSpaces,
+	  atom_length(MatchingWordsAtom, MatchingWordsLength),
+	  TotalLength is MatchingWordsLength + ExtraSpaces,
 	  TotalLength >= MinLength
 	; true
 	).

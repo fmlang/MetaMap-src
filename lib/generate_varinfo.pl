@@ -63,8 +63,6 @@
 
 :- use_module(skr_lib(sicstus_utils), [
 	lower/2,
-	midstring/5,
-	midstring/6,
 	string_char/3,
 	string_size/2
   ]).

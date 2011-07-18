@@ -59,6 +59,10 @@
 % Because they are called in the code regardless of which application we compile,
 % they must still be defined, even as stubs, so as not to get a warning message.
 
+:- use_module(skr_db(db_access), [
+	default_release/1
+   ]).
+
 :- use_module(lexicon(qp_lexicon), [
 	use_multi_word_lexicon/0
    ]).
@@ -75,12 +79,12 @@
 
 :- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/17,
+	skr_phrases/18,
 	stop_skr/0
    ]).
 
 :- use_module(skr(skr_text_processing), [
-	extract_sentences/8,
+	extract_sentences/9,
 	get_skr_text/1
 	% is_sgml_text/1
 	% warn_remove_non_ascii_from_input_lines/2
@@ -104,6 +108,7 @@
 	output_should_be_bracketed/1,
 	output_tagging/3,
 	replace_crs_with_blanks/4,
+	send_message/2,
 	token_template/5,
 	token_template/6,
 	usage/0,
@@ -117,10 +122,6 @@
 	conditionally_print_xml_footer/3,
 	generate_and_print_xml/1,
 	xml_header_footer_print_setting/3
-   ]).
-
-:- use_module(skr_db(db_access), [
-	default_full_year/1
    ]).
 
 :- use_module(skr_lib(efficiency), [
@@ -216,10 +217,10 @@ go(HaltOption, command_line(Options0,Args0)) :-
 	reset_control_options(metamap),
 	update_command_line(Options0, Args0, metamap, Options, Args),
 	get_program_name(ProgramName),
-	default_full_year(FullYear),
+	default_release(Release),
 	close_all_streams,
 	( initialize_skr(Options, Args, InterpretedArgs, IOptions) ->
-          ( skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions) ->
+          ( skr_fe(InterpretedArgs, ProgramName, Release, IOptions) ->
 	    true
 	  ; true
 	  )
@@ -252,7 +253,7 @@ initialize_skr(InitialOptions, InitialArgs, FinalArgs, FinalOptions) :-
 		 ],
 	interpret_args(FinalOptions, ArgSpecs, InitialArgs, FinalArgs),
 	toggle_control_options(FinalOptions),
-	set_control_values(FinalOptions,FinalArgs),
+	set_control_values(FinalOptions, FinalArgs),
 	use_multi_word_lexicon,
 	initialize_skr([]).
 
@@ -451,28 +452,25 @@ process_text(Text,
 	( process_text_1(Text,
 			 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 			 WSDServerHosts, WSDForced, WSDServerPort,
-			 RawTokenList, AAs, MMResults) ->
+			 RawTokenList, AAs, _UDAs, MMResults) ->
 	  true
- 	; format('#### ERROR: process_text/4 failed for~n~p~n',[Text]),
-	  format(user_output,'#### ERROR: process_text/4 failed for~n~p~n',[Text]),
-	  RawTokenList = [],
-	  MMResults = [],
-	  ttyflush
+ 	; send_message('#### ERROR: process_text/4 failed for~n~p~n', [Text]),
+	  abort
 	).
 
 process_text_1(Lines0,
 	       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	       WSDServerHosts, WSDForced, WSDServerPort,
-	       ExpRawTokenList, AAs, MMResults) :-
+	       ExpRawTokenList, AAs, UDAs, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
-	Lines2 = Lines0,
 	% Sentences and CoordSentences are the token lists
 	% CoordSentences includes the positional information for the original text
 	% format(user_output, 'Processing PMID ~w~n', [PMID]),
-	extract_sentences(Lines2, InputType, TextFields, NonTextFields,
-			  Sentences, CoordSentences, AAs, Lines),
+	extract_sentences(Lines0, InputType, TextFields, NonTextFields,
+			  Sentences, CoordSentences, AAs, UDAs, Lines),
+	% need to update Lines
 	% fail,
 	% RawTokenList is the copy of Sentences that includes an extra pos(_,_) term
 	% showing the position of each token in the raw, undoctored text.
@@ -495,12 +493,12 @@ process_text_1(Lines0,
 				  CurrentPos, TokenState,
 				  TrimmedTextFieldsOnlyString, TempExpRawTokenList),
 		
-%				  InputStringWithBlanks, TempExpRawTokenList),
+				  % InputStringWithBlanks, TempExpRawTokenList),
 	ExpRawTokenList = TempExpRawTokenList,
 	create_UNEXP_raw_token_list(Sentences,
 				    CurrentPos, TokenState,
 				    TrimmedTextFieldsOnlyString, UnExpRawTokenList),
-% 				    InputStringWithBlanks, UnExpRawTokenList),
+				   % InputStringWithBlanks, UnExpRawTokenList),
 	!,
 	% halt,
 	% length(Sentences,         SentencesLength),
@@ -537,7 +535,7 @@ process_text_1(Lines0,
 	process_text_aux(ExpandedUtterances,
 			 TagOption,  TaggerServerHosts, TaggerForced, TaggerServerPort,
 			 WSDServerHosts, WSDForced, WSDServerPort,
-			 CitationTextAtomWithCRs, AAs, 
+			 CitationTextAtomWithCRs, AAs, UDAs,
 			 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut, MMOutput),
         !.
@@ -545,13 +543,13 @@ process_text_1(Lines0,
 process_text_aux([],
 		 _TagOption, _TaggerServerHosts, _TaggerForced, _TaggerServerPort,
 		 _WSDServerHosts, _WSDForced, _WSDServerPort,
-		 _CitationTextAtom, _AAs,
+		 _CitationTextAtom, _AAs, _UDAs,
 		 ExpRawTokenList, WordDataCache, USCCache,
 		 ExpRawTokenList, WordDataCache, USCCache, []).
 process_text_aux([ExpandedUtterance|Rest],
 		 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		 WSDServerHosts, WSDForced, WSDServerPort,
-		 CitationTextAtom, AAs,
+		 CitationTextAtom, AAs, UDAs,
 		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
 		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
 		 [mm_output(ExpandedUtterance,CitationTextAtom,ModifiedText,Tagging,AAs,
@@ -571,13 +569,13 @@ process_text_aux([ExpandedUtterance|Rest],
 			     HRTagStrings, Definitions, SyntAnalysis0),
 	conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-		    AAs, SyntAnalysis, WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
+		    AAs, UDAs, SyntAnalysis, WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
 		    WSDServerHosts, WSDForced, WSDServerPort,
 		    ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 		    DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases),
 	process_text_aux(Rest, TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 			 WSDServerHosts, WSDForced, WSDServerPort,
-			 CitationTextAtom, AAs,
+			 CitationTextAtom, AAs, UDAs,
 			 ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 			 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
 
@@ -591,8 +589,7 @@ postprocess_text(Lines0, BracketedOutput, InterpretedArgs,
 	; postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
 			     IOptions,  ExpRawTokenList, AAs, MMResults) ->
 	  true
-	; format(user_output, 'ERROR: postprocess_text/2 failed for~n~p~n', [Lines0]),
-	  format('ERROR: postprocess_text/2 failed for~n~p~n', [Lines0]),
+	; send_message('### ERROR: postprocess_text/2 failed for~n~p~n', [Lines0]),
 	  abort
 	).
 
@@ -645,11 +642,9 @@ postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences,
 postprocess_sentences_1([FailedUtterance|_], _Sentences,
 			_BracketedOutput, _N, _AAs, _MMOutput, _MMOIn, _MMOOut) :-
 	FailedUtterance = utterance(UtteranceID,UtteranceText,_PosInfo,_ReplPos),
-	format(user_output,
-	       'ERROR: postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
-	       [UtteranceID,UtteranceText]),
-	ttyflush,
-	fail.
+	send_message('### ERROR: postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
+		     [UtteranceID,UtteranceText]),
+	abort.
 
 
 postprocess_phrases([], [], _Sentences, _BracketedOutput, _N, _M, _AAs, _Label, MMO, MMO) :- !.

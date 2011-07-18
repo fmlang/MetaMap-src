@@ -103,8 +103,6 @@
         append/2
    ]).
 
-
-
 :- dynamic lexAccess_lexicon/1.
 
 /* ************************************************************************
@@ -141,8 +139,8 @@ initialize_lexicon(L,I) :-
 %%    assert(lexAccess_lexicon(LexiconVersion)),
     !.
 initialize_lexicon(_L, _I) :-
-    format('ERROR: Cannot connect to a lexicon server.~n',[]),
-    fail.
+    format('ERROR: Cannot connect to a lexicon.~n',[]),
+    abort.
 
 /* tokenize_string_for_lexical_lookup(+String, -TokenLists)
 

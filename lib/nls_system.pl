@@ -129,14 +129,19 @@ is_control_option(metamap, 'J', restrict_to_sts, no,
                   aspec(restrict_to_sts, mandatory, list, none, no_default,
                         'List of semantic types to use for output')).
 is_control_option(metamap, 'K', ignore_stop_phrases, 		no, none).
-is_control_option(metamap, 'L', lexicon_year, 	 		no, none).
+is_control_option(metamap, 'L', lexicon_year, 	 		no,
+                  aspec(lexicon_year, mandatory, none, none, no_default,
+                        'Lexicon year')).
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
 is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
-is_control_option(metamap, 'Q', composite_phrases, 		no, none).
+is_control_option(metamap, 'Q', composite_phrases, 		no,
+                  aspec(composite_phrases, mandatory, integer, none, no_default,
+                        'Max number of prepositional phrases to glom on')).
 is_control_option(metamap, 'R', restrict_to_sources, no,
                   aspec(restrict_to_sources, mandatory, list, none, no_default,
                         'List of sources to use for output')).
+
 is_control_option(metamap, 'S', tagger, no,
                   aspec(tagger, mandatory, none, none, no_default,
                         'Which tagger to use')).
@@ -150,7 +155,7 @@ is_control_option(metamap, 'X', truncate_candidates_mappings, 	no, none).
 is_control_option(metamap, 'Y', prefer_multiple_concepts, 	no, none).
 is_control_option(metamap, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
-                        'Year of MetaMap data to use')).
+                        'Release of MetaMap data to use')).
 
 is_control_option(metamap,   a, all_acros_abbrs,	        no, none).	% MetaMap default
 is_control_option(metamap,   b, compute_all_mappings,    	no, none).  	% MetaMap default
@@ -159,6 +164,7 @@ is_control_option(metamap,   d, no_derivational_variants,	no, none).
 is_control_option(metamap,   e, exclude_sources, 		no,
                   aspec(exclude_sources, mandatory, list, none, no_default,
                         'List of sources to exclude for output')).
+is_control_option(metamap,   f, number_the_mappings, 		no, none).
 is_control_option(metamap,   g, allow_concept_gaps, 		no, none).
 % is_control_option(metamap,   f, fielded_output, 		no, none).
 is_control_option(metamap,   i, ignore_word_order, 		no, none).
@@ -199,18 +205,20 @@ is_control_option(metamap,  '', min_length, 	 no,
                   aspec(min_length, mandatory, integer, none, no_default,
                         'Must specify an integer value.')).
 is_control_option(metamap,  '', phrases_only, 	 	 	no, none).
-is_control_option(metamap,  '', separate_apostrophe_s, 	 	no, none).
+is_control_option(metamap,  '', apostrophe_s_contraction, 	no, none).
 is_control_option(metamap,  '', warnings, 	 	 	no, none).
 is_control_option(metamap,  '', no_prune,	 	 	no, none).
 is_control_option(metamap,  '', prune, no,
                   aspec(prune, mandatory, integer, none, no_default,
                         'Max num of candidates to allow before pruning')).
 is_control_option(metamap,  '', restore, 	 	 	no, none).
+is_control_option(metamap,  '', 'UDA',   no,
+		  aspec('UDA', mandatory, none, none, no_default,
+                        'Must specify a filename.')).
 is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLn1',		 	no, none).
-
 
 is_control_option(metamap,  '', lexicon, no,
                   aspec(lexicon, mandatory, none, none, no_default,
@@ -785,7 +793,7 @@ subtract_from_control_options([Option0|Rest]) :-
 	  true
         ; Option=Option0
         ),
-	( retract(control_option(Option))
+	( retractall(control_option(Option))
         ; true
         ),
 	!,
@@ -854,12 +862,11 @@ display_one_control_option(Option) :-
 
 display_mandatory_metamap_options :-
 	format('Mandatory arguments:~n', []),
-	findall(LongOptionName-Length:Description,
+	findall(LongOptionName-LongOptionNameLength:Description,
 		( is_control_option(metamap,_ShortOptionName,LongOptionName,_IsDefault,
 				    aspec(LongOptionName,mandatory,
 					  _Type,_SubType,_Default,Description)),
-		  atom_codes(LongOptionName, LongOptionNameChars),
-		  length(LongOptionNameChars, Length)),
+		  atom_length(LongOptionName, LongOptionNameLength)),
 		  OptionDescriptionList),
 	longest_option_name_length(OptionDescriptionList, 0, LongestLength),
 	print_mandatory_options(OptionDescriptionList, LongestLength).
@@ -1428,7 +1435,7 @@ illegal_default_component(user_output).
 
 conditionally_announce_program_name(ProgramName, FullYear) :-
 	( \+ control_option(silent) ->
-	  format(user_output, '~n~w (~d)~n~n',[ProgramName,FullYear])
+	  format(user_output, '~n~w (~a)~n~n',[ProgramName,FullYear])
 	; true
 	).
 

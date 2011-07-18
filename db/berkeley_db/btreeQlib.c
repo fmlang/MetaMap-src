@@ -123,6 +123,13 @@ void GetConfigInfo(char *loc_database_home)
    {
       if(line[0] != '#')    /* Skip over comment lines */
       {
+	if(pos >= NUM_TABLES)
+	{
+           NUM_TABLES++;
+	   config_info = (struct config_struct **)
+		   realloc(config_info, sizeof(struct config_struct *) * NUM_TABLES);
+        } /* fi */
+
         config_info[pos] = 
             (struct config_struct *)malloc(sizeof(struct config_struct));
 
@@ -171,6 +178,14 @@ void GetConfigInfo(char *loc_database_home)
    } /* while */
 
    fclose(fp);
+
+   if(pos != NUM_TABLES)
+   {
+       NUM_TABLES = pos;
+       config_info = (struct config_struct **)
+	       realloc(config_info, sizeof(struct config_struct *) * NUM_TABLES);
+                   
+    } /* fi */
 } /* GetConfigInfo */
 
 /**************************************************************************/

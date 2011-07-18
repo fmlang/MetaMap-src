@@ -56,8 +56,12 @@
 	db_get_cui_sources/2
     ]).
 
-:- use_module(skr(skr_umls_info_2011AA), [
+:- use_module(skr(skr_umls_info), [
 	convert_to_root_sources/2
+    ]).
+
+:- use_module(skr(skr_utilities), [
+	ensure_atom/2
     ]).
 
 :- use_module(skr_lib(semtype_translation_2011AA), [
@@ -121,23 +125,37 @@ xxx
 */
 
 dump_aphrase_mappings([], Label) :-
-	format('Meta ~a: <none>~n', [Label]),
-	!.
+	format('Meta ~a: <none>~n', [Label]).
 dump_aphrase_mappings([H|T], Label) :-
 	APhrases = [H|T],
-	dump_aphrase_mappings_aux(APhrases, Label).
+	( control_option(number_the_mappings) ->
+	  Counter is 1
+	; Counter is 0
+	),
+	dump_aphrase_mappings_aux(APhrases, Label, Counter).
 
-dump_aphrase_mappings_aux([], _Label).
-dump_aphrase_mappings_aux([ap(NegValue,_,_,Mapping)|Rest], Label) :-
-	Value is -NegValue,
-	dump_mapping(Mapping, Label, Value),
-	dump_aphrase_mappings_aux(Rest, Label).
+dump_aphrase_mappings_aux([], _Label, _Counter).
+dump_aphrase_mappings_aux([ap(NegValue,_,_,Mapping)|Rest], Label, Counter) :-
+	Score is -NegValue,
+	get_display_and_increment_counter(Counter, CounterDisplay, NextCounter),
+	dump_mapping(Mapping, Label, Score, CounterDisplay),
+	dump_aphrase_mappings_aux(Rest, Label, NextCounter).
 
-dump_mapping([], Label, _) :-
+get_display_and_increment_counter(Counter, CounterDisplay, NextCounter) :-
+	( Counter =:= 0 ->
+	  CounterDisplay = '',
+	  NextCounter is 0
+	; ensure_atom(Counter, CounterAtom),
+	  % atom_concat/3 is a SICStus Prolog built-in predicate
+	  atom_concat(CounterAtom, '. ', CounterDisplay),
+	  NextCounter is Counter + 1
+	).	  
+
+dump_mapping([], Label, _Score, _DisplayCounter) :-
 	format('Meta ~a: <none>~n', [Label]).
-dump_mapping([H|T], Label, Value) :-
+dump_mapping([H|T], Label, Score, DisplayCounter) :-
 	Mapping = [H|T],
-	format('Meta ~a (~d):~n', [Label,Value]),
+	format('~wMeta ~a (~d):~n', [DisplayCounter,Label,Score]),
 	dump_evaluations(Mapping).
 
 dump_evaluations([]).

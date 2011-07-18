@@ -33,10 +33,6 @@
 % Author:   Lan
 % Purpose:  Provide simple text (atom) processing
 
-% WARNING: This module is obsolete since midstring/? corrupts memory
-%          for atoms > ~512 in size!!!
-
-
 :- module(nls_text,[
 	concatenate_text/3,
 	eliminate_multiple_meaning_designator/2,
@@ -55,6 +51,7 @@
 
 
 :- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2,
 	concat_strings_with_separator/3
    ]).
 
@@ -75,9 +72,7 @@ one of its arguments MUST be instantiated.*/
 append_text([], '') :- !.
 append_text([Text], Text) :- !.
 append_text(TextList, Text) :-
-	atom_codes_list(TextList, StringList),
-	append(StringList, String),
-	atom_codes(Text, String).
+	concat_atom(TextList, Text).
 
 /* concatenate_text(+TextList, +InsertText, -Text)
 
@@ -116,19 +111,15 @@ eliminate_multiple_meaning_designator(Word, ModifiedWord) :-
 is_all_graphic_text/1 succeeds if Text is an atom (INCLUDING '') consisting
 entirely of graphic characters. */
 
-is_all_graphic_text('') :-
-    !.
+is_all_graphic_text('') :- !.
 is_all_graphic_text(Text) :-
-%    midstring(Text,First,Rest,0,1),     midstring/? corrupts memory!
-%    is_graphic_text(First),
-%    is_all_graphic_text(Rest).
-    atom_codes(Text,S),
-    is_all_graphic(S).
+	atom_codes(Text, S),
+	is_all_graphic(S).
 
 is_all_graphic([]).
 is_all_graphic([Char|Rest]) :-
-    is_graphic(Char),
-    is_all_graphic(Rest).
+	is_graphic(Char),
+	is_all_graphic(Rest).
 
 is_graphic(0'!).  % see ctypes:is_graph/1 for non-alphanumeric graphics
 is_graphic(0'").  % " This comment is just to un-confuse Emacs

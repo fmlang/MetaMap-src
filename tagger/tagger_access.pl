@@ -62,6 +62,10 @@
 	ensure_number/2
    ]).
 
+:- use_module(skr_lib(ctypes),[
+	is_punct/1
+    ]).
+
 :- use_module(skr_lib(sicstus_utils),[
 	concat_atom/2,
 	number_to_atom/2,
@@ -80,6 +84,7 @@
 
 :- use_module(library(lists),[
 	append/2,
+	last/2,
 	rev/2
    ]).
 
@@ -134,10 +139,8 @@ tag_text(Input,
 tag_text_with_options([], _, _, _, _, _, []) :- !.
 tag_text_with_options(Input, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      ModeOption, PrologOption, TaggedTextList) :-
-	atom_codes(ModeOption, MOString),
-	atom_codes(PrologOption, POString),
-	append([MOString,"|",POString], OptionsString),
-	atom_codes(Options, OptionsString),
+
+	concat_atom([ModeOption, '|', PrologOption], Options),
 	ensure_atom(Input, QueryAtom),
 	call_tagger(Options,
 		    TaggerServerHosts, TaggerForced, TaggerServerPort,
@@ -371,7 +374,7 @@ choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost) :-
 % onto the previous token.
 
 postprocess_apostrophe_s(TagListIn, TagListOut) :-
-	( control_option(separate_apostrophe_s) ->
+	( control_option(apostrophe_s_contraction) ->
 	  TagListOut = TagListIn
 	; postprocess_apostrophe_s_aux(TagListIn, TagListOut)
 	).
@@ -380,20 +383,24 @@ postprocess_apostrophe_s(TagListIn, TagListOut) :-
 % [finkelstein,noun], ['\'',ap], [s,'noun/3'], [test,'verb/3'], [positive,'adj/2']
 % into
 % ['finkelstein\'s',noun], [test,'verb/3'], [positive,'adj/2']
-% but do NOT do this is the token immedidately preceding the ['\'',ap]
-% has LexCat == pron (the exceptions are "he", "she", and "it").
+% by glomming the "'s" onto the end of the preceeding token.
+% However, do NOT do this glomming if the token immedidately preceeding the ['\'',ap]
+% has LexCat == pron (the exceptions are "he", "she", and "it")
+% or if that token ends in a punctuation char.
+
+% In other words, by deMorgan's laws, do the glomming IF the preceeding token
+% (1) is not a pronoun AND
+% (2) does not end in a punctuation char
 postprocess_apostrophe_s_aux([], []).
 postprocess_apostrophe_s_aux(TaggedTextList0, TaggedTextList) :-
 	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap], [s,'noun/3']|RestTaggedTextList0],
 	LexCat \== pron,
+	atom_codes(OrigWord, OrigWordCodes),
+	last(OrigWordCodes, LastCode),
+	\+ is_punct(LastCode),
 	!,
-	atom_chars(OrigWord, OrigWordChars),
-	append(OrigWordChars, ['''', s], NounChars),
-	atom_chars(Noun, NounChars),
+	concat_atom([OrigWord, '''', s], Noun),
 	TaggedTextList = [[Noun,LexCat]|RestTaggedTextList],
 	postprocess_apostrophe_s_aux(RestTaggedTextList0, RestTaggedTextList).
 postprocess_apostrophe_s_aux([H|RestIn], [H|RestOut]) :-
 	postprocess_apostrophe_s_aux(RestIn, RestOut).
-
-
-

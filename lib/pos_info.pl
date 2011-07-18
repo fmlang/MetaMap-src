@@ -227,6 +227,20 @@ handle_ws_token_type(_TokenState,
 	  % which, in this case, happens to be just RestTokens.
 	  RestTokensNext = RestTokens.
 
+handle_special_token_type(aadef, _PrevToken,
+			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
+			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
+			  RestNewTokens) :-
+	% Special case for aadef(_) and aa(_) being consecutive tokens,
+	% which means the AA is user-defined
+	RestTokensIn = [FirstRestTokensIn|_],
+	aa_tok(FirstRestTokensIn),
+	arg(3, FirstRestTokensIn, [CurrentToken]),
+	!,
+	InputStringNext = InputStringIn,
+	RestNewTokens = NewTokens,
+	NextPos is CurrentPos,
+	RestTokensNext = RestTokensIn.
 handle_special_token_type(aadef, PrevToken,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,

@@ -33,24 +33,28 @@
 % Module:   MetaMap
 % Author:   Lan
 % Purpose:  Factual information about bad derivational variants.  (2006 edition)
-%           There have been no changes since 2001.
+%           Updated in 2011 to add "man" rows.
 
 :- module(vdx,[
    vdx/2
    ]).
 
-vdx('foe','foy').
-vdx('foy','foe').
-vdx('id','idant').
-vdx('lean','lea').
-vdx('lea','lean').
-vdx('lee','ley').
-vdx('ley','lee').
-vdx('mae','may').
-vdx('may','mae').
-vdx('nona','nonan').
-vdx('pot','potable').
-vdx('roe','roy').
-vdx('roy','roe').
-vdx('teal','tea').
-vdx('tea','teal').
+vdx(X, Y) :-
+	( vdx_fact(X, Y)  ->
+	  true
+	; vdx_fact(Y, X)
+	).
+
+vdx_fact('foe',   'foy').
+vdx_fact('id',    'idant').
+vdx_fact('lean',  'lea').
+vdx_fact('lee',   'ley').
+vdx_fact('mae',   'may').
+vdx_fact('man',   'mane').
+vdx_fact('man',   'maned').
+vdx_fact('man',   'manor').
+vdx_fact('may',   'mae').
+vdx_fact('nona',  'nonan').
+vdx_fact('pot',   'potable').
+vdx_fact('roe',   'roy').
+vdx_fact('teal',  'tea').

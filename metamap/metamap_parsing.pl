@@ -54,7 +54,6 @@
 	generate_variant_info/2
     ]).
 
-
 :- use_module(skr_lib(mincoman),[
 	minimal_commitment_analysis/5
     ]).
@@ -66,6 +65,10 @@
 :- use_module(skr_lib(retokenize),[
 	remove_null_atom_defns/2,
 	retokenize/2
+    ]).
+
+:- use_module(skr_lib(sicstus_utils),[
+	concat_atom/2
     ]).
 
 :- use_module(library(lists),[
@@ -110,12 +113,12 @@ generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions
 % will parse words ending in "'s" (apostrophe + s) into three tokens, e.g.,
 % tokenize_string_for_lexical_lookup("finkelstein's test positive", Words0)
 % will instantiate Words0 to [[finkelstein,'\'',s,test,positive]].
-% MetaMap's (new!) default behavior is to reattach the "'s"  to the previous token.
+% MetaMap's (new!) default behavior is to reattach the "'s" to the previous token.
 
 % WordListsIn is a list of lists of tokens, e.g.,
 % [[finkelstein, '\'', s, test, positive]]
 re_attach_apostrophe_s_syntax(WordListsIn, TagList, WordListsOut) :-
-	( control_option(separate_apostrophe_s) ->
+	( control_option(apostrophe_s_contraction) ->
 	  WordListsOut = WordListsIn
 	; (  foreach(ListIn,  WordListsIn),
 	     foreach(ListOut, WordListsOut),
@@ -127,12 +130,12 @@ re_attach_apostrophe_s_syntax(WordListsIn, TagList, WordListsOut) :-
 % Given a list of tokens, transform the sequence of atoms <any token>, <apostrophe>, <s>
 % to the atom <any token apostrophe s>, e.g.,
 % [finkelstein, '\'', s, test, positive] --> [finkelstein's, test, positive]
+% We do not have to worry about glomming the apostrophe onto a previous token
+% ending in a punctuation mark here...I think...
 re_attach_apostrophe_s_to_prev_word([], _TagList, []).
 re_attach_apostrophe_s_to_prev_word(WordListIn, TagList, WordListOut) :-
 	WordListIn = [OrigWord, '''', s | RestWordsIn],
-	atom_chars(OrigWord, OrigWordChars),
-	append(OrigWordChars, ['''', s], WordWithApostropheSChars),
-	atom_chars(WordWithApostropheS, WordWithApostropheSChars),
+	concat_atom([OrigWord, '''', s], WordWithApostropheS),
 	member(TagElement, TagList),
 	TagElement = [WordWithApostropheS,_LexCat],
 	!,

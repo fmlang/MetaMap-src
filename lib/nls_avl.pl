@@ -75,4 +75,3 @@ add_to_avl_once(Key, Value, AVLIn, AVLOut) :-
 	  AVLOut = AVLIn
 	; avl_store(Key, AVLIn, [Value], AVLOut)
 	).
-

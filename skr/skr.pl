@@ -43,7 +43,7 @@
 	% print_duplicate_info/4 is not explicitly called by any other module,
 	% but it must still be imported because it's called via debug_call.
 	print_duplicate_info/4,
-	skr_phrases/17,
+	skr_phrases/18,
 	print_all_aevs/1,
 	% called by MetaMap API -- do not change signature!
 	stop_skr/0
@@ -58,7 +58,7 @@
     ]).
 
 :- use_module(metamap(metamap_candidates), [
-	add_candidates/8
+	add_candidates/9
     ]).
 
 :- use_module(metamap(metamap_evaluation), [
@@ -112,7 +112,7 @@
 	gather_variants/4
     ]).
 
-:- use_module(skr(skr_umls_info_2011AA), [
+:- use_module(skr(skr_umls_info), [
 	convert_to_root_sources/2
     ]).
 
@@ -211,6 +211,9 @@
 	union/4
     ]).
 
+:- multifile user:user_defined_AA/2.
+:- dynamic user:user_defined_AA/2.
+
 /* 
    initialize_skr(+Options)
    stop_skr
@@ -242,12 +245,12 @@ stop_skr :-
 	close_all_streams.
 
 skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-	    AAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
+	    AAs, UDAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
 	    WSDServerHosts, WSDForced, WSDServerPort,
 	    RawTokensOut, WordDataCacheOut, USCCacheOut,
 	    MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) :-
 	( skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-			  AAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
+			  AAs, UDAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
 			  WSDServerHosts, WSDForced, WSDServerPort,
 			  RawTokensOut, WordDataCacheOut, USCCacheOut,
 			  MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) ->
@@ -263,7 +266,7 @@ skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
         ).
 
 skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-		AAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
+		AAs, UDAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
 		WSDServerHosts, WSDForced, WSDServerPort,
 		RawTokensOut, WordDataCacheOut, USCCacheOut,
 		DisambiguatedMMOPhrases, ExtractedPhrases,
@@ -274,7 +277,7 @@ skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
 	% UtteranceText contains no AAs. E.g.,
 	% "heart attack (HA)" will become simply "heart attack".
 	skr_phrases_1(Phrases, InputLabel, UtteranceText,
-		      AAs, CitationTextAtom,
+		      AAs, UDAs, CitationTextAtom,
 		      WordDataCacheIn, USCCacheIn,
 		      WordDataCacheOut, USCCacheOut,
 		      RawTokensIn, RawTokensOut,
@@ -283,11 +286,11 @@ skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
 	       WSDServerHosts, WSDForced, WSDServerPort,
 	       MMOPhrases, DisambiguatedMMOPhrases, SemRepPhrasesWithWSD).
 
-skr_phrases_1([], _InputLabel, _AllUtteranceText, _AAs, _CitationTextAtom,
+skr_phrases_1([], _InputLabel, _AllUtteranceText, _AAs, _UDAs, _CitationTextAtom,
 	      WordDataCache, USCCache, WordDataCache, USCCache,
 	      RawTokens, RawTokens, [], []).
 skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
-	      AAs, CitationTextAtom,
+	      AAs, UDAs, CitationTextAtom,
 	      WordDataCacheIn, USCCacheIn,
 	      WordDataCacheOut, USCCacheOut,
 	      RawTokensIn, RawTokensOut,
@@ -296,46 +299,59 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	get_composite_phrases([PhraseIn|OrigRestPhrasesIn],
 			      CompositePhrase, RestCompositePhrases, CompositeOptions),
 	% Merge consecutive phrases spanned by an AA
-	merge_aa_phrases(RestCompositePhrases, CompositePhrase, AAs,
-			 MergedPhrase0, RemainingCompositePhrases),
+	% The original composite phrases are the list
+	% [CompositePhrase|RestCompositePhrases];
+	% after merging phrases that are spanned by an AA, the phrases are
+	% [MergedPhrase|RestMergedPhrases]
+	merge_aa_phrases(RestCompositePhrases, CompositePhrase, AAs, UDAs,
+			 MergedPhrase, RestMergedPhrases, MergeOptions),
+	append(CompositeOptions, MergeOptions, AllOptions0),
+	sort(AllOptions0, AllOptions),
 	% AllUtteranceText is never used in skr_phrase; it's there only for gap analysis,
 	% which is no longer used!!
 	skr_phrase(InputLabel, AllUtteranceText,
-		   MergedPhrase0, AAs, CitationTextAtom, RawTokensIn, GVCs,
+		   MergedPhrase, AAs, CitationTextAtom, RawTokensIn, GVCs,
 		   WordDataCacheIn, USCCacheIn,
 		   WordDataCacheNext, USCCacheNext,
 		   RawTokensNext, APhrases, FirstMMOPhrase),
 	set_var_GVCs_to_null(GVCs),
 	extract_phrases_from_aps(APhrases, Phrases),
-	subtract_from_control_options(CompositeOptions),
+	subtract_from_control_options(AllOptions),
 	% add_semtypes_to_phrases_if_necessary(Phrases0,FirstEPPhrases),
-	skr_phrases_1(RemainingCompositePhrases, InputLabel, AllUtteranceText,
-		      AAs, CitationTextAtom,
+	skr_phrases_1(RestMergedPhrases, InputLabel, AllUtteranceText,
+		      AAs, UDAs, CitationTextAtom,
 		      WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut,
 		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrases).
 
 % Determine if an AA Expansion spans two (or more) consecutive phrases.
 % If so, collapse the spanned phrases into one.
 
-merge_aa_phrases([], CompositePhrase, _AAs, CompositePhrase, []).
-merge_aa_phrases([NextPhrase|RestPhrases], FirstPhrase, AAs,
-		 MergedPhrase, RestMergedPhrases) :-
-	( acronym_expansion_spans_phrases(AAs, 
+merge_aa_phrases([], CompositePhrase, _AAs, _UDAs, CompositePhrase, [], []).
+merge_aa_phrases([NextPhrase|RestPhrases], FirstPhrase, AAs, UDAs,
+		 MergedPhrase, RestMergedPhrases, MergedOptions) :-
+	( acronym_expansion_spans_phrases(AAs, UDAs,
 					  [FirstPhrase,NextPhrase|RestPhrases],
 					  PhrasesToMerge, RemainingPhrases) ->
 	  merge_aa_phrases_1(PhrasesToMerge, MergedPhrase),
-	  RestMergedPhrases = RemainingPhrases
+	  RestMergedPhrases = RemainingPhrases,
+	  MergedOptions = [term_processing],            % -z
+	  add_to_control_options(MergedOptions)
 	; MergedPhrase = FirstPhrase,
-	  RestMergedPhrases = [NextPhrase|RestPhrases]
+	  RestMergedPhrases = [NextPhrase|RestPhrases],
+	  MergedOptions = []
 	).
 
-merge_aa_phrases_1(PhrasesToMerge, MergedPhrase) :-
-	append(PhrasesToMerge, AppendedPhrasesToMerge),
-	demote_heads(AppendedPhrasesToMerge, MergedPhrase).
+merge_aa_phrases_1(PhrasesToMerge, [AppendedPhrase1|DemotedPhrases]) :-
+	append(PhrasesToMerge, [AppendedPhrase1|RestAppendedPhrases]),
+	demote_heads(RestAppendedPhrases, DemotedPhrases).
 
-acronym_expansion_spans_phrases(AAs, [FirstPhrase|RestPhrases],
+% We take the first AA or UDA to span multiple phrases,
+% and assume it's the only one that does. Maybe too simple?
+acronym_expansion_spans_phrases(AAs, UDAs, [FirstPhrase|RestPhrases],
 				[FirstPhrasePrefix|PhrasesToMerge], RemainingPhrases) :-
-	avl_member(_AATokens, AAs, [ExpansionTokens]),
+	( avl_member(_AATokens, AAs, [ExpansionTokens])
+	; avl_member(_AATokens, UDAs, [ExpansionTokens])
+	),
 	% extract_token_strings(ExpansionTokens, ExpansionStrings),
 	append(FirstPhrasePrefix, FirstPhraseSuffix, FirstPhrase),
 	FirstPhraseSuffix \== [],
@@ -343,7 +359,8 @@ acronym_expansion_spans_phrases(AAs, [FirstPhrase|RestPhrases],
 	last(FirstPhraseSuffix, LastPhraseSuffix),
 	not_non_hyphen_punc(LastPhraseSuffix),
 	tokens_match_inputmatch(ExpansionTokens, FirstPhraseSuffix, RestPhrases,
-				0, _NumPhrasesMerged, PhrasesToMerge, RemainingPhrases).
+				0, _NumPhrasesMerged, PhrasesToMerge, RemainingPhrases),
+	!.
 
 not_non_hyphen_punc(LastPhraseSuffix) :-
 	% Either the LastPhraseSuffix syntax element is not a punc(_) structure....
@@ -433,28 +450,6 @@ match_tokens_to_inputmatch([FirstExpansionToken|RestExpansionTokens],
 				     RestInputMatchAtoms, RemainingExpansionTokens)
 	).
 
-%%% syntax_matches_aa_tokens([], AATokens, AATokens).
-%%% syntax_matches_aa_tokens([FirstSyntax|RestSyntax], AATokensIn, AATokensOut) :-
-%%% 	arg(1, FirstSyntax, FeatureList),
-%%% 	memberchk(inputmatch(InputMatchAtoms), FeatureList),
-%%% 	match_inputmatch_atoms(InputMatchAtoms, AATokensIn, AATokensNext),
-%%% 	syntax_matches_aa_tokens(RestSyntax, AATokensNext, AATokensOut).
-%%% 
-%%% match_inputmatch_atoms([], AATokens, AATokens).
-%%% match_inputmatch_atoms([FirstAtom|RestAtoms], AATokensIn, AATokensOut) :-
-%%% 	match_one_inputmatch_atom(AATokensIn, FirstAtom, AATokensNext),
-%%% 	match_inputmatch_atoms(RestAtoms, AATokensNext, AATokensOut).
-%%% 
-%%% 
-%%% match_one_inputmatch_atom([FirstAAToken|RestAATokens], FirstAtom, AATokensNext) :-
-%%% 	( ws_tok(FirstAAToken) ->
-%%% 	  match_one_inputmatch_atom(RestAATokens, FirstAtom, AATokensNext)
-%%% 	; FirstAAToken = tok(_TokenType, TokenString, _LCTokenString, _PosInfo),
-%%% 	  atom_codes(FirstAtom, TokenString),
-%%% 	  AATokensNext = RestAATokens
-%%% 	).
-	
-
 set_var_GVCs_to_null(GVCs) :-
 	( var(GVCs) ->
 	  GVCs=[]
@@ -520,8 +515,8 @@ skr_phrase_1(Label, UtteranceTextString,
 				     TokenPhraseHeadWords, WordDataCacheOut,
 				     USCCacheOut, Evaluations0),
 	refine_evaluations(Evaluations0, EvaluationsAfterSTs, Evaluations),
-	length(Evaluations0, InitialCandidatesCount),
-	length(Evaluations,  RefinedCandidatesCount),
+	debug_call(candidates, length(Evaluations0, InitialCandidatesCount)),
+	debug_call(candidates, length(Evaluations,  RefinedCandidatesCount)),
 	debug_message(candidates,
 		      '### ~d Initial Candidates~n### ~d Refined Candidates~n',
 		      [InitialCandidatesCount, RefinedCandidatesCount]),
@@ -592,8 +587,8 @@ get_label_components(Label, [PMID, TiOrAB, UtteranceNum]) :-
 
 get_pwi_info(Phrase, PhraseWordInfoPair, TokenPhraseWords, TokenPhraseHeadWords) :-
 	( control_option(term_processing) ->
-	  parse_phrase_word_info(nofilter, Phrase, PhraseWordInfoPair)
-	; parse_phrase_word_info(filter, Phrase, PhraseWordInfoPair)
+	  parse_phrase_word_info(Phrase, unfiltered, PhraseWordInfoPair)
+	; parse_phrase_word_info(Phrase, filtered,   PhraseWordInfoPair)
 	),
 	PhraseWordInfoPair = _AllPhraseWordInfo:FilteredPhraseWordInfo,
 	% format(user_output, 'ALL:      ~q~n', [AllPhraseWordInfo]),
@@ -818,7 +813,8 @@ compute_evaluations(Label, UtteranceText,
 
 	debug_message(trace, '~N### Calling add_candidates: ~q~n', [TokenPhraseWords]),
 	test_single_char_tokens(InputMatchPhraseWords, IgnoreSingleChars),
-	add_candidates(GVCs, Variants, IgnoreSingleChars, DebugFlags,
+	CandidateCount is 1,
+	add_candidates(GVCs, CandidateCount, Variants, IgnoreSingleChars, DebugFlags,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut),
 	% format(user_output, '~N### add_candidates DONE!~n', []),
@@ -879,7 +875,7 @@ test_single_char_tokens(InputMatchPhraseWords, IgnoreSingleChars) :-
 	).
 
 test_single_char_tokens_aux([], PhraseLength, Count, Count, Result) :-
-	( Count > PhraseLength / 3 ->
+	( Count > PhraseLength * 0.75 ->
 	  Result is 1
 	; Result is 0
 	).
@@ -892,17 +888,17 @@ test_single_char_tokens_aux([FirstWord|RestWords], PhraseLength, CountIn, CountO
 % otherwise reset the count to zero.
 next_single_alpha_or_hyphen_count(Word, CountIn, CountNext) :-
 	atom_codes(Word, WordCodes),
-	( WordCodes = [SingleChar],
-	  is_alpha_or_hyphen(SingleChar) ->
+	( WordCodes = [_SingleChar] ->
+	  % is_alpha_or_hyphen(SingleChar) ->
 	  CountNext is CountIn + 1
 	; CountNext is CountIn
 	).
 
- is_alpha_or_hyphen(SingleChar) :-
-	( is_alpha(SingleChar) ->
-	  true
-	; SingleChar =:= 45 % ASCII code for "-"
-	).
+% is_alpha_or_hyphen(SingleChar) :-
+% 	( is_alpha(SingleChar) ->
+% 	  true
+% 	; SingleChar =:= 45 % ASCII code for "-"
+% 	).
 
 generate_variants(PhraseWords, PhraseHeadWords, Phrase, DebugFlags, GVCs3, Variants) :-
 	expand_split_word_list(PhraseWords,     DupPhraseWords),
@@ -1442,19 +1438,23 @@ construct_best_mappings(Evaluations, PhraseTextString, Phrase,
 	  debug_message(trace, '~n### DONE with construct_all_mappings: ~w~n', [AllMappingsLength])
 	; AllMappings = []
 	),
+	debug_message(mappings, '~N### Adding duplicate candidates to mappings.~n', []),
 	add_dup_candidates_to_all_mappings(AllMappings, DuplicateCandidates, AllMappingsWithDups),
+	debug_message(mappings, '~N### Distributing duplicate candidates over mappings.~n', []),
 	distribute_duplicate_candidates(AllMappingsWithDups, AllDistributedMappings),
 	append(AllDistributedMappings, AllAppendedMappings),
 	construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllAppendedMappings,
 				  Variants, APhrases, BestMaps),
 	deaugment_mapping_evaluations(BestAEvs, BestCandidates).
 
-apply_shortcut_processing_rules(LCFilteredWords, PhraseTextString) :-
-	( contains_n_amino_acids(LCFilteredWords, 3) ->
-	  true
-	; text_contains_n_hyphens_within_word(PhraseTextString, 4)
-	).
+apply_shortcut_processing_rules(LCFilteredWords, _PhraseTextString) :-
+	contains_n_amino_acids(LCFilteredWords, 3) .
 
+% apply_shortcut_processing_rules(LCFilteredWords, PhraseTextString) :-
+% 	( contains_n_amino_acids(LCFilteredWords, 3) ->
+% 	  true
+% 	; text_contains_n_hyphens_within_word(PhraseTextString, 4)
+% 	).
 
 construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 			  Variants, APhrases, BestMappings) :-
@@ -1464,12 +1464,11 @@ construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 	% sort(APhrases0,APhrases1),
 	debug_message(trace, '~N### Calling conditionally_filter_best_aphrases~n', []),
 	conditionally_filter_best_aphrases(APhrases0, APhrases),
-	debug_message(trace, '~N### Calling aphrases_maps~n', []),
 	% Aphrases is a list of terms of the form
 	% ap(NegValue,LPhraseOut,LPhraseMapOut,Mapping).
 	aphrases_maps(APhrases, BestMappings),
 	% BestMappings = BestMappings0,
-	length(BestMappings, BestMappingsCount),
+	debug_call(mappings, length(BestMappings, BestMappingsCount)),
 	debug_message(mappings, '~n### ~d Best Mappings~n', [BestMappingsCount]),
 	debug_message(mappings, '~N### Done with aphrases_maps~n', []).
 
@@ -1588,27 +1587,27 @@ is_an_amino_acid(his).
 is_an_amino_acid(met).
 is_an_amino_acid(trp).
 
-text_contains_n_hyphens_within_word(PhraseText, N) :-
-	( atom(PhraseText) ->
-	  atom_codes(PhraseText, PhraseString)
-	; PhraseString = PhraseText
-	),
-	contains_n_hyphens_within_word(PhraseString, 0, N).
-
-contains_n_hyphens_within_word(_,N,N) :-
-    !.
-contains_n_hyphens_within_word("",_,_) :-
-    !,
-    fail.
-contains_n_hyphens_within_word([0'-|Rest],I,N) :-
-    !,
-    J is I+1,
-    contains_n_hyphens_within_word(Rest,J,N).
-contains_n_hyphens_within_word([0' |Rest],_I,N) :-
-    !,
-    contains_n_hyphens_within_word(Rest,0,N).
-contains_n_hyphens_within_word([_|Rest],I,N) :-
-    contains_n_hyphens_within_word(Rest,I,N).
+% text_contains_n_hyphens_within_word(PhraseText, N) :-
+% 	( atom(PhraseText) ->
+% 	  atom_codes(PhraseText, PhraseString)
+% 	; PhraseString = PhraseText
+% 	),
+% 	contains_n_hyphens_within_word(PhraseString, 0, N).
+% 
+% contains_n_hyphens_within_word(_,N,N) :-
+%     !.
+% contains_n_hyphens_within_word("",_,_) :-
+%     !,
+%     fail.
+% contains_n_hyphens_within_word([0'-|Rest],I,N) :-
+%     !,
+%     J is I+1,
+%     contains_n_hyphens_within_word(Rest,J,N).
+% contains_n_hyphens_within_word([0' |Rest],_I,N) :-
+%     !,
+%     contains_n_hyphens_within_word(Rest,0,N).
+% contains_n_hyphens_within_word([_|Rest],I,N) :-
+%     contains_n_hyphens_within_word(Rest,I,N).
 
 augment_evaluations([], []).
 augment_evaluations([First|Rest], [AugmentedFirst|AugmentedRest]) :-
@@ -2214,7 +2213,7 @@ construct_all_mappings(Evaluations, PhraseTextString, BestAEvaluations, Duplicat
 	debug_call(mappings, length(FlattenedNestedMappings1, FlattenedMappingsLength)),
 	length(FlattenedNestedMappings1, FlattenedMappingsLength),
 	debug_message(mappings,
-		      '~N### Deaugmenting and Reordering ~w mapping(s)~n',
+		      '~N### Deaugmenting and Reordering ~w mappings~n',
 		      [FlattenedMappingsLength]),
 	% Prepending is just an efficiency measure to minimize
 	% the amount of unification done in subsumption testing
@@ -2228,6 +2227,7 @@ construct_all_mappings(Evaluations, PhraseTextString, BestAEvaluations, Duplicat
 	% HUH?!
 	% ( control_option(compute_all_mappings) ->
 	ChunkSize = 1000,
+	debug_message(mappings, '~N### Filtering out subsumed mappings.~n', []),
  	filter_out_subsumed_mappings_chunked(Mappings3, ChunkSize, FinalMappings0),
 	keys_and_values(FinalMappings0, _Keys, FinalMappings),
 	length(FinalMappings, FinalMappingsCount),
@@ -3128,8 +3128,8 @@ get_inputmatch_lists_from_phrase([FirstPhraseComponent|RestPhraseComponents],
 		
 get_composite_phrases([PhraseIn|RestPhrasesIn],
 		      CompositePhrase, RestCompositePhrasesIn, CompositeOptions) :-
-	control_option(composite_phrases),
-	begins_with_composite_phrase([PhraseIn|RestPhrasesIn],
+	control_value(composite_phrases, MaxPrepPhrases),
+	begins_with_composite_phrase([PhraseIn|RestPhrasesIn], MaxPrepPhrases,
 				     CompositePhrase0, RestCompositePhrasesIn),
 	!,
 	collapse_syntactic_analysis(CompositePhrase0, CompositePhrase),
@@ -3148,13 +3148,13 @@ and returns it and the Rest of the phrases. A composite phrases is
  *  followed by a prepositional phrase
  *  followed by zero to four 'of' prepositional phrases. */
 
-begins_with_composite_phrase([First,Second|Rest],
+begins_with_composite_phrase([First,Second|Rest], MaxPrepPhrases,
 			     [First,Second|RestComposite], NewRest) :-
 	\+ is_prep_phrase(First),
 	\+ ends_with_punc(First),
 	is_prep_phrase(Second),
 	!,
-	MaxOFPhrases = 2,
+	MaxOFPhrases is MaxPrepPhrases - 1,
 	initial_of_phrases(Rest, MaxOFPhrases, RestComposite, NewRest).
 
 %%%%% begins_with_composite_phrase([First,Second|Rest],
@@ -3176,10 +3176,10 @@ ends_with_punc(PhraseItems) :-
 
 initial_of_phrases([], _Count, [], []) :- !.
 initial_of_phrases([First|Rest], CountIn, [First|RestOf], NewRest) :-
-	CountIn =< 4,
+	CountIn > 0,
 	is_of_phrase(First),
 	!,
-	CountNext is CountIn + 1,	
+	CountNext is CountIn - 1,	
 	initial_of_phrases(Rest, CountNext, RestOf, NewRest).
 initial_of_phrases(Phrases, _Count, [], Phrases).
 

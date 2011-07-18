@@ -219,5 +219,3 @@ lowercase_list([],[]).
 lowercase_list([First|Rest],[LCFirst|LCRest]) :-
 	lower(First,LCFirst),
 	lowercase_list(Rest,LCRest).
-
-

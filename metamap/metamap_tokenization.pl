@@ -49,7 +49,6 @@
 	linearize_phrase/4,
 	linearize_components/2,
 	parse_phrase_word_info/3,
-	parse_phrase_word_info/9,
 	% whitespace tokenization (break at whitespace and hyphens; ignore colons)
 	tokenize_text/2,
 	% wordind tokenization (maximal alphanumeric sequences)
@@ -190,8 +189,8 @@ make_list(LexMatch, TextList) :-
 	).
 
 /* 
-   parse_phrase_word_info(+Option, +Phrase, -PhraseWordInfoPair)
-   parse_phrase_word_info(+Phrase, +FilterFlag, +WordsBegin
+   parse_phrase_word_info(+Phrase, +Option, -PhraseWordInfoPair)
+   parse_phrase_word_info_aux(+Phrase, +FilterFlag, +WordsBegin
                           +PhraseWordsIn, -PhraseWordsOut,
                           +PhraseHeadWordsIn, -PhraseWordsOut,
                           +PhraseMapIn, -PhraseMapOut)
@@ -200,74 +199,77 @@ parse_phrase_word_info/3 extracts PhraseWordInfoPair from Phrase where
 PhraseWordInfoPair is PhraseWordInfo:FilteredPhraseWordInfo and each element
 of the pair is of the form
      pwi(PhraseWordL,PhraseHeadWordL,PhraseMap).
-If Option is nofilter, then FilteredPhraseWordInfo is the same as
-PhraseWordInfo.
+If Option is nofilter, then FilteredPhraseWordInfo is the same as PhraseWordInfo.
 parse_phrase_word_info/2 calls parse_phrase_word_info/3 with Option filter.
 Filtering consists of removing syntactic items with "opaque" tags
-such as prepositions and determiners. See *input_match* family description
-for full list.
+such as prepositions and determiners. See *input_match* family description for full list.
 parse_phrase_word_info/9 is the auxiliary which does the work.  */
 
-parse_phrase_word_info(filter,Phrase,
-                       pwi(PhraseWordL,PhraseHeadWordL,PhraseMap):
-                       pwi(FPhraseWordL,FPhraseHeadWordL,FPhraseMap)) :-
-    parse_phrase_word_info(Phrase,unfiltered,1,[],PhraseWords,
-                           [],PhraseHeadWords,[],PhraseMap0),
-    create_word_list(PhraseWords,PhraseWordL),
-    create_word_list(PhraseHeadWords,PhraseHeadWordL),
-    rev(PhraseMap0,PhraseMap),
-    parse_phrase_word_info(Phrase,filtered,1,[],FPhraseWords,
-                           [],FPhraseHeadWords,[],FPhraseMap0),
-    create_word_list(FPhraseWords,FPhraseWordL),
-    create_word_list(FPhraseHeadWords,FPhraseHeadWordL),
-    rev(FPhraseMap0,FPhraseMap).
-parse_phrase_word_info(nofilter,Phrase,
-                       pwi(PhraseWordL,PhraseHeadWordL,PhraseMap):
-                       pwi(PhraseWordL,PhraseHeadWordL,PhraseMap)) :-
-    parse_phrase_word_info(Phrase,unfiltered,1,[],PhraseWords,
-                           [],PhraseHeadWords,[],PhraseMap0),
-    create_word_list(PhraseWords,PhraseWordL),
-    create_word_list(PhraseHeadWords,PhraseHeadWordL),
-    rev(PhraseMap0,PhraseMap).
+parse_phrase_word_info(Phrase, FilterChoice,
+                       pwi(PhraseWordL,PhraseHeadWordL,PhraseMap)
+                      :pwi(FilteredPhraseWordL,FilteredPhraseHeadWordL,FilteredPhraseMap)) :-
+	parse_phrase_word_info_aux(Phrase, unfiltered, 1, [], PhraseWords,
+				   [], PhraseHeadWords, [], PhraseMap0),
+	create_word_list(PhraseWords, PhraseWordL),
+	create_word_list(PhraseHeadWords, PhraseHeadWordL),
+	rev(PhraseMap0, PhraseMap),
+	( FilterChoice == filtered ->
+	  parse_phrase_word_info_aux(Phrase, filtered, 1, [], FilteredPhraseWords,
+				     [], FilteredPhraseHeadWords, [], FilteredPhraseMap0),
+	  create_word_list(FilteredPhraseWords, FilteredPhraseWordL),
+	  create_word_list(FilteredPhraseHeadWords, FilteredPhraseHeadWordL),
+	  rev(FilteredPhraseMap0, FilteredPhraseMap)
+	; FilterChoice == unfiltered ->
+	  FilteredPhraseWordL = PhraseWordL,
+	  FilteredPhraseHeadWordL = PhraseHeadWordL,
+	  FilteredPhraseMap = PhraseMap
+	).
 
-parse_phrase_word_info([],_FilterFlag,_WordsBegin,
-                       PhraseWordsIn,PhraseWordsIn,
-                       PhraseHeadWordsIn,PhraseHeadWordsIn,
-                       PhraseMapIn,PhraseMapIn).
-parse_phrase_word_info([PhraseItem|Rest],FilterFlag,WordsBegin,
-                       PhraseWordsIn,PhraseWordsOut,
-                       PhraseHeadWordsIn,PhraseHeadWordsOut,
-                       PhraseMapIn,PhraseMapOut) :-
-    (FilterFlag==unfiltered ->
-% try tokens instead of input_match
-        extract_tokens(PhraseItem, IMWords, IMHeadWords)
-    ;   filter_tokens(PhraseItem, IMWords, IMHeadWords)
-    ),
-    !,
-    (IMWords==[] ->
-        PhraseWordsInOut=PhraseWordsIn,
-        PhraseHeadWordsInOut=PhraseHeadWordsIn,
-        PhraseMapInOut=[[0,-1]|PhraseMapIn],
-        NewWordsBegin=WordsBegin
-    ;   append(PhraseWordsIn,IMWords,PhraseWordsInOut),
-        append(PhraseHeadWordsIn,IMHeadWords,PhraseHeadWordsInOut),
-        length(IMWords,NIMWords),
-        NewWordsBegin is WordsBegin + NIMWords,
-        WordsEnd is NewWordsBegin - 1,
-        PhraseMapInOut=[[WordsBegin,WordsEnd]|PhraseMapIn]
-    ),
-    parse_phrase_word_info(Rest,FilterFlag,NewWordsBegin,
-                           PhraseWordsInOut,PhraseWordsOut,
-                           PhraseHeadWordsInOut,PhraseHeadWordsOut,
-                           PhraseMapInOut,PhraseMapOut).
-parse_phrase_word_info([_|Rest],FilterFlag,WordsBegin,
-                       PhraseWordsIn,PhraseWordsOut,
-                       PhraseHeadWordsIn,PhraseHeadWordsOut,
-                       PhraseMapIn,PhraseMapOut) :-
-    parse_phrase_word_info(Rest,FilterFlag,WordsBegin,
-                           PhraseWordsIn,PhraseWordsOut,
-                           PhraseHeadWordsIn,PhraseHeadWordsOut,
-                           [[0,-1]|PhraseMapIn],PhraseMapOut).
+parse_phrase_word_info_aux([], _FilterFlag, _WordsBegin,
+			   PhraseWordsIn, PhraseWordsIn,
+			   PhraseHeadWordsIn, PhraseHeadWordsIn,
+			   PhraseMapIn, PhraseMapIn).
+parse_phrase_word_info_aux([PhraseItem|Rest], FilterFlag, WordsBegin,
+			   PhraseWordsIn, PhraseWordsOut,
+			   PhraseHeadWordsIn, PhraseHeadWordsOut,
+			   PhraseMapIn, PhraseMapOut) :-
+	( FilterFlag == unfiltered ->
+          % try tokens instead of input_match
+	  extract_tokens(PhraseItem, IMWords, IMHeadWords)
+	  % filter_tokens will exclude stop words,
+	  % which is desirable, except not for the first word,
+	  % so that we can identify concepts whose first word is a stop word,
+	  % e.g., "in breathing" and "the uppermost part of the stomach", etc.
+	  % ; WordsBegin =:= 1 ->
+	  %   extract_tokens(PhraseItem, IMWords, IMHeadWords)
+	; FilterFlag == filtered ->
+	  filter_tokens(PhraseItem, IMWords, IMHeadWords)
+	),
+	!,
+	( IMWords == [] ->
+	  PhraseWordsInOut = PhraseWordsIn,
+	  PhraseHeadWordsInOut = PhraseHeadWordsIn,
+	  PhraseMapInOut = [[0,-1]|PhraseMapIn],
+	  NewWordsBegin = WordsBegin
+	; append(PhraseWordsIn, IMWords, PhraseWordsInOut),
+	  append(PhraseHeadWordsIn, IMHeadWords, PhraseHeadWordsInOut),
+	  length(IMWords, NIMWords),
+	  NewWordsBegin is WordsBegin + NIMWords,
+	  WordsEnd is NewWordsBegin - 1,
+	  PhraseMapInOut = [[WordsBegin,WordsEnd]|PhraseMapIn]
+	),
+	parse_phrase_word_info_aux(Rest, FilterFlag, NewWordsBegin,
+				   PhraseWordsInOut, PhraseWordsOut,
+				   PhraseHeadWordsInOut, PhraseHeadWordsOut,
+				   PhraseMapInOut, PhraseMapOut).
+parse_phrase_word_info_aux([_|Rest], FilterFlag, WordsBegin,
+			   PhraseWordsIn, PhraseWordsOut,
+			   PhraseHeadWordsIn, PhraseHeadWordsOut,
+			   PhraseMapIn, PhraseMapOut) :-
+	parse_phrase_word_info_aux(Rest, FilterFlag, WordsBegin,
+				   PhraseWordsIn, PhraseWordsOut,
+				   PhraseHeadWordsIn, PhraseHeadWordsOut,
+				   [[0,-1]|PhraseMapIn], PhraseMapOut).
 
 
 /* create_word_list(+Words, -WordL)
@@ -277,76 +279,76 @@ create_word_list/2 forms wdl(Words,LCWords).  */
 create_word_list(Words,wdl(Words,LCWords)) :-
     lowercase_list(Words,LCWords).
 
-/* opaque_tags(?Tag)
+/* opaque_tag(?Tag)
 
-opaque_tags/1 is a factual predicate of phrase tags which prevent further
+opaque_tag/1 is a factual predicate of phrase tags which prevent further
 search for matching input.  */
 
-opaque_tags(error).    %  Unknown
+opaque_tag(error).    %  Unknown
 % Tagger tags
-opaque_tags(aux).
-opaque_tags(compl).
-opaque_tags(conj).
-opaque_tags(det).
-opaque_tags(modal).
-opaque_tags(prep).
-opaque_tags(pron).
-opaque_tags(punc).
+opaque_tag(aux).
+opaque_tag(compl).
+opaque_tag(conj).
+opaque_tag(det).
+opaque_tag(modal).
+opaque_tag(prep).
+opaque_tag(pron).
+opaque_tag(punc).
 % Other tags
-opaque_tags(num).      %  digits only (Tagger tokenizer)
-opaque_tags(am).       %  & (Tagger tokenizer)
-opaque_tags(ap).       %  ' (Tagger tokenizer)
-opaque_tags(at).       %  @ (Tagger tokenizer)
-opaque_tags(ax).       %  * (Tagger tokenizer)
-opaque_tags(ba).       %  | (Tagger tokenizer)
-opaque_tags(bk).       %  [ or ] (Tagger tokenizer)
-opaque_tags(bl).       %  \ (Tagger tokenizer)
-opaque_tags(bq).       %  ` (Tagger tokenizer)
-opaque_tags(br).       %  { or } (Tagger tokenizer)
-opaque_tags(cl).       %  : (Tagger tokenizer)
-opaque_tags(cm).       %  , (Tagger tokenizer)
-opaque_tags(dl).       %  $ (Tagger tokenizer)
-opaque_tags(dq).       %  " (Tagger tokenizer)
-opaque_tags(eq).       %  = (Tagger tokenizer)
-opaque_tags(ex).       %  ! (Tagger tokenizer)
-opaque_tags(gr).       %  > (Tagger tokenizer)
-opaque_tags(hy).       %  - (Tagger tokenizer)
-opaque_tags(ls).       %  < (Tagger tokenizer)
-opaque_tags(nm).       %  # (Tagger tokenizer)
-opaque_tags(pa).       %  ( or ) (Tagger tokenizer)
-opaque_tags(pc).       %  % (Tagger tokenizer)
-opaque_tags(pd).       %  . (Tagger tokenizer)
-opaque_tags(pl).       %  + (Tagger tokenizer)
-opaque_tags(qu).       %  ? (Tagger tokenizer)
-opaque_tags(sc).       %  ; (Tagger tokenizer)
-opaque_tags(sl).       %  / (Tagger tokenizer)
-opaque_tags(tl).       %  ~ (Tagger tokenizer)
-opaque_tags(un).       %  _ (Tagger tokenizer)
-opaque_tags(up).       %  ^ (Tagger tokenizer)
+opaque_tag(num).      %  digits only (Tagger tokenizer)
+opaque_tag(am).       %  & (Tagger tokenizer)
+opaque_tag(ap).       %  ' (Tagger tokenizer)
+opaque_tag(at).       %  @ (Tagger tokenizer)
+opaque_tag(ax).       %  * (Tagger tokenizer)
+opaque_tag(ba).       %  | (Tagger tokenizer)
+opaque_tag(bk).       %  [ or ] (Tagger tokenizer)
+opaque_tag(bl).       %  \ (Tagger tokenizer)
+opaque_tag(bq).       %  ` (Tagger tokenizer)
+opaque_tag(br).       %  { or } (Tagger tokenizer)
+opaque_tag(cl).       %  : (Tagger tokenizer)
+opaque_tag(cm).       %  , (Tagger tokenizer)
+opaque_tag(dl).       %  $ (Tagger tokenizer)
+opaque_tag(dq).       %  " (Tagger tokenizer)
+opaque_tag(eq).       %  = (Tagger tokenizer)
+opaque_tag(ex).       %  ! (Tagger tokenizer)
+opaque_tag(gr).       %  > (Tagger tokenizer)
+opaque_tag(hy).       %  - (Tagger tokenizer)
+opaque_tag(ls).       %  < (Tagger tokenizer)
+opaque_tag(nm).       %  # (Tagger tokenizer)
+opaque_tag(pa).       %  ( or ) (Tagger tokenizer)
+opaque_tag(pc).       %  % (Tagger tokenizer)
+opaque_tag(pd).       %  . (Tagger tokenizer)
+opaque_tag(pl).       %  + (Tagger tokenizer)
+opaque_tag(qu).       %  ? (Tagger tokenizer)
+opaque_tag(sc).       %  ; (Tagger tokenizer)
+opaque_tag(sl).       %  / (Tagger tokenizer)
+opaque_tag(tl).       %  ~ (Tagger tokenizer)
+opaque_tag(un).       %  _ (Tagger tokenizer)
+opaque_tag(up).       %  ^ (Tagger tokenizer)
 
 
-/* transprent_tags(?Tag)
+/* transparent_tag(?Tag)
 
-transparent_tags/1 is a factual predicate of phrase tags which are essentially
+transparent_tag/1 is a factual predicate of phrase tags which are essentially
 ignored in determining the input match words for a phrase, i.e., processing
 continues with the argument of the tag.  The only effect is that in
 extract_input_match/3, IMHeadWords is always []. */
 
 % Tagger tags
-transparent_tags(adj).
-transparent_tags(adv).
-transparent_tags(noun).
-transparent_tags(prefix).
-transparent_tags(verb).
+transparent_tag(adj).
+transparent_tag(adv).
+transparent_tag(noun).
+transparent_tag(prefix).
+transparent_tag(verb).
 % Parser tags
-transparent_tags(mod).
-transparent_tags(pre).
-transparent_tags(shapes).
-transparent_tags(prefix).
-transparent_tags(not_in_lex).  %  Let unknowns through
-transparent_tags(no_tag).      %  Let unknowns through
-transparent_tags(ing).         %  Obsolete(?)
-transparent_tags(pastpart).    %  Obsolete(?)
+transparent_tag(mod).
+transparent_tag(pre).
+transparent_tag(shapes).
+transparent_tag(prefix).
+transparent_tag(not_in_lex).  %  Let unknowns through
+transparent_tag(no_tag).      %  Let unknowns through
+transparent_tag(ing).         %  Obsolete(?)
+transparent_tag(pastpart).    %  Obsolete(?)
 
 
 /* extract_tokens(+PhraseItem, -TokenWords, -TokenHeadWords)
@@ -444,9 +446,9 @@ filter_tokens_1(head(SubItemList), TokenWords,TokenWords) :-
 	extract_tokens_aux(SubItemList, TokenWords).
 filter_tokens_1(PhraseItem, TokenWords, []) :-
 	functor(PhraseItem, Tag, 1),
-	( opaque_tags(Tag) ->        % stop
+	( opaque_tag(Tag) ->        % stop
 	  TokenWords = []
-	; transparent_tags(Tag) ->   % continue
+	; transparent_tag(Tag) ->   % continue
 	  arg(1, PhraseItem, SubItemList),
 	  extract_tokens_aux(SubItemList, TokenWords)
 	; fail                       % fail
@@ -822,7 +824,7 @@ tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 % MetaMap's (new!) default behavior is to reattach the "'s"  to the previous token.
 
 re_attach_apostrophe_s_tokens(FieldsIn, FieldsOut) :-
-	( control_option(separate_apostrophe_s) ->
+	( control_option(apostrophe_s_contraction) ->
 	  FieldsOut = FieldsIn
 	; re_attach_apostrophe_s_tokens_aux(FieldsIn, FieldsOut)
 	).
@@ -830,7 +832,7 @@ re_attach_apostrophe_s_tokens(FieldsIn, FieldsOut) :-
 re_attach_apostrophe_s_tokens_aux([], []).
 re_attach_apostrophe_s_tokens_aux(TokField0, TokField) :-
 	TokField0 = [OrigString, "'", "s", " " | Rest],
-	\+ pronoun_string(OrigString),
+	\+ no_reattach_string(OrigString),
 	!,
 	append([OrigString, "'", "s"], StringWithApostropheS),
 	TokField = [StringWithApostropheS, " " | RestTokField],
@@ -838,9 +840,15 @@ re_attach_apostrophe_s_tokens_aux(TokField0, TokField) :-
 re_attach_apostrophe_s_tokens_aux([H|Rest], [H|NewRest]) :-
 	re_attach_apostrophe_s_tokens_aux(Rest, NewRest).
 
-pronoun_string(OrigString) :-
-	atom_codes(Atom, OrigString),
-	no_combine_pronoun(Atom).
+% succeeds if OrigString (the string representation of the previous token)
+% is a string to which the following "'s" (apostrophe-s) should not be re-attached.
+% That's true of any token ending in a non-alnum char, "he", "she", and "it".
+no_reattach_string(OrigString) :-
+	( last(OrigString, LastChar),
+	  \+ local_alnum(LastChar)
+	; atom_codes(Atom, OrigString),
+	  no_combine_pronoun(Atom)
+	).
 
 no_combine_pronoun(he).
 no_combine_pronoun(she).
@@ -937,132 +945,133 @@ local_space(13).
 local_space(31).
 local_space(32).
 
-local_alnum(48).
-local_alnum(49).
-local_alnum(50).
-local_alnum(51).
-local_alnum(52).
-local_alnum(53).
-local_alnum(54).
-local_alnum(55).
-local_alnum(56).
-local_alnum(57).
-local_alnum(65).
-local_alnum(66).
-local_alnum(67).
-local_alnum(68).
-local_alnum(69).
-local_alnum(70).
-local_alnum(71).
-local_alnum(72).
-local_alnum(73).
-local_alnum(74).
-local_alnum(75).
-local_alnum(76).
-local_alnum(77).
-local_alnum(78).
-local_alnum(79).
-local_alnum(80).
-local_alnum(81).
-local_alnum(82).
-local_alnum(83).
-local_alnum(84).
-local_alnum(85).
-local_alnum(86).
-local_alnum(87).
-local_alnum(88).
-local_alnum(89).
-local_alnum(90).
-local_alnum(97).
-local_alnum(98).
-local_alnum(99).
-local_alnum(100).
-local_alnum(101).
-local_alnum(102).
-local_alnum(103).
-local_alnum(104).
-local_alnum(105).
-local_alnum(106).
-local_alnum(107).
-local_alnum(108).
-local_alnum(109).
-local_alnum(110).
-local_alnum(111).
-local_alnum(112).
-local_alnum(113).
-local_alnum(114).
-local_alnum(115).
-local_alnum(116).
-local_alnum(117).
-local_alnum(118).
-local_alnum(119).
-local_alnum(120).
-local_alnum(121).
-local_alnum(122).
-local_alnum(192).
-local_alnum(193).
-local_alnum(194).
-local_alnum(195).
-local_alnum(196).
-local_alnum(197).
-local_alnum(198).
-local_alnum(199).
-local_alnum(200).
-local_alnum(201).
-local_alnum(202).
-local_alnum(203).
-local_alnum(204).
-local_alnum(205).
-local_alnum(206).
-local_alnum(207).
-local_alnum(208).
-local_alnum(209).
-local_alnum(210).
-local_alnum(211).
-local_alnum(212).
-local_alnum(213).
-local_alnum(214).
-local_alnum(215).
-local_alnum(216).
-local_alnum(217).
-local_alnum(218).
-local_alnum(219).
-local_alnum(220).
-local_alnum(221).
-local_alnum(222).
-local_alnum(223).
-local_alnum(224).
-local_alnum(225).
-local_alnum(226).
-local_alnum(227).
-local_alnum(228).
-local_alnum(229).
-local_alnum(230).
-local_alnum(231).
-local_alnum(232).
-local_alnum(233).
-local_alnum(234).
-local_alnum(235).
-local_alnum(236).
-local_alnum(237).
-local_alnum(238).
-local_alnum(239).
-local_alnum(240).
-local_alnum(241).
-local_alnum(242).
-local_alnum(243).
-local_alnum(244).
-local_alnum(245).
-local_alnum(246).
-local_alnum(247).
-local_alnum(248).
-local_alnum(249).
-local_alnum(250).
-local_alnum(251).
-local_alnum(252).
-local_alnum(253).
-local_alnum(254).
-local_alnum(255).
+local_alnum(48).  % 0
+local_alnum(49).  % 1
+local_alnum(50).  % 2
+local_alnum(51).  % 3
+local_alnum(52).  % 4
+local_alnum(53).  % 5
+local_alnum(54).  % 6
+local_alnum(55).  % 7
+local_alnum(56).  % 8
+local_alnum(57).  % 9
+local_alnum(65).  % A
+local_alnum(66).  % B
+local_alnum(67).  % C
+local_alnum(68).  % D
+local_alnum(69).  % E
+local_alnum(70).  % F
+local_alnum(71).  % G
+local_alnum(72).  % H
+local_alnum(73).  % I
+local_alnum(74).  % J
+local_alnum(75).  % K
+local_alnum(76).  % L
+local_alnum(77).  % M
+local_alnum(78).  % N
+local_alnum(79).  % O
+local_alnum(80).  % P
+local_alnum(81).  % Q
+local_alnum(82).  % R
+local_alnum(83).  % S
+local_alnum(84).  % T
+local_alnum(85).  % U
+local_alnum(86).  % V
+local_alnum(87).  % W
+local_alnum(88).  % X
+local_alnum(89).  % Y
+local_alnum(90).  % Z
+local_alnum(97).  % a
+local_alnum(98).  % b
+local_alnum(99).  % c
+local_alnum(100). % d
+local_alnum(101). % e
+local_alnum(102). % f
+local_alnum(103). % g
+local_alnum(104). % h
+local_alnum(105). % i
+local_alnum(106). % j
+local_alnum(107). % k
+local_alnum(108). % l
+local_alnum(109). % m
+local_alnum(110). % n
+local_alnum(111). % o
+local_alnum(112). % p
+local_alnum(113). % q
+local_alnum(114). % r
+local_alnum(115). % s
+local_alnum(116). % t
+local_alnum(117). % u
+local_alnum(118). % v
+local_alnum(119). % w
+local_alnum(120). % x
+local_alnum(121). % y
+local_alnum(122). % z
+
+% local_alnum(192). % À
+% local_alnum(193). % Á
+% local_alnum(194). % Â
+% local_alnum(195). % Ã
+% local_alnum(196). % Ä
+% local_alnum(197). % Å
+% local_alnum(198). % Æ
+% local_alnum(199). % Ç
+% local_alnum(200). % È
+% local_alnum(201). % É
+% local_alnum(202). % Ê
+% local_alnum(203). % Ë
+% local_alnum(204). % Ì
+% local_alnum(205). % Í
+% local_alnum(206). % Î
+% local_alnum(207). % Ï
+% local_alnum(208). % Ð
+% local_alnum(209). % Ñ
+% local_alnum(210). % Ò
+% local_alnum(211). % Ó
+% local_alnum(212). % Ô
+% local_alnum(213). % Õ
+% local_alnum(214). % Ö
+% local_alnum(215). % ×
+% local_alnum(216). % Ø
+% local_alnum(217). % Ù
+% local_alnum(218). % Ú
+% local_alnum(219). % Û
+% local_alnum(220). % Ü
+% local_alnum(221). % Ý
+% local_alnum(222). % Þ
+% local_alnum(223). % ß
+% local_alnum(224). % à
+% local_alnum(225). % á
+% local_alnum(226). % â
+% local_alnum(227). % ã
+% local_alnum(228). % ä
+% local_alnum(229). % å
+% local_alnum(230). % æ
+% local_alnum(231). % ç
+% local_alnum(232). % è
+% local_alnum(233). % é
+% local_alnum(234). % ê
+% local_alnum(235). % ë
+% local_alnum(236). % ì
+% local_alnum(237). % í
+% local_alnum(238). % î
+% local_alnum(239). % ï
+% local_alnum(240). % ð
+% local_alnum(241). % ñ
+% local_alnum(242). % ò
+% local_alnum(243). % ó
+% local_alnum(244). % ô
+% local_alnum(245). % õ
+% local_alnum(246). % ö
+% local_alnum(247). % ÷
+% local_alnum(248). % ø
+% local_alnum(249). % ù
+% local_alnum(250). % ú
+% local_alnum(251). % û
+% local_alnum(252). % ü
+% local_alnum(253). % ý
+% local_alnum(254). % þ
+% local_alnum(255). % ÿ
 
 
 /* ************************************************************************

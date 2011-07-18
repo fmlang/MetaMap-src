@@ -91,7 +91,8 @@
    ]).
 
 :- use_module(skr_lib(nls_system),[
-	control_option/1
+	control_option/1,
+	control_value/2
     ]).
 
 :- use_module(skr_lib(sicstus_utils),[
@@ -135,7 +136,6 @@
     ]).
 
 :- dynamic generation_mode/1.
-
 
 /* ************************************************************************
    ************************************************************************
@@ -295,9 +295,8 @@ no_variants_word(Word, Category) :-
 	  true
 	  % At the LNCV meeting on 01/15/2009,
 	  % we decided not to generate variants for words of 1 or 2 chars.
-	; atom_codes(Word, WordChars),
-	  length(WordChars, WordCharsLength),
-	  WordCharsLength =< 2
+	; atom_length(Word, WordLength),
+	  WordLength =< 2
 	).
 
 augment_GVCs_with_variants_aux([], _GenerationMode).
@@ -306,7 +305,7 @@ augment_GVCs_with_variants_aux([GVC|Rest], GenerationMode) :-
 	GVC = gvc(Generator,Variants,_Candidates),
 	Generator = v(Word,TempCategory,_,_,_,_),
 	get_real_category(TempCategory, Category),
-	( no_variants_word(Word, Category) ->
+	( no_variants_word(Word, Category),
 	  Variants = [Generator],
 	  augment_variant_with_roots(Generator), % necessary?
 	  augment_GVCs_with_variants_aux(Rest, GenerationMode)
@@ -331,94 +330,95 @@ augment_GVCs_with_variants_mode(static, [gvc(G,Vs,Cs)|Rest]) :-
 	%    ;   true
 	%    ),
 	augment_GVCs_with_variants_aux(Rest, static).
+
 augment_GVCs_with_variants_mode(dynamic, [gvc(G,Vs,_Cs)|Rest]) :-
 	% augment the generator with acronyms, abbreviations and synonyms
 	% temp
 	G = v(Generator,_,_,_,_,_),
 	%format('~a|2.00~n',[Generator]),
 	compute_acros_abbrs(G,GAAs),
-	announce_variants_length(Generator, 'GAAs', GAAs),
+	announce_variants(Generator, 'GAAs', GAAs),
 	% temp
 	%format('~a|2.01~n',[Generator]),
 	compute_syns(G,GSs),
-	announce_variants_length(Generator, 'Gs', GSs),
+	announce_variants(Generator, 'GSs', GSs),
 	% temp
 	%format('~a|2.02~n',[Generator]),
 	% compute same-part, inflectional and derivational variants of G
-	get_spid_variants(G,yes,GSPs,GIs,GDs),
-	announce_variants_length(Generator, 'GSPs', GSPs),
-	announce_variants_length(Generator, 'GIs', GIs),
-	announce_variants_length(Generator, 'GDs', GDs),
+	get_spid_variants(G, yes, GSPs, GIs, GDs),
+	announce_variants(Generator, 'GSPs', GSPs),
+	announce_variants(Generator, 'GIs', GIs),
+	announce_variants(Generator, 'GDs', GDs),
 	% temp
 	%format('~a|2.03~n',[Generator]),
 	% compute same-part, inflectional and derivational variants of AAs and Ss
-	get_all_spid_variants(GAAs,no,GAASPs,GAAIs,GAADs),
-	announce_variants_length(Generator, 'GAASPs', GAASPs),
-	announce_variants_length(Generator, 'GAAIs', GAAIs),
-	announce_variants_length(Generator, 'GAADs', GAADs),
+	get_all_spid_variants(GAAs, no, GAASPs, GAAIs, GAADs),
+	announce_variants(Generator, 'GAASPs', GAASPs),
+	announce_variants(Generator, 'GAAIs', GAAIs),
+	announce_variants(Generator, 'GAADs', GAADs),
 
 	% temp
 	%format('~a|2.04~n',[Generator]),
-	get_all_spid_variants(GSs,no,GSSPs,GSIs,GSDs),
-	announce_variants_length(Generator, 'GSSPs', GSSPs),
-	announce_variants_length(Generator, 'GSIs', GSIs),
-	announce_variants_length(Generator, 'GSDs', GSDs),
+	get_all_spid_variants(GSs, no, GSSPs, GSIs, GSDs),
+	announce_variants(Generator, 'GSSPs', GSSPs),
+	announce_variants(Generator, 'GSIs', GSIs),
+	announce_variants(Generator, 'GSDs', GSDs),
 	% temp
 	%format('~a|2.05~n',[Generator]),
 	% compute synonyms of AAs and acronyms and abbreviations of Ss
-	compute_all_syns(GAAs,GAASs),
-	announce_variants_length(Generator, 'GAASs', GAASs),
+	compute_all_syns(GAAs, GAASs),
+	announce_variants(Generator, 'GAASs', GAASs),
 	% temp
 	%format('~a|2.06~n',[Generator]),
-	compute_all_acros_abbrs(GSs,GSAAs),
-	announce_variants_length(Generator, 'GSAAs', GSAAs),
+	compute_all_acros_abbrs(GSs, GSAAs),
+	announce_variants(Generator, 'GSAAs', GSAAs),
 	%temp
 	%format('~a|2.07~n',[Generator]),
 	% perform final augmentations
 	% augment all derivational variants with synonyms and then inflect
-	compute_synonyms_and_inflect(GDs,GDSIs),
-	announce_variants_length(Generator, 'GDSIs', GDSIs),
+	compute_synonyms_and_inflect(GDs, GDSIs),
+	announce_variants(Generator, 'GDSIs', GDSIs),
 	% temp
 	%format('~a|2.08~n',[Generator]),
-	compute_synonyms_and_inflect(GAADs,GAADSIs),
-	announce_variants_length(Generator, 'GAADSIs', GAADSIs),
+	compute_synonyms_and_inflect(GAADs, GAADSIs),
+	announce_variants(Generator, 'GAADSIs', GAADSIs),
 	% temp
 	%format('~a|2.09~n',[Generator]),
-	compute_synonyms_and_inflect(GSDs,GSDSIs),
-	announce_variants_length(Generator, 'GSDSIs', GSDSIs),
+	compute_synonyms_and_inflect(GSDs, GSDSIs),
+	announce_variants(Generator, 'GSDSIs', GSDSIs),
 	% temp
 	%format('~a|2.10~n',[Generator]),
 	% inflect acronym/abbreviation/synonym combinations (GAASs and GSAAs)
-	compute_all_inflections(GAASs,GAASIs),
-	announce_variants_length(Generator, 'GAASIs', GAASIs),
+	compute_all_inflections(GAASs, GAASIs),
+	announce_variants(Generator, 'GAASIs', GAASIs),
 	% temp
 	%format('~a|2.11~n',[Generator]),
-	compute_all_inflections(GSAAs,GSAAIs),
-	announce_variants_length(Generator, 'GSAAIs', GSAAIs),
+	compute_all_inflections(GSAAs, GSAAIs),
+	announce_variants(Generator, 'GSAAIs', GSAAIs),
 	% temp
 	%format('~a|2.12~n',[Generator]),
 	% full_variants is obsolete
 	%    (control_option(full_variants) ->
 	%    format('~n',[]),
 	%        dump_variants_labelled('G (A)',[G]),
-	%        dump_variants_labelled('GAA (B)',GAAs),
-	%        dump_variants_labelled('GS (C)',GSs),
-	%        dump_variants_labelled('GSP (1)',GSPs),
-	%        dump_variants_labelled('GI (2)',GIs),
-	%        dump_variants_labelled('GD (3)',GDs),
-	%        dump_variants_labelled('GAASP (4)',GAASPs),
-	%        dump_variants_labelled('GAAI (5)',GAAIs),
-	%        dump_variants_labelled('GAAD (6)',GAADs),
-	%        dump_variants_labelled('GSSP (7)',GSSPs),
-	%        dump_variants_labelled('GSI (8)',GSIs),
-	%        dump_variants_labelled('GSD (9)',GSDs),
-	%        dump_variants_labelled('GAAS (10)',GAASs),
-	%        dump_variants_labelled('GSAA (11)',GSAAs),
-	%        dump_variants_labelled('GDSI (12)',GDSIs),
-	%        dump_variants_labelled('GAADSI (13)',GAADSIs),
-	%        dump_variants_labelled('GSDSI (14)',GSDSIs),
-	%        dump_variants_labelled('GAASI (15)',GAASIs),
-	%        dump_variants_labelled('GSAAI (16)',GSAAIs),
+	%        dump_variants_labelled('GAA (B)', GAAs),
+	%        dump_variants_labelled('GS (C)', GSs),
+	%        dump_variants_labelled('GSP (1)', GSPs),
+	%        dump_variants_labelled('GI (2)', GIs),
+	%        dump_variants_labelled('GD (3)', GDs),
+	%        dump_variants_labelled('GAASP (4)', GAASPs),
+	%        dump_variants_labelled('GAAI (5)', GAAIs),
+	%        dump_variants_labelled('GAAD (6)', GAADs),
+	%        dump_variants_labelled('GSSP (7)', GSSPs),
+	%        dump_variants_labelled('GSI (8)', GSIs),
+	%        dump_variants_labelled('GSD (9)', GSDs),
+	%        dump_variants_labelled('GAAS (10)', GAASs),
+	%        dump_variants_labelled('GSAA (11)', GSAAs),
+	%        dump_variants_labelled('GDSI (12)', GDSIs),
+	%        dump_variants_labelled('GAADSI (13)', GAADSIs),
+	%        dump_variants_labelled('GSDSI (14)', GSDSIs),
+	%        dump_variants_labelled('GAASI (15)', GAASIs),
+	%        dump_variants_labelled('GSAAI (16)', GSAAIs),
 	%        format('~n',[]),
 	%    ;   true
 	%    ),
@@ -441,9 +441,16 @@ augment_GVCs_with_variants_mode(dynamic, [gvc(G,Vs,_Cs)|Rest]) :-
 	%    ),
 	augment_GVCs_with_variants_aux(Rest, dynamic).
 	
-announce_variants_length(_Generator, _Type, _Data).
+announce_variants(_Generator, _Type, _Data).
 
-% announce_variants_length(Generator, Type, Data) :-
+% announce_variants(Generator, Type, Data) :-
+% 	format('~q:~q~n', [Generator, Type]),
+% 	member(X, Data),
+% 	format('   ~q~n', [X]),
+%  	fail.
+% announce_variants(_Generator, _Type, _Data).
+
+% announce_variants(Generator, Type, Data) :-
 % 	length(Data, Length),
 % 	( Length =\= 0 ->
 % 	  format(user_output, '~q|~q|~d~n', [Generator,Type,Length])
@@ -992,8 +999,10 @@ generate_root_forms_from_bases([First|Rest],RootTerms) :-
 
 %% temp
 generate_root_forms_from_base(BaseAtom,RootTerms) :-
-    get_variants_for_citation_form(BaseAtom,VariantList),
-    extract_root_forms_from_variants(VariantList,RootTerms).
+    ( get_variants_for_citation_form(BaseAtom,VariantList) ->
+      extract_root_forms_from_variants(VariantList,RootTerms)
+    ; RootTerms = []
+    ).
 
 %% dump version
 %generate_root_forms_from_base(BaseAtom,RootTerms) :-
@@ -1474,15 +1483,16 @@ gather_variants(GVCs, PhraseWords, HeadWords, VariantsAVL) :-
 			EmptyPositionAVL, InitialPositionAVL),
 	% reversed order of args from QP library version!
 	last(PossibleHeadPositions, HeadPosition),
-	gather_variants_GVC(GVCs, PhraseWords, HeadPosition,
-			    InitialPositionAVL,
-			    EmptyVariantsAVL, VariantsAVL).
+	length(PhraseWords, PhraseWordsLength),
+	gather_variants_GVC(GVCs, PhraseWords, PhraseWordsLength, HeadPosition,
+			    InitialPositionAVL, EmptyVariantsAVL, VariantsAVL).
 
 % Loop through all gvc/3 terms, and for each gvc/3 term,
 % loop through all positions of the GeneratorWord in the phrase.
-gather_variants_GVC([],_PhraseWords, _HeadPosition, _PositionAVL, VAVLIn, VAVLIn).
-gather_variants_GVC([gvc(Generator,Variants,_)|Rest], PhraseWords, HeadPosition,
-		    PositionAVLIn, VAVLIn, VAVLOut) :-
+gather_variants_GVC([],_PhraseWords, _PhraseWordsLength, _HeadPosition,
+		    _PositionAVL, VAVLIn, VAVLIn).
+gather_variants_GVC([gvc(Generator,Variants,_)|Rest], PhraseWords, PhraseWordsLength,
+		    HeadPosition, PositionAVLIn, VAVLIn, VAVLOut) :-
 	Generator = v(GeneratorWord,_LexCats,_,_,_,NFR),
 	% format(user_output, 'GVC: ~q-~q~n', [GeneratorWord,LexCats]),
 	tokenize_text_mm_lc(GeneratorWord, GeneratorWordList),
@@ -1490,12 +1500,13 @@ gather_variants_GVC([gvc(Generator,Variants,_)|Rest], PhraseWords, HeadPosition,
 						 PhraseWords, GeneratorPositions,
 						 PositionAVLIn, PositionAVLOut),
 	GeneratorPositions = [[FirstI|_]|_],
-	length(PhraseWords, PhraseWordsLength),
-	% instantiate NFR here!
+	% instantiate NFR ("number from right") here!
 	NFR is PhraseWordsLength + 1 - FirstI,
+	% format(user_output, '~d:~w~n', [NFR,GeneratorWordList]),
 	gather_variants_pos(GeneratorPositions, PhraseWords, HeadPosition,
 			    Generator, Variants, NFR, VAVLIn, VAVLInOut),
-	gather_variants_GVC(Rest, PhraseWords, HeadPosition, PositionAVLOut, VAVLInOut, VAVLOut).
+	gather_variants_GVC(Rest, PhraseWords, PhraseWordsLength,
+			    HeadPosition, PositionAVLOut, VAVLInOut, VAVLOut).
 
 % For each generator position in the phrase words, loop through all the variants.
 gather_variants_pos([], _PhraseWords, _HeadPosition, _Generator, _Variants, _NFR, VAVLIn, VAVLIn).

@@ -117,11 +117,9 @@ pl_to_po :-
       ; true.
 
 compile_to_PO_if_necessary(FilePL) :-
-	sub_atom('SKR', FilePL),
-	atom_codes(FilePL, CodesPL),
-	append(Prefix, ".pl", CodesPL),
-	append(Prefix, ".po", CodesPO),
-	atom_codes(FilePO, CodesPO),
+	sub_atom(FilePL, _, _, _, 'SKR'),
+	atom_concat(Prefix, '.pl', FilePL),
+	atom_concat(Prefix, '.po', FilePO),
 	% UNLESS the PO file exists and is more recent than the PL file,
 	% compile the PL file to PO
 	( file_exists(FilePO),

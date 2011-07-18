@@ -58,7 +58,6 @@
 	lex_is_a_root_ci/1,	% root form, case insensitive
 	lex_is_a_root_ci_cats/2,
 	lex_is_a_form_ci/1,	% lexical form, case insensitive
-
 	% for use from the parser
 	lex_form_ci_recs_input_5/5,
 	% general
@@ -75,7 +74,7 @@
 % 	lexAccess_get_lex_form_cats_init/2,
 % 	lexAccess_get_varlist_for_form_init/2,
 % 	lexAccess_lex_form_input_init/2
-%    ]).
+%   ]).
 
 
 :- use_module(lexicon(qp_fm_lexrec), [
@@ -86,10 +85,20 @@
 	read_lex_record/3
    ]).
 
+:- use_module(skr(skr_utilities), [
+	check_valid_file_type/2,
+	send_message/2
+   ]).
+
+
 :- use_module(skr_lib(ctypes), [
 	is_alnum/1,
 	is_punct/1,
 	is_white/1
+   ]).
+
+:- use_module(skr_db(db_access), [
+	default_release/1
    ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -104,11 +113,6 @@
 	concat_atoms_intelligently/2,
 	lower/2,
 	lower_all/2
-   ]).
-
-:- use_module(library(file_systems), [
-	file_exists/1,
-	file_exists/2
    ]).
 
 :- use_module(library(lists), [
@@ -161,7 +165,6 @@ foreign(c_lex_is_a_root,      c,
 
 foreign(c_lex_is_a_form,      c,
 	c_lex_is_a_form(+string, +string, +integer, +integer, [-integer])).
-
 foreign(c_lex_is_a_root_cats, c,
 	c_lex_is_a_root_cats(+string, +string, +integer, +integer, +term, [-integer])).
 
@@ -179,63 +182,67 @@ foreign(c_get_varlist,        c,
 
 %%% lex_init(-Lexicon, -Index)
 %%% This predicate will return the names of the default location of the lexicon files
-lex_init(Lexicon, Index) :-
-	lexicon_files(Lexicon,Index),
+lex_init(LexiconFile, LexiconIndex) :-
+	lexicon_files(LexiconFile, LexiconIndex),
 	!.  % already initialized
-lex_init(Lexicon, Index) :-
-	lex_init_quietly(Lexicon, Index),
-	conditionally_announce_lexicon(Lexicon).
+lex_init(LexiconFile, LexiconIndex) :-
+	lex_init_quietly(LexiconFile, LexiconIndex),
+	conditionally_announce_lexicon(LexiconFile).
 
-lex_init_quietly(Lexicon, Index) :-
-	lexicon_files(Lexicon,Index),
+lex_init_quietly(LexiconFile, LexiconIndex) :-
+	lexicon_files(LexiconFile, LexiconIndex),
 	!.  % already initialized
-lex_init_quietly(Lexicon, Index) :-
-	environ('DEFAULT_LEXICON_FILE', Lexicon),
-	check_valid_lexicon_file(Lexicon),
-	environ('DEFAULT_LEXICON_INDEX_FILE', Index),
-	concat_atom([Index, 'ByEui.dbx'], EuiIndexFile),
-	check_valid_lexicon_file(EuiIndexFile),
-	concat_atom([Index, 'ByInfl.dbx'], InflIndexFile),
-	check_valid_lexicon_file(InflIndexFile),
+lex_init_quietly(LexiconFile, LexiconIndex) :-
+	get_lexicon_year(LexiconYear),
+	% environ('DEFAULT_LEXICON_FILE', Lexicon),
+	environ('LEXICON_DATA', LexiconDataDir),
+	concat_atom([LexiconDataDir, '/lexiconStatic', LexiconYear], LexiconFile),
+	check_valid_file_type(LexiconFile, 'Lexicon'),
+	% environ('DEFAULT_LEXICON_INDEX_FILE', Index),
+	concat_atom([LexiconFile, 'Ind'], LexiconIndex),
+	concat_atom([LexiconIndex, 'ByEui.dbx'], EuiIndexFile),
+	check_valid_file_type(EuiIndexFile, 'Lexicon Index'),
+	concat_atom([LexiconIndex, 'ByInfl.dbx'], InflIndexFile),
+	check_valid_file_type(InflIndexFile, 'Lexicon Index'),
 	retractall(default_lexicon_file(_)),
-	assert(default_lexicon_file(Lexicon)),
+	assert(default_lexicon_file(LexiconFile)),
 	retractall(default_index_file(_)),
-	assert(default_index_file(Index)),
+	assert(default_index_file(LexiconIndex)),
 	retractall(lexicon_files(_,_)),
-	assert(lexicon_files(Lexicon,Index)).
+	assert(lexicon_files(LexiconFile,LexiconIndex)).
 
+get_lexicon_year(NormalizedLexiconYear) :-
+	default_release(DefaultRelease),
+	atom_codes(DefaultRelease, Codes),
+	Codes = [D1,D2,D3,D4,_AorB1,_AorB2],
+	atom_codes(LexiconYear, [D1,D2,D3,D4]),
+	normalize_lexicon_year(LexiconYear, NormalizedDefaultLexiconYear),
+	% Is the lexicon year explicitly specified on the command line?
+	( control_value(lexicon_year, SpecifiedLexiconYear),
+	  normalize_lexicon_year(SpecifiedLexiconYear, NormalizedSpecifiedLexiconYear),
+	  NormalizedDefaultLexiconYear \== NormalizedSpecifiedLexiconYear ->
+	  send_message('##### WARNING: Overriding default lexicon ~w with ~w.~n',
+		       [NormalizedDefaultLexiconYear, SpecifiedLexiconYear]),
+	  NormalizedLexiconYear = NormalizedSpecifiedLexiconYear
+	; NormalizedLexiconYear = NormalizedDefaultLexiconYear
+	).
+
+
+normalize_lexicon_year(LexiconYear, NormalizedLexiconYear) :-
+	( LexiconYear == '99' ->
+	  NormalizedLexiconYear = '1999'
+	; LexiconYear == '1999' ->
+	  NormalizedLexiconYear = LexiconYear
+	; atom_length(LexiconYear, LexiconLength),
+	  ( LexiconLength =:= 2 ->
+	    concat_atom(['20', LexiconYear], NormalizedLexiconYear)
+	  ; NormalizedLexiconYear = LexiconYear
+	  )
+	).
 
 conditionally_announce_lexicon(Lexicon) :-
 	( \+ control_option(silent) ->
 	  format('Accessing lexicon ~a.~n', [Lexicon])
-	; true
-	).
-
-
-check_valid_lexicon_file(File) :-
-	current_output(OutputStream),
-	( \+ file_exists(File) ->
-	  % don't duplicate ERROR message if current output is user_output!
-	  ( OutputStream \== user_output ->
-	    format('~n~*c~nERROR: Lexicon file~n~w~ndoes not exist. Aborting.~n~*c~n~n',
-		   [80,35,File,80,35])
-	  ; true
-	  ),
-	  format(user_output,
-		 '~n~*c~nERROR: Lexicon file~n~w~ndoes not exist. Aborting.~n~*c~n~n',
-		 [80,35,File,80,35]),
-	  abort
-	; \+ file_exists(File, read) ->
-	  % don't duplicate ERROR message if current output is user_output!
-	  ( OutputStream \== user_output ->
-	    format('~n~*c~nERROR: Lexicon file~n~w~nis not not readable. Aborting.~n~*c~n~n',
-		   [80,35,File,80,35])
-	  ; true
-	  ),
-	  format(user_output,
-		 '~n~*c~nERROR: Lexicon file~n~w~nis not not readable. Aborting.~n~*c~n~n',
-		 [80,35,File,80,35]),
-	  abort
 	; true
 	).
 
@@ -420,71 +427,92 @@ lexicon_type(LexiconType),
 % lfit == lex_form_input_test
 
 lexAccess_ignore_token(Token) :-
-	atom_codes(Token, [Char]),
-	is_punct(Char).
+	atom_codes(Token, [Code]),
+	is_punct(Code).
 
-%%% lfit(InputTokens, ResultOut) :-
-%%% 	Prefix = [],
-%%% 	ResultIn = [],
-%%% 	NumTokens = 0,
-%%% 	lfit_1(InputTokens, NumTokens, Prefix, ResultIn, ResultOut).
-%%% 
-%%% lfit_1([], _NumTokens, _Prefix, Result, Result).
-%%% lfit_1([_FirstToken|_RestTokens], NumTokensIn, _PrevPrefix, ResultIn, ResultOut) :-
-%%% 	NumTokensIn > 10,
-%%% 	!,
-%%% 	ResultOut = ResultIn.
-%%% 
-%%% % This clause handles special cases such as [has, '', been] and [in, '', patients]:
-%%% % in retokenize.pl, the special atom '' is inserted between "has" and "been",
-%%% % between "in" and "patients", and other such special cases.
-%%% % It also stops lfit from proceeding further if it encounters and apostrophe
-%%% % in the token list, which is desirable, so that, e.g., "cancer's" returns "cancer",
-%%% % and leaves "'s" in the input list.
-%%% 
-%%% lfit_1([FirstToken|_RestTokens], _NumTokensIn, _PrevPrefix, ResultIn, ResultOut) :-
-%%% 	( FirstToken == '' ->
-%%% 	  true
-%%% 	; FirstToken == '\'' ->
-%%% 	  true
-%%% % 	; atom_codes(FirstToken, [Code]),
-%%% % 	  is_punct(Code) ->
-%%% % 	  true
-%%% 	),
-%%% 	!,
-%%% 	ResultIn = ResultOut.
-%%% lfit_1([FirstToken|RestTokens], NumTokensIn, PrevPrefix, ResultIn, ResultOut) :-
-%%% 	NumTokensNext is NumTokensIn + 1,
-%%% 	append(PrevPrefix, [FirstToken], Prefix),
-%%% 	( lexAccess_ignore_token(FirstToken) ->
-%%% 	  ResultNext = ResultIn
-%%% 	; lfit_prefix(Prefix, NumTokensNext, ResultIn, ResultNext)
-%%% 	),
-%%% 	lfit_1(RestTokens, NumTokensNext, Prefix, ResultNext, ResultOut).
-%%% 
-%%% lfit_prefix(Prefix, NumTokens, ResultIn, ResultOut) :-
-%%% 	concat_atoms_intelligently(Prefix, SingleToken),
-%%% 	% insert_white_space_between_alnums(T, H, TokensWithWhiteSpace),
-%%% 	% concat_atom(TokensWithWhiteSpace, SingleToken),
-%%% 	statistics(runtime,_),
-%%% 	lexAccess_lex_form_input_init(SingleToken, FirstResult),
-%%% 	% statistics(runtime, [_,MilliSeconds]),
-%%% 	% format(user_output,
-%%% 	%        '@@@ Call to lexAccess_lex_form_input_init on ~q took ~d ms~n',
-%%% 	%        [SingleToken, MilliSeconds]),
-%%% 	( FirstResult == [] ->
-%%% 	  ResultOut = ResultIn
-%%% 	; ResultOut = NumTokens-FirstResult
-%%% 	).
+lfit(InputTokens, ResultOut) :-
+	Prefix = [],
+	ResultIn = [],
+	NumTokens = 0,
+	lfit_1(InputTokens, NumTokens, Prefix, ResultIn, ResultOut).
 
-lex_form_ci_recs_input_5(Input, NewRecs, NewRemaining, Lexicon, Index) :-
-%	( control_value(clfi, c) ->
-	  lex_form_ci_recs_input_5_C(Input, NewRecs, NewRemaining, Lexicon, Index).
+lfit_1([], _NumTokens, _Prefix, Result, Result).
+lfit_1([_FirstToken|_RestTokens], NumTokensIn, _PrevPrefix, ResultIn, ResultOut) :-
+	NumTokensIn > 10,
+	!,
+	ResultOut = ResultIn.
+
+% This clause handles special cases such as [has, '', been] and [in, '', patients]:
+% in retokenize.pl, the special atom '' is inserted between "has" and "been",
+% between "in" and "patients", and other such special cases.
+% It also stops lfit from proceeding further if it encounters and apostrophe
+% in the token list, which is desirable, so that, e.g., "cancer's" returns "cancer",
+% and leaves "'s" in the input list.
+
+lfit_1([FirstToken|_RestTokens], _NumTokensIn, _PrevPrefix, ResultIn, ResultOut) :-
+	( FirstToken == '' ->
+	  true
+	; FirstToken == '\'' ->
+	  true
+% 	; atom_codes(FirstToken, [Code]),
+% 	  is_punct(Code) ->
+% 	  true
+	),
+	!,
+	ResultIn = ResultOut.
+lfit_1([FirstToken|RestTokens], NumTokensIn, PrevPrefix, ResultIn, ResultOut) :-
+	NumTokensNext is NumTokensIn + 1,
+	append(PrevPrefix, [FirstToken], Prefix),
+	( lexAccess_ignore_token(FirstToken) ->
+	  ResultNext = ResultIn
+	; lfit_prefix(Prefix, NumTokensNext, ResultIn, ResultNext)
+	),
+	lfit_1(RestTokens, NumTokensNext, Prefix, ResultNext, ResultOut).
+
+lfit_prefix(Prefix, NumTokens, ResultIn, ResultOut) :-
+	concat_atoms_intelligently(Prefix, SingleToken),
+	% insert_white_space_between_alnums(T, H, TokensWithWhiteSpace),
+	% concat_atom(TokensWithWhiteSpace, SingleToken),
+	statistics(runtime,_),
+	lexAccess_lex_form_input_init(SingleToken, FirstResult),
+	% statistics(runtime, [_,MilliSeconds]),
+	% format(user_output,
+	%        '@@@ Call to lexAccess_lex_form_input_init on ~q took ~d ms~n',
+	%        [SingleToken, MilliSeconds]),
+	( FirstResult == [] ->
+	  ResultOut = ResultIn
+	; ResultOut = NumTokens-FirstResult
+	).
+
+lex_form_ci_recs_input_5(Input, Recs, Remaining, Lexicon, Index) :-
+%%	( control_value(clfi, c) ->
+	  lex_form_ci_recs_input_5_C(Input, OldRecs, OldRemaining, Lexicon, Index),
+	  Recs = OldRecs,
+	  Remaining = OldRemaining.
+%	; control_value(clfi, java) ->
+%	  lex_form_ci_recs_input_5_JAVA(Input, NewRecs, NewRemaining, Lexicon, Index),
+%	  Recs = NewRecs,
+%	  Remaining = NewRemaining
+%	; format(user_output, '### MUST SPECIFY clfi setting~n', []),
+%	  abort
+%	).
+	  % format(user_output, 'Old Recs: ~q~nNew Recs: ~q~n', [OldRecs,NewRecs]),
+	  % format(user_output, 'New Rem:  ~q~nNew Rem:  ~q~n', [OldRemaining,NewRemaining]),
+%	  append(InputMatch, OldRemaining, Input),
+%	  test_output(OldRecs, NewRecs, InputMatch).
 %	; control_value(clfi, java) ->
 %	  lex_form_ci_recs_input_5_JAVA(Input, NewRecs, NewRemaining, Lexicon, Index)
 %	; format(user_output, '~n### ERROR: clfi setting must be either c or java!~n', []),
 %	  abort
 %	).
+
+test_output(OldRecs, NewRecs, InputMatch) :-
+	( OldRecs == NewRecs ->
+	  true
+	; format(user_output, '### InputMatch: ~q~n### Old Recs: ~q~n### New Recs: ~q~n',
+		 [InputMatch,OldRecs,NewRecs])
+	).
+
 
 lex_form_ci_recs_input_5_C(Input, OrigRecs, OrigRemaining, Lexicon, Index) :-
 	lexicon_type(LexiconType),
@@ -504,8 +532,23 @@ lex_form_ci_recs_input_5_C(Input, OrigRecs, OrigRemaining, Lexicon, Index) :-
 	OrigRemaining = OrigRemaining,
 	OrigRecs = lexicon:[lexmatch:[OrigLexMatch], inputmatch:OrigInputMatch, records:OrigLexRecs].
 
-lex_form_ci_recs_input_5_JAVA(Input, Recs, Remaining, Lexicon, Index) :-
-	lex_form_ci_recs_input_5_C(Input, Recs, Remaining, Lexicon, Index).
+lex_form_ci_recs_input_5_JAVA(Input, NewRecs, NewRemaining, _Lexicon, _Index) :-
+	% lex_form_ci_recs_input_5_C(Input, Recs, Remaining, Lexicon, Index).
+        lfit(Input, NumTokens-LexAccessResult0),
+	LexAccessResult0 = [First|_IgnoreRest],
+	LexAccessResult = [First],
+        length(ListOfVariables, NumTokens),
+        append(ListOfVariables, NewRemaining, Input),
+        NewInputMatch = ListOfVariables,
+        % NewInputMatch = [NewInputMatchH|NewInputMatchT],
+        length(Input, InputLength),
+        length(NewRemaining, NewRemainingLength),
+        % Just to verify
+        InputLength =:= NewRemainingLength + NumTokens,
+        lexAccess_get_all_lexical_records(LexAccessResult, NewLexRecs),
+        NewRecs  = lexicon:[lexmatch:LexAccessResult,
+			    inputmatch:NewInputMatch,
+			    records:NewLexRecs].
 
 %%% gets the best match, and collapses all offsets
 get_best_match([FirstMatch|RestMatches], N) :-

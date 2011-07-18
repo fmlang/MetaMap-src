@@ -54,7 +54,6 @@
     ]).
 
 :- use_module(skr_db(db_access),[
-	get_year/1,
 	initialize_db_access/3,
 	db_get_mesh_mh/2,
 	db_get_meta_mesh/2,
@@ -80,12 +79,12 @@
 	concat_atom/3,
 	index/3,
 	lower/2,
-	substring/4,
 	ttyflush/0,
 	upper/2
    ]).
 
 :- use_module(skr(skr_utilities), [
+	debug_message/3,
 	ensure_number/2,
 	skr_begin_write/1,
 	skr_end_write/1,
@@ -120,11 +119,7 @@
 
 do_MMI_processing(OrigUtterances, BracketedOutput, _Sentences, DisambMMOutput) :-
 	% Do MMI processing, if requested
-	( xml_output_format(_XMLFormat) ->
-	  true
-	; control_option(machine_output) ->
-	  true
-        ; control_option(fielded_mmi_output) ->
+	( control_option(fielded_mmi_output) ->
 	  conditionally_skr_begin_write(BracketedOutput),
           current_output(Stream),
 	  get_UIAtom(OrigUtterances, UIAtom),
@@ -320,7 +315,8 @@ construct_text_atom(PosInfoList, CitationTextAtom, TextString) :-
 
 extract_text_atoms([], _CitationTextAtom, []).
 extract_text_atoms([StartPos/Length|RestPosInfo], CitationTextAtom, [Atom|RestAtoms]) :-
-	substring(CitationTextAtom, Atom, StartPos, Length),
+	% substring(CitationTextAtom, Atom, StartPos, Length),
+	sub_atom(CitationTextAtom, StartPos, Length, _After, Atom),
 	extract_text_atoms(RestPosInfo, CitationTextAtom, RestAtoms).
 
 compute_mesh_and_treecodes(MetaConcept, TreeCodes) :-

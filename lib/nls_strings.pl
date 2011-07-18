@@ -106,6 +106,10 @@
 	rev/2
     ]).
 
+:- use_module(library(lists3),[
+	substitute/4
+    ]).
+
 
 % Use this predicate if you know that none of the strings
 % to be converted to atoms is > 65K chars long.
@@ -798,7 +802,7 @@ prep_conj_det(String) :-
 replace_all_substrings/4 replaces all occurrences of OldSubString to
 NewSubString in String producing NewString. */
 
-replace_all_substrings(String,OldSubString, NewSubString, NewString) :-
+replace_all_substrings(String, OldSubString, NewSubString, NewString) :-
 	split_string(String, OldSubString, Left, Right),
 	replace_all_substrings(Right, OldSubString, NewSubString, NewRight),
 	split_string(NewString, NewSubString, Left, NewRight),
@@ -833,11 +837,8 @@ with a space in each String.  */
 
 replace_tabs_in_strings([], []).
 replace_tabs_in_strings([First|Rest], [ModifiedFirst|ModifiedRest]) :-
-	replace_tabs(First, ModifiedFirst),
+	substitute(9, First, 32, ModifiedFirst),
 	replace_tabs_in_strings(Rest, ModifiedRest).
-
-replace_tabs(String, ModifiedString) :-
-	replace_all_substrings(String, [9], " ", ModifiedString).
 
 /* split_string(?String, +Substring, ?Left, ?Right)
 split_string/4 embodies the property that String is the concatenation of
@@ -955,7 +956,7 @@ trim_and_compress_whitespace_1([], H, [H]).
 trim_and_compress_whitespace_1([Next|Rest], First, Trimmed) :-
 	( is_white(First),
 	  is_white(Next) ->
-	  RestTrimmed = Trimmed
+	  Trimmed = RestTrimmed
 	; Trimmed = [First|RestTrimmed]
 	),
 	trim_and_compress_whitespace_1(Rest, Next, RestTrimmed).

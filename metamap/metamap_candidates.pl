@@ -35,7 +35,7 @@
 
 
 :- module(metamap_candidates, [
-	add_candidates/8
+	add_candidates/9
     ]).
 
 :- use_module(metamap(metamap_evaluation), [
@@ -96,7 +96,7 @@
    ************************************************************************ */
 
 
-/* add_candidates(?GVCs, +AllVariants, +IgnoreSingleChars, +DebugFlags,
+/* add_candidates(?GVCs, +CandidateCount, +AllVariants, +IgnoreSingleChars, +DebugFlags,
    		  +WordDataCacheIn, +USCCacheIn,
 		  -WordDataCacheOut, -USCCacheOut)
 
@@ -107,14 +107,14 @@ AllVariants is an AVL tree used for determining which index to use in some cases
 WordDataCacheIn and WordDataCacheOut are used to cache results to avoid recomputation.
 USCCacheIn and USCCacheOut are also used to cache results to avoid recomputation. */
 
-add_candidates([], _AllVariants, _IgnoreSingleChars, _DebugFlags,
+add_candidates([], _CandidateCount, _AllVariants, _IgnoreSingleChars, _DebugFlags,
 	       WordDataCache, USCCache, WordDataCache, USCCache).
 add_candidates([gvc(Generator,Variants,Candidates)|RestGVCs],
-	       AllVariants, IgnoreSingleChars, DebugFlags,
+	       CandidateCount, AllVariants, IgnoreSingleChars, DebugFlags,
 	       WordDataCacheIn, USCCacheIn,
 	       WordDataCacheOut, USCCacheOut) :-
-	% If IgnoreSingleChars == 1, then don't generate candidates
-	% for single-character tokens
+	% If IgnoreSingleChars == 1,
+	% then don't generate candidates for single-character tokens
 	Generator = v(Token,_,_,_,_Roots0,_WordCount),
 	% add_wordcount_to_roots(Roots0, WordCount, Roots),
 	( IgnoreSingleChars =:= 1,
@@ -125,7 +125,7 @@ add_candidates([gvc(Generator,Variants,Candidates)|RestGVCs],
 	; % format(user_output, 'G:~q~n', [Generator]),
 	  % format(user_output, 'V:~q~n', [Variants]),
 	  % format(user_output, 'C:~q~n~n', [Candidates]),
-	  extract_simple_variants(Variants, SimpleVariants),
+	  extract_simple_variants(Variants, CandidateCount, SimpleVariants),
 	  % append(SimpleVariants, Roots, VariantsWithRoots),
 	  debug_message(trace, '~n### Generating candidates for ~q~n', [SimpleVariants]),
 	  % get_meta_candidates_for_variants(SimpleVariants, AllVariants, Candidates, DebugFlags,
@@ -134,7 +134,8 @@ add_candidates([gvc(Generator,Variants,Candidates)|RestGVCs],
 					   WordDataCacheIn, USCCacheIn,
 					   WordDataCacheNext, USCCacheNext)
 	),
-	add_candidates(RestGVCs, AllVariants, IgnoreSingleChars, DebugFlags,
+	NextCandidateCount is CandidateCount + 1,
+	add_candidates(RestGVCs, NextCandidateCount, AllVariants, IgnoreSingleChars, DebugFlags,
 		       WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut).
 	
 add_wordcount_to_roots(Roots0, WordCount, Roots) :-
@@ -153,17 +154,20 @@ stop_variant/2
 For extract_simple_variants/2, SimpleVariants is a list of variant Words.
 */
 
-extract_simple_variants(Vs, SimpleVariants) :-
-	extract_simple_variants_aux(Vs, SimpleVariants0),
+extract_simple_variants(Vs, CandidateCount, SimpleVariants) :-
+	extract_simple_variants_aux(Vs, CandidateCount, SimpleVariants0),
 	list_to_set(SimpleVariants0, SimpleVariants).
 
-extract_simple_variants_aux([], []).
-extract_simple_variants_aux([v(Word,_,_,_,_,NFR)|Rest], Result) :-
-	( stop_variant(Word) ->
+extract_simple_variants_aux([], _CandidateCount, []).
+extract_simple_variants_aux([v(Word,_,_,_,_,NFR)|Rest], CandidateCount, Result) :-
+	% If it's the first candidate, don't check for stop words
+	( CandidateCount =:= 1 ->
+	  Result = [Word-NFR|ExtractedRest]
+	; stop_variant(Word) ->
 	  Result = ExtractedRest
 	; Result = [Word-NFR|ExtractedRest]
 	),
-	extract_simple_variants_aux(Rest, ExtractedRest).
+	extract_simple_variants_aux(Rest, CandidateCount, ExtractedRest).
 
 stop_variant(Word) :-
 	\+ control_option(allow_large_n),
@@ -261,6 +265,7 @@ get_meta_uscs_1([Word|_RestWords], Words, NFR, AllVariants, DebugFlags, MetaUSCs
 	% WTF is this for?
 	length(Words, NWords),
 	NewNFR is NFR + NWords - 1,
+	% format(user_output, '~d ~d : ~w~n', [NFR,NewNFR,Words]),
 	% NewNFR is NFR,
 	get_meta_uscs_2(NewNFR, Word, AllVariants, Words, DebugFlags, MetaUSCs,
 			WordDataCacheIn, USCCacheIn,
@@ -332,6 +337,7 @@ get_meta_uscs_2(PhraseLength, Word, AllVariants, FilterWords,
 		WordDataCacheIn, USCCacheIn,
 		WordDataCacheOut, USCCacheOut) :-
 	determine_table(Word, AllVariants, PhraseLength, Table),
+	% format(user_output, '~q (~d): ~w~n', [Word,PhraseLength,Table]),
 	get_from_table(Word, FilterWords, Table, DebugFlags, MetaUSCs,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut),
@@ -360,6 +366,7 @@ frequent_first_word_pair(arabidopsis, protein).
 frequent_first_word_pair(c,           protein).
 frequent_first_word_pair(drosophila,  protein).
 frequent_first_word_pair(e,           protein).
+frequent_first_word_pair(extended,    tablet).
 frequent_first_word_pair(human,       '1').
 frequent_first_word_pair(human,       protein).
 frequent_first_word_pair(mouse,       protein).
