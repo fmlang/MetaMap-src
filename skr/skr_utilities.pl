@@ -34,6 +34,7 @@
 % Purpose:  Utilities
 
 :- module(skr_utilities, [
+	check_valid_file_type/2,
 	compare_utterance_lengths/2,
 	compute_sum/3,
 	conditionally_print_end_info/0,
@@ -61,6 +62,7 @@
 	output_tagging/3,
 	replace_crs_with_blanks/4,
 	replace_blanks_with_crs/4,
+	send_message/2,
 	skr_begin_write/1,
 	skr_end_write/1,
 	% must be exported for mm_print
@@ -116,7 +118,7 @@
 	ttyflush/0
     ]).
 
-:- use_module(skr(skr_umls_info_2011AA), [
+:- use_module(skr(skr_umls_info), [
 	verify_sources/1,
 	verify_sts/1
     ]).
@@ -160,6 +162,11 @@
 :- use_module(library(codesio), [
 	with_output_to_codes/2
     ]).
+
+:- use_module(library(file_systems), [
+	file_exists/1,
+	file_exists/2
+   ]).
 
 :- use_module(library(lists), [
 	append/2,
@@ -539,9 +546,13 @@ fatal_error_check([FatalErrorOption|RestOptions], OutputOption, ResultIn, Result
 	fatal_error_check(RestOptions, OutputOption, ResultNext, ResultOut).
 
 send_message(Message, Format):-
-	format(user_output, Message, Format),
-	( current_stream(_File, write, _Output) ->
-	  format(Message, Format)
+	current_output(OutputStream),
+	% First, send the message to the output stream.
+	format(OutputStream, Message, Format),
+	% Then, if the output stream is not user_output,
+	( \+ stream_property(OutputStream, alias(user_output)) ->
+	% send the message to user_output as well.
+	  format(user_output, Message, Format)
 	; true
 	).
 
@@ -1194,3 +1205,16 @@ split_word('', '', '').
 % split_word(breastfeeding, breast, feeding).
 % split_word(heartrate,     heart, rate).
 
+check_valid_file_type(File, Type) :-
+	( \+ file_exists(File) ->
+	  send_message('~n~*c~nERROR: ~w file~n~w~ndoes not exist. Aborting.~n~*c~n~n',
+		       [80,0'#,Type,File,80,0'#]),
+	  abort
+	; true
+	),
+	( \+ file_exists(File, read) ->
+	  send_message('~n~*c~nERROR: ~q file~n~w~nis not not readable. Aborting.~n~*c~n~n',
+		       [80,0'#,Type,File,80,0'#]),
+	  abort
+	; true
+	).
