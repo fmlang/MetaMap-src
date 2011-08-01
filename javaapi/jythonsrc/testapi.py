@@ -1,7 +1,7 @@
 """ complete example of using MetaMap api """
 import sys
 import string
-from se.sics.prologbeans import PBList, PrologSession
+from se.sics.prologbeans import PrologSession
 from gov.nih.nlm.nls.metamap import MetaMapApi, MetaMapApiImpl, Result
 
 class testapi:
@@ -9,7 +9,7 @@ class testapi:
         self.api = MetaMapApiImpl()
 
     def process(self, inputtext):
-        return self.api.processString(inputtext)
+        return self.api.processCitationsFromString(inputtext)
 
     def display_aas(self, result, output=sys.stdout):
         aalist = result.getAcronymsAbbrevs()
@@ -85,7 +85,8 @@ if __name__ == '__main__':
         exit(1)
     else:
         inst = testapi()
-        result = inst.process(string.join(sys.argv[1:]))
-        inst.display_aas(result)
-        inst.display_negations(result)
-        inst.display_utterances(result, display_pcmlist=True)
+        resultList = inst.process(string.join(sys.argv[1:]))
+        for result in resultList:
+            inst.display_aas(result)
+            inst.display_negations(result)
+            inst.display_utterances(result, display_pcmlist=True)
