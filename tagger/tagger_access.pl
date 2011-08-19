@@ -41,10 +41,11 @@
    ]).
 
 :- use_module(skr_lib(nls_strings),[
+	atom_codes_list/2,
 	atom_codes_list_list/2,
-	is_print_string/1,
 	split_string/4,
-	split_string_completely/3
+	split_string_completely/3,
+	trim_and_compress_whitespace/2
    ]).
 
 :- use_module(skr_lib(nls_system),[
@@ -53,13 +54,17 @@
    ]).
 
 :- use_module(skr_lib(skr_tcp),[
-	establish_tcp_connection/5
+	establish_tcp_connection/4
    ]).
 
 :- use_module(skr(skr_utilities),[
 	ensure_atom/2,
 	ensure_number/2
    ]).
+
+:- use_module(skr_lib(ctypes),[
+	is_punct/1
+    ]).
 
 :- use_module(skr_lib(sicstus_utils),[
 	concat_atom/2,
@@ -79,6 +84,7 @@
 
 :- use_module(library(lists),[
 	append/2,
+	last/2,
 	rev/2
    ]).
 
@@ -133,16 +139,15 @@ tag_text(Input,
 tag_text_with_options([], _, _, _, _, _, []) :- !.
 tag_text_with_options(Input, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      ModeOption, PrologOption, TaggedTextList) :-
-	atom_codes(ModeOption, MOString),
-	atom_codes(PrologOption, POString),
-	append([MOString,"|",POString], OptionsString),
-	atom_codes(Options, OptionsString),
+
+	concat_atom([ModeOption, '|', PrologOption], Options),
 	ensure_atom(Input, QueryAtom),
 	call_tagger(Options,
 		    TaggerServerHosts, TaggerForced, TaggerServerPort,
-		    QueryAtom, TaggedTextList),
-	TaggedTextList \== '',
-	TaggedTextList \== end_of_file,
+		    QueryAtom, TaggedTextList0),
+	TaggedTextList0 \== '',
+	TaggedTextList0 \== end_of_file,
+	postprocess_apostrophe_s(TaggedTextList0, TaggedTextList),
 	!.
 tag_text_with_options(Input, _, _, _, _, _Tagger, []) :-
 	format(user_output,
@@ -155,11 +160,9 @@ tag_text_with_options(Input, _, _, _, _, _Tagger, []) :-
 call_tagger(Options,
 	    TaggerServerHosts, TaggerForced, TaggerServerPort,
 	    QueryAtom, TaggedTextList) :-
-	choose_tagger_server(TaggerForced, TaggerServerHosts,
-			     ChosenTaggerServerHost, ChosenTaggerServerIP),
+	choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost),
 	% format(user_output, 'Chose tagger ~w~n', [ChosenTaggerServerHost]),
-	call_tagger_server(Options,
-			   ChosenTaggerServerHost, ChosenTaggerServerIP,
+	call_tagger_server(Options, ChosenTaggerServerHost, 
 			   TaggerForced, TaggerServerPort,
 			   QueryAtom, TaggedTextAtom),
 	!,
@@ -204,10 +207,10 @@ form_prolog_output([[WordString,TypeString]|Rest],
 
 form_human_readable_output([], [""]) :- !.
 form_human_readable_output(FTTLS, Result) :-
-	form_human_readable_output(FTTLS, "", "", [], RevResult),
+	form_human_readable_output_aux(FTTLS, "", "", [], RevResult),
 	rev(RevResult, Result).
 
-form_human_readable_output([], CurWords, CurTypes, RRIn, RR) :-
+form_human_readable_output_aux([], CurWords, CurTypes, RRIn, RR) :-
 	( CurWords == "" ->
 	  RR = RRIn
 	; ( RRIn == [] ->
@@ -215,7 +218,7 @@ form_human_readable_output([], CurWords, CurTypes, RRIn, RR) :-
 	  ; RR = [CurTypes,CurWords,""|RRIn]
 	  )
 	).
-form_human_readable_output([[Word,Type]|Rest],CurWords,CurTypes,RRIn,RROut) :-
+form_human_readable_output_aux([[Word,Type]|Rest],CurWords,CurTypes,RRIn,RROut) :-
     length(Word,LWord),
     length(Type,LType),
     (   LWord > LType ->
@@ -254,10 +257,10 @@ form_human_readable_output([[Word,Type]|Rest],CurWords,CurTypes,RRIn,RROut) :-
 	;   RRInOut=[CurTypes,CurWords,""|RRIn]
 	)
     ),
-    form_human_readable_output(Rest,NewCurWords,NewCurTypes,RRInOut,RROut).
+    form_human_readable_output_aux(Rest,NewCurWords,NewCurTypes,RRInOut,RROut).
 
 call_tagger_server(Options,
-		   TaggerServerHost, TaggerServerIP, TaggerForced, TaggerServerPort,
+		   TaggerServerHost, TaggerForced, TaggerServerPort,
 		   QueryAtom, TaggedTextAtom) :-
 	% GIVEN:
 	%   options <- Options (is an atom?)
@@ -275,9 +278,7 @@ call_tagger_server(Options,
 	concat_atom([Options,NewLine,QueryAtom,NewLine,NewLine], Request),
 	between(1, 10, _),
 	   ServerName = 'Tagger',
-	   establish_tcp_connection(ServerName,
-				    TaggerServerHost, TaggerServerIP,
-				    TaggerServerPort, SocketStream),
+	   establish_tcp_connection(ServerName, TaggerServerHost, TaggerServerPort, SocketStream),
 	   conditionally_announce_tagger_connection(TaggerServerMessage, TaggerServerHost),
 	   test_post_tagger_query(SocketStream, Request),
 	   test_get_tagger_result(SocketStream, Request, Response),
@@ -337,23 +338,20 @@ get_chars_tagger(Stream, Input) :-
 	).
 
 get_tagger_server_hosts_and_port(TaggerServerHosts, UserChoice, TaggerServerPort) :-
-	environ('TAGGER_SERVER_HOSTS', TaggerServerHostsEnv),
-	atom_codes(TaggerServerHostsEnv, TaggerServerHostsChars0),
-	% SICStus Prolog's read_from_codes/2 requires a terminating period,
-	% which Quintus Prolog's chars_to_term/2 does not!
-	append(TaggerServerHostsChars0, ".", TaggerServerHostsChars),
-	read_from_codes(TaggerServerHostsChars, TaggerServerHosts),
-	( control_value(tagger, TaggerServerHost) ->
-	  UserChoice = TaggerServerHost,
-	  member(ChosenTaggerServerHostAndIP, TaggerServerHosts),
-	  get_tagger_server_name_and_IP_address(ChosenTaggerServerHostAndIP,
-						TaggerServerHost,
-						_ChosenTaggerServerIP)
-	; UserChoice is 0
+	( control_value(tagger, ChosenTaggerServerHost) ->
+	  UserChoice = ChosenTaggerServerHost,
+	  TaggerServerHosts = []
+     	  % memberchk(ChosenTaggerServerHost-_IP, TaggerServerHosts),
+	; UserChoice is 0,
+	  environ('TAGGER_SERVER_HOSTS', TaggerServerHostsEnv),
+	  atom_codes(TaggerServerHostsEnv, TaggerServerHostsChars0),
+	  trim_and_compress_whitespace(TaggerServerHostsChars0, TaggerServerHostsChars),
+	  split_string_completely(TaggerServerHostsChars, " ", TaggerServerHostsStrings),
+	  atom_codes_list(TaggerServerHosts, TaggerServerHostsStrings)
 	),
         environ('TAGGER_SERVER_PORT', TaggerServerPortAtom),
-	!,
-	ensure_number(TaggerServerPortAtom, TaggerServerPort).
+	ensure_number(TaggerServerPortAtom, TaggerServerPort),
+	!.
 get_tagger_server_hosts_and_port(_TaggerServerHosts, _UserChoice, _TaggerServerPort) :-
 	( control_value(tagger, UserChoice) ->
 	  format(user_output,
@@ -363,29 +361,46 @@ get_tagger_server_hosts_and_port(_TaggerServerHosts, _UserChoice, _TaggerServerP
 	),
 	halt.
 
-choose_tagger_server(TaggerForced, TaggerServerHosts,
-		     ChosenTaggerServerHost, ChosenTaggerServerIP) :-
+choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost) :-
 	( TaggerForced \== 0 ->
-	  ChosenTaggerServerHost = TaggerForced,
-	  member(ChosenTaggerServerHostAndIP, TaggerServerHosts),
-	  get_tagger_server_name_and_IP_address(ChosenTaggerServerHostAndIP,
-						ChosenTaggerServerHost,
-						ChosenTaggerServerIP)
+	  ChosenTaggerServerHost = TaggerForced
 	; repeat,
 	     % must be backtrackable!
-	     random_member(ChosenTaggerServerHostAndIP, TaggerServerHosts),
-	     atom_codes(ChosenTaggerServerHostAndIP, ChosenTaggerServerHostAndIPString),
-	     split_string_completely(ChosenTaggerServerHostAndIPString, "|",
-				     [ChosenTaggerServerHostString, ChosenTaggerServerIPString]),
-	     atom_codes(ChosenTaggerServerHost, ChosenTaggerServerHostString),
-	     atom_codes(ChosenTaggerServerIP, ChosenTaggerServerIPString)
+ 	     random_member(ChosenTaggerServerHost, TaggerServerHosts)
 	).
 
-get_tagger_server_name_and_IP_address(ChosenTaggerServerHostAndIP,
-				      ChosenTaggerServerHost,
-				      ChosenTaggerServerIP) :-
-	atom_codes(ChosenTaggerServerHostAndIP, ChosenTaggerServerHostAndIPString),
-	split_string_completely(ChosenTaggerServerHostAndIPString, "|",
-				[ChosenTaggerServerHostString, ChosenTaggerServerIPString]),
-	atom_codes(ChosenTaggerServerHost, ChosenTaggerServerHostString),
-	atom_codes(ChosenTaggerServerIP, ChosenTaggerServerIPString).
+% The idea here is to overcome a feature of the tagger that
+% breaks XYX's into [XYZ, ', s]; this predicate gloms the "'s"
+% onto the previous token.
+
+postprocess_apostrophe_s(TagListIn, TagListOut) :-
+	( control_option(apostrophe_s_contraction) ->
+	  TagListOut = TagListIn
+	; postprocess_apostrophe_s_aux(TagListIn, TagListOut)
+	).
+
+% Transform, e.g.,
+% [finkelstein,noun], ['\'',ap], [s,'noun/3'], [test,'verb/3'], [positive,'adj/2']
+% into
+% ['finkelstein\'s',noun], [test,'verb/3'], [positive,'adj/2']
+% by glomming the "'s" onto the end of the preceeding token.
+% However, do NOT do this glomming if the token immedidately preceeding the ['\'',ap]
+% has LexCat == pron (the exceptions are "he", "she", and "it")
+% or if that token ends in a punctuation char.
+
+% In other words, by deMorgan's laws, do the glomming IF the preceeding token
+% (1) is not a pronoun AND
+% (2) does not end in a punctuation char
+postprocess_apostrophe_s_aux([], []).
+postprocess_apostrophe_s_aux(TaggedTextList0, TaggedTextList) :-
+	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap], [s,'noun/3']|RestTaggedTextList0],
+	LexCat \== pron,
+	atom_codes(OrigWord, OrigWordCodes),
+	last(OrigWordCodes, LastCode),
+	\+ is_punct(LastCode),
+	!,
+	concat_atom([OrigWord, '''', s], Noun),
+	TaggedTextList = [[Noun,LexCat]|RestTaggedTextList],
+	postprocess_apostrophe_s_aux(RestTaggedTextList0, RestTaggedTextList).
+postprocess_apostrophe_s_aux([H|RestIn], [H|RestOut]) :-
+	postprocess_apostrophe_s_aux(RestIn, RestOut).

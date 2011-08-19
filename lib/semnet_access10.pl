@@ -41,7 +41,7 @@
     ]).
 
 % Print strings double-quoted
-:- use_module(library(print_chars)).
+% :- use_module(library(print_chars)).
 
 
 /* preferred_relation(?Relation)

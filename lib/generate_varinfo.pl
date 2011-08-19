@@ -44,14 +44,25 @@
 
 % ----- Imported predicates
 
+% :- use_module( skr(testlvg), [
+% 	lexAccess_get_varlist_for_all_forms_init/2
+%   ]).
+
+:- use_module( lexicon(lex_access), [
+	get_citation_forms_for_form/3
+  ]).
+
 :- use_module( lexicon(qp_lexicon), [
 	lex_form_ci_vars/2
   ]).
 
+:- use_module(skr_lib(nls_system), [
+        control_option/1,
+        control_value/2
+   ]).
+
 :- use_module(skr_lib(sicstus_utils), [
 	lower/2,
-	midstring/5,
-	midstring/6,
 	string_char/3,
 	string_size/2
   ]).
@@ -71,7 +82,10 @@ generate_variant_info_1(unknown, UnkList, RestDefinitions, [ThisItem|NewGap]) :-
 generate_variant_info_1(lexicon, [lexmatch:[LexMatch], InputMatch|_], RestDefinitions,
 		      [LexMatch:ThisVarInfo|NewGap]) :-
 	!,
-	lex_form_ci_vars(LexMatch, VarInfo),
+	get_varlist_LEXACCESS_TOGGLE(LexMatch, VarInfo),
+	% lex_form_ci_vars(LexMatch, VarInfo),
+	% get_citation_forms_for_form(LexMatch, _Cats, CitationForms),
+	% lexAccess_get_varlist_for_all_forms_init(CitationForms, VarInfo),
 	get_this_variant(VarInfo, LexMatch, ThisVarInfo, VariantTail),
 	% append(ThisVarInfo, [InputMatch], ThisVarInfoAndInputMatch),   % Lan needs InputMatch
 	VariantTail = [InputMatch], 
@@ -79,6 +93,16 @@ generate_variant_info_1(lexicon, [lexmatch:[LexMatch], InputMatch|_], RestDefini
 % This is for shapes, punctuation, and perhaps other stuff
 generate_variant_info_1(Other, OtherList, RestDefinitions, [Other:OtherList|NewGap]) :-
 	generate_variant_info(RestDefinitions, NewGap).
+
+get_varlist_LEXACCESS_TOGGLE(LexMatch, VarInfo) :-
+%	( control_value(lexicon, c) ->
+	  lex_form_ci_vars(LexMatch, VarInfo).
+% 	; control_value(lexicon, java) ->
+% 	  get_citation_forms_for_form(LexMatch, _Cats, CitationForms),
+% 	  lexAccess_get_varlist_for_all_forms_init(CitationForms, VarInfo)
+%	; format(user_error, '### ERROR: lexicon setting must be either c or java!~n', []),
+%	  abort
+%	).
 
 % ----- GET_LEX_ITEM
 

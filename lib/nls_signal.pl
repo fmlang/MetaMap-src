@@ -45,7 +45,7 @@ foreign_resource(nls_signal, ['C_establish_signal_handling']).
 foreign('C_establish_signal_handling', c,
         'C_establish_signal_handling'([-integer])).
 
-:- load_foreign_resource(nls_signal).
+:- load_foreign_resource('../nls_signal').
 
 % :- abolish(foreign_resource/2, [force(true)]).
 

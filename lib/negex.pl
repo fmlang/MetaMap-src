@@ -60,6 +60,10 @@
 	sublist/2
    ]).
 
+:- use_module(skr(skr_xml),[
+        xml_output_format/1
+   ]).
+
 :- use_module(library(lists), [
 	append/2,
 	delete/3,
@@ -108,7 +112,7 @@ compute_negex(RawTokenList, Lines, DisambMMOutput, NegationTerms) :-
 
 compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) :-
 	( \+ control_option(machine_output),
-	  \+ control_option('XML'),
+	  \+ xml_output_format(_XMLFormat),
 	  \+ control_option(negex) ->
 	  NegationTerms = []
 	; environ('NEGEX_UTTERANCE_MAX_DIST', UtteranceMaxDistAtom),
@@ -138,13 +142,13 @@ negex_aux([RawTokenList|ListOfTokenLists], [MMOutput|MMOutputList],
 generate_negex_output(NegationTerms) :-
 	( control_option(negex),
 	  \+ control_option(machine_output),
-	  \+ control_option('XML') ->
+	  \+ xml_output_format(_XMLFormat) ->
 	   format('~nNEGATIONS:~n', []),
 	   generate_all_negex_output(NegationTerms),
 	   nl
 	; true
 	).
-	  
+
 generate_all_negex_output([]).
 generate_all_negex_output([H|T]) :-
 	generate_one_negex_output(H),

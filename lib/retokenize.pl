@@ -50,7 +50,7 @@ The particular problem this addresses is the fact that "after-treatment" is a le
 Thus the prepositional phrase "after treatment" is lexicalized as the lexical entry (a noun).
 Ultimately, what is needed is a switch that allows only single-word lexical entries
 to be retrieved from the lexicon.
-Until that is available "after treatment" is retokenized as "after '' treatment".
+Until that is available, "after treatment" is retokenized as [after, '', treatment].
 
 The list of "in ..." expressions for which this hack is done is below. Gross.
 The lexical entry for '' is then removed via remove_null_atom_defn/2.
@@ -78,6 +78,7 @@ retokenize_list_1([Next|Rest], First, [First|ReTokenizedRest]) :-
 retokenize_word(after, treatment, [''|Tail], Tail) :- !.
 retokenize_word(has,   been,      [''|Tail], Tail) :- !.
 retokenize_word(in,    InWord,    [''|Tail], Tail) :- in_patients_in_word(InWord), !.
+retokenize_word(over,  long,      [''|Tail], Tail) :- !.
 retokenize_word(_First, _Next,     Tail,     Tail).
 
 in_patients_in_word('-').

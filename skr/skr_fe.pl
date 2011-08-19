@@ -59,6 +59,10 @@
 % Because they are called in the code regardless of which application we compile,
 % they must still be defined, even as stubs, so as not to get a warning message.
 
+:- use_module(skr_db(db_access), [
+	default_release/1
+   ]).
+
 :- use_module(lexicon(qp_lexicon), [
 	use_multi_word_lexicon/0
    ]).
@@ -75,12 +79,12 @@
 
 :- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/17,
+	skr_phrases/18,
 	stop_skr/0
    ]).
 
 :- use_module(skr(skr_text_processing), [
-	extract_sentences/6,
+	extract_sentences/9,
 	get_skr_text/1
 	% is_sgml_text/1
 	% warn_remove_non_ascii_from_input_lines/2
@@ -104,12 +108,13 @@
 	output_should_be_bracketed/1,
 	output_tagging/3,
 	replace_crs_with_blanks/4,
+	send_message/2,
 	token_template/5,
 	token_template/6,
 	usage/0,
         write_MMO_terms/1,
-        write_raw_token_lists/3,
-        write_sentences/3
+        write_raw_token_lists/2,
+        write_sentences/2
    ]).
 
 :- use_module(skr(skr_xml), [
@@ -117,10 +122,6 @@
 	conditionally_print_xml_footer/3,
 	generate_and_print_xml/1,
 	xml_header_footer_print_setting/3
-   ]).
-
-:- use_module(skr_db(db_access), [
-	default_full_year/1
    ]).
 
 :- use_module(skr_lib(efficiency), [
@@ -138,19 +139,21 @@
 	normalized_syntactic_uninvert_string/2,
 	split_atom_completely/3,
 	trim_whitespace/2,
-	trim_whitespace_left/3
+	trim_whitespace_left/3,
+	trim_whitespace_right/2
    ]).
 
 :- use_module(skr_lib(nls_system), [
-	get_control_options_for_modules/2,
-	reset_control_options/1,
-	toggle_control_options/1,
-	set_control_values/2,
 	control_option/1,
-	parse_command_line/1,
-	interpret_options/4,
+	get_control_options_for_modules/2,
+	get_from_iargs/4,
 	interpret_args/4,
-	get_from_iargs/4
+	interpret_options/4,
+	parse_command_line/1,
+	reset_control_options/1,
+	set_control_values/2,
+	toggle_control_options/1,
+	update_command_line/5
    ]).
 
 :- use_module(skr_lib(pos_info), [
@@ -187,6 +190,7 @@
 
 :- use_module(library(lists), [
 	append/2,
+	prefix/2,
 	rev/2
    ]).
 
@@ -209,13 +213,15 @@ go(HaltOption) :-
 	parse_command_line(CLTerm),
 	go(HaltOption, CLTerm).
 
-go(HaltOption, command_line(Options,Args)) :-
+go(HaltOption, command_line(Options0,Args0)) :-
 	reset_control_options(metamap),
+	update_command_line(Options0, Args0, metamap, Options, Args),
 	get_program_name(ProgramName),
-	default_full_year(FullYear),
+	default_release(Release),
 	close_all_streams,
 	( initialize_skr(Options, Args, InterpretedArgs, IOptions) ->
-          ( skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions)
+          ( skr_fe(InterpretedArgs, ProgramName, Release, IOptions) ->
+	    true
 	  ; true
 	  )
 	; usage
@@ -234,10 +240,10 @@ discovered, and performs other initialization tasks including initializing
 other modules by calling initialize_skr/1.  It returns InterpretedArgs
 for later use (e.g., the stream associated with a file).  */
 
-initialize_skr(Options, Args, IArgs, IOptions) :-
+initialize_skr(InitialOptions, InitialArgs, FinalArgs, FinalOptions) :-
 	get_control_options_for_modules([metamap], AllOptions),
-	interpret_options(Options, AllOptions, metamap, IOptions),
-	\+ member(iopt(help,_), IOptions),
+	interpret_options(InitialOptions, AllOptions, metamap, FinalOptions),
+	\+ member(iopt(help,_), FinalOptions),
 	ArgSpecs=[aspec(infile,mandatory,file,read,
 			user_input,
 			'Input file containing labelled utterances'),
@@ -245,9 +251,9 @@ initialize_skr(Options, Args, IArgs, IOptions) :-
 			or(['<infile>','.','out'],user_output),
 			'Output file')
 		 ],
-	interpret_args(IOptions, ArgSpecs, Args, IArgs),
-	toggle_control_options(IOptions),
-	set_control_values(IOptions,IArgs),
+	interpret_args(FinalOptions, ArgSpecs, InitialArgs, FinalArgs),
+	toggle_control_options(FinalOptions),
+	set_control_values(FinalOptions, FinalArgs),
 	use_multi_word_lexicon,
 	initialize_skr([]).
 
@@ -264,7 +270,7 @@ skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions) :-
 	% XML header will be printed here (and XML footer several lines below) iff
 	% (1) XML command-line option is on, and
 	% (2) OutputChoice is 1 (which is manually forced)
-	% (3) XML value is either format1 or noformat1
+	% (3) XML value is either XMLf1 or XMLn1
 	% get_xml_settings(XMLOption, FormatMode, XMLValue),
 	xml_header_footer_print_setting(1, XMLMode, PrintSetting),
 	get_output_stream(OutputStream),
@@ -272,8 +278,8 @@ skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions) :-
 	( InputStream = user_input,
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
-          process_all(ProgramName, FullYear, InputStream, OutputStream,
-		      TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+          process_all(ProgramName, FullYear, InputStream, OutputStream, TagOption,
+		      TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      WSDServerHosts, WSDForced, WSDServerPort,
 		      InterpretedArgs, IOptions)
           % batch_skr is for batch processing
@@ -354,14 +360,16 @@ process_all(ProgramName, FullYear, InputStream, OutputStream,
 process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	      WSDServerHosts, WSDForced, WSDServerPort,
 	      InterpretedArgs, IOptions) :-
-	get_skr_text(Strings),
-	( Strings \== [] ->
-	  process_text(Strings,
+	get_skr_text(Strings0),
+	Strings0 = [FirstString|RestStrings],
+	trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
+	( TrimmedStrings \== [] ->
+	  process_text(TrimmedStrings,
 		       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		       WSDServerHosts, WSDForced, WSDServerPort,
 		       ExpRawTokenList, AAs, MMResults),
 	  output_should_be_bracketed(BracketedOutput),
- 	  postprocess_text(Strings, BracketedOutput, InterpretedArgs,
+ 	  postprocess_text(TrimmedStrings, BracketedOutput, InterpretedArgs,
 			   IOptions, ExpRawTokenList, AAs, MMResults),
 	  process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 			WSDServerHosts, WSDForced, WSDServerPort,
@@ -369,6 +377,11 @@ process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	; true
 	),
 	!.
+
+trim_whitespace_from_last_string([], LastString, [TrimmedLastString]) :-
+	trim_whitespace_right(LastString, TrimmedLastString).
+trim_whitespace_from_last_string([NextString|RestStrings], FirstString, [FirstString|TrimmedStrings]) :-
+	trim_whitespace_from_last_string(RestStrings, NextString, TrimmedStrings).
 
 /* process_text(+Lines,
    		+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
@@ -439,46 +452,53 @@ process_text(Text,
 	( process_text_1(Text,
 			 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 			 WSDServerHosts, WSDForced, WSDServerPort,
-			 RawTokenList, AAs, MMResults) ->
+			 RawTokenList, AAs, _UDAs, MMResults) ->
 	  true
- 	; format('#### ERROR: process_text/4 failed for~n~p~n',[Text]),
-	  format(user_output,'#### ERROR: process_text/4 failed for~n~p~n',[Text]),
-	  RawTokenList = [],
-	  MMResults = [],
-	  ttyflush
+ 	; send_message('#### ERROR: process_text/4 failed for~n~p~n', [Text]),
+	  abort
 	).
 
 process_text_1(Lines0,
 	       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	       WSDServerHosts, WSDForced, WSDServerPort,
-	       ExpRawTokenList, AAs, MMResults) :-
+	       ExpRawTokenList, AAs, UDAs, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
-	Lines2 = Lines0,
 	% Sentences and CoordSentences are the token lists
 	% CoordSentences includes the positional information for the original text
 	% format(user_output, 'Processing PMID ~w~n', [PMID]),
-	extract_sentences(Lines2, InputType, Sentences, CoordSentences, AAs, Lines),
+	extract_sentences(Lines0, InputType, TextFields, NonTextFields,
+			  Sentences, CoordSentences, AAs, UDAs, Lines),
+	% need to update Lines
 	% fail,
 	% RawTokenList is the copy of Sentences that includes an extra pos(_,_) term
 	% showing the position of each token in the raw, undoctored text.
 	form_one_string(Lines, [10], InputStringWithCRs),
-	form_one_string(Lines, " ", InputStringWithBlanks),
+	form_one_string(Lines, " ",  InputStringWithBlanks),
 
-	write_sentences(PMID, CoordSentences, Sentences),
+	write_sentences(CoordSentences, Sentences),
 
 	% '' is just the previous token type, which, for the initial call, is null
 	TokenState is 0,
 	atom_codes(CitationTextAtomWithCRs, InputStringWithCRs),
-	CurrentPos is 0,
+	% Here I need to change to blanks everything other than then text of text fields
+ 	convert_non_text_fields_to_blanks(InputType, InputStringWithBlanks,
+ 					  TextFields, NonTextFields,
+					  TrimmedTextFieldsOnlyString, NumBlanksTrimmed),
+	CurrentPos is NumBlanksTrimmed,
+ 	% format(user_output, '~n~s~n~n~s~n', [InputStringWithBlanks,TextFieldsOnlyString]),
+	
 	create_EXP_raw_token_list(Sentences, '',
 				  CurrentPos, TokenState,
-				  InputStringWithBlanks, TempExpRawTokenList),
+				  TrimmedTextFieldsOnlyString, TempExpRawTokenList),
+		
+				  % InputStringWithBlanks, TempExpRawTokenList),
 	ExpRawTokenList = TempExpRawTokenList,
 	create_UNEXP_raw_token_list(Sentences,
 				    CurrentPos, TokenState,
-				    InputStringWithBlanks, UnExpRawTokenList),
+				    TrimmedTextFieldsOnlyString, UnExpRawTokenList),
+				   % InputStringWithBlanks, UnExpRawTokenList),
 	!,
 	% halt,
 	% length(Sentences,         SentencesLength),
@@ -492,7 +512,7 @@ process_text_1(Lines0,
 	% 	[SentencesLength,UnExpRawTokenListLength,
 	% 	 CoordSentencesLength,ExpRawTokenListLength]),
 
-	write_raw_token_lists(PMID, ExpRawTokenList, UnExpRawTokenList),
+	write_raw_token_lists(ExpRawTokenList, UnExpRawTokenList),
 	form_original_sentences(Sentences, 1, 0, 0, CitationTextAtomWithCRs,
 				UnExpRawTokenList, OrigUtterances),
 	% format(user_output, '~n~n#### ~w OrigUtterances:~n', [PMID]),
@@ -515,7 +535,7 @@ process_text_1(Lines0,
 	process_text_aux(ExpandedUtterances,
 			 TagOption,  TaggerServerHosts, TaggerForced, TaggerServerPort,
 			 WSDServerHosts, WSDForced, WSDServerPort,
-			 CitationTextAtomWithCRs, AAs, 
+			 CitationTextAtomWithCRs, AAs, UDAs,
 			 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut, MMOutput),
         !.
@@ -523,13 +543,13 @@ process_text_1(Lines0,
 process_text_aux([],
 		 _TagOption, _TaggerServerHosts, _TaggerForced, _TaggerServerPort,
 		 _WSDServerHosts, _WSDForced, _WSDServerPort,
-		 _CitationTextAtom, _AAs,
+		 _CitationTextAtom, _AAs, _UDAs,
 		 ExpRawTokenList, WordDataCache, USCCache,
 		 ExpRawTokenList, WordDataCache, USCCache, []).
 process_text_aux([ExpandedUtterance|Rest],
 		 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		 WSDServerHosts, WSDForced, WSDServerPort,
-		 CitationTextAtom, AAs,
+		 CitationTextAtom, AAs, UDAs,
 		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
 		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
 		 [mm_output(ExpandedUtterance,CitationTextAtom,ModifiedText,Tagging,AAs,
@@ -549,13 +569,13 @@ process_text_aux([ExpandedUtterance|Rest],
 			     HRTagStrings, Definitions, SyntAnalysis0),
 	conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-		    AAs, SyntAnalysis, WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
+		    AAs, UDAs, SyntAnalysis, WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
 		    WSDServerHosts, WSDForced, WSDServerPort,
 		    ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 		    DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases),
 	process_text_aux(Rest, TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 			 WSDServerHosts, WSDForced, WSDServerPort,
-			 CitationTextAtom, AAs,
+			 CitationTextAtom, AAs, UDAs,
 			 ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 			 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
 
@@ -569,8 +589,7 @@ postprocess_text(Lines0, BracketedOutput, InterpretedArgs,
 	; postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
 			     IOptions,  ExpRawTokenList, AAs, MMResults) ->
 	  true
-	; format(user_output, 'ERROR: postprocess_text/2 failed for~n~p~n', [Lines0]),
-	  format('ERROR: postprocess_text/2 failed for~n~p~n', [Lines0]),
+	; send_message('### ERROR: postprocess_text/2 failed for~n~p~n', [Lines0]),
 	  abort
 	).
 
@@ -623,11 +642,9 @@ postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences,
 postprocess_sentences_1([FailedUtterance|_], _Sentences,
 			_BracketedOutput, _N, _AAs, _MMOutput, _MMOIn, _MMOOut) :-
 	FailedUtterance = utterance(UtteranceID,UtteranceText,_PosInfo,_ReplPos),
-	format(user_output,
-	       'ERROR: postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
-	       [UtteranceID,UtteranceText]),
-	ttyflush,
-	fail.
+	send_message('### ERROR: postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
+		     [UtteranceID,UtteranceText]),
+	abort.
 
 
 postprocess_phrases([], [], _Sentences, _BracketedOutput, _N, _M, _AAs, _Label, MMO, MMO) :- !.
@@ -913,4 +930,126 @@ conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis) :-
 	( control_option(term_processing) ->
 	  collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis)
 	; SyntAnalysis = SyntAnalysis0
+	).
+
+convert_non_text_fields_to_blanks(InputType, InputStringWithBlanks,
+				  TextFields, NonTextFields,
+				  TrimmedTextFieldsOnlyString, NumBlanksTrimmed) :-
+	( InputType == citation ->
+	  cntfb(InputStringWithBlanks, TextFields, NonTextFields, TextFieldsOnly)
+	; TextFieldsOnly = [InputStringWithBlanks]
+	),
+	append(TextFieldsOnly, TextFieldsOnlyString0),
+	trim_whitespace_right(TextFieldsOnlyString0, TextFieldsOnlyString),
+	trim_whitespace_left(TextFieldsOnlyString, TrimmedTextFieldsOnlyString, NumBlanksTrimmed).
+
+
+% "cntfb" == "Convert Non-Text Fields to Blanks"
+cntfb([], [], [], []).
+cntfb([FirstChar|RestChars], TextFieldsIn, NonTextFieldsIn, [ConvertedField|RestConvertedFields]) :-
+	convert_one_field_to_blanks([FirstChar|RestChars],TextFieldsIn, NonTextFieldsIn,
+				    TextFieldsNext, NonTextFieldsNext, ConvertedField, CharsNext),
+	cntfb(CharsNext, TextFieldsNext, NonTextFieldsNext, RestConvertedFields).
+	
+convert_one_field_to_blanks(CharsIn,
+			    TextFieldsIn, NonTextFieldsIn,
+			    TextFieldsNext, NonTextFieldsNext,
+			    ConvertedField, CharsNext) :-
+	get_field_components(TextFieldsIn,
+			     FirstTextField, FirstTextFieldLines, RestTextFields),
+	get_field_components(NonTextFieldsIn,
+			     FirstNonTextField, FirstNonTextFieldLines, RestNonTextFields),
+	( FirstTextField \== [],
+	  prefix(CharsIn, FirstTextField) ->
+	  convert_text_field(FirstTextField, FirstTextFieldLines, CharsIn,
+			     ConvertedField, CharsNext),
+	  TextFieldsNext = RestTextFields,
+	  NonTextFieldsNext = NonTextFieldsIn
+	; FirstNonTextField \== [],
+	  prefix(CharsIn, FirstNonTextField) ->
+	  convert_non_text_field(FirstNonTextField, FirstNonTextFieldLines, CharsIn,
+				 ConvertedField, CharsNext),
+	  TextFieldsNext = TextFieldsIn,
+	  NonTextFieldsNext = RestNonTextFields
+	).
+
+get_field_components([], [], [], []).
+get_field_components([[FirstField,FirstFieldLines]|RestFields],
+		     FirstField, FirstFieldLines, RestFields).
+	
+convert_text_field(TextField, TextFieldLines, CharsIn, ConvertedField, CharsNext) :-
+	trim_field_name_prefix(TextField, CharsIn, TextFieldLength, NumBlanksTrimmed, CharsNext3),
+	form_one_string(TextFieldLines, " ", PaddedTextFieldLines0),
+	append(PaddedTextFieldLines0, " ", PaddedTextFieldLines),
+	% each line has a blank space after it corresponding to the original <CR>
+	% NumBlanks is TextFieldLength + NumBlanksTrimmed + TextFieldLinesLength,
+	NumBlanks is TextFieldLength + NumBlanksTrimmed,
+	% create a string of blanks whose length is equal to the length of the
+	% field name, blanks, etc. up to the actual text
+	length(BlanksList, NumBlanks),
+	% format(user_output, 'LINE ~d >~s:~p~n', [NumBlanks,TextField,TextFieldLines]),
+	( foreach(X, BlanksList) do X is 32 ),
+	% This is where I'm missing a character?
+	append(BlanksList, PaddedTextFieldLines, ConvertedField),
+	walk_off_field_lines(TextFieldLines, CharsNext3, CharsNext).
+	% format(user_output, 'AFTER >~s<:>~s<~n', [TextField,CharsNext]).
+  
+% Calculate how many characters are taken up by
+%  * the text field (e.g., "TI", "AB", "PG", "OWN", "STAT", etc.,
+%  * any blanks immediately after the text field,
+%  * the following hyphen, and
+%  * any blanks immediately after the hyphen.
+% Currently, this prefix always (?) contains exactly 6 chars,
+% but who knows if this might someday change!
+trim_field_name_prefix(Field, CharsIn, FieldLength, NumBlanksTrimmed, CharsNext3) :-
+	% trim off the text field, e.g., "TI", "AB", etc.
+	append(Field, CharsNext0, CharsIn),
+	% determine the length of the text field
+	length(Field, FieldLength),
+	% trim off any whitespace immediately after the text field
+	trim_whitespace_left(CharsNext0, CharsNext1, NumBlanksTrimmed1),
+	% trim off the hyphen after the blanks
+	CharsNext1 = [45|CharsNext2],
+	% trim off any whitespace immediately after the hyphen
+	trim_whitespace_left(CharsNext2, CharsNext3, NumBlanksTrimmed2),
+	% The "+1" is for the hyphen
+	NumBlanksTrimmed is NumBlanksTrimmed1 + NumBlanksTrimmed2 + 1.
+
+
+convert_non_text_field(NonTextField, NonTextFieldLines, CharsIn, ConvertedField, CharsNext) :-
+	trim_field_name_prefix(NonTextField, CharsIn, NonTextFieldLength, NumBlanksTrimmed, CharsNext3),
+	% convert_strings_to_blanks(NonTextFieldLines, BlanksLines),
+	% length(BlanksLines, BlanksLinesLength),
+	% must add 1 blank for each line
+	% length(NonTextFieldLines, NonTextFieldLinesLength),
+
+	form_one_string(NonTextFieldLines, " ", PaddedNonTextFieldLines0),
+	append(PaddedNonTextFieldLines0, " ", PaddedNonTextFieldLines),
+	length(PaddedNonTextFieldLines, PNTFLength),
+	NumBlanks is NonTextFieldLength + NumBlanksTrimmed + PNTFLength,
+	length(BlanksList, NumBlanks),
+	% format(user_output, 'LINE ~d >~s:~p~n', [NumBlanks,NonTextField,NonTextFieldLines]),
+	( foreach(X, BlanksList) do X is 32 ),
+	ConvertedField = BlanksList,
+	walk_off_field_lines(NonTextFieldLines, CharsNext3, CharsNext).
+	% format(user_output, 'AFTER >~s<:>~s<~n', [NonTextField,CharsNext]).
+
+walk_off_field_lines([], Chars, Chars).
+walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-
+	append(FieldLine, CharsNext0, CharsIn),
+	( CharsNext0 = [32|CharsNext1] ->
+	  true
+	; CharsNext1 = []
+	),
+	walk_off_field_lines(RestFieldLines, CharsNext1, CharsOut).
+
+% convert each string in NonTextFieldLines to a string of blanks of the same length
+convert_strings_to_blanks(NonTextFieldLines, BlanksLines) :-
+	(  foreach(Line, NonTextFieldLines),
+	   foreach(BlanksLine, BlanksLines)
+	do length(Line, LineLength),
+	   length(BlanksLine, LineLength),
+	   (  foreach(Blank, BlanksLine)
+	   do Blank is 32
+	   )
 	).

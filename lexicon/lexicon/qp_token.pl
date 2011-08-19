@@ -154,7 +154,7 @@ form_barrier_token_lists([First|Rest],RevTokenList,Result) :-
     ),
     form_barrier_token_lists(Rest,[Token|RevTokenList],Result).
 
-is_barrier(0',,',').
-is_barrier(0';,';').
-is_barrier(0'.,'.').
-is_barrier(0':,':').
+is_barrier(0',,   ',').
+is_barrier(0';,   ';').
+is_barrier(0'.,   '.').
+is_barrier(0':,   ':').

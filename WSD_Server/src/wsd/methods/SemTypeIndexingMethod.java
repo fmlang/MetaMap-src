@@ -637,7 +637,10 @@ public class SemTypeIndexingMethod implements DisambiguationMethod
           if (result[i] > topScore) {
             topScore = result[i];
             topSemType = semType;
-          }
+          } else if (topSemType == null) {
+            topScore = result[i];
+            topSemType = semType;
+	  }
         }
       }
     }

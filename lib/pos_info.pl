@@ -42,6 +42,7 @@
     ]).
 
 :- use_module(skr_lib(nls_strings),[
+	trim_whitespace_left/2,
 	trim_whitespace_left/3,
 	trim_whitespace_left_1/4
     ]).
@@ -67,10 +68,14 @@
 :- use_module(text(text_object_util),[
 	aa_tok/1,
 	aadef_tok/1,
+	ex_lbracket_char/1,
+	ex_lbracket_tok/1,
+	ex_rbracket_char/1,
 	ex_rbracket_tok/1,
 	higher_order_or_annotation_tok/1,
 	higher_order_or_annotation_type/1,
 	hyphen_punc/1,
+	pe_tok/1,
 	punc_tok/1,
 	token_sequence_length/4,
 	ws_tok/1,
@@ -90,6 +95,7 @@ create_EXP_raw_token_list([], _PreviousToken, _CurrentPos, _TokenState, _InputSt
 create_EXP_raw_token_list([CurrentToken|RestTokensIn], PreviousToken, CurrentPos, TokenState,
 		          InputStringIn, NewTokens) :-
 	% CurrentToken  = tok(CurrentTokenType, _CurrentString, _CurrentLCString, _CurrentPos),
+	% format(user_output, 'TOK: ~p~n', [CurrentToken]),
 	token_template(CurrentToken, CurrentTokenType,
 		       _CurrentString, _CurrentLCString, _CurrentPos),
 	handle_token_type(CurrentTokenType, PreviousToken, TokenState,
@@ -221,6 +227,20 @@ handle_ws_token_type(_TokenState,
 	  % which, in this case, happens to be just RestTokens.
 	  RestTokensNext = RestTokens.
 
+handle_special_token_type(aadef, _PrevToken,
+			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
+			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
+			  RestNewTokens) :-
+	% Special case for aadef(_) and aa(_) being consecutive tokens,
+	% which means the AA is user-defined
+	RestTokensIn = [FirstRestTokensIn|_],
+	aa_tok(FirstRestTokensIn),
+	arg(3, FirstRestTokensIn, [CurrentToken]),
+	!,
+	InputStringNext = InputStringIn,
+	RestNewTokens = NewTokens,
+	NextPos is CurrentPos,
+	RestTokensNext = RestTokensIn.
 handle_special_token_type(aadef, PrevToken,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
@@ -243,13 +263,28 @@ handle_special_token_type(aadef, PrevToken,
 					      NewTokens, RestNewTokens, NextPos1,
 					      InputString1),
 	% Then, match and remove those aadef tokens from RestTokensIn
-	remove_tokens_no_consume(AADefTokens, RestTokensIn, RestTokensIn1),
-	remove_tokens_up_to_ws_token(RestTokensIn1, RestTokensIn2),
+	remove_tokens_no_consume(AADefTokens, RestTokensIn, RestTokens1),
+	InputString1 \== '',
+	consume_ws_tokens(RestTokens1, RestTokens2, 0, _NumWSTokens1),
+	trim_whitespace_left(InputString1, InputString2, NumBlanksTrimmed1),
+	NextPos2 is NextPos1 + NumBlanksTrimmed1,
 	% remove all following tokens up to and including
-	% the exclusive right-bracket token
-	% ws*, pe, pn ("(" or "["), aa, uc*, pn (")" or "]")
-	consume_tokens_through_ex_rbracket(RestTokensIn2, InputString1, NextPos1,
-					   RestTokensNext, InputStringNext, NextPos),
+	% the exclusive right-bracket token, which can be done by
+	% identifying PeTokenEndPos, the end pos of the pe token,
+	% which should be the first token in RestTokens2,
+	% and consuming all tokens whose end pos is =< PeTokenEndPos
+	% (and any whitespace after that?).
+	% RestTokens3 = RestTokens2,
+	% RestTokens3 = [PeToken|RestTokens4],
+	% token_template(PeToken, pe, _String, _LCString, PeTokenPosInfo),
+	% PeTokenPosInfo = pos(PeTokenStartPos, PeTokenEndPos),
+	NumPeTokens = 0,
+	consume_tokens_through_ex_rbracket(RestTokens2, NumPeTokens, RestTokens3),
+	consume_ws_tokens(RestTokens3, RestTokensNext, 0, _NumWSTokens3),
+	consume_chars_through_ex_rbracket(InputString2, NumPeTokens, NextPos2,
+					  InputString3, NextPos3),
+	trim_whitespace_left(InputString3, InputStringNext, NumBlanksTrimmed3),
+	NextPos is NextPos3 + NumBlanksTrimmed3,
 	!.
 	% fail.
 handle_special_token_type(aadef, _PrevToken,
@@ -333,10 +368,13 @@ handle_an_pn_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn, Token
 	  NewTokens = [NewCurrentToken|RestNewTokens],
 	  RestTokensNext = RestTokensIn.
 
-remove_tokens_up_to_ws_token([FirstToken|RestTokens], TokensOut) :-
+consume_ws_tokens([], [], NumSpaces, NumSpaces).
+consume_ws_tokens([FirstToken|RestTokens], RemainingTokens, NumSpacesIn, NumSpacesOut) :-
 	( ws_tok(FirstToken) ->
-	  TokensOut = RestTokens
-	; remove_tokens_up_to_ws_token(RestTokens, TokensOut)
+	  NumSpacesNext is NumSpacesIn + 1,
+	  consume_ws_tokens(RestTokens, RemainingTokens, NumSpacesNext, NumSpacesOut)
+	; RemainingTokens = [FirstToken|RestTokens],
+	  NumSpacesOut is NumSpacesIn
 	).
 
 
@@ -401,7 +439,7 @@ get_aa_tokens_length([FirstAAToken|RestAATokens], InputStringIn, _PrevNumLeftBla
 
 % calculate how many chars we peel off from InputString when we remove
 % (1) the chars in TokenString, and then
-% (2)  all leading blanks (i.e., trim_left)
+% (2) all leading blanks (i.e., trim_left)
 get_one_token_pos_length(AAToken, InputStringIn,
 			 InputStringOut, StringLength, NumLeftBlanksTrimmed) :-
 	token_template(AAToken,
@@ -562,33 +600,70 @@ remove_whitespace_chars([H|T], NumBlanksRemovedIn,
 	  NumBlanksRemovedOut is NumBlanksRemovedIn
         ).
 
-consume_tokens_through_ex_rbracket([FirstToken|RestTokens], InputStringIn,  PosIn,
-				   NewTokenList, InputStringOut, PosOut) :-
-	% Simply skip over the pe and aa tokens
-	( higher_order_or_annotation_tok(FirstToken) ->
-	  InputStringNext = InputStringIn,
-	  PosNext = PosIn
-	% Consume regular token
-	; remove_untokenized_whitespace([FirstToken|RestTokens], InputStringIn,
-	  				InputString1, NumBlanksRemoved1),
-	  arg(2, FirstToken, CharString),
-	  append(CharString, InputStringTemp, InputString1),
-	  length(CharString, CharStringLength),
-	  PosTemp is PosIn + CharStringLength,
-	  % This is in case the acronym occurs at the beginning of a line
-	  % in a citation -- after that damn whitespace that doesn't get tokenized!
-	  remove_untokenized_whitespace(RestTokens, InputStringTemp,
-	  				InputStringNext, NumBlanksRemoved2),
-	  PosNext is PosTemp + NumBlanksRemoved1 + NumBlanksRemoved2
-	),
-	% Right-bracket token (")" or "]")
-	( ex_rbracket_tok(FirstToken) ->
-	  NewTokenList = RestTokens,
-	  InputStringOut = InputStringNext,
-	  PosOut is PosNext
-	; consume_tokens_through_ex_rbracket(RestTokens,   InputStringNext, PosNext,
-					     NewTokenList, InputStringOut,  PosOut)
+% Consume tokens until an ex_rbracket_tok is encountered AND NumPeTokensIn == 1.
+% This refinement is designed to handle obnoxious AADefs like "(GABA(A))".
+consume_tokens_through_ex_rbracket([FirstToken|RestTokensIn], NumPeTokensIn, RestTokensOut) :-
+	( ex_rbracket_tok(FirstToken),
+	  NumPeTokensIn =:= 1 ->
+	  RestTokensOut = RestTokensIn
+	; ex_rbracket_tok(FirstToken) ->
+	  % NumPeTokensIn > 1
+	  NumPeTokensNext is NumPeTokensIn - 1,
+	  consume_tokens_through_ex_rbracket(RestTokensIn, NumPeTokensNext, RestTokensOut)
+	; ex_lbracket_tok(FirstToken) ->
+	  NumPeTokensNext is NumPeTokensIn + 1,
+	  consume_tokens_through_ex_rbracket(RestTokensIn, NumPeTokensNext, RestTokensOut)
+	; consume_tokens_through_ex_rbracket(RestTokensIn, NumPeTokensIn, RestTokensOut)
 	).
+
+consume_chars_through_ex_rbracket([FirstChar|RestChars], NumPeTokensIn, PosIn, InputStringOut, PosOut) :-
+	( ex_rbracket_char(FirstChar),
+	  NumPeTokensIn =:= 1 ->
+	  InputStringOut = RestChars,
+	  PosOut is PosIn + 1
+	; ex_rbracket_char(FirstChar) ->
+	  % NumPeTokensIn > 1
+	  NumPeTokensNext is NumPeTokensIn - 1,
+  	  PosNext is PosIn + 1,
+	  consume_chars_through_ex_rbracket(RestChars, NumPeTokensNext, PosNext, InputStringOut, PosOut)
+	; ex_lbracket_char(FirstChar) ->
+	  NumPeTokensNext is NumPeTokensIn + 1,
+	  PosNext is PosIn + 1,
+	  consume_chars_through_ex_rbracket(RestChars, NumPeTokensNext, PosNext, InputStringOut, PosOut)
+	; PosNext is PosIn + 1,
+	  consume_chars_through_ex_rbracket(RestChars, NumPeTokensIn, PosNext, InputStringOut, PosOut)
+	).
+	  
+	
+
+
+% consume_tokens_through_ex_rbracket([FirstToken|RestTokens], InputStringIn,  PosIn,
+% 				   NewTokenList, InputStringOut, PosOut) :-
+% 	% Simply skip over the pe and aa tokens
+% 	( higher_order_or_annotation_tok(FirstToken) ->
+% 	  InputStringNext = InputStringIn,
+% 	  PosNext = PosIn
+% 	% Consume regular token
+% 	; remove_untokenized_whitespace([FirstToken|RestTokens], InputStringIn,
+% 	  				InputString1, NumBlanksRemoved1),
+% 	  arg(2, FirstToken, CharString),
+% 	  append(CharString, InputStringTemp, InputString1),
+% 	  length(CharString, CharStringLength),
+% 	  PosTemp is PosIn + CharStringLength,
+% 	  % This is in case the acronym occurs at the beginning of a line
+% 	  % in a citation -- after that damn whitespace that doesn't get tokenized!
+% 	  remove_untokenized_whitespace(RestTokens, InputStringTemp,
+% 	  				InputStringNext, NumBlanksRemoved2),
+% 	  PosNext is PosTemp + NumBlanksRemoved1 + NumBlanksRemoved2
+% 	),
+% 	% Right-bracket token (")" or "]")
+% 	( ex_rbracket_tok(FirstToken) ->
+% 	  NewTokenList = RestTokens,
+% 	  InputStringOut = InputStringNext,
+% 	  PosOut is PosNext
+% 	; consume_tokens_through_ex_rbracket(RestTokens,   InputStringNext, PosNext,
+% 					     NewTokenList, InputStringOut,  PosOut)
+% 	).
 
 % remove_and_consume_ws_tokens([FirstToken|TokensIn], InputStringIn, TokensOut, InputStringOut) :-
 % 	( ws_tok(FirstToken) ->

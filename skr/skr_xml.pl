@@ -36,8 +36,8 @@
 	conditionally_print_xml_header/2,
 	conditionally_print_xml_footer/3,
 	generate_and_print_xml/1,
-	get_xml_format_mode/2,
-	xml_header_footer_print_setting/3
+	xml_header_footer_print_setting/3,
+	xml_output_format/1
     ]).
 
 :- use_module(skr_lib(negex), [
@@ -88,8 +88,8 @@
 % which is defined in the Quintus Prolog library.
 
 generate_and_print_xml(AllMMO) :-
-	( control_value('XML', Format) ->
-	  map_to_true_and_false(Format, TrueOrFalse),
+	( xml_output_format(XMLFormat) ->
+	  get_xml_format_mode(XMLFormat, _OneOrZero, TrueOrFalse),
 	  current_output(OutputStream),
 	  XMLTerm = xml([], MMOXML),
 	  AllMMO = [ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO],
@@ -112,20 +112,15 @@ generate_xml_MMO_term(XMLArgTerm, XMLAATerm, XMLNegExTerm, XMLUtterancesTerm, MM
 			     [XMLArgTerm,XMLAATerm,XMLNegExTerm,XMLUtterancesTerm],
 			     MMOXML).
 
-map_to_true_and_false(noformat,  false).
-map_to_true_and_false(noformat1, false).
-map_to_true_and_false(format,    true).
-map_to_true_and_false(format1,   true).
-
 % Increase the indentation of the XML beginning with <MMO>,
 % because <MMOs> is left justified.
 
-conditionally_increase_indent_by_one(format1, XMLChars, XMLChars1) :-
+conditionally_increase_indent_by_one('XMLf1', XMLChars, XMLChars1) :-
 	increase_indent_by_one(XMLChars, XMLChars1).
-conditionally_increase_indent_by_one(format, XMLChars, XMLChars1) :-
+conditionally_increase_indent_by_one('XMLf', XMLChars, XMLChars1) :-
 	increase_indent_by_one(XMLChars, XMLChars1).
-conditionally_increase_indent_by_one(noformat1, XMLChars, XMLChars).
-conditionally_increase_indent_by_one(noformat, XMLChars, XMLChars).
+conditionally_increase_indent_by_one('XMLn1', XMLChars, XMLChars).
+conditionally_increase_indent_by_one('XMLn',  XMLChars, XMLChars).
 
 increase_indent_by_one([], []).
 increase_indent_by_one([H|T], IncreasedIndent) :-
@@ -146,10 +141,10 @@ print_xml_output(OutputStream, XMLChars) :-
 	flush_output(OutputStream).
 
 conditionally_print_CR(Format, OutputStream) :-
-	( Format == format1 ->
+	( Format == 'XMLf1' ->
 	  format(OutputStream, "~n", []),
 	  flush_output(OutputStream)
-	; Format == format ->
+	; Format == 'XMLf' ->
 	  format(OutputStream, "~n", []),
 	  flush_output(OutputStream)
 	; true
@@ -923,17 +918,17 @@ conditionally_print_xml_header(PrintSetting, OutputStream) :-
 	; true
 	).
 
-conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream) :-
+conditionally_print_xml_footer(PrintSetting, XMLSetting, OutputStream) :-
 	( PrintSetting =:= 1 ->
-	  conditionally_print_CR(XMLMode, OutputStream),
+	  conditionally_print_CR(XMLSetting, OutputStream),
 	  format(OutputStream, '</MMOs>~n', []),
 	  flush_output(OutputStream)
 	; true
 	).
 
-xml_header_footer_print_setting(InnerOrOuter, XMLMode, PrintSetting) :-
-	( control_value('XML', XMLMode),
-	  get_xml_format_mode(XMLMode, FormatMode) ->
+xml_header_footer_print_setting(InnerOrOuter, XMLFormat, PrintSetting) :-
+	( xml_output_format(XMLFormat),
+	  get_xml_format_mode(XMLFormat, FormatMode, _TrueOrFalse) ->
 	  % This is bitwise XOR
 	  PrintSetting is \(InnerOrOuter, FormatMode)
 	; PrintSetting is 0
@@ -942,35 +937,50 @@ xml_header_footer_print_setting(InnerOrOuter, XMLMode, PrintSetting) :-
 % Why can we use XOR here?
 % Let's assume XML is on -- otherwise this is all irrelevant anyway.
 % If we're at the outer header/footer (InnerOrOuter =:= 1)
-% we want to print the header iff the format mode is 0 (format1/noformat1).
+% we want to print the header iff the format mode is 0 (XMLf1/XMLn1).
 % If we're at the inner header/footer (InnerOrOuter =:= 0)
-% we want to print the header iff the format mode is 1 (format/noformat).
+% we want to print the header iff the format mode is 1 (XMLf/XMLn).
 
 % The overall structure of MetaMap XML output is the following.
 % Note that there will be exactly one of inner and outer headers/footers.
 % If the user has requested one XML document for the entire input file
-% (format1/noformat1), only the outer header and footer will be printed.
+% (XMLf1/XMLn1), only the outer header and footer will be printed.
 % If the user has requested multiple XML documents, i.e., one per citation
 % (format/noformat), only the inner headers and footers will be printed.
 % 
-% outer XML header                     (for format1/noformat1 only)
+% outer XML header                     (for XMLf1/XMLn1 only)
 % 
-%     inner XML header                 (for format/noformat only)
-%     inner XML footer                 (for format/noformat only)
+%     inner XML header                 (for XMLf/XMLn only)
+%     inner XML footer                 (for XMLf/XMLn only)
 % 
-%     inner XML header                 (for format/noformat only)
-%     inner XML footer                 (for format/noformat only)
+%     inner XML header                 (for XMLf/XMLn only)
+%     inner XML footer                 (for XMLf/XMLn only)
 % 
-%     inner XML header                 (for format/noformat only)
-%     inner XML footer                 (for format/noformat only)
+%     inner XML header                 (for XMLf/XMLn only)
+%     inner XML footer                 (for XMLf/XMLn only)
 % 
-% outer XML footer                     (for format1/noformat1 only)
+% outer XML footer                     (for XMLf1/XMLn1 only)
 % 
 
-get_xml_format_mode(format1,   0).
-get_xml_format_mode(noformat1, 0).
-get_xml_format_mode(format,    1).
-get_xml_format_mode(noformat,  1).
+
+% get_xml_format_mode(XMLFormatMode, OneOrZero, TrueOrFalse)
+% OneOrZero controls the printing of the inner header/footer
+% TrueOrFalse controls whether XML output is formatted (true) or unformatted (false)
+get_xml_format_mode('XMLf1', 0, true).
+get_xml_format_mode('XMLn1', 0, false).
+get_xml_format_mode('XMLf',  1, true).
+get_xml_format_mode('XMLn',  1, false).
+
+xml_output_format(XMLFormat) :-
+	( control_option('XMLf')  ->
+	  XMLFormat = 'XMLf'
+	; control_option('XMLf1') ->
+	  XMLFormat = 'XMLf1'
+	; control_option('XMLn')  ->
+	  XMLFormat = 'XMLn'
+	; control_option('XMLn1') ->
+	  XMLFormat = 'XMLn1'
+	).
 
 % :- use_module(library(addportray)).
 % portray_mm_output(candidates(_)) :- write('CANDIDATES').

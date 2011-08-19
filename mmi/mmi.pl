@@ -54,23 +54,16 @@
     ]).
 
 :- use_module(skr_db(db_access),[
-	get_year/1,
 	initialize_db_access/3,
 	db_get_mesh_mh/2,
 	db_get_meta_mesh/2,
 	db_get_mesh_tc_relaxed/2
     ]).
 
-:- use_module(skr_lib(ctypes),[
-	is_alnum/1,
-	is_white/1
-    ]).
-
 :- use_module(skr_lib(nls_strings),[
 	atom_codes_list/2,
 	split_string/4,
-	split_string_completely/3,
-	trim_and_compress_internal_whitespace/2
+	split_string_completely/3
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -86,15 +79,20 @@
 	concat_atom/3,
 	index/3,
 	lower/2,
-	substring/4,
 	ttyflush/0,
 	upper/2
    ]).
 
 :- use_module(skr(skr_utilities), [
+	debug_message/3,
+	ensure_number/2,
 	skr_begin_write/1,
 	skr_end_write/1,
 	token_template/5
+    ]).
+
+:- use_module(skr(skr_xml), [
+	xml_output_format/1
     ]).
 
 :- use_module(text(text_objects),[
@@ -115,13 +113,13 @@
 	sumlist/2
     ]).
 
+:- use_module(library(system), [
+        environ/2
+   ]).
+
 do_MMI_processing(OrigUtterances, BracketedOutput, _Sentences, DisambMMOutput) :-
 	% Do MMI processing, if requested
-	( control_value('XML', _) ->
-	  true
-	; control_option(machine_output) ->
-	  true
-        ; control_option(fielded_mmi_output) ->
+	( control_option(fielded_mmi_output) ->
 	  conditionally_skr_begin_write(BracketedOutput),
           current_output(Stream),
 	  get_UIAtom(OrigUtterances, UIAtom),
@@ -151,6 +149,14 @@ conditionally_skr_end_write(BracketedOutput) :-
 	  ).
 
 % 2000 parameters
+% NOTE: These are weighting parameters only, and do not need to be changed when MeSH changes.
+% MeSH-specific parameters are handled by the three environment variables
+% * MMI_TREE_DEPTH_SPECIFICITY_DIVISOR,
+% * MMI_WORD_SPECIFICITY_DIVISOR, and
+% * MMI_CHARACTER_SPECIFICITY_DIVISOR,
+% which are set in SKRenv.XX and SKRrun.XX
+% and used in compute_specificities/12 below.
+
 processing_parameter(nc,    0).   % character normalization index
 processing_parameter(nf,   -5).   % frequency normalization index
 processing_parameter(nm,    0).   % MeSH normalization index
@@ -309,7 +315,8 @@ construct_text_atom(PosInfoList, CitationTextAtom, TextString) :-
 
 extract_text_atoms([], _CitationTextAtom, []).
 extract_text_atoms([StartPos/Length|RestPosInfo], CitationTextAtom, [Atom|RestAtoms]) :-
-	substring(CitationTextAtom, Atom, StartPos, Length),
+	% substring(CitationTextAtom, Atom, StartPos, Length),
+	sub_atom(CitationTextAtom, StartPos, Length, _After, Atom),
 	extract_text_atoms(RestPosInfo, CitationTextAtom, RestAtoms).
 
 compute_mesh_and_treecodes(MetaConcept, TreeCodes) :-
@@ -453,7 +460,7 @@ collapse_tf([tf(Concept,STs,Tuples,TF,CUI,Freq,Value,TC)|Rest],
 	    [tf(Concept,STs,Tuples,TF,CUI,Freq,Value,TC)|ComputedRest]) :-
 	collapse_tf(Rest, ComputedRest).
 
-accumulate_rest_tfvs([], _Concept, [], [], [], [], []).
+accumulate_rest_tfvs([], _Concept, [], [], [], [], []) :- !.
 accumulate_rest_tfvs([tf(Concept,_STs,Tuples,TF,_CUI,Freq,Value,_TC)|Rest],
 		     Concept, NewRest,
 		     [Tuples|RestTuples], [TF|RestTFs],
@@ -513,21 +520,12 @@ process_tf_1([FirstTF|RestTFs],
 
 normalize_value(0, Value, NValue) :-
 	!,
-	( Value > 1 ->
-	  NValue = 1
-	; Value < 0 ->
-	  NValue = 0
-	; NValue = Value
-	).
+	set_value_1(Value, Value1),
+	NValue = Value1.
 normalize_value(N, Value, NValue) :-
 	N > 0,
 	!,
-	( Value > 1 ->
-          Value1 = 1
-	; Value < 0 ->
-	  Value1 = 0
-	; Value1 = Value
-	),
+	set_value_1(Value, Value1),
 	EN is exp(N),
 	A is EN + 1,
 	B is EN - 1,
@@ -537,12 +535,7 @@ normalize_value(N, Value, NValue) :-
 normalize_value(N, Value, NValue) :-
 	N < 0,
 	!,
-	( Value > 1 ->
-          Value1 = 1
-	; Value < 0 ->
-	  Value1 = 0
-	; Value1 = Value
-	),
+	set_value_1(Value, Value1),
 	M is -N,
 	EM is exp(M),
 	A is EM + 1,
@@ -551,6 +544,14 @@ normalize_value(N, Value, NValue) :-
 	LC is log(C),
 	NValue is LC / M.
 
+set_value_1(Value, Value1) :-
+	( Value > 1 ->
+	  Value1 = 1
+	; Value < 0 ->
+	  Value1 = 0
+	; Value1 = Value
+	).	
+
 compute_specificities(Concept, MMValue, TreeCodes, WD, NMM, NM, NW, NC, 
                       NMMSpec, NMSpec, NWSpec, NCSpec) :-
 	% MetaMap specificity
@@ -558,16 +559,25 @@ compute_specificities(Concept, MMValue, TreeCodes, WD, NMM, NM, NW, NC,
 	normalize_value(NMM, MMSpec, NMMSpec),
 	% MeSH tree depth specificity
 	compute_tree_depth_specificity(Concept, TreeCodes, WD, MValue),
-	MSpec is MValue / 9,
+	% TreeDepthSpecificityDivisor used to be hard-coded as 9
+	environ('MMI_TREE_DEPTH_SPECIFICITY_DIVISOR', TreeDepthSpecificityDivisorVar),
+	ensure_number(TreeDepthSpecificityDivisorVar, TreeDepthSpecificityDivisor),
+	MSpec is MValue / TreeDepthSpecificityDivisor,
 	normalize_value(NM, MSpec, NMSpec),
 	% Word specificity
 	tokenize_text_more(Concept, ConceptWords),
 	length(ConceptWords, WValue),
-	WSpec is WValue / 26,
+	% WordSpecificityDivisor used to be hard-coded as 26
+	environ('MMI_WORD_SPECIFICITY_DIVISOR', WordSpecificityDivisorVar),
+	ensure_number(WordSpecificityDivisorVar, WordSpecificityDivisor),
+	WSpec is WValue / WordSpecificityDivisor,
 	normalize_value(NW, WSpec, NWSpec),
 	% Character specificity
 	length(Concept, CValue),
-	CSpec is CValue / 102,
+	% CharacterSpecificityDivisor used to be hard-coded as 102
+	environ('MMI_CHARACTER_SPECIFICITY_DIVISOR', CharacterSpecificityDivisorVar),
+	ensure_number(CharacterSpecificityDivisorVar, CharacterSpecificityDivisor),
+	CSpec is CValue / CharacterSpecificityDivisor,
 	normalize_value(NC, CSpec, NCSpec).
 
 compute_tree_depth_specificity(_Concept, TreeCodes, WD, MValue) :-

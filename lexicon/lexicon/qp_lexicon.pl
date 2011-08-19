@@ -58,15 +58,24 @@
 	lex_is_a_root_ci/1,	% root form, case insensitive
 	lex_is_a_root_ci_cats/2,
 	lex_is_a_form_ci/1,	% lexical form, case insensitive
-
 	% for use from the parser
 	lex_form_ci_recs_input_5/5,
 	% general
         lex_init/2,
 	default_lexicon_file/1,
 	default_index_file/1,
+	reformat_list/2,
+	reformat_list_of_lists/2,
 	use_multi_word_lexicon/0
     ]).
+
+% :- use_module(skr(testlvg),[
+% 	lexAccess_get_all_lexical_records/2,
+% 	lexAccess_get_lex_form_cats_init/2,
+% 	lexAccess_get_varlist_for_form_init/2,
+% 	lexAccess_lex_form_input_init/2
+%   ]).
+
 
 :- use_module(lexicon(qp_fm_lexrec), [
 	fm_lexical_record/3
@@ -76,24 +85,45 @@
 	read_lex_record/3
    ]).
 
+:- use_module(skr(skr_utilities), [
+	check_valid_file_type/2,
+	send_message/2
+   ]).
+
+
+:- use_module(skr_lib(ctypes), [
+	is_alnum/1,
+	is_punct/1,
+	is_white/1
+   ]).
+
+:- use_module(skr_db(db_access), [
+	default_release/1
+   ]).
+
 :- use_module(skr_lib(nls_system), [
-	control_option/1
+	control_option/1,
+	control_value/2
    ]).
 
 % :- dynamic lexicon_type/1.
 
 :- use_module(skr_lib(sicstus_utils), [
-	concat_atom/2
-   ]).
-
-:- use_module(library(file_systems), [
-	file_exists/1,
-	file_exists/2
+	concat_atom/2,
+	concat_atoms_intelligently/2,
+	lower/2,
+	lower_all/2
    ]).
 
 :- use_module(library(lists), [
-	rev/2,
-	append/2
+	append/2,
+	delete/3,
+	last/2,
+	rev/2
+   ]).
+
+:- use_module(library(sets), [
+	intersection/3
    ]).
 
 :- use_module(library(system), [
@@ -108,6 +138,7 @@
 foreign_resource(qp_lexicon, [
 	% c_lex_cit, c_lex_root, c_lex_form,
       	c_lex_cit, c_lex_form,
+      	c_lex_form,
 	% c_lex_cit_cats, c_lex_root_cats,
 	c_lex_form_cats,
 	c_lex_is_a_root, c_lex_is_a_form,
@@ -116,6 +147,7 @@ foreign_resource(qp_lexicon, [
 	c_get_varlist
     ]).
 
+% Replaced with new lexAccess code
 foreign(c_lex_cit,            c,
 	c_lex_cit(+string, +string, +integer, +integer, +integer, -term, [-integer])).
 
@@ -133,7 +165,6 @@ foreign(c_lex_is_a_root,      c,
 
 foreign(c_lex_is_a_form,      c,
 	c_lex_is_a_form(+string, +string, +integer, +integer, [-integer])).
-
 foreign(c_lex_is_a_root_cats, c,
 	c_lex_is_a_root_cats(+string, +string, +integer, +integer, +term, [-integer])).
 
@@ -143,7 +174,7 @@ foreign(c_lex_form_input,     c,
 foreign(c_get_varlist,        c,
 	c_get_varlist(+string, +integer, -term, [-integer])).
 
-:- load_foreign_resource(qp_lexicon).
+:- load_foreign_resource('../../qp_lexicon').
 
 % :- abolish(foreign_resource/2, [force(true)]).
 
@@ -151,31 +182,63 @@ foreign(c_get_varlist,        c,
 
 %%% lex_init(-Lexicon, -Index)
 %%% This predicate will return the names of the default location of the lexicon files
-lex_init(Lexicon, Index) :-
-	lexicon_files(Lexicon,Index),
+lex_init(LexiconFile, LexiconIndex) :-
+	lexicon_files(LexiconFile, LexiconIndex),
 	!.  % already initialized
-lex_init(Lexicon, Index) :-
-	lex_init_quietly(Lexicon, Index),
-	conditionally_announce_lexicon(Lexicon).
+lex_init(LexiconFile, LexiconIndex) :-
+	lex_init_quietly(LexiconFile, LexiconIndex),
+	conditionally_announce_lexicon(LexiconFile).
 
-lex_init_quietly(Lexicon, Index) :-
-	lexicon_files(Lexicon,Index),
+lex_init_quietly(LexiconFile, LexiconIndex) :-
+	lexicon_files(LexiconFile, LexiconIndex),
 	!.  % already initialized
-lex_init_quietly(Lexicon, Index) :-
-	environ('DEFAULT_LEXICON_FILE', Lexicon),
-	check_valid_lexicon_file(Lexicon),
-	environ('DEFAULT_LEXICON_INDEX_FILE', Index),
-	concat_atom([Index, 'ByEui.dbx'], EuiIndexFile),
-	check_valid_lexicon_file(EuiIndexFile),
-	concat_atom([Index, 'ByInfl.dbx'], InflIndexFile),
-	check_valid_lexicon_file(InflIndexFile),
+lex_init_quietly(LexiconFile, LexiconIndex) :-
+	get_lexicon_year(LexiconYear),
+	% environ('DEFAULT_LEXICON_FILE', Lexicon),
+	environ('LEXICON_DATA', LexiconDataDir),
+	concat_atom([LexiconDataDir, '/lexiconStatic', LexiconYear], LexiconFile),
+	check_valid_file_type(LexiconFile, 'Lexicon'),
+	% environ('DEFAULT_LEXICON_INDEX_FILE', Index),
+	concat_atom([LexiconFile, 'Ind'], LexiconIndex),
+	concat_atom([LexiconIndex, 'ByEui.dbx'], EuiIndexFile),
+	check_valid_file_type(EuiIndexFile, 'Lexicon Index'),
+	concat_atom([LexiconIndex, 'ByInfl.dbx'], InflIndexFile),
+	check_valid_file_type(InflIndexFile, 'Lexicon Index'),
 	retractall(default_lexicon_file(_)),
-	assert(default_lexicon_file(Lexicon)),
+	assert(default_lexicon_file(LexiconFile)),
 	retractall(default_index_file(_)),
-	assert(default_index_file(Index)),
+	assert(default_index_file(LexiconIndex)),
 	retractall(lexicon_files(_,_)),
-	assert(lexicon_files(Lexicon,Index)).
+	assert(lexicon_files(LexiconFile,LexiconIndex)).
 
+get_lexicon_year(NormalizedLexiconYear) :-
+	default_release(DefaultRelease),
+	atom_codes(DefaultRelease, Codes),
+	Codes = [D1,D2,D3,D4,_AorB1,_AorB2],
+	atom_codes(LexiconYear, [D1,D2,D3,D4]),
+	normalize_lexicon_year(LexiconYear, NormalizedDefaultLexiconYear),
+	% Is the lexicon year explicitly specified on the command line?
+	( control_value(lexicon_year, SpecifiedLexiconYear),
+	  normalize_lexicon_year(SpecifiedLexiconYear, NormalizedSpecifiedLexiconYear),
+	  NormalizedDefaultLexiconYear \== NormalizedSpecifiedLexiconYear ->
+	  send_message('##### WARNING: Overriding default lexicon ~w with ~w.~n',
+		       [NormalizedDefaultLexiconYear, SpecifiedLexiconYear]),
+	  NormalizedLexiconYear = NormalizedSpecifiedLexiconYear
+	; NormalizedLexiconYear = NormalizedDefaultLexiconYear
+	).
+
+
+normalize_lexicon_year(LexiconYear, NormalizedLexiconYear) :-
+	( LexiconYear == '99' ->
+	  NormalizedLexiconYear = '1999'
+	; LexiconYear == '1999' ->
+	  NormalizedLexiconYear = LexiconYear
+	; atom_length(LexiconYear, LexiconLength),
+	  ( LexiconLength =:= 2 ->
+	    concat_atom(['20', LexiconYear], NormalizedLexiconYear)
+	  ; NormalizedLexiconYear = LexiconYear
+	  )
+	).
 
 conditionally_announce_lexicon(Lexicon) :-
 	( \+ control_option(silent) ->
@@ -183,41 +246,27 @@ conditionally_announce_lexicon(Lexicon) :-
 	; true
 	).
 
-
-check_valid_lexicon_file(File) :-
-	current_output(OutputStream),
-	( \+ file_exists(File) ->
-	  % don't duplicate ERROR message if current output is user_output!
-	  ( OutputStream \== user_output ->
-	    format('~n~*c~nERROR: Lexicon file~n~w~ndoes not exist. Aborting.~n~*c~n~n',
-		   [80,35,File,80,35])
-	  ; true
-	  ),
-	  format(user_output,
-		 '~n~*c~nERROR: Lexicon file~n~w~ndoes not exist. Aborting.~n~*c~n~n',
-		 [80,35,File,80,35]),
-	  abort
-	; \+ file_exists(File, read) ->
-	  % don't duplicate ERROR message if current output is user_output!
-	  ( OutputStream \== user_output ->
-	    format('~n~*c~nERROR: Lexicon file~n~w~nis not not readable. Aborting.~n~*c~n~n',
-		   [80,35,File,80,35])
-	  ; true
-	  ),
-	  format(user_output,
-		 '~n~*c~nERROR: Lexicon file~n~w~nis not not readable. Aborting.~n~*c~n~n',
-		 [80,35,File,80,35]),
-	  abort
-	; true
-	).
-
 %%% Retrieve records given root form
 
 %%% lex_form_ci_recs(+Form, -Rec)
-lex_form_ci_recs(Form, Rec) :-
-	default_lexicon_file(Lexicon),
-	default_index_file(Index),
-	lex_recs(form, Form, Rec, 1, 0, Lexicon, Index).
+% lex_form_ci_recs(Form, Rec) :-
+% 	default_lexicon_file(Lexicon),
+% 	default_index_file(Index),
+% 	lex_recs(form, Form, Rec, 1, 0, Lexicon, Index).
+
+lex_form_ci_recs(Form, LexicalRecords) :-
+	lex_form_ci_recs_LEXACCESS_TOGGLE(Form, LexicalRecords).
+
+lex_form_ci_recs_LEXACCESS_TOGGLE(Form, LexicalRecords) :-
+%	( control_value(lexicon, c) ->
+	  default_lexicon_file(Lexicon),
+	  default_index_file(Index),
+	  lex_recs(form, Form, LexicalRecords, 1, 0, Lexicon, Index).
+% 	; control_value(lexicon, java) ->
+% 	  lexAccess_get_all_lexical_records([Form], LexicalRecords)
+%	; format(user_error, '### ERROR: lexicon setting must be either c or java!~n', []),
+%	  abort
+%	).
 
 %%% Retrieves category given root form
 
@@ -225,6 +274,19 @@ lex_form_ci_recs(Form, Rec) :-
 lex_form_ci_cats(Form, Cats) :-
 	default_index_file(Index),
 	lex_cats(form, Form, Cats, 1, Index).
+
+lex_form_ci_cats(Form, LexicalCategories) :-
+	lex_form_ci_cats_LEXACCESS_TOGGLE(Form, LexicalCategories).
+
+lex_form_ci_cats_LEXACCESS_TOGGLE(Form, LexicalCategories) :-
+%	( control_value(lexicon, c) ->
+	  default_index_file(Index),
+	  lex_cats(form, Form, LexicalCategories, 1, Index).
+% 	; control_value(lexicon, java) ->
+% 	  lexAccess_get_lex_form_cats_init([Form], LexicalCategories)
+%	; format(user_error, '### ERROR: lexicon setting must be either c or java!~n', []),
+%	  abort
+%	).
 
 %%% Retrieves inflectional variant info for a citation form
 
@@ -243,7 +305,19 @@ lex_form_ci_vars(Form, Vars) :-
 	lex_vars(form, Form, Vars, 1, Lexicon, Index).
 
 lex_form_ci_var_lists_4(Form, VarLists, Lexicon, Index) :-
-        lex_var_lists(form, Form, VarLists, 1, Lexicon, Index).
+	lex_form_ci_var_lists_4_LEXACCESS_TOGGLE(Form, VarLists, Lexicon, Index).
+
+lex_form_ci_var_lists_4_LEXACCESS_TOGGLE(Form, VarLists, Lexicon, Index) :-
+%	( control_value(lexicon, c) ->
+	  lex_var_lists(form, Form, VarLists, 1, Lexicon, Index).
+% 	; control_value(lexicon, java) ->
+% 	  lexAccess_get_varlist_for_form_init(Form, VarLists)
+%	; format(user_error, '### ERROR: lexicon setting must be either c or java!~n', []),
+%	  abort
+%	).
+
+
+
 
 %%% generic record retrieval predicate
 lex_recs(form, Form, Rec, LowerFlag, FlushFlag, Lexicon, Index) :-
@@ -257,15 +331,17 @@ lex_cats(form, Form, Cats, LowerFlag, Index) :-
 	lexicon_type(LexiconType),
 	% LexiconType = 0,
 	c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1).
-	% format(user_output, '~q~n', [c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1)]).
+ 	% format(user_output, '~q~n', [c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1)]).
 
 
 %%% generic variant retrieval predicate
+% Replaced with new lexAccess code
 lex_vars(cit, Cit, Vars, LowerFlag, Lexicon, Index) :-
-	lex_vars_cit(Cit, Vars, LowerFlag, Lexicon, Index).
+  	lex_vars_cit(Cit, Vars, LowerFlag, Lexicon, Index).
 lex_vars(form, Form, Vars, LowerFlag, Lexicon, Index) :-
 	lex_vars_form(Form, Vars, LowerFlag, Lexicon, Index).
 
+% Replaced with new lexAccess code
 lex_vars_cit(Cit, Vars, LowerFlag, Lexicon, Index) :-
 	LexiconType = 0,
 	c_lex_cit(Index, Cit, LexiconType, LowerFlag, 0, OfsList, 1),
@@ -330,7 +406,7 @@ lex_is_a_form_ci(Form) :-
 lex_is_a_form_ci_2(Form, Index) :-
 	lexicon_type(LexiconType),
 	c_lex_is_a_form(Index, Form, LexiconType, 1, 1).
-	% format(user_output, '~q~n', [c_lex_is_a_form(Form, Return)]).
+ 	% format(user_output, '~q~n', [c_lex_is_a_form(Form, Return)]).
 
 %%% lex_is_a_root_ci_cats(+Root, +Cats)
 %%% succeeds if +Root is a root form in any category in +Cats
@@ -339,32 +415,154 @@ lex_is_a_root_ci_cats(Root, Cats) :-
 	lex_is_a_root_ci_cats_3(Root, Cats, Index).
 
 lex_is_a_root_ci_cats_3(Root, Cats, Index) :-
-	lexicon_type(LexiconType),
+lexicon_type(LexiconType),
 	c_lex_is_a_root_cats(Index, Root, LexiconType, 1, Cats, 1).
 	% format(user_output, '~q~n', [c_lex_is_a_root_cats(Root, Cats, Return)]),
-	% Return =:= 1.
+% 	% Return =:= 1.
 
 %%% This is for retrieval of records with sensitivity to input context
 %%% for use from a parser.
 %%% lex_form_ci_recs_input(+Input, -Recs, -Remaining)
+
+% lfit == lex_form_input_test
+
+lexAccess_ignore_token(Token) :-
+	atom_codes(Token, [Code]),
+	is_punct(Code).
+
+lfit(InputTokens, ResultOut) :-
+	Prefix = [],
+	ResultIn = [],
+	NumTokens = 0,
+	lfit_1(InputTokens, NumTokens, Prefix, ResultIn, ResultOut).
+
+lfit_1([], _NumTokens, _Prefix, Result, Result).
+lfit_1([_FirstToken|_RestTokens], NumTokensIn, _PrevPrefix, ResultIn, ResultOut) :-
+	NumTokensIn > 10,
+	!,
+	ResultOut = ResultIn.
+
+% This clause handles special cases such as [has, '', been] and [in, '', patients]:
+% in retokenize.pl, the special atom '' is inserted between "has" and "been",
+% between "in" and "patients", and other such special cases.
+% It also stops lfit from proceeding further if it encounters and apostrophe
+% in the token list, which is desirable, so that, e.g., "cancer's" returns "cancer",
+% and leaves "'s" in the input list.
+
+lfit_1([FirstToken|_RestTokens], _NumTokensIn, _PrevPrefix, ResultIn, ResultOut) :-
+	( FirstToken == '' ->
+	  true
+	; FirstToken == '\'' ->
+	  true
+% 	; atom_codes(FirstToken, [Code]),
+% 	  is_punct(Code) ->
+% 	  true
+	),
+	!,
+	ResultIn = ResultOut.
+lfit_1([FirstToken|RestTokens], NumTokensIn, PrevPrefix, ResultIn, ResultOut) :-
+	NumTokensNext is NumTokensIn + 1,
+	append(PrevPrefix, [FirstToken], Prefix),
+	( lexAccess_ignore_token(FirstToken) ->
+	  ResultNext = ResultIn
+	; lfit_prefix(Prefix, NumTokensNext, ResultIn, ResultNext)
+	),
+	lfit_1(RestTokens, NumTokensNext, Prefix, ResultNext, ResultOut).
+
+lfit_prefix(Prefix, NumTokens, ResultIn, ResultOut) :-
+	concat_atoms_intelligently(Prefix, SingleToken),
+	% insert_white_space_between_alnums(T, H, TokensWithWhiteSpace),
+	% concat_atom(TokensWithWhiteSpace, SingleToken),
+	statistics(runtime,_),
+	lexAccess_lex_form_input_init(SingleToken, FirstResult),
+	% statistics(runtime, [_,MilliSeconds]),
+	% format(user_output,
+	%        '@@@ Call to lexAccess_lex_form_input_init on ~q took ~d ms~n',
+	%        [SingleToken, MilliSeconds]),
+	( FirstResult == [] ->
+	  ResultOut = ResultIn
+	; ResultOut = NumTokens-FirstResult
+	).
+
 lex_form_ci_recs_input_5(Input, Recs, Remaining, Lexicon, Index) :-
+%%	( control_value(clfi, c) ->
+	  lex_form_ci_recs_input_5_C(Input, OldRecs, OldRemaining, Lexicon, Index),
+	  Recs = OldRecs,
+	  Remaining = OldRemaining.
+%	; control_value(clfi, java) ->
+%	  lex_form_ci_recs_input_5_JAVA(Input, NewRecs, NewRemaining, Lexicon, Index),
+%	  Recs = NewRecs,
+%	  Remaining = NewRemaining
+%	; format(user_output, '### MUST SPECIFY clfi setting~n', []),
+%	  abort
+%	).
+	  % format(user_output, 'Old Recs: ~q~nNew Recs: ~q~n', [OldRecs,NewRecs]),
+	  % format(user_output, 'New Rem:  ~q~nNew Rem:  ~q~n', [OldRemaining,NewRemaining]),
+%	  append(InputMatch, OldRemaining, Input),
+%	  test_output(OldRecs, NewRecs, InputMatch).
+%	; control_value(clfi, java) ->
+%	  lex_form_ci_recs_input_5_JAVA(Input, NewRecs, NewRemaining, Lexicon, Index)
+%	; format(user_output, '~n### ERROR: clfi setting must be either c or java!~n', []),
+%	  abort
+%	).
+
+test_output(OldRecs, NewRecs, InputMatch) :-
+	( OldRecs == NewRecs ->
+	  true
+	; format(user_output, '### InputMatch: ~q~n### Old Recs: ~q~n### New Recs: ~q~n',
+		 [InputMatch,OldRecs,NewRecs])
+	).
+
+
+lex_form_ci_recs_input_5_C(Input, OrigRecs, OrigRemaining, Lexicon, Index) :-
 	lexicon_type(LexiconType),
 	c_lex_form_input(Index, LexiconType, Input, Matches, 1),
-	% format(user_output, '~q~n', [c_lex_form_input(Input, Matches, Return)]),
 	sort_matches(Matches, SortedMatches),
 	get_best_match(SortedMatches, BestMatch),
-	BestMatch = match(Term, OfsList, BestLength),
-	get_records_from_offsets(OfsList, LexRecs, Lexicon),
-	skip_n_tokens(BestLength, Input, IM, Remaining),
-	Recs = lexicon:[lexmatch:[Term], inputmatch:IM, records:LexRecs].
+	% (  foreach(M, Matches),
+	%    foreach(D, MatchData)
+	% do M = match(Type, Term, _Ofs, Length),
+	%    D = Type-Term-Length
+	% ),
+	% format(user_output, 'LEXICON|~q|~q~n', [Input,MatchData]),
+	BestMatch = match(OrigLexMatch, OfsList, BestLength),
+	get_records_from_offsets(OfsList, OrigLexRecs, Lexicon),
+	skip_n_tokens(BestLength, Input, OrigInputMatch, OrigRemaining),
+	% just to avoid compiler warning about singleton var!
+	OrigRemaining = OrigRemaining,
+	OrigRecs = lexicon:[lexmatch:[OrigLexMatch], inputmatch:OrigInputMatch, records:OrigLexRecs].
+
+lex_form_ci_recs_input_5_JAVA(Input, NewRecs, NewRemaining, _Lexicon, _Index) :-
+	% lex_form_ci_recs_input_5_C(Input, Recs, Remaining, Lexicon, Index).
+        lfit(Input, NumTokens-LexAccessResult0),
+	LexAccessResult0 = [First|_IgnoreRest],
+	LexAccessResult = [First],
+        length(ListOfVariables, NumTokens),
+        append(ListOfVariables, NewRemaining, Input),
+        NewInputMatch = ListOfVariables,
+        % NewInputMatch = [NewInputMatchH|NewInputMatchT],
+        length(Input, InputLength),
+        length(NewRemaining, NewRemainingLength),
+        % Just to verify
+        InputLength =:= NewRemainingLength + NumTokens,
+        lexAccess_get_all_lexical_records(LexAccessResult, NewLexRecs),
+        NewRecs  = lexicon:[lexmatch:LexAccessResult,
+			    inputmatch:NewInputMatch,
+			    records:NewLexRecs].
 
 %%% gets the best match, and collapses all offsets
-get_best_match([F|R], N) :-
-	F = match(Type, Term, Ofs, Length),
-	( findall(SomeOfs, member(match(Type, Term, SomeOfs, Length), R), MoreOfs) ->
+get_best_match([FirstMatch|RestMatches], N) :-
+	FirstMatch = match(Type, Term, Ofs, Length),
+	% The `C' lexicon code recognizes "HE's" as a lexical item. Go figure.
+	Term \== 'HE''s',
+	!,
+	( findall(SomeOfs, member(match(Type, Term, SomeOfs, Length), RestMatches), MoreOfs) ->
 	  N = match(Term, [Ofs|MoreOfs], Length)
 	; N = match(Term, [Ofs], Length)
 	).
+get_best_match([_|RestMatches], N) :-
+	get_best_match(RestMatches, N).
+
 
 %%% skip_n_tokens(+N, +List, -NTok, -Remain)
 %%% returns the result of skipping 'n' tokens in a list
@@ -400,6 +598,8 @@ get_records_from_offsets([Ofs|R], [X|Y], Lexicon) :-
 sort_matches(In, Out) :-
 	make_keys(In, InKeys),
 	keysort(InKeys, OutKeys),
+
+
 	rev(OutKeys, RevOutKeys),
 	make_unkeys(RevOutKeys, UnOut),
 	prune(UnOut, Out).
@@ -437,6 +637,12 @@ prune([F|R1], [F|R2]) :-
 	prune(R1, R2).
 
 %%% reformats a Term(Cat, Feature) to a Term:[Cat:[Feature]]
+reformat_list_of_lists(ListOfLists, ReformattedListOfLists) :-
+	(  foreach(List, ListOfLists),
+	   foreach(ReformattedList, ReformattedListOfLists)
+	do reformat_list(List, ReformattedList)
+	).
+
 reformat_list([], []).
 reformat_list([F|R], [X|Y]) :-
 	functor(F, Term, 2),

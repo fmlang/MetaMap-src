@@ -49,6 +49,7 @@
 #include <debug.h>
 #include <lexicon.h>
 #include <lm.h>
+#include <stdlib.h>
 
 /*end of includes ----------*/
 
@@ -1065,15 +1066,16 @@ static void * lex_reallocate_buffer(
   if ((size + n) > *alloc)
     {
       while ((size+n) > *alloc)
-	*alloc += incr;
+	*alloc += incr + 1;
       if (size == 0)
 	{
-	    if ((buf = (void *) malloc((unsigned)(unit*(*alloc)))) == (void *)NULL)
+	    if ((buf = (void *) malloc((size_t)(unit*(*alloc)))) == (void *)NULL)
+	      memset(buf, 0, unit*(*alloc));
 	      goto bottom;
 	}
 	else
 	{
-	    if ((buf = (void *) realloc((char *)buf, (unsigned)(unit*(*alloc)))) == (void *)NULL)
+	    if ((buf = (void *) realloc(buf, (size_t)(unit*(*alloc)))) == (void *)NULL)
 	      goto bottom;
 	}
     }

@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -65,7 +64,8 @@
 	% called by MetaMap API -- do not change signature!
 	subtract_from_control_options/1,
 	% called by MetaMap API -- do not change signature!
-	toggle_control_options/1
+	toggle_control_options/1,
+	update_command_line/5
     ]).
 
 
@@ -112,9 +112,6 @@ which options are defaults (IsDefault) and which options take an argument
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 is_control_option(metamap, '+', bracketed_output,		no, none).
-is_control_option(metamap, '%', 'XML', no,
-                  aspec('XML', mandatory, none, none, no_default,
-                       'XML value must be one of format/format1/noformat/noformat1')).
 is_control_option(metamap, '8', dynamic_variant_generation, 	no, none).
 is_control_option(metamap, '@', 'WSD', no,
                   aspec('WSD', mandatory, none, none, no_default,
@@ -123,24 +120,28 @@ is_control_option(metamap, 'A', strict_model, 			no, none).
 % is_control_option(metamap, 'B', moderate_model, 		no, none).
 is_control_option(metamap, 'C', relaxed_model, 			no, none).
 is_control_option(metamap, 'D', all_derivational_variants,      no, none).  	% MetaMap default
-is_control_option(metamap, 'E', indicate_citation_end,   no, none).
+is_control_option(metamap, 'E', indicate_citation_end,   	no, none).
 is_control_option(metamap, 'F', formal_tagger_output, 		no, none).
-is_control_option(metamap, 'G', sources,                 no, none).
+is_control_option(metamap, 'G', sources,                 	no, none).
 % is_control_option(metamap, 'H', display_original_phrases, 	no, none).
-is_control_option(metamap, 'I', show_cuis, 		 no, none).
+is_control_option(metamap, 'I', show_cuis, 		 	no, none).
 is_control_option(metamap, 'J', restrict_to_sts, no,
                   aspec(restrict_to_sts, mandatory, list, none, no_default,
                         'List of semantic types to use for output')).
 is_control_option(metamap, 'K', ignore_stop_phrases, 		no, none).
-is_control_option(metamap, 'L', lexicon_year, 	 		no, none).
+is_control_option(metamap, 'L', lexicon_year, 	 		no,
+                  aspec(lexicon_year, mandatory, none, none, no_default,
+                        'Lexicon year')).
 % is_control_option(metamap, 'M', mmi_output,              no, none).
-is_control_option(metamap, 'N', fielded_mmi_output,      no, none).
+is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
 is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
-is_control_option(metamap, 'P', composite_phrases, 		no, none).
-is_control_option(metamap, 'Q', quick_composite_phrases, 	no, none).
+is_control_option(metamap, 'Q', composite_phrases, 		no,
+                  aspec(composite_phrases, mandatory, integer, none, no_default,
+                        'Max number of prepositional phrases to glom on')).
 is_control_option(metamap, 'R', restrict_to_sources, no,
                   aspec(restrict_to_sources, mandatory, list, none, no_default,
                         'List of sources to use for output')).
+
 is_control_option(metamap, 'S', tagger, no,
                   aspec(tagger, mandatory, none, none, no_default,
                         'Which tagger to use')).
@@ -149,37 +150,38 @@ is_control_option(metamap, 'U', allow_duplicate_concept_names,  no, none).
 is_control_option(metamap, 'V', mm_data_version, no,
                   aspec(mm_data_version,mandatory, none, none, no_default,
                         'Version of MetaMap data to use')).
-is_control_option(metamap, 'W', preferred_name_sources,  no, none).
-is_control_option(metamap, 'X', truncate_candidates_mappings, no, none).
+is_control_option(metamap, 'W', preferred_name_sources,  	no, none).
+is_control_option(metamap, 'X', truncate_candidates_mappings, 	no, none).
 is_control_option(metamap, 'Y', prefer_multiple_concepts, 	no, none).
 is_control_option(metamap, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
-                        'Year of MetaMap data to use')).
+                        'Release of MetaMap data to use')).
 
 is_control_option(metamap,   a, all_acros_abbrs,	        no, none).	% MetaMap default
-is_control_option(metamap,   b, compute_all_mappings,    no, none).  	% MetaMap default
+is_control_option(metamap,   b, compute_all_mappings,    	no, none).  	% MetaMap default
 is_control_option(metamap,   c, hide_candidates,	        no, none).	% MetaMap default
 is_control_option(metamap,   d, no_derivational_variants,	no, none).
-is_control_option(metamap,   e, exclude_sources, no,
+is_control_option(metamap,   e, exclude_sources, 		no,
                   aspec(exclude_sources, mandatory, list, none, no_default,
                         'List of sources to exclude for output')).
+is_control_option(metamap,   f, number_the_mappings, 		no, none).
 is_control_option(metamap,   g, allow_concept_gaps, 		no, none).
 % is_control_option(metamap,   f, fielded_output, 		no, none).
 is_control_option(metamap,   i, ignore_word_order, 		no, none).
-is_control_option(metamap,   j, dump_aas,                no, none).
+is_control_option(metamap,   j, dump_aas,                	no, none).
 is_control_option(metamap,   k, exclude_sts, no,
                   aspec(exclude_sts, mandatory, list, none, no_default,
                         'List of semantic types to exclude for output')).
 is_control_option(metamap,   l, allow_large_n,		        no, none).	% MetaMap default
-is_control_option(metamap,   m, hide_mappings,	         no, none).    	% MetaMap default
-is_control_option(metamap,   n, number_the_candidates, 	      no, none).
+is_control_option(metamap,   m, hide_mappings,	         	no, none).    	% MetaMap default
+is_control_option(metamap,   n, number_the_candidates, 	      	no, none).
 is_control_option(metamap,   o, allow_overmatches, 		no, none).
 is_control_option(metamap,   q, machine_output, 		no, none).
 is_control_option(metamap,   p, hide_plain_syntax,	        no, none).  	% MetaMap default
 is_control_option(metamap,   r, threshold, no,
                   aspec(threshold, mandatory, integer, none, no_default,
                         'Threshold for displaying candidates')).
-is_control_option(metamap,   s, hide_semantic_types,	 no, none).   	% MetaMap default
+is_control_option(metamap,   s, hide_semantic_types,	 	no, none).   	% MetaMap default
 is_control_option(metamap,   t, no_tagging,		        no, none).	% MetaMap default
 is_control_option(metamap,   u, unique_acros_abbrs_only, 	no, none).
 is_control_option(metamap,   v, variants, 			no, none).
@@ -189,10 +191,10 @@ is_control_option(metamap,   z, term_processing, 		no, none).
 
 is_control_option(metamap,  '', debug, 			 no,
                   aspec(debug, mandatory, list, none, no_default, 'Debugging settings')).
-is_control_option(metamap,  '', help, 		 	 no, none).
-is_control_option(metamap,  '', longest_lexicon_match, 	 no, none).
-is_control_option(metamap,  '', negex,		 	 no, none).
-is_control_option(metamap,  '', silent,		 	 no, none).
+is_control_option(metamap,  '', help, 		 	 	no, none).
+is_control_option(metamap,  '', longest_lexicon_match, 	 	no, none).
+is_control_option(metamap,  '', negex,		 	 	no, none).
+is_control_option(metamap,  '', silent,		 	 	no, none).
 % is_control_option(metamap,  '', max_ambiguity,	 	 no,
 %                   aspec(max_ambiguity, mandatory, integer, none, 0,
 %                         'Maximum allowable degree of ambiguity')).
@@ -202,8 +204,29 @@ is_control_option(metamap,  '', silent,		 	 no, none).
 is_control_option(metamap,  '', min_length, 	 no,
                   aspec(min_length, mandatory, integer, none, no_default,
                         'Must specify an integer value.')).
-is_control_option(metamap,  '', phrases_only, 	 	 no, none).
-is_control_option(metamap,  '', warnings, 	 	 no, none).
+is_control_option(metamap,  '', phrases_only, 	 	 	no, none).
+is_control_option(metamap,  '', apostrophe_s_contraction, 	no, none).
+is_control_option(metamap,  '', warnings, 	 	 	no, none).
+is_control_option(metamap,  '', no_prune,	 	 	no, none).
+is_control_option(metamap,  '', prune, no,
+                  aspec(prune, mandatory, integer, none, no_default,
+                        'Max num of candidates to allow before pruning')).
+is_control_option(metamap,  '', restore, 	 	 	no, none).
+is_control_option(metamap,  '', 'UDA',   no,
+		  aspec('UDA', mandatory, none, none, no_default,
+                        'Must specify a filename.')).
+is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
+is_control_option(metamap,  '', 'XMLf1',		 	no, none).
+is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
+is_control_option(metamap,  '', 'XMLn1',		 	no, none).
+
+is_control_option(metamap,  '', lexicon, no,
+                  aspec(lexicon, mandatory, none, none, no_default,
+                        'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
+is_control_option(metamap,  '', clfi, no,
+                  aspec(clfi, mandatory, none, none, no_default,
+                        'Whether to use original C code or lexAccess version of lex_form_input')).
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% MetaMap %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -330,6 +353,15 @@ is_control_option(filter_mrconso,t,total_lines,no,
 is_control_option(filter_mrconso,p,progress_bar_interval,no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
                         'Interval of progress bar')).
+
+is_control_option(filter_mrconso,  '', lexicon, no,
+                  aspec(lexicon, mandatory, none, none, no_default,
+                        'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
+is_control_option(filter_mrconso,  '', clfi, no,
+                  aspec(clfi, mandatory, none, none, no_default,
+                        'Whether to use original C code or lexAccess version of lex_form_input')).
+
+
 is_control_option(filter_mrconso,'N',silent,no,none).
 is_control_option(filter_mrconso,w,warnings,no,none).
 is_control_option(find_subwords,a,use_atoms,no,none).
@@ -449,48 +481,49 @@ is_control_option(mm_extract_fielded,h,help,no,none).
 is_control_option(mm_extract_fielded,w,warnings,no,none).
 is_control_option(mm_filter,c,duplicate_concepts,no,none).
 is_control_option(mm_filter,h,help,no,none).
-is_control_option(mm_print,'A',alnum_filter,no,none).
-is_control_option(mm_print,z,stop_phrase_file,no,
+is_control_option(mm_print, 'A',alnum_filter,no,none).
+is_control_option(mm_print, z,stop_phrase_file,no,
                   aspec(stop_phrase_file,mandatory,file,read,no_default,
                         'File of stop phrases')).
-is_control_option(mm_print,'T',truncate_output,no,none).
-is_control_option(mm_print,f,filter_out_01,no,none).
-is_control_option(mm_print,r,threshold,no,
+is_control_option(mm_print, 'T',truncate_output,no,none).
+is_control_option(mm_print, f,filter_out_01,no,none).
+is_control_option(mm_print, r,threshold,no,
                   aspec(threshold,mandatory,integer,none,no_default,
                         'Threshold for displaying candidates')).
-is_control_option(mm_print,n,null_only,no,none).
-is_control_option(mm_print,'K',non_null_only,no,none).
-is_control_option(mm_print,x,syntax,no,none).
-is_control_option(mm_print,s,simple_syntax,yes,none).
-is_control_option(mm_print,c,candidates,yes,none).
-is_control_option(mm_print,t,semantic_types,yes,none).
-is_control_option(mm_print,m,mappings,yes,none).
-is_control_option(mm_print,o,organize_semantic_types,no,none).
-is_control_option(mm_print,'F',first_mappings_only,no,none).
-is_control_option(mm_print,'I',show_cuis,no,none).
-is_control_option(mm_print,'O',show_preferred_names_only,no,none).
-is_control_option(mm_print,l,not_in_lex_dump,no,none).
-is_control_option(mm_print,d,label_text_field_dump,no,none).
-is_control_option(mm_print,a,syntax_dump,no,none).
-is_control_option(mm_print,y,syntactic_pattern_dump,no,none).
-is_control_option(mm_print,w,with_text,no,none).
-is_control_option(mm_print,b,candidate_count_dump,no,none).
-is_control_option(mm_print,'C',candidate_text_dump,no,none).
-is_control_option(mm_print,'M',mapping_text_dump,no,none).
-is_control_option(mm_print,'S',mapping_summary_dump,no,none).
-is_control_option(mm_print,'U',unique_mapping_text_dump,no,none).
-is_control_option(mm_print,'N',non_monotonic_mapping_dump,no,none).
-is_control_option(mm_print,'k',odd_mapping_dump,no,none).
-is_control_option(mm_print,j,mapping_count_dump,no,none).
-is_control_option(mm_print,p,potential_stopphrase_dump,no,none).
-is_control_option(mm_print,'P',phrase_dump,no,none).
-is_control_option(mm_print,'Q',prepositional_phrase_dump,no,none).
+is_control_option(mm_print, n,null_only,no,none).
+is_control_option(mm_print, 'K',non_null_only,no,none).
+is_control_option(mm_print, x,syntax,no,none).
+is_control_option(mm_print, s,simple_syntax,yes,none).
+is_control_option(mm_print, c,candidates,yes,none).
+is_control_option(mm_print, t,semantic_types,yes,none).
+is_control_option(mm_print, m,mappings,yes,none).
+is_control_option(mm_print, o,organize_semantic_types,no,none).
+is_control_option(mm_print, 'F',first_mappings_only,no,none).
+is_control_option(mm_print, 'I',show_cuis,no,none).
+is_control_option(mm_print, 'O',show_preferred_names_only,no,none).
+is_control_option(mm_print, l,not_in_lex_dump,no,none).
+is_control_option(mm_print, d,label_text_field_dump,no,none).
+is_control_option(mm_print, a,syntax_dump,no,none).
+is_control_option(mm_print, y,syntactic_pattern_dump,no,none).
+is_control_option(mm_print, w,with_text,no,none).
+is_control_option(mm_print, b,candidate_count_dump,no,none).
+is_control_option(mm_print, 'C',candidate_text_dump,no,none).
+is_control_option(mm_print, 'M',mapping_text_dump,no,none).
+is_control_option(mm_print, 'S',mapping_summary_dump,no,none).
+is_control_option(mm_print, 'U',unique_mapping_text_dump,no,none).
+is_control_option(mm_print, 'N',non_monotonic_mapping_dump,no,none).
+is_control_option(mm_print, 'k',odd_mapping_dump,no,none).
+is_control_option(mm_print, j,mapping_count_dump,no,none).
+is_control_option(mm_print, p,potential_stopphrase_dump,no,none).
+is_control_option(mm_print, 'P',phrase_dump,no,none).
+is_control_option(mm_print, 'Q',prepositional_phrase_dump,no,none).
 
-is_control_option(mm_print,i,inputmatch_lexmatch_dump,no,none).
-is_control_option(mm_print,h,help,no,none).
-is_control_option(mm_print, '%', 'XML', no,
-                  aspec('XML', mandatory, none, none, no_default,
-                        'XML output pretty-printed: format1/format/noformat1/noformat')).
+is_control_option(mm_print, i,inputmatch_lexmatch_dump,no,none).
+is_control_option(mm_print, h,help,no,none).
+is_control_option(mm_print,  '', 'XMLf',		 no, none).
+is_control_option(mm_print,  '', 'XMLf1',	 	 no, none).
+is_control_option(mm_print,  '', 'XMLn',		 no, none).
+is_control_option(mm_print,  '', 'XMLn1',	 	 no, none).
 is_control_option(mm_print,  '', negex, no, none).
 is_control_option(mm_select,h,help,no,none).
 
@@ -760,7 +793,7 @@ subtract_from_control_options([Option0|Rest]) :-
 	  true
         ; Option=Option0
         ),
-	( retract(control_option(Option))
+	( retractall(control_option(Option))
         ; true
         ),
 	!,
@@ -803,14 +836,21 @@ display_current_control_options/2 displays program name and year and currently s
 display_current_control_options(ProgramName, FullYear) :-
 	conditionally_announce_program_name(ProgramName, FullYear),
 	display_current_control_options_aux.
+
 display_current_control_options_aux :-
 	% If any control options are set, show them all,
 	% unless --silent is set from the command line.
-	  \+ control_option(silent),
-	  format(user_output, '~nControl options:~n',[]),
+	\+ control_option(silent),
+	!,
+	format(user_output, 'Control options:',[]),
+	( \+ control_option(Option) ->
+	  format(user_output, ' NONE~n~n',[])
+	; nl(user_output),
 	  control_option(Option),
 	  display_one_control_option(Option),
-	  fail.
+	  fail
+	; true
+	).
 display_current_control_options_aux.
 
 display_one_control_option(Option) :-
@@ -822,12 +862,11 @@ display_one_control_option(Option) :-
 
 display_mandatory_metamap_options :-
 	format('Mandatory arguments:~n', []),
-	findall(LongOptionName-Length:Description,
+	findall(LongOptionName-LongOptionNameLength:Description,
 		( is_control_option(metamap,_ShortOptionName,LongOptionName,_IsDefault,
 				    aspec(LongOptionName,mandatory,
 					  _Type,_SubType,_Default,Description)),
-		  atom_codes(LongOptionName, LongOptionNameChars),
-		  length(LongOptionNameChars, Length)),
+		  atom_length(LongOptionName, LongOptionNameLength)),
 		  OptionDescriptionList),
 	longest_option_name_length(OptionDescriptionList, 0, LongestLength),
 	print_mandatory_options(OptionDescriptionList, LongestLength).
@@ -969,22 +1008,87 @@ possibly_environ(EnvironVar, Value) :-
 	; Value = []
 	).
 
+% remove duplicate options and args, and warn user about duplicates; e.g.,
+% update_command_line([mm_data_year,z], ['1011','10'], metamap, OptionsOut, ArgsOut)
+% will results in the removal of "z" and "10", so that
+% OptionsOut = [mm_data_year] and
+% ArgsOut    = ['10'].
+
+update_command_line([], Args, _Program, [], Args).
+update_command_line([FirstOption|RestOptions], ArgsIn, Program, OptionsOut, ArgsOut) :-
+	% If the first option is repeated,
+	( repeated_control_option(Program, FirstOption, RestOptions) ->
+	% discard it by simply recursing on the final output variable OptionsOut
+	  OptionsOut = OptionsOutRest,
+	% and possibly remove the first arg
+	  possibly_remove_first_arg(ArgsIn, FirstOption, Program, RestArgs, ArgsOut, ArgsOutRest)
+	; OptionsOut = [FirstOption|OptionsOutRest],
+	  set_rest_args(ArgsIn, RestArgs, ArgsOut, ArgsOutRest)
+	),
+	update_command_line(RestOptions, RestArgs, Program, OptionsOutRest, ArgsOutRest).
+
+
+% set_rest_args(ArgsIn, RestArgs, ArgsOut, ArgsOutRest)
+set_rest_args([], [], [], _).
+set_rest_args([FirstArg|RestArgs], RestArgs, [FirstArg|ArgsOutRest], ArgsOutRest).
+	
+repeated_control_option(Program, FirstOption, RestOptions) :-
+	member(OtherOption, RestOptions),
+	equivalent_control_options(Program, FirstOption, OtherOption),
+	!,
+	format(user_output, 'WARNING: Option ~w overridden by option ~w.~n', [FirstOption, OtherOption]).
+
+equivalent_control_options(Program, Option1, Option2) :-
+	( Option1 == Option2 ->
+	  true
+	; is_control_option(Program, Option1, Option2, _, _) ->
+	  true
+	; is_control_option(Program, Option1, Option2, _, _) ->
+	  true
+	).
+
+% possibly_remove_first_arg(ArgsIn, FirstOption, Program, RestArgs, ArgsOut, ArgsOutRest)
+% If the current option being examined takes a mandatory argument,
+% and the first arg does not begin with a hyphen, remove the first arg.
+
+% possibly_remove_first_arg(ArgsIn, _FirstOption, _Program, RestArgs, ArgsOut, ArgsOutRest).
+
+possibly_remove_first_arg([], _FirstOption, _Program, [], [], _).
+
+possibly_remove_first_arg([FirstArg|RestArgs], FirstOption, Program, RestArgs, ArgsOut, ArgsOutRest) :-
+% possibly_remove_first_arg(FirstOption, FirstArg, Program, ArgsOut, ArgsOutRest) :-
+	( control_option_requires_argspec(Program, FirstOption),
+	  atom_codes(FirstArg, FirstArgCodes),
+	  FirstArgCodes = [FirstChar|_],
+	  % FirstArg does not begin with a hyphen (ASCII 45)
+	  FirstChar =\= 45 ->
+	  ArgsOut = ArgsOutRest
+	; ArgsOut = [FirstArg|ArgsOutRest]
+	).
+
+control_option_requires_argspec(Program, Option) :-
+        ( is_control_option(Program, Option, _LongName, _, aspec(_,_,_,_,_,_)) ->
+          true
+        ; is_control_option(Program, _ShortName, Option, _, aspec(_,_,_,_,_,_))
+        ).
+
+
 /* interpret_options(+Options, +AllOptions, +Module, -InterpretedOptions)
 
 interpret_options/4 determines InterpretedOptions, a subset of AllOptions
 unambiguously found in Options.  Single-character options must be Module
 options.  Ambiguous or unknown Options cause failure.  */
 
-interpret_options(Options,AllOptions,Module,IOptions) :-
-%format('All options: ~p~n',[AllOptions]),
-%format('Options: ~p~n',[Options]),
-    compute_completions(Options,AllOptions,Module,OptionCompletions),
-%format('Option completions: ~p~n',[OptionCompletions]),
-    resolve_options(Options,OptionCompletions,[],IOptions0,ok,StatusOut),
-    rev(IOptions0,IOptions),
-%format('Interpreted options: ~p~n',[IOptions]),
-    !,
-    StatusOut==ok.
+interpret_options(Options, AllOptions, Module, IOptions) :-
+	% format('All options: ~p~n',[AllOptions]),
+	% format('Options: ~p~n',[Options]),
+	compute_completions(Options, AllOptions, Module, OptionCompletions),
+	% format('Option completions: ~p~n',[OptionCompletions]),
+	resolve_options(Options, OptionCompletions, [], IOptions0, ok, StatusOut),
+	rev(IOptions0, IOptions),
+	% format('Interpreted options: ~p~n',[IOptions]),
+	!,
+	StatusOut == ok.
 
 compute_completions([],_AllOptions,_Module,[]).
 compute_completions([First|Rest],AllOptions,Module,
@@ -1331,7 +1435,7 @@ illegal_default_component(user_output).
 
 conditionally_announce_program_name(ProgramName, FullYear) :-
 	( \+ control_option(silent) ->
-	  format(user_output, '~n~w (~d)~n~n',[ProgramName,FullYear])
+	  format(user_output, '~n~w (~a)~n~n',[ProgramName,FullYear])
 	; true
 	).
 

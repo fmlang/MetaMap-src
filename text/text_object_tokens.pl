@@ -40,6 +40,7 @@
 	filter_out_field_comments/2,
 	filter_out_ws_tokens/2,
 	form_field_tokens/2,
+	form_simple_tokens/4,
 	get_token_position/2,
 	position_contains/2,
 	position_ge/2,
@@ -177,29 +178,37 @@ Subsequent aa tokens will have the same [<aadef token>] argument as the example
 above but with different positions for the <AA> and <position> arguments.
 */
 
-form_field_tokens([],[]) :-
-    !.
-form_field_tokens([[Field,TokenizedField]|Rest],
-		  [[Field,Tokens]|TokenizedRest]) :-
-    form_simple_tokens(TokenizedField,Tokens),
-    form_field_tokens(Rest,TokenizedRest).
-
-form_simple_tokens(TokenizedText,Tokens) :-
-    lowercase_list(TokenizedText,LCTokenizedText),
-    form_simple_tokens(TokenizedText,LCTokenizedText,0,Tokens).
+form_field_tokens([], []).
+form_field_tokens([[Field,TokenizedField]|Rest], [[Field,Tokens]|TokenizedRest]) :-
+	lowercase_list(TokenizedField, LCTokenizedField),
+	form_simple_tokens(TokenizedField, LCTokenizedField, 0, Tokens),
+	form_field_tokens(Rest, TokenizedRest).
 
 form_simple_tokens([], [], _, []).
-form_simple_tokens([Text|RestText], [LCText|RestLCText], Start,
-            [tok(Type,Text,LCText,pos(Start,End))|RestTokens]) :-
-	set_token_type(Text, Type),
-	length(Text,L),
-	End is Start + L,
-	form_simple_tokens(RestText, RestLCText, End, RestTokens).
+form_simple_tokens([Text|RestText], [LCText|RestLCText], CurrentPos,
+            [tok(Type,Text,LCText,pos(StartPos,EndPos))|RestTokens]) :-
+        set_token_type(Text, Type),
+	set_start_and_end_pos(CurrentPos, Text, StartPos, EndPos, NextPos),
+        form_simple_tokens(RestText, RestLCText, NextPos, RestTokens).
+
+% If CurrentPos is specified as X/Y, we want to explicitly specify
+% the StartPos and EndPos of each token created as those specific values;
+% otherwise, use CurrentPos as the StartPos, and StartPos + TextLength as the EndPos.
+set_start_and_end_pos(CurrentPos, Text, StartPos, EndPos, NextPos) :-
+	( CurrentPos = StartPos/EndPos ->
+	  NextPos = CurrentPos
+	; integer(CurrentPos),
+	  length(Text, TextLength),
+	  StartPos is CurrentPos,
+	  EndPos is StartPos + TextLength,
+	  NextPos is EndPos
+	).
 
 % ws is space, tab or newline
 set_token_type(Token, ws) :-
 	Token = [Char],
-	ws_char(Char).
+	ws_char(Char),
+	!.
 
 % token_type(" ",ws) :-
 %     !.
@@ -209,15 +218,17 @@ set_token_type(Token, ws) :-
 % ",ws) :-
 %     !.
 
-set_token_type([Char], pn) :-
+set_token_type([Char], Type) :-
 	is_punct(Char),
-	!.
+	!,
+	Type = pn.
 set_token_type(Token, Type) :-
 	Token \== "",
 	all_alnum(Token),
 	!,
 	set_alnum_token_type(Token, Type).
 
+% This should happen only for tokens ending in apostrophe-s, as far as I know.
 set_token_type(Token, xx) :-
 	( control_option(warnings) ->
 	  write_warning(Token,wxx,'<unavailable>','Unknown token')
@@ -442,8 +453,7 @@ token_component_matches_pattern_component(PatternComponent, TokenComponent) :-
 
 /* filter_out_ws_tokens(+TokensIn, -TokensOut)
 
-filter_out_ws_tokens/2 filters out whitespace tokens from TokensIn producing
-TokensOut.  */
+filter_out_ws_tokens/2 filters out whitespace tokens from TokensIn producing TokensOut.  */
 
 filter_out_ws_tokens([], []).
 filter_out_ws_tokens([tok(ws,_,_,_)|Rest],FilteredRest) :-

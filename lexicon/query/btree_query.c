@@ -686,7 +686,7 @@ int init_lex_btree(
      
 {
   int    return_code = D_S_SUCCESS;
-  char   database_home[MAXLINE];
+  char   lexicon_data_dir[MAXLINE];
   int    mode = DB_RDONLY; 
   char   eui_index[MAXLINE];
   char   infl_index[MAXLINE];
@@ -707,29 +707,27 @@ int init_lex_btree(
 
   }
 
-  
-  strcpy( database_home , getenv("DATABASE_HOME") );
+  strcpy( lexicon_data_dir , getenv("LEXICON_DATA") );
 
-
-  if (( database_home == NULL ) || ( strlen( database_home ) < 1 ) ) {
+  if (( lexicon_data_dir == NULL ) || ( strlen( lexicon_data_dir ) < 1 ) ) {
      sprintf(msg,"The DATABASE_HOME environment variable has not been set.");
      DPE(msg);
   }
 
-  if ((( database_home == NULL ) || ( strlen( database_home ) < 1 ) ) ||
-      ( strcmp( database_home, index_file ) == 0 )) { 
-    strcpy(database_home,"./");
+  if ((( lexicon_data_dir == NULL ) || ( strlen( lexicon_data_dir ) < 1 ) ) ||
+      ( strcmp( lexicon_data_dir, index_file ) == 0 )) { 
+    strcpy(lexicon_data_dir,"./");
   }
 
   sprintf(eui_index,  "%sByEui.dbx",  index_file);
   sprintf(infl_index, "%sByInfl.dbx", index_file);
 
-  sprintf(msg,"%s|%s|%s|%s", database_home, index_file,infl_index, eui_index );
+  sprintf(msg,"%s|%s|%s|%s", lexicon_data_dir, index_file,infl_index, eui_index );
   DPR(DF1159,msg);
 
 
 
-  dbenv = (DB_ENV *) db_init(database_home,__FILE__ ); 
+  dbenv = (DB_ENV *) db_init(lexicon_data_dir,__FILE__ ); 
 
   if ( write_mode == D_TRUE ) {
     mode = (DB_CREATE);

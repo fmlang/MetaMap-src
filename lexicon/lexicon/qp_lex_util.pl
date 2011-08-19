@@ -136,15 +136,25 @@ filter_one_by_categories([First|Rest],Categories,[First|FilteredRest]) :-
 filter_one_by_categories([_|Rest],Categories,FilteredRest) :-
     filter_one_by_categories(Rest,Categories,FilteredRest).
 
-compute_all_variant_sps_infls([],_,[],[]).
-compute_all_variant_sps_infls([Variants|Rest],Term,[Sps|RestSps],
+compute_all_variant_sps_infls([], _, [], []).
+compute_all_variant_sps_infls([Variants|Rest], Term,
+			      [Sps|RestSps],
                               [Infls|RestInfls]) :-
-    setof(Infl, X^member(Infl:X, Variants), Infls),
-    setof(S, Cat^Infl^(
-	    member(SomeTerm:[Cat:[Infl]], Variants),
-	    lowermatch(Term, SomeTerm),
-	    get_synonym(Cat:[Infl], Variants, S)), Sps),
-    compute_all_variant_sps_infls(Rest,Term,RestSps,RestInfls).
+	% setof(Infl, X^member(Infl:X, Variants), Infls),
+	get_all_inflections(Variants, Infls),
+	% setof(S, Cat^Infl^SomeTerm^(
+	% 		   member(SomeTerm:[Cat:[Infl]], Variants),
+	% 		   lowermatch(Term, SomeTerm),
+	% 		   get_synonym(Cat:[Infl], Variants, S)), Sps),
+	findall(S, (   member(SomeTerm:[Cat:[Infl]], Variants),
+		       lowermatch(Term, SomeTerm),
+		       get_synonym(Cat:[Infl], Variants, S)), Sps),
+	compute_all_variant_sps_infls(Rest,Term,RestSps,RestInfls).
+
+get_all_inflections([], []).
+get_all_inflections([Inflection:_|RestVariants], [Inflection|RestInflections]) :-
+	get_all_inflections(RestVariants, RestInflections).
+
 
 %%% does lowercase matching
 lowermatch(Term, Term) :- !.
@@ -156,7 +166,19 @@ lowermatch(Term, SomeTerm) :-
 %%% looks for another +Term with the same principal part
 get_synonym(Cat:[Infl], Variants, Synonym) :-
     member(Synonym:[Cat:[SomeInfl]], Variants),
-    (	Infl = SomeInfl
-    ;	Infl = base, SomeInfl = spvar
-    ;	Infl = spvar, SomeInfl = base
+    (	Infl = SomeInfl ->
+	true
+    ;	Infl = base ->
+	SomeInfl = spvar
+    ;	Infl = spvar ->
+	SomeInfl = base
     ).
+
+test :-
+	user:word(Word),
+	(  qp_lex_util:lex_form_ci_var_lists_4(Word, VarList0, _, _) -> true
+	; VarList0 = []
+	),
+	sort(VarList0, VarList),
+	format(user_output, '~q:~q.~n', [Word,VarList]), fail ; true.
+

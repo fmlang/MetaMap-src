@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -36,7 +35,7 @@
 
 :- module(metamap_variants,[
 	initialize_metamap_variants/1,
-	compute_variant_generators/2,
+	compute_variant_generators/3,
 	augment_GVCs_with_variants/1,
 	gather_variants/4,
 	write_all_variants/1
@@ -73,6 +72,11 @@
 	vdx/2
    ]).
 
+:- use_module(skr(skr_utilities), [
+	expand_split_word_list/2,
+	split_word/3
+   ]).
+
 :- use_module(skr_db(db_access),[
 	db_get_synonyms/2,
 	db_get_synonyms/3,
@@ -87,7 +91,8 @@
    ]).
 
 :- use_module(skr_lib(nls_system),[
-	control_option/1
+	control_option/1,
+	control_value/2
     ]).
 
 :- use_module(skr_lib(sicstus_utils),[
@@ -131,7 +136,6 @@
     ]).
 
 :- dynamic generation_mode/1.
-
 
 /* ************************************************************************
    ************************************************************************
@@ -190,45 +194,53 @@ the form
     gvc(v(Word,Categories,VarLevel,History,_,_),_,_)
 */
 
-compute_variant_generators(Words, VGenerators) :-
-	compute_variant_generators_aux(Words, VGenerators0),
+compute_variant_generators(PhraseWords, DupPhraseWords, GVCs) :-
+	( PhraseWords = DupPhraseWords ->
+	  compute_variant_generators_1(PhraseWords, GVCs)
+	; compute_variant_generators_1(PhraseWords, PhraseWordsGVCs),
+	  compute_variant_generators_1(DupPhraseWords, DupPhraseWordsGVCs),
+	  append(PhraseWordsGVCs, DupPhraseWordsGVCs, GVCs)
+	).
+
+compute_variant_generators_1(Words, GVCs) :-
+	compute_variant_generators_aux(Words, GVCs0),
 	% remove duplicates keeping first occurrence
-	rev(VGenerators0, VGenerators1),
+	rev(GVCs0, GVCs1),
 	% Vgenerators0 could have duplicates if a word
 	% occurs in the phrase more than once!
-	list_to_set(VGenerators1, VGenerators2),
-	rev(VGenerators2, VGenerators),
-	augment_generators_with_roots(VGenerators).
+	list_to_set(GVCs1, GVCs2),
+	rev(GVCs2, GVCs),
+	augment_generators_with_roots(GVCs).
 
 compute_variant_generators_aux([], []).
-compute_variant_generators_aux([First|Rest], VGenerators) :-
+compute_variant_generators_aux([First|Rest], GVCs) :-
 	rev(Rest, RevRest),
-	compute_variant_generators_1(RevRest, First, VGeneratorsFirst),
-	append(VGeneratorsFirst, VGeneratorsRest, VGenerators),
-	compute_variant_generators_aux(Rest,VGeneratorsRest).
+	compute_variant_generators_1(RevRest, First, GVCsFirst),
+	append(GVCsFirst, GVCsRest, GVCs),
+	compute_variant_generators_aux(Rest,GVCsRest).
 
-compute_variant_generators_1([], Word, VGenerators) :-
-	compute_variant_generators_for_word(Word, VGenerators).
+compute_variant_generators_1([], Word, GVCs) :-
+	compute_variant_generators_for_word(Word, GVCs).
 
 % compute_variant_generators_1([], Word, []) :-
 % 	format('####################### ~w ###############~n', [Word]).
-compute_variant_generators_1([H|T], Word, VGenerators) :-
+compute_variant_generators_1([H|T], Word, GVCs) :-
 	RevRest = [H|T],
 	rev(RevRest, Rest),
 	concatenate_text([Word|Rest], ' ', MultiWord),
 	is_a_form(MultiWord),  % multi-word items must be in lexicon
 	!,
-	compute_variant_generators_for_word(MultiWord, FirstVGenerators),
-	append(FirstVGenerators, RestVGenerators, VGenerators),
+	compute_variant_generators_for_word(MultiWord, FirstGVCs),
+	append(FirstGVCs, RestGVCs, GVCs),
 	RevRest = [_|RevRestRest],
-	compute_variant_generators_1(RevRestRest, Word, RestVGenerators).
+	compute_variant_generators_1(RevRestRest, Word, RestGVCs).
 
-compute_variant_generators_1([_|RevRestRest],Word, VGenerators) :-
-	compute_variant_generators_1(RevRestRest,Word, VGenerators).
+compute_variant_generators_1([_|RevRestRest],Word, GVCs) :-
+	compute_variant_generators_1(RevRestRest,Word, GVCs).
 
 compute_variant_generators_for_word(Word, VariantGenerators) :-
-	get_categories_for_word(Word, Categories),
-	create_generators(Categories, Word, VariantGenerators).
+	get_categories_for_word(Word, LexicalCategories),
+        create_generators(LexicalCategories, Word, VariantGenerators).
 
 get_categories_for_word(Word, Categories) :-
 	( is_a_form(Word),  % single words need not be in lexicon
@@ -238,23 +250,26 @@ get_categories_for_word(Word, Categories) :-
 	).
 
 create_generators([], Word, VariantGenerators) :-
-	VariantGenerators = [gvc(v(Word,[],0,"",_,_),_,_)].
+        VariantGenerators = [gvc(v(Word,[],0,"",_,_),_,_)].
 create_generators([H|T], Word, VariantGenerators) :-
-	split_generator([H|T], Word, 0, [], _BWord, _NFR, VariantGenerators).
-	
-% VarLevel, History, BWord, and NFR all come in as anonymous variables,
+        split_generator([H|T], Word, 0, [], _Roots, _NFR, VariantGenerators).
+        
+% VarLevel, History, Roots, and NFR all come in as anonymous variables,
 % but they must be the same in each gvc/3 term.
 
-split_generator([], _Word, _VarLevel, _History, _BWord, _NFR, []).
-split_generator([First|Rest], Word, VarLevel, History, BWord, NFR,
-                [gvc(v(Word,[First],VarLevel,History,BWord,NFR),_,_)|SplitRest]) :-
-	split_generator(Rest, Word, VarLevel, History, BWord, NFR, SplitRest).
+split_generator([], _Word, _VarLevel, _History, _Roots, _NFR, []).
+split_generator([First|Rest], Word, VarLevel, History, Roots, NFR,
+                [gvc(v(Word,[First],VarLevel,History,Roots,NFR),_,_)|SplitRest]) :-
+        split_generator(Rest, Word, VarLevel, History, Roots, NFR, SplitRest).
 
-% No reason to create the gvc/3 structure here -- just pass in the variables!
-% split_generator([], gvc(v(_Word,[],_VarLevel,_History,_BWord,_NFR),_,_),[]).
-% split_generator([First|Rest], gvc(v(Word,[First|Rest],VarLevel,History,BWord,NFR),_,_),
-%                 [gvc(v(Word,[First],VarLevel,History,BWord,NFR),_,_)|SplitRest]) :-
-%     split_generator(Rest, gvc(v(Word,Rest,VarLevel,History,BWord,NFR),_,_), SplitRest).
+
+% VarLevel, History, Roots, and NFR they must be the same in each gvc/3 term,
+% including the same free variable.
+
+% split_generator([], _Word, _VarLevel, _History, _Roots, _NFR, []).
+% split_generator([First|Rest], Word, VarLevel, History, Roots, NFR,
+%                 [gvc(v(Word,[First],VarLevel,History,Roots,NFR),_,_)|SplitRest]) :-
+% 	split_generator(Rest, Word, VarLevel, History, Roots, NFR, SplitRest).
 
 /* augment_GVCs_with_variants(?GVCs)
    augment_GVCs_with_variants(+GenerationMode, ?GVCs)
@@ -280,9 +295,8 @@ no_variants_word(Word, Category) :-
 	  true
 	  % At the LNCV meeting on 01/15/2009,
 	  % we decided not to generate variants for words of 1 or 2 chars.
-	; atom_codes(Word, WordChars),
-	  length(WordChars, WordCharsLength),
-	  WordCharsLength =< 2
+	; atom_length(Word, WordLength),
+	  WordLength =< 2
 	).
 
 augment_GVCs_with_variants_aux([], _GenerationMode).
@@ -291,7 +305,7 @@ augment_GVCs_with_variants_aux([GVC|Rest], GenerationMode) :-
 	GVC = gvc(Generator,Variants,_Candidates),
 	Generator = v(Word,TempCategory,_,_,_,_),
 	get_real_category(TempCategory, Category),
-	( no_variants_word(Word, Category) ->
+	( no_variants_word(Word, Category),
 	  Variants = [Generator],
 	  augment_variant_with_roots(Generator), % necessary?
 	  augment_GVCs_with_variants_aux(Rest, GenerationMode)
@@ -316,75 +330,95 @@ augment_GVCs_with_variants_mode(static, [gvc(G,Vs,Cs)|Rest]) :-
 	%    ;   true
 	%    ),
 	augment_GVCs_with_variants_aux(Rest, static).
+
 augment_GVCs_with_variants_mode(dynamic, [gvc(G,Vs,_Cs)|Rest]) :-
 	% augment the generator with acronyms, abbreviations and synonyms
 	% temp
-	%G=v(Generator,_,_,_,_,_),
+	G = v(Generator,_,_,_,_,_),
 	%format('~a|2.00~n',[Generator]),
 	compute_acros_abbrs(G,GAAs),
+	announce_variants(Generator, 'GAAs', GAAs),
 	% temp
 	%format('~a|2.01~n',[Generator]),
 	compute_syns(G,GSs),
+	announce_variants(Generator, 'GSs', GSs),
 	% temp
 	%format('~a|2.02~n',[Generator]),
 	% compute same-part, inflectional and derivational variants of G
-	get_spid_variants(G,yes,GSPs,GIs,GDs),
+	get_spid_variants(G, yes, GSPs, GIs, GDs),
+	announce_variants(Generator, 'GSPs', GSPs),
+	announce_variants(Generator, 'GIs', GIs),
+	announce_variants(Generator, 'GDs', GDs),
 	% temp
 	%format('~a|2.03~n',[Generator]),
 	% compute same-part, inflectional and derivational variants of AAs and Ss
-	get_all_spid_variants(GAAs,no,GAASPs,GAAIs,GAADs),
+	get_all_spid_variants(GAAs, no, GAASPs, GAAIs, GAADs),
+	announce_variants(Generator, 'GAASPs', GAASPs),
+	announce_variants(Generator, 'GAAIs', GAAIs),
+	announce_variants(Generator, 'GAADs', GAADs),
+
 	% temp
 	%format('~a|2.04~n',[Generator]),
-	get_all_spid_variants(GSs,no,GSSPs,GSIs,GSDs),
+	get_all_spid_variants(GSs, no, GSSPs, GSIs, GSDs),
+	announce_variants(Generator, 'GSSPs', GSSPs),
+	announce_variants(Generator, 'GSIs', GSIs),
+	announce_variants(Generator, 'GSDs', GSDs),
 	% temp
 	%format('~a|2.05~n',[Generator]),
 	% compute synonyms of AAs and acronyms and abbreviations of Ss
-	compute_all_syns(GAAs,GAASs),
+	compute_all_syns(GAAs, GAASs),
+	announce_variants(Generator, 'GAASs', GAASs),
 	% temp
 	%format('~a|2.06~n',[Generator]),
-	compute_all_acros_abbrs(GSs,GSAAs),
+	compute_all_acros_abbrs(GSs, GSAAs),
+	announce_variants(Generator, 'GSAAs', GSAAs),
 	%temp
 	%format('~a|2.07~n',[Generator]),
 	% perform final augmentations
 	% augment all derivational variants with synonyms and then inflect
-	compute_synonyms_and_inflect(GDs,GDSIs),
+	compute_synonyms_and_inflect(GDs, GDSIs),
+	announce_variants(Generator, 'GDSIs', GDSIs),
 	% temp
 	%format('~a|2.08~n',[Generator]),
-	compute_synonyms_and_inflect(GAADs,GAADSIs),
+	compute_synonyms_and_inflect(GAADs, GAADSIs),
+	announce_variants(Generator, 'GAADSIs', GAADSIs),
 	% temp
 	%format('~a|2.09~n',[Generator]),
-	compute_synonyms_and_inflect(GSDs,GSDSIs),
+	compute_synonyms_and_inflect(GSDs, GSDSIs),
+	announce_variants(Generator, 'GSDSIs', GSDSIs),
 	% temp
 	%format('~a|2.10~n',[Generator]),
 	% inflect acronym/abbreviation/synonym combinations (GAASs and GSAAs)
-	compute_all_inflections(GAASs,GAASIs),
+	compute_all_inflections(GAASs, GAASIs),
+	announce_variants(Generator, 'GAASIs', GAASIs),
 	% temp
 	%format('~a|2.11~n',[Generator]),
-	compute_all_inflections(GSAAs,GSAAIs),
+	compute_all_inflections(GSAAs, GSAAIs),
+	announce_variants(Generator, 'GSAAIs', GSAAIs),
 	% temp
 	%format('~a|2.12~n',[Generator]),
 	% full_variants is obsolete
 	%    (control_option(full_variants) ->
 	%    format('~n',[]),
 	%        dump_variants_labelled('G (A)',[G]),
-	%        dump_variants_labelled('GAA (B)',GAAs),
-	%        dump_variants_labelled('GS (C)',GSs),
-	%        dump_variants_labelled('GSP (1)',GSPs),
-	%        dump_variants_labelled('GI (2)',GIs),
-	%        dump_variants_labelled('GD (3)',GDs),
-	%        dump_variants_labelled('GAASP (4)',GAASPs),
-	%        dump_variants_labelled('GAAI (5)',GAAIs),
-	%        dump_variants_labelled('GAAD (6)',GAADs),
-	%        dump_variants_labelled('GSSP (7)',GSSPs),
-	%        dump_variants_labelled('GSI (8)',GSIs),
-	%        dump_variants_labelled('GSD (9)',GSDs),
-	%        dump_variants_labelled('GAAS (10)',GAASs),
-	%        dump_variants_labelled('GSAA (11)',GSAAs),
-	%        dump_variants_labelled('GDSI (12)',GDSIs),
-	%        dump_variants_labelled('GAADSI (13)',GAADSIs),
-	%        dump_variants_labelled('GSDSI (14)',GSDSIs),
-	%        dump_variants_labelled('GAASI (15)',GAASIs),
-	%        dump_variants_labelled('GSAAI (16)',GSAAIs),
+	%        dump_variants_labelled('GAA (B)', GAAs),
+	%        dump_variants_labelled('GS (C)', GSs),
+	%        dump_variants_labelled('GSP (1)', GSPs),
+	%        dump_variants_labelled('GI (2)', GIs),
+	%        dump_variants_labelled('GD (3)', GDs),
+	%        dump_variants_labelled('GAASP (4)', GAASPs),
+	%        dump_variants_labelled('GAAI (5)', GAAIs),
+	%        dump_variants_labelled('GAAD (6)', GAADs),
+	%        dump_variants_labelled('GSSP (7)', GSSPs),
+	%        dump_variants_labelled('GSI (8)', GSIs),
+	%        dump_variants_labelled('GSD (9)', GSDs),
+	%        dump_variants_labelled('GAAS (10)', GAASs),
+	%        dump_variants_labelled('GSAA (11)', GSAAs),
+	%        dump_variants_labelled('GDSI (12)', GDSIs),
+	%        dump_variants_labelled('GAADSI (13)', GAADSIs),
+	%        dump_variants_labelled('GSDSI (14)', GSDSIs),
+	%        dump_variants_labelled('GAASI (15)', GAASIs),
+	%        dump_variants_labelled('GSAAI (16)', GSAAIs),
 	%        format('~n',[]),
 	%    ;   true
 	%    ),
@@ -407,6 +441,22 @@ augment_GVCs_with_variants_mode(dynamic, [gvc(G,Vs,_Cs)|Rest]) :-
 	%    ),
 	augment_GVCs_with_variants_aux(Rest, dynamic).
 	
+announce_variants(_Generator, _Type, _Data).
+
+% announce_variants(Generator, Type, Data) :-
+% 	format('~q:~q~n', [Generator, Type]),
+% 	member(X, Data),
+% 	format('   ~q~n', [X]),
+%  	fail.
+% announce_variants(_Generator, _Type, _Data).
+
+% announce_variants(Generator, Type, Data) :-
+% 	length(Data, Length),
+% 	( Length =\= 0 ->
+% 	  format(user_output, '~q|~q|~d~n', [Generator,Type,Length])
+% 	; true
+% 	).
+	       
 get_real_category([],         []).
 get_real_category([Category], Category).
 
@@ -565,9 +615,10 @@ get_roots_for_word(Word, Categories, Roots) :-
 %augment_variant_with_roots(_V).
 
 augment_generators_with_roots([]).
-augment_generators_with_roots([gvc(G,_,_)|Rest]) :-
+augment_generators_with_roots([gvc(G,_,_)|RestGVCs]) :-
+	G =  v(_Word,_Categories,_VarLevel,_History,_Roots,_NFR),
 	augment_variant_with_roots(G),
-	augment_generators_with_roots(Rest).
+	augment_generators_with_roots(RestGVCs).
 
 
 /* filter_out_null_pairs(+AAPairs, -FilteredAAPairs)
@@ -799,6 +850,12 @@ get_spid_variants/5
 xxx
 */
 
+verify_base_form_and_history(History, Word) :-
+	( History == [] ->
+	  true
+	; is_a_base_form(Word)
+	).
+
 %% temp
 get_spid_variants(V,_SPFlag,SPVariants,IVariants,DVariants) :-
     variant_score(inflection,InflectionLevel),
@@ -806,9 +863,9 @@ get_spid_variants(V,_SPFlag,SPVariants,IVariants,DVariants) :-
     variant_score(derivation,DerivationLevel),
     V=v(Word,Categories,VarLevel,History,_Roots,_NFR),
     % compute the sp_variants and i_variants
-    (((History==[]; is_a_base_form(Word)),
-      get_spellings_and_inflections_for_form(Word,Categories,
-					     SPVariantAtoms0,IVariantAtoms0)) ->
+    ( ( verify_base_form_and_history(History, Word),
+	get_spellings_and_inflections_for_form(Word,Categories,
+					       SPVariantAtoms0,IVariantAtoms0) ) ->
         ord_subtract(IVariantAtoms0,SPVariantAtoms0,IVariantAtoms1),
         lowercase_list(SPVariantAtoms0,SPVariantAtoms1),
         sort(SPVariantAtoms1,SPVariantAtoms2),
@@ -842,92 +899,6 @@ get_spid_variants(V,_SPFlag,SPVariants,IVariants,DVariants) :-
         DVariants=[]
     ).
 
-%% dump version
-%get_spid_variants(V,_SPFlag,SPVariants,IVariants,DVariants) :-
-%    variant_score(inflection,InflectionLevel),
-%    variant_score(spelling,SpellingLevel),
-%    variant_score(derivation,DerivationLevel),
-%    V=v(Word,Categories,VarLevel,History,_Roots,_NFR),
-%    format('*|3.0|get_spid_variants|~p~n',[Word]),
-%    % compute the sp_variants and i_variants
-%    (((History==[]; is_a_base_form(Word)),
-%      get_spellings_and_inflections_for_form(Word,Categories,
-%					     SPVariantAtoms0,IVariantAtoms0)) ->
-%	format('*|3.1|is_a_base_form|~p|true~n',[Word]),
-%	format('*|3.2|get_spellings_and_inflections_for_form|~p|~p|~p~n',
-%	       [Word,SPVariantAtoms0,IVariantAtoms0]),
-%        ord_subtract(IVariantAtoms0,SPVariantAtoms0,IVariantAtoms1),
-%        lowercase_list(SPVariantAtoms0,SPVariantAtoms1),
-%        sort(SPVariantAtoms1,SPVariantAtoms2),
-%        ord_subtract(SPVariantAtoms2,[Word],SPVariantAtoms),
-%        lowercase_list(IVariantAtoms1,IVariantAtoms2),
-%        sort(IVariantAtoms2,IVariantAtoms),
-%        (SPVariantAtoms==[] ->
-%            SPVariants=[]
-%        ;   NewSPVarLevel is VarLevel + SpellingLevel,
-%            NewSPHistory=[0'p|History],
-%            convert_to_variants(SPVariantAtoms,Categories,NewSPVarLevel,
-%				NewSPHistory,SPVariants)
-%        ),
-%        (IVariantAtoms==[] ->
-%            IVariants=[]
-%        ;   NewIVarLevel is VarLevel + InflectionLevel,
-%            NewIHistory=[0'i|History],
-%            convert_to_variants(IVariantAtoms,Categories,NewIVarLevel,
-%				NewIHistory,IVariants)
-%        ),
-%        % compute the d_variants
-%        % do not compute derivational variants for AAs (expansions are allowed)
-%        ((aao(Word); History=[0'a|_]) ->  %'
-%            DVariants=[]
-%        ;   get_all_derivational_variants(SPVariantAtoms2,IVariantAtoms,
-%	                                  Categories,VarLevel,History,
-%					  DerivationLevel,DVariants)
-%	)
-%    ;   SPVariants=[],
-%        IVariants=[],
-%        DVariants=[]
-%    ),
-%    groundify_variants(SPVariants,SPVariantsG),
-%    groundify_variants(IVariants,IVariantsG),
-%    groundify_variants(DVariants,DVariantsG),
-%    format('*|3.9|get_spid_variants|~p|~p|~p|~p~n',
-%	   [Word,SPVariantsG,IVariantsG,DVariantsG]).
-%
-%groundify_variants([],[]) :-
-%    !.
-%groundify_variants([First|Rest],[FirstG|RestG]) :-
-%    groundify_variant(First,FirstG),
-%    groundify_variants(Rest,RestG).
-%
-%groundify_variant(v(W,C,V,H,R,N),
-%		  v(WG,CG,VG,HG,RG,NG)) :-
-%    (var(W) ->
-%	WG=''
-%    ;   WG=W
-%    ),
-%    (var(C) ->
-%	CG=''
-%    ;   CG=C
-%    ),
-%    (var(V) ->
-%	VG=''
-%    ;   VG=V
-%    ),
-%    (var(H) ->
-%	HG=''
-%    ;   HG=H
-%    ),
-%    (var(R) ->
-%	RG=''
-%    ;   RG=R
-%    ),
-%    (var(N) ->
-%	NG=''
-%    ;   NG=N
-%    ).
-
-
 /* get_all_derivational_variants(+SPVariantAtoms, +IVariantAtoms, +Categories,
                                  +VarLevel, +History, +DerivationLevel,
                                  -DVariants)
@@ -949,25 +920,6 @@ get_all_derivational_variants(SPVariantAtoms,IVariantAtoms,Categories,
     generate_derivational_root_forms(Vs,FilterAtoms,DerivationLevel,
                                      [],DVariants0),
     sort(DVariants0,DVariants).
-
-%% dump version
-%get_all_derivational_variants(SPVariantAtoms,IVariantAtoms,Categories,
-%                              VarLevel,History,DerivationLevel,DVariants) :-
-%    format('*|4.0|get_all_derivational_variants|~p|~p|~p~n',
-%	   [SPVariantAtoms,IVariantAtoms,Categories]),
-%    get_initial_root_forms(SPVariantAtoms,Categories,RootTerms0),
-%    filter_by_categories(RootTerms0,Categories,RootTerms1),
-%    convert_terms_to_variants(RootTerms1,VarLevel,History,Vs),
-%    extract_atoms_from_terms(RootTerms1,RootAtoms),
-%    append([RootAtoms,SPVariantAtoms,IVariantAtoms],FilterAtoms0),
-%    sort(FilterAtoms0,FilterAtoms),
-%    generate_derivational_root_forms(Vs,FilterAtoms,DerivationLevel,
-%                                     [],DVariants0),
-%    sort(DVariants0,DVariants),
-%    groundify_variants(DVariants,DVariantsG),
-%    format('*|4.9|get_all_derivational_variants|~p|~p~n',
-%	   [SPVariantAtoms,DVariantsG]).
-
 
 /* get_initial_root_forms(+SPVariantAtoms, +Categories, -RootTerms)
    get_initial_root_forms(+SPVariantAtoms, +Categories,
@@ -1047,8 +999,10 @@ generate_root_forms_from_bases([First|Rest],RootTerms) :-
 
 %% temp
 generate_root_forms_from_base(BaseAtom,RootTerms) :-
-    get_variants_for_citation_form(BaseAtom,VariantList),
-    extract_root_forms_from_variants(VariantList,RootTerms).
+    ( get_variants_for_citation_form(BaseAtom,VariantList) ->
+      extract_root_forms_from_variants(VariantList,RootTerms)
+    ; RootTerms = []
+    ).
 
 %% dump version
 %generate_root_forms_from_base(BaseAtom,RootTerms) :-
@@ -1523,38 +1477,42 @@ gather_variants_pos/8
 gather_variants(GVCs, PhraseWords, HeadWords, VariantsAVL) :-
 	empty_avl(EmptyVariantsAVL),
 	empty_avl(EmptyPositionAVL),
-	% format("~nHEAD:   ~q~nPHRASE: ~q~n", [HeadWords,PhraseWords]),
 	compute_all_subsequence_positions(HeadWords, PhraseWords, PossibleHeadPositions),
 	concatenate_text(HeadWords, ' ', HeadWordsAtom),
 	add_to_avl_once(HeadWordsAtom, PossibleHeadPositions,
 			EmptyPositionAVL, InitialPositionAVL),
 	% reversed order of args from QP library version!
 	last(PossibleHeadPositions, HeadPosition),
-	gather_variants_GVC(GVCs, PhraseWords, HeadPosition,
-			  InitialPositionAVL,
-			  EmptyVariantsAVL, VariantsAVL).
+	length(PhraseWords, PhraseWordsLength),
+	gather_variants_GVC(GVCs, PhraseWords, PhraseWordsLength, HeadPosition,
+			    InitialPositionAVL, EmptyVariantsAVL, VariantsAVL).
 
-% For each gvc/3 term, loop through all positions of the generator in the phrase.
-gather_variants_GVC([],_PhraseWords, _HeadPosition, _PositionAVL, VAVLIn, VAVLIn).
-gather_variants_GVC([gvc(Generator,Variants,_)|Rest], PhraseWords, HeadPosition,
-		    PositionAVLIn, VAVLIn, VAVLOut) :-
-	Generator = v(GeneratorWord,_,_,_,_,NFR),
-	tokenize_text_mm_lc(GeneratorWord, GeneratorWords),
-	cached_compute_all_subsequence_positions(GeneratorWords, PhraseWords,
-						 GeneratorPositions,
+% Loop through all gvc/3 terms, and for each gvc/3 term,
+% loop through all positions of the GeneratorWord in the phrase.
+gather_variants_GVC([],_PhraseWords, _PhraseWordsLength, _HeadPosition,
+		    _PositionAVL, VAVLIn, VAVLIn).
+gather_variants_GVC([gvc(Generator,Variants,_)|Rest], PhraseWords, PhraseWordsLength,
+		    HeadPosition, PositionAVLIn, VAVLIn, VAVLOut) :-
+	Generator = v(GeneratorWord,_LexCats,_,_,_,NFR),
+	% format(user_output, 'GVC: ~q-~q~n', [GeneratorWord,LexCats]),
+	tokenize_text_mm_lc(GeneratorWord, GeneratorWordList),
+	cached_compute_all_subsequence_positions(GeneratorWord, GeneratorWordList,
+						 PhraseWords, GeneratorPositions,
 						 PositionAVLIn, PositionAVLOut),
 	GeneratorPositions = [[FirstI|_]|_],
-	length(PhraseWords, PhraseWordsLength),
-	% instantiate NFR here!
+	% instantiate NFR ("number from right") here!
 	NFR is PhraseWordsLength + 1 - FirstI,
+	% format(user_output, '~d:~w~n', [NFR,GeneratorWordList]),
 	gather_variants_pos(GeneratorPositions, PhraseWords, HeadPosition,
 			    Generator, Variants, NFR, VAVLIn, VAVLInOut),
-	gather_variants_GVC(Rest, PhraseWords, HeadPosition, PositionAVLOut, VAVLInOut, VAVLOut).
+	gather_variants_GVC(Rest, PhraseWords, PhraseWordsLength,
+			    HeadPosition, PositionAVLOut, VAVLInOut, VAVLOut).
 
 % For each generator position in the phrase words, loop through all the variants.
 gather_variants_pos([], _PhraseWords, _HeadPosition, _Generator, _Variants, _NFR, VAVLIn, VAVLIn).
 gather_variants_pos([GeneratorPosition|Rest], PhraseWords, HeadPosition, Generator,
 		  Variants, NFR,VAVLIn, VAVLOut) :-
+	% format(user_output, '   POS: ~q~n', [GeneratorPosition]),
 	compute_head_involvement(GeneratorPosition, HeadPosition, GeneratorInvolvesHead),
 	gather_variants_var(Variants, NFR, Generator,
 			    GeneratorPosition, GeneratorInvolvesHead,
@@ -1569,93 +1527,116 @@ gather_variants_var([Variant|RestVariants], NFR, Generator,
 	% instantiate NFR!
 	Variant = v(Word,_,_,_,_,NFR),
 	tokenize_text_mm_lc(Word, Words),
+	VInfo = vinfo(Generator,GeneratorPosition,GeneratorInvolvesHead,Variant,Words),
 	( Words = [FirstWord|_] ->
-	  add_to_avl(FirstWord,
-		     vinfo(Generator, GeneratorPosition, GeneratorInvolvesHead, Variant, Words),
-		     VAVLIn, VAVLInOut)
-	; VAVLInOut = VAVLIn
+	  % format(user_output, '      VAR: ~q:~q~n', [FirstWord,VInfo]),
+	  add_to_avl(FirstWord, VInfo, VAVLIn, VAVLInOut)
+	; abort,
+	  VAVLInOut = VAVLIn
 	),
 	gather_variants_var(RestVariants, NFR, Generator, GeneratorPosition,
 			    GeneratorInvolvesHead, VAVLInOut, VAVLOut).
 
-% csp(SubWords, Words, Res) :-
-% 	% compute_all_subsequence_positions(SubWords, Words, Res).
-% 	compute_all_positions(SubWords, Words, Res).
-
-% compute_all_subsequence_positions_OLD(SubWords, Words, Positions) :-
-% 	( findall(Position,
-% 		  compute_one_subsequence_position(SubWords,Words,Position),
-% 		  Positions),
-% 	  Positions \== [] ->
-% 	  true
-% 	; format('~NERROR: compute_all_subsequence_positions/3 failed for ~p and ~p~n',
-% 		 [SubWords,Words])
-% 	).
-
 % First check the cache to see if we have already computed
 % the subsequence positions for this word sequence.
-cached_compute_all_subsequence_positions(GeneratorWords, PhraseWords, GeneratorPositions,
+cached_compute_all_subsequence_positions(GeneratorAtom, GeneratorWordList,
+					 PhraseWords, GeneratorPositions,
 					 PositionAVLIn, PositionAVLOut) :-
 	% avl:avl_size(PositionAVLIn, PositionAVLSize),
- 	concatenate_text(GeneratorWords, ' ', GeneratorAtom),
-	% GeneratorAtom = GeneratorWords,
+	% GeneratorAtom = GeneratorWordList,
 	( avl_fetch(GeneratorAtom, PositionAVLIn, [GeneratorPositions]) ->
 	  % format(user_output, '~n    Cached (~w): ~q|~q|~q~n',
-	  % 	 [PositionAVLSize, GeneratorWords, PhraseWords, GeneratorPositions]),
+	  % 	 [PositionAVLSize, GeneratorWordList, PhraseWords, GeneratorPositions]),
 	  PositionAVLOut = PositionAVLIn
-	; compute_all_subsequence_positions(GeneratorWords, PhraseWords, GeneratorPositions),
+	; compute_all_subsequence_positions(GeneratorWordList, PhraseWords, GeneratorPositions),
 	  % format(user_output, '~nNot Cached (~w): ~q|~q|~q~n',
-	  % 	 [PositionAVLSize, GeneratorWords, PhraseWords, GeneratorPositions]),
+	  % 	 [PositionAVLSize, GeneratorWordList, PhraseWords, GeneratorPositions]),
 	  add_to_avl_once(GeneratorAtom, GeneratorPositions, PositionAVLIn, PositionAVLOut)
 	).
 
-compute_all_subsequence_positions(SubWords, Words, AllPositions) :-
-	( compute_all_subsequence_positions_1(SubWords, Words, AllPositions),
-	  % format(user_output, '~nCSP: ~q|~q|~q~n', [SubWords, Words, AllPositions]),
-	  AllPositions \== [] ->
-	  true
-	; format('~NERROR: compute_all_subsequence_positions/3 failed for ~p and ~p~n',
-		 [SubWords,Words])
+compute_all_subsequence_positions(GeneratorWords, PhraseWords, AllPositions) :-
+	compute_all_subsequence_positions_1(GeneratorWords, PhraseWords, AllPositions0),
+	% If AllPositions0 is [], there was no match, which should mean that
+	% GeneratorWords contains one of more components of a split word such as "breastfeeding".
+	% E.g., if GeneratorWords is [breast] or [feeding] or [breast,feeding],
+	% and PhraseWords is [... breastfeeding, ... ], then AllPositions0 could be [],
+	% so we need to expand PhraseWords using the split-word table.
+	% This expansion transforms [... breastfeeding, ... ] into [ ... breast,feeding, ... ].
+	( AllPositions0 == [],
+	  member(SplitWord, PhraseWords),
+	  split_word(SplitWord, _Word1, _Word2) ->
+	  expand_split_word_list(PhraseWords, ExpandedPhraseWords),
+	  compute_all_subsequence_positions_1(GeneratorWords, ExpandedPhraseWords, AllPositions1),
+	  decrease_end_pos(AllPositions1, AllPositions2),
+	  ( AllPositions2 == [] ->
+	    format('~NERROR: compute_all_subsequence_positions/3 failed for ~p and ~p~n',
+		   [GeneratorWords,PhraseWords])
+	  ; AllPositions = AllPositions2
+	  )
+	; AllPositions = AllPositions0
+	).
+
+% In the following comments, casp == compute_all_subsequence_positions.
+% If we call, e.g., casp([breast,feeding], [breastfeeding,patients], Pos),
+% Pos will be [], so we expand [breastfeeding,patients] to [breast,feeding,patients],
+% and call casp([breast,feeding], [breast,feeding,patients], Pos).
+% That call to casp will instantiate Pos to [[1,2]];
+% however, it should really be [[1,1]], so we have to decrease the end positions by 1.
+
+decrease_end_pos(AllPositionsIn, AllPositionsOut) :-
+	(  foreach([StartPos,OrigEndPos], AllPositionsIn),
+	   foreach([StartPos,NewEndPos], AllPositionsOut)
+	do NewEndPos is OrigEndPos - 1
 	).
 
 % The following is a more elegant way of doing compute_all_subsequence_position/3,
 % which after extensive testing, has also proved to be faster, and it doesn't use findall/3!
 
+% Given two lists, HeadWords and AllWords,
+% we want to know all subsequence positions in AllWords in which HeadWords appear.
+% E.g., if HeadWords is [a,b] and AllWords is [a,b,c,a,b,c,a,b,c],
+%                                              1 2 3 4 5 6 7 8 9
+% [a,b] appears in positions [1,2], [4,5], and [7,8], so
+% AllPositions would be [[1,2], [4,5], [7,8]]
+
+% A more real-world example:
+% If HeadWords is [patients] and AllWords is [breastfeeding,patients],
+% then AllPositions would be [[2,2]].
 compute_all_subsequence_positions_1([], _Words, [[0,-1]]).
-compute_all_subsequence_positions_1([FirstSubWord|RestSubWords], Words, AllPositions) :-
+compute_all_subsequence_positions_1([FirstGeneratorWord|RestGeneratorWords], Words, AllPositions) :-
 	% reversed order of args from QP library version!
-	length([FirstSubWord|RestSubWords], SubWordsLength),
-	last([FirstSubWord|RestSubWords], LastSubWord),
-	all_positions(Words, FirstSubWord, 1, FirstPositions),
-	all_positions(Words, LastSubWord,  1, LastPositions),
-	all_pairs(FirstPositions, LastPositions, SubWordsLength, AllPositions, []).
+	last([FirstGeneratorWord|RestGeneratorWords], LastGeneratorWord),
+	all_positions(Words, FirstGeneratorWord, 1, FirstPositions),
+	all_positions(Words, LastGeneratorWord,  1, LastPositions),
+ 	length([FirstGeneratorWord|RestGeneratorWords], GeneratorWordListLength),
+	all_pairs(FirstPositions, LastPositions, GeneratorWordListLength, AllPositions, []).
 
 % Given a list L and an element X, generate all index positions of X in L.
 % E.g., calling
-%                1 2 3 4 5 6 7 8 9
 % all_positions([a,b,c,a,b,c,a,b,c], a, 1, AllPositions)
+% Positions:     1 2 3 4 5 6 7 8 9
 % instantiates AllPositions to [1,4,7]
 
-all_positions([], _SubWord, _Index, []).
-all_positions([H|T], SubWord, Index, AllPositions) :-
-	( H == SubWord ->
+all_positions([], _GeneratorWord, _Index, []).
+all_positions([H|T], GeneratorWord, Index, AllPositions) :-
+	( H == GeneratorWord ->
 	  AllPositions = [Index|Rest]
 	; AllPositions = Rest
 	),
 	NextIndex is Index + 1,
-	all_positions(T, SubWord, NextIndex, Rest).
+	all_positions(T, GeneratorWord, NextIndex, Rest).
 
 % Given two lists L1 and L2, generate all pairs X1-X2
-% (each pair is currently represented as a 2-element list -- this MUST change!!)
+% (each pair is currently represented as a 2-element list, which is not good!)
 % such that
 % * X1 is a member of L1,
 % * X2 is a member of L2,
 % * X1 =< X2, and
-% * (X2 - X1) + 1 == SubWordsLength
+% * (X2 - X1) + 1 == GeneratorWordListLength
 % E.g., calling
-% all_pairs([1,3,5], [2,4,6], SubWordsLength, AllPairs, [])
-% instantiates AllPairs to [[1,2],[1,4],[1,6],[3,4],[3,6],[5,6]]
-% subject to the constraint that 
+% all_pairs([1,3,5], [2,4,6], GeneratorWordListLength, AllPairs, [])
+% instantiates AllPairs to [[1,2],[1,4],[1,6],[3,4],[3,6],[5,6]],
+% but the constraint (X2 - X1) + 1 == GeneratorWordListLength would remove some of those pairs.
 
 all_pairs([], _List2, _DesiredLength, AllPairs, AllPairs).
 all_pairs([H|T], List2, DesiredLength, AllPairs, Tail) :-
@@ -1671,8 +1652,21 @@ all_pairs_1([H|T], X, DesiredLength, AllPairs, Tail) :-
 	),
 	all_pairs_1(T, X, DesiredLength, RestAllPairs, Tail).
 
-
 % Old version:
+% csp(SubWords, Words, Res) :-
+% 	% compute_all_subsequence_positions(SubWords, Words, Res).
+% 	compute_all_positions(SubWords, Words, Res).
+
+% compute_all_subsequence_positions(SubWords, Words, Positions) :-
+% 	( findall(Position,
+% 		  compute_one_subsequence_position(SubWords,Words,Position),
+% 		  Positions),f
+% 	  Positions \== [] ->
+% 	  true
+% 	; format('~NERROR: compute_all_subsequence_positions/3 failed for ~p and ~p~n',
+% 		 [SubWords,Words])
+% 	).
+%
 % compute_one_subsequence_position([], _Words, [0,-1]).
 % compute_one_subsequence_position([SubWord|RestSubWords], Words, Position) :-
 % 	SubWords = [SubWord|RestSubWords],
@@ -1685,7 +1679,6 @@ all_pairs_1([H|T], X, DesiredLength, AllPairs, Tail) :-
 % 	BeginPos is PrefixLength + 1,
 % 	EndPos is BeginPos + SubWordsLength - 1,
 % 	Position = [BeginPos,EndPos].
-
 
 /* compute_head_involvement(+GeneratorPosition, +HeadPosition,
                             -GeneratorInvolvesHead)

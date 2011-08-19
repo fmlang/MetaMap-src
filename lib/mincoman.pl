@@ -141,6 +141,7 @@ convert([punctuation:PuncList|MoreWords],[NewItem|NewGap],Gap) :-
 convert([(not):VarInfoList|MoreWords], 
         [adv([lexmatch(['not']),
          inputmatch(InputMatch),tag(adv)])|NewGap],Gap) :-
+	!,
     get_variant( inputmatch, VarInfoList, InputMatch ),
     convert( MoreWords, NewGap, Gap ).
 

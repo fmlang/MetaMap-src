@@ -49,7 +49,7 @@
     ]).
 
 :- use_module(skr_lib(skr_tcp), [
-	establish_tcp_connection/5
+	establish_tcp_connection/4
    ]).
 
 :- use_module(skr(skr), [
@@ -65,7 +65,9 @@
    ]).
 
 :- use_module(skr_lib(nls_strings), [
-	split_string_completely/3
+	atom_codes_list/2,
+	split_string_completely/3,
+	trim_and_compress_whitespace/2
    ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -332,11 +334,8 @@ all_unambiguous_phrases([FirstPhrase|RestPhrases]) :-
 unambiguous_phrase(PhraseTerm) :-
 	PhraseTerm = phrase(_Phrase,_Candidates,Mappings,_PWI,_GVCs,_EV0,_APhrases),
 	Mappings = mappings(MapTermList),
-	singleton_or_empty(MapTermList).
-
-singleton_or_empty([]).
-singleton_or_empty([_]).
-
+	length(MapTermList, Length),
+	Length =< 1.
 
 /*
 extract_mmo/8 takes MMOutput, a list of MMO_Terms [MMOTerm1, MMOTerm2, ..., MMOTermN]
@@ -345,7 +344,9 @@ where each MMOTerm corresponds to an utterance in the citation and is of the for
 
 mm_output(ExpSentence, Citation, ModifiedText, Tagging, AAs, Syntax, MMOPhrases, ExtractedPhrases)
 
-MMOPhrases is a list [PhraseTerm1, PhraseTerm2, ..., PhraseTermN]
+The only component of the mm_output structure we care about is MMOPhrases,
+
+which is a list [PhraseTerm1, PhraseTerm2, ..., PhraseTermN]
 
 where each PhraseTerm is of the form
 
@@ -529,7 +530,7 @@ parse_disamb_mmo_aux([First|Rest], Result) :-
             ; DisambSenses0 == "[JDI unable to disambiguate input]"
             ) ->
 	    Result = DisambRest,
-	    debug_message(trace, '~n### WSD response: ~s~n', [DisambSenses0])
+	    debug_message('WSD', '~n### WSD response: ~s~n', [DisambSenses0])
 	  ; atom_codes(Label, Label0),
 	    number_codes(I, I0),
 	    number_codes(N, N0),
@@ -541,8 +542,8 @@ parse_disamb_mmo_aux([First|Rest], Result) :-
 	    Result = [disamb(Label,I,N,AllSenses,DisambSenses)|DisambRest],
 	    length(AllSenses, NumWSDInputs),
 	    length(DisambSenses, NumWSDOutputs),
-	    debug_message(trace, '~n### WSD inputs (~d): ~w~n', [NumWSDInputs,AllSenses]),
-	    debug_message(trace, '### WSD output (~d): ~w~n~n',  [NumWSDOutputs,DisambSenses])
+	    debug_message('WSD', '~n### WSD inputs (~d): ~w~n', [NumWSDInputs,AllSenses]),
+	    debug_message('WSD', '### WSD output (~d): ~w~n~n',  [NumWSDOutputs,DisambSenses])
 
 	  )
       ),
@@ -738,12 +739,15 @@ map_contains_sense_to_strip(ThisMap, RestMaps, MapsToKeep,
 			    SensesToStrip, SensesToKeep) :-
 	ThisMap = map(_ThisMapNegScore, ThisMapEVs),
 	evs_contain_sense(ThisMapEVs, 1, MatchingPosition, SensesToStrip),
+	% do NOT change these calls to member/2 to calls to memberchk/2!!
 	( member(OtherMap, RestMaps)
         ; member(OtherMap, MapsToKeep)
         ),
 	OtherMap = map(_OtherMapNegScore, OtherMapEVs),
 	evs_contain_sense(OtherMapEVs, 1, MatchingPosition, SensesToKeep),
 	!.	
+
+% :- nondet evs_contain_sense/4.
 
 % At least one of Evs contains at least one of SensesToStrip
 evs_contain_sense([ev(_,_,_,Concept,_,_,_,_,_,_Srcs,_PosInfo)|_RestEVs],
@@ -780,13 +784,14 @@ ap_contains_sense_to_strip(ThisAP, RestAPs, APsToKeep,
 			   SensesToStrip, SensesToKeep) :-
 	ThisAP = ap(_ThisAPNegScore,_ThisAPLinearPhrase,_ThisAPLinearPhraseMap,ThisAPEVs),
 	evs_contain_sense(ThisAPEVs, 1, MatchingPosition, SensesToStrip),
+	% do NOT change these calls to member/2 to calls to memberchk/2!!
 	( member(OtherAP, RestAPs)
 	; member(OtherAP, APsToKeep)
 	),
 	OtherAP = ap(_OtherAPNegScore,_OtherAPLinearPhrase,_OtherAPLinearPhraseMap,OtherAPEVs),
 	evs_contain_sense(OtherAPEVs, 1, MatchingPosition, SensesToKeep).
 
-reinsert_mmoutput([], [], []).
+reinsert_mmoutput([], [], []) :- !.
 reinsert_mmoutput([mm_output(Utterance,Citation,ModifiedText,Tagging,
 			     AAs,Syntax,MMOPhrases,_ExtractedPhrases)
 		   |RestMMOutput],
@@ -843,12 +848,11 @@ call_WSD(MMOTermList,
 	 WSDServerHosts, WSDForced, WSDServerPort,
 	 WSDString) :-
 	get_WSD_parameters(MethodList, BeginDelimiterChars, EndDelimiterChars),
-	choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost, ChosenWSDServerIP),
+	choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost),	
 	mmo_terms_to_xml_chars(MMOTermList, MethodList, XMLRequest),
 	% format(user_output, 'BEFORE call_WSD_client~n', []),
 	call_WSD_server(XMLRequest,
-			ChosenWSDServerHost, ChosenWSDServerIP,
-			WSDForced, WSDServerPort, Response),
+			ChosenWSDServerHost, WSDForced, WSDServerPort, Response),
 	append([BeginDelimiterChars, WSDString, EndDelimiterChars, [10]], Response),
 	!.
 	% atom_codes(WSDAtomOut, WSDString).
@@ -869,15 +873,11 @@ get_WSD_parameters(MethodList, BeginDelimiterChars, EndDelimiterChars) :-
 	atom_codes(END_DELIMITER, EndDelimiterChars),
 	make_method_list(Methods, Weights, MethodList).
 
-call_WSD_server(XMLRequest,
-		WSDServerHost, WSDServerIP,
-		WSDForced, WSDServerPort,
-		Response) :-
+call_WSD_server(XMLRequest, WSDServerHost, WSDForced, WSDServerPort, Response) :-
 	wsd_server_message(WSDForced, WSDServerMessage),
 	between(1, 10, _),
 	   ServerName = 'WSD',
-           establish_tcp_connection(ServerName, WSDServerHost, WSDServerIP,
-				    WSDServerPort, SocketStream),
+           establish_tcp_connection(ServerName, WSDServerHost, WSDServerPort, SocketStream),
 	   format(user_output,
 	          'Established connection to WSD Server on ~w~w.~n',
 	          [WSDServerMessage, WSDServerHost]),
@@ -936,23 +936,39 @@ make_method_list([Method0|Methods], [Weight|Weights], [MethodElement|MethodList]
 	make_method_list(Methods, Weights, MethodList).
 
 get_WSD_server_hosts_and_port(WSDServerHosts, UserChoice, WSDServerPort) :-
+	( control_value('WSD', ChosenWSDServerHost) ->
+	  UserChoice = ChosenWSDServerHost,
+	  WSDServerHosts = []
+	; UserChoice is 0,
+	  environ('WSD_SERVER_HOSTS', WSDServerHostsEnv),
+	  atom_codes(WSDServerHostsEnv, WSDServerHostsChars0),
+	  trim_and_compress_whitespace(WSDServerHostsChars0, WSDServerHostsChars),
+	  split_string_completely(WSDServerHostsChars, " ", WSDServerHostsStrings),
+	  atom_codes_list(WSDServerHosts, WSDServerHostsStrings)
+	),
+        environ('WSD_SERVER_PORT', WSDServerPortAtom),
+	ensure_number(WSDServerPortAtom, WSDServerPort),
+	!.
+
+/*
+get_WSD_server_hosts_and_port(WSDServerHosts, UserChoice, WSDServerPort) :-
 	environ('WSD_SERVER_HOSTS', WSDServerHostsEnv),
 	atom_codes(WSDServerHostsEnv, WSDServerHostsChars0),
 	% SICStus Prolog's read_from_codes/2 requires a terminating period,
 	% which Quintus Prolog's chars_to_term/2 does not!
 	append(WSDServerHostsChars0, ".", WSDServerHostsChars),
-	read_from_codes(WSDServerHostsChars, WSDServerHosts),
-	( control_value('WSD', WSDServerHost) ->
-	  UserChoice = WSDServerHost,
-	  member(ChosenWSDServerHostAndIP, WSDServerHosts),
-	  get_WSD_server_name_and_IP_address(ChosenWSDServerHostAndIP,
-					     WSDServerHost,
-					     _ChosenWSDServerIP)
+	read_from_codes(WSDServerHostsChars, WSDServerHostsAtoms),
+	reformat_WSD_server_hosts(WSDServerHostsAtoms, WSDServerHosts),	
+	( control_value('WSD', ChosenWSDServerHost) ->
+	  UserChoice = ChosenWSDServerHost,
+     	  member(ChosenWSDServerHost-_IP, WSDServerHosts)
 	; UserChoice is 0
 	),
         environ('WSD_SERVER_PORT', WSDServerPortAtom),
 	!,
 	ensure_number(WSDServerPortAtom, WSDServerPort).
+*/
+
 get_WSD_server_hosts_and_port(_WSDServerHosts, UserChoice, _WSDServerPort) :-
 	( control_value('WSD', UserChoice) ->
 	  format(user_output,
@@ -962,26 +978,13 @@ get_WSD_server_hosts_and_port(_WSDServerHosts, UserChoice, _WSDServerPort) :-
 	),
 	halt.
 
-choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost, ChosenWSDServerIP) :-
+% :- nondet choose_WSD_server/3.
+
+choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost) :-
 	( WSDForced \== 0 ->
-	  ChosenWSDServerHost = WSDForced,
-	  member(ChosenWSDServerHostAndIP, WSDServerHosts),
-	  get_WSD_server_name_and_IP_address(ChosenWSDServerHostAndIP,
-					     ChosenWSDServerHost,
-					     ChosenWSDServerIP)
+	  ChosenWSDServerHost = WSDForced
 	; repeat,
 	     % must be backtrackable!
-	     random_member(ChosenWSDServerHostAndIP, WSDServerHosts),
-	     get_WSD_server_name_and_IP_address(ChosenWSDServerHostAndIP,
-						ChosenWSDServerHost,
-						ChosenWSDServerIP)
+ 	     random_member(ChosenWSDServerHost, WSDServerHosts)
        ).
 
-get_WSD_server_name_and_IP_address(ChosenWSDServerHostAndIP,
-				   ChosenWSDServerHost,
-				   ChosenWSDServerIP) :-
-	atom_codes(ChosenWSDServerHostAndIP, ChosenWSDServerHostAndIPString),
-	split_string_completely(ChosenWSDServerHostAndIPString, "|",
-				[ChosenWSDServerHostString, ChosenWSDServerIPString]),
-	atom_codes(ChosenWSDServerHost, ChosenWSDServerHostString),
-	atom_codes(ChosenWSDServerIP, ChosenWSDServerIPString).

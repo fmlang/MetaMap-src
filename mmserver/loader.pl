@@ -36,17 +36,26 @@
 % Note that MetaMap is now subsumed by SKR.
 % In particular, metamap_fe and metamap have been replaced by skr_fe and skr.
 
-:- use_module(mmserver,[
+:- use_module(mmserver, [
 	main/0
     ]).
 
-:- use_module(skr_lib(nls_signal),[
+:- use_module(skr(skr), [
+	stop_skr/0
+    ]).
+
+:- use_module(skr_lib(nls_signal), [
 	establish_signal_handling/0
     ]).
 
 
 :- use_module(skr_lib(sicstus_utils), [
 	ttyflush/0
+    ]).
+
+:- use_module(library(file_systems), [
+	file_exists/1,
+	file_property/3
     ]).
 
 :- use_module(library(random), [
@@ -98,3 +107,26 @@ runtime_entry(abort) :-
 	ttyflush,
 	stop_skr,
 	format(user_output,'Done.~n',[]).
+
+pl_to_po :-
+	source_file(FilePL),
+	compile_to_PO_if_necessary(FilePL),
+	fail
+      ; true.
+
+compile_to_PO_if_necessary(FilePL) :-
+	sub_atom(FilePL, _, _, _, 'SKR'),
+	atom_concat(Prefix, '.pl', FilePL),
+	atom_concat(Prefix, '.po', FilePO),
+	% UNLESS the PO file exists and is more recent than the PL file,
+	% compile the PL file to PO
+	( file_exists(FilePO),
+	  file_property(FilePL, modify_timestamp, TimeStampPL),
+	  file_property(FilePO, modify_timestamp, TimeStampPO),
+	  TimeStampPO > TimeStampPL ->
+	  true
+	; format(user_output, 'Saving ~w to ~w~n', [FilePL,FilePO]),
+	  save_files(FilePL, FilePO)
+	).
+	   
+:- pl_to_po.
