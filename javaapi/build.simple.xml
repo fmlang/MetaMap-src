@@ -17,8 +17,8 @@
   <!-- property name="quintus.java"    value="${quintus}/java3.5"/ -->
   <!-- property name="prologbeans.jar" value="${quintus.java}/prologbeans.jar"/ -->
 
-  <property name="sicstus"         value="/nfsvol/crfiler-ind/II_Research/SICStus/sp-4.1.2-x86-linux-glibc2.5"/>
-  <property name="sicstus.java"    value="${sicstus}/lib/sicstus-4.1.2/bin"/>
+  <property name="sicstus"         value="/nfsvol/crfiler-ind/II_Research/SICStus/sp-4.2.0-x86-linux-glibc2.5"/>
+  <property name="sicstus.java"    value="${sicstus}/lib/sicstus-4.2.0/bin"/>
   <property name="prologbeans.jar" value="${sicstus.java}/prologbeans.jar"/>
 
   <!-- ======================== compile ========================= -->
