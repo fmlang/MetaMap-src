@@ -43,15 +43,18 @@ O_SYSTEM = $(shell uname)
 ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G -shared
   LIBS = # -lnsl  -lsocket -lrt -llm  -lm
+  SEXT=so
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LD = gcc
     LDFLAGS=-m32 -shared
     LIBS = -lpthread -llm  -lm
+    SEXT=so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
         LDFLAGS=-m32
         LIBS = 
+	SEXT=bundle
     endif
   endif
 endif
@@ -106,7 +109,7 @@ DYNAMIC_LINK_FLAGS = -- ${LDFLAGS}			        \
 
 # all:		splfr_STATIC splfr_DYNAMIC
 all:		splfr_DYNAMIC
-		mv qp_lexicon.so ../..
+		mv qp_lexicon.${SEXT} ../..
 
 splfr_STATIC:	functions query miscutil morph
 		${SPLFR} ${SPLFR_STATIC_FLAGS} qp_lexicon.pl c_lexicon.c c_linfl.c ${STATIC_LINK_FLAGS}
@@ -128,7 +131,7 @@ morph:
 		cd ${SKR_LEXICON}/morph; make -f Makefile.morph
 
 clean:
-		-${RM} *.o *.a *.s.o *.so *glue* lcheck lcheckp lterm core
+		-${RM} *.o *.a *.s.o *.${SEXT} *glue* lcheck lcheckp lterm core
 		cd ${SKR_LEXICON}/functions ;  make -f Makefile.functions clean
 		cd ${SKR_LEXICON}/query ;      make -f Makefile.query     clean
 		cd ${SKR_LEXICON}/miscutil ;   make -f Makefile.miscutil  clean

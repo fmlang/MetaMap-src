@@ -51,12 +51,18 @@ ifeq '$(O_SYSTEM)' "SunOS"
   SOLDFLAGS=-G
   LDFLAGS=
   LIBS = -lnsl
+  SEXT=so
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LD = gcc
     SOLDFLAGS=-m32 -shared
     LDFLAGS=-m32
     LIBS =
+    SEXT=so
+  else 
+    ifeq '$(O_SYSTEM)' "Darwin"
+	SEXT=bundle
+    endif
   endif
 endif
 
@@ -85,13 +91,12 @@ LINK_FLAGS = -- ${LOCAL_LIBS} ${LIBS} -lc ${DM_OBJ} ../miscutil/miscutil.o ../..
 
 # all:		splfr_STATIC splfr_DYNAMIC ${FACTS} ${RULES}
 all:		splfr_DYNAMIC ${FACTS} ${RULES}
-		mv qp_morph.so ../..
+		mv qp_morph.${SEXT} ../..
 
 liblm.a:	${LM_OBJ} lm_translated_rules
 		${AR} ${ARFLAGS} $@ ${LM_OBJ}
 		${RANLIB} $@
 		${MOVE} $@ ${LIBDIR}/$@
-
 lm_translated_rules:	lm_rule_tran lm.rules rpp
 		./rpp < lm.rules | ./lm_rule_tran > $@
 
@@ -133,4 +138,4 @@ rpp.o:		rpp.c
 		${CC} ${CFLAGS} ${INCLUDES} -c rpp.c
 
 clean:
-		-${RM} *.o *.a *.so core *glue* $(FACTS) $(RULES) 
+		-${RM} *.o *.a *.${SEXT} core *glue* $(FACTS) $(RULES) 

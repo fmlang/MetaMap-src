@@ -50,11 +50,17 @@ ifeq '$(O_SYSTEM)' "SunOS"
   LD = ld
   LDFLAGS=-G -shared
   LIBS =
+  SEXT=so
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LD = gcc
     LDFLAGS=-m32 -shared
     LIBS = -lpthread
+    SEXT=so
+  else 
+    ifeq '$(O_SYSTEM)' "Darwin"
+	SEXT=bundle
+    endif
   endif
 endif
 
@@ -79,14 +85,13 @@ SPLFR = splfr --conf CC=${CC} ${addprefix --cflag=, ${CFLAGS}}
 
 # all:		splfr_DYNAMIC splfr_STATIC
 all:		splfr_DYNAMIC
-		mv nls_signal.so ..
+		mv nls_signal.${SEXT} ..
 
 splfr_DYNAMIC:
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} nls_signal.pl nls_signal.c
 
-	
 splfr_STATIC:
 		${SPLFR} ${SPLFR_STATIC_FLAGS} nls_signal.pl nls_signal.c
 
 clean:
-		-${RM} *.o *.a *.so *glue*
+		-${RM} *.o *.a *.${SEXT} *glue*

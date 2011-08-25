@@ -37,7 +37,7 @@
 #	Make file.
 #
 #%REVISED
-	#	30Aug95 divita -- Initial Version
+#	30Aug95 divita -- Initial Version
 #
 #
 #==========================================================*/
@@ -50,16 +50,19 @@ ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
   LIBS = #-lsocket -lnsl -lrt
   C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
+  SEXT=so
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LDFLAGS=-m32 -shared
     LIBS = -lpthread
     C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
+    SEXT=so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
         LDFLAGS=-m32 -shared
 	LIBS=db_access_glue.o
-        C_NLS_DB_DYNAMIC_LIB=c_nls_db.dylib
+        C_NLS_DB_DYNAMIC_LIB=c_nls_db.bundle
+	SEXT=bundle
     endif
   endif
 endif
@@ -83,7 +86,7 @@ SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=,
 
 # all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
 all:		BDB splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
-		mv db_access.so ..
+		mv db_access.${SEXT} ..
 
 # all:
 # 		@echo NOTHING TO DO HERE
@@ -114,7 +117,7 @@ splfr_DYNAMIC:	${BTREE_QLIB_O}
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}
 
 clean:
-		-${RM} *.o *.a *.so *glue*; cd berkeley_db ; make -f Makefile.berkeley_db clean
+		-${RM} *.o *.a *.${SEXT} *glue*; cd berkeley_db ; make -f Makefile.berkeley_db clean
 #		@echo NOTHING to clean here
 
 
