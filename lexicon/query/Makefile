@@ -1,4 +1,3 @@
-#!/usr/bin/make -f 
 
 #############################################################################
 #
@@ -29,26 +28,37 @@
 #
 ############################################################################
 
-# MetaMap Server (mmserver) makefile
+#/*==========================================================
 #
-# To use set environment variable "SKR" to location of SKR directory,
-# usually ${HOME}/specialist/SKR.
+#%SOURCE FILE
+#	Makefile
 #
-#   $ make SKR=${HOME}/specialist/SKR
+#%DESCRIPTION OF FILE
+#	Make file.
 #
+#%REVISED
+#	6Dec96 divita -- Initial Version
+#
+#%SCCS:	@(#)Makefile.query	1.1 09/15/06
+#==========================================================*/
 
-include ../Makefile.include
+include ../../Makefile.include
 
-APPNAME=mmserver11
-SAVED_STATE=$(APPNAME).sav
-BINEXEC=$(APPNAME).BINARY.$(ARCH)
+CFLAGS= ${DEFAULT_CFLAGS}
 
-all : $(BINEXEC) 
+INCLUDES = -I${SKR_LEXICON}/include -I${SKR_DEBUG}/include -I${BERKELEY_INC}
 
-# mmserver targets
-$(SAVED_STATE) : loader.pl
-	sicstus $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
+OBJ = btree_query.o tokenize.o wl.o
 
-$(BINEXEC) : $(SAVED_STATE)
-	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+LIBRARY = lex_btree.a
 
+all:		${LIBRARY}
+
+${LIBRARY}:	${OBJ}
+		${AR} ${ARFLAGS} ${LIBRARY} ${OBJ}
+
+.c.o:
+	${CC} -c ${CFLAGS} ${INCLUDES} $<
+
+clean:
+	${RM} -f *.o *.a

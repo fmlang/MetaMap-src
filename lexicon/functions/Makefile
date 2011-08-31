@@ -1,4 +1,3 @@
-#!/usr/bin/make -f 
 
 #############################################################################
 #
@@ -29,26 +28,40 @@
 #
 ############################################################################
 
-# MetaMap Server (mmserver) makefile
+#/*==========================================================
 #
-# To use set environment variable "SKR" to location of SKR directory,
-# usually ${HOME}/specialist/SKR.
+#%SOURCE FILE
+#	Makefile
 #
-#   $ make SKR=${HOME}/specialist/SKR
+#%DESCRIPTION OF FILE
+#	Make file.
 #
+#%REVISED
+#	11Mar98 divita -- Initial Version
+#
+#%SCCS:	@(#)Makefile.functions	1.1 09/15/06
+#==========================================================*/
 
-include ../Makefile.include
+include ../../Makefile.include
 
-APPNAME=mmserver11
-SAVED_STATE=$(APPNAME).sav
-BINEXEC=$(APPNAME).BINARY.$(ARCH)
+CFLAGS= ${DEFAULT_CFLAGS}
+LIB=lexicon.a
 
-all : $(BINEXEC) 
+#-----------------------------
+# Include paths
+#-----------------------------
+INCLUDES = -I${SKR_LEXICON}/include -I${SKR_DEBUG}/include
 
-# mmserver targets
-$(SAVED_STATE) : loader.pl
-	sicstus $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
+# OBJ = c_lexicon.o c_linfl.o field.o linfl.o tokenize.o tokenizer.o 
+OBJ = linfl.o tokenize.o tokenizer.o 
 
-$(BINEXEC) : $(SAVED_STATE)
-	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+all:		${LIB}
 
+${LIB}:		${OBJ}
+		${AR} ${ARFLAGS} ${LIB} ${OBJ}
+
+.c.o:
+	${CC} -c ${CFLAGS} ${INCLUDES} $<
+
+clean:
+	${RM} -f *.o *.a

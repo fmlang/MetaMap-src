@@ -1,0 +1,106 @@
+#!/usr/bin/make -f 
+#
+# Makefile variables common to all Makefiles.
+#
+# To use set environment variable "SKR" to location of SKR directory,
+# usually ${HOME}/specialist/SKR.
+#
+#   $ make -f Makefile SKR=${HOME}/specialist/SKR
+#
+# In this case the file Makefile includes Makefile.include.
+#
+ARCH=$(shell uname)
+
+export CP = cp
+export RM = rm
+export LD = gcc
+export CC = gcc
+export GCC = gcc
+export MKDIR = mkdir
+export AR = ar
+export ARFLAGS = cruv
+export C__DEBUG = -D__DEBUG
+
+export PREFIX='$$SP_APP_DIR'
+
+export WARNINGS = -pedantic -Wall -Wbad-function-cast -Wcast-qual -Wcast-align -Wconversion \
+-Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes \
+-Wredundant-decls -Wnested-externs -Winline -Wno-long-long
+
+export SKR_HOME=$(SKR)
+export SKR_SRC_HOME=$(SKR_HOME)/src
+export SKR_LEXICON=$(SKR_SRC_HOME)/lexicon
+export SKR_DB=$(SKR_SRC_HOME)/db
+export SKR_DEBUG=$(SKR_SRC_HOME)/debug
+export SKR_LIB=$(SKR_SRC_HOME)/lib
+export SKR_LEX_LIB=$(SKR_SRC_HOME)/lexicon/lib
+export SKR_METAMAP=$(SKR_SRC_HOME)/metamap
+export SKR_SKR=$(SKR_SRC_HOME)/skr
+export SKR_TAGGER=$(SKR_SRC_HOME)/tagger
+export SKR_TEXT=$(SKR_SRC_HOME)/text
+export SKR_WSD=$(SKR_SRC_HOME)/WSD
+export SKR_MORPH=$(SKR_SRC_HOME)/lexicon/morph
+export SKR_MMI=$(SKR_SRC_HOME)/mmi
+export TOOLS_SRC=$(SKR)/tools
+
+O_SYSTEM = $(shell uname)
+
+ifeq '$(O_SYSTEM)' "Linux"
+  export DEFAULT_CFLAGS = -g -O -m32 -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -D__DEBUG
+  export SOLDFLAGS = -m32 -shared
+  export LDFLAGS = -m32
+  export LINKFLAGS = -m32 -shared
+  export BERKELEY_DIR = /nfsvol/nls/tools/berkeley_db
+  export BERKELEY = $(BERKELEY_DIR)/Linux-i686/db-4.8.24
+  export BERKELEY_INC = $(BERKELEY)/include
+  export BERKELEY_LIB = $(BERKELEY)/lib
+  export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb-4.8.a
+  export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb-4.8.so
+  export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb-4.8.a
+  export BERKELEY_LIB_DYNAMIC = $(BERKELEY_LIB)/libdb-4.8.so
+  export DEFAULT_LIBXML_DIR = /usr
+  export SICSTUS = /nfsvol/crfiler-ind/II_Research/SICStus/sp-4.2.0-x86-linux-glibc2.5
+  export SICSTUS_BIN = $(SICSTUS)/bin
+  export SICSTUS_LIB = $(SICSTUS)/lib
+  export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-4.2.0/bin
+  export SICSTUS_LIBRARY = $(SICSTUS)/lib/sicstus-4.2.0/library
+  export SICSTUS_NATIVE_LIB = $(SICSTUS_LIBRARY)/x86-linux-glibc2.5
+else
+  ifeq '$(O_SYSTEM)' "Darwin"
+    export DEFAULT_CFLAGS = -g -O -m32 -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -I/usr/include/malloc -D__DEBUG
+    export LINKFLAGS = -m32 -shared
+    export LDFLAGS = -m32
+    export BERKELEY_VERSION = /usr/local/db-4.8.24
+    export BERKELEY_INC = $(BERKELEY_VERSION)/include
+    export BERKELEY_LIB = $(BERKELEY_VERSION)/lib
+    export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb.a
+    export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb.dylib
+    export SICSTUS = /usr/local/sicstus-4.2.0
+    export SICSTUS_BIN = $(SICSTUS)/bin
+    export SICSTUS_LIBRARY = $(SICSTUS)/lib/sicstus-4.2.0/library
+    export SICSTUS_NATIVE_LIB = $(SICSTUS_LIBRARY)/x86-linux-glibc2.5
+  endif
+endif
+
+RESPATH=.:$(SKR_LIB):$(SKR_LEXICON)/lexicon:$(SKR_LEXICON)/morph:$(SKR_DB)
+
+export LINK_FILES=$(SKR_DEBUG)/debug.o \
+           $(SKR_LEXICON)/functions/linfl.o \
+           $(SKR_LEXICON)/functions/tokenize.o \
+           $(SKR_LEXICON)/morph/lm.o \
+           $(SKR_LEXICON)/morph/util.o \
+           $(SKR_LEXICON)/query/btree_query.o \
+           $(SKR_LEXICON)/query/tokenize.o \
+           $(SKR_LEXICON)/query/wl.o \
+           $(SKR_LEXICON)/miscutil/miscutil.o \
+           $(SKR_DEBUG)/get_val.o \
+           $(SKR_LEXICON)/morph/dm.o \
+           $(SKR_DB)/c_nls_db.a \
+           $(SKR_SRC_HOME)/nls_signal.so \
+           $(SKR_SRC_HOME)/qp_lexicon.so \
+           $(SKR_SRC_HOME)/qp_morph.so \
+           $(BERKELEY_LIB_DYNAMIC) \
+           $(XDR_STATIC_LIB)
+
+export CONF=--conf BDBLIB=$(BERKELEY_LIB_DYNAMIC) --conf BDB_PATH=$(BERKELEY)
+
