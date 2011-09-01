@@ -519,7 +519,7 @@ matching_token(lc, MatchingPhraseWordAtom,
 	  ( append(MatchingPhraseWordCodes, [39,0's], LCTokenString) % 39 is apostrophe
 	  ; MatchingPhraseWordCodes = LCTokenString
 	  )
-	; true
+	; MatchingPhraseWordCodes = LCTokenString
 	).	  
 
 
