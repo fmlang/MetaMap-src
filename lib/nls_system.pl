@@ -55,6 +55,7 @@
 	parse_command_line/3,		      
 	pa/0,
 	pwd/0,
+	pwd/1,
 	% called by MetaMap API -- do not change signature!
 	reset_control_options/1,
 	% called by MetaMap API -- do not change signature!
@@ -130,7 +131,7 @@ is_control_option(metamap, 'J', restrict_to_sts, no,
                         'List of semantic types to use for output')).
 is_control_option(metamap, 'K', ignore_stop_phrases, 		no, none).
 is_control_option(metamap, 'L', lexicon_year, 	 		no,
-                  aspec(lexicon_year, mandatory, none, none, no_default,
+                  aspec(lexicon_year, mandatory, year, none, no_default,
                         'Lexicon year')).
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
@@ -148,7 +149,7 @@ is_control_option(metamap, 'S', tagger, no,
 is_control_option(metamap, 'T', tagger_output, 			no, none).
 is_control_option(metamap, 'U', allow_duplicate_concept_names,  no, none).
 is_control_option(metamap, 'V', mm_data_version, no,
-                  aspec(mm_data_version,mandatory, none, none, no_default,
+                  aspec(mm_data_version, mandatory, none, none, no_default,
                         'Version of MetaMap data to use')).
 is_control_option(metamap, 'W', preferred_name_sources,  	no, none).
 is_control_option(metamap, 'X', truncate_candidates_mappings, 	no, none).
@@ -189,7 +190,7 @@ is_control_option(metamap,   x, syntax, 			no, none).
 is_control_option(metamap,   y, word_sense_disambiguation, 	no, none).
 is_control_option(metamap,   z, term_processing, 		no, none).
 
-is_control_option(metamap,  '', debug, 			 no,
+is_control_option(metamap,  '', debug, 			 	no,
                   aspec(debug, mandatory, list, none, no_default, 'Debugging settings')).
 is_control_option(metamap,  '', help, 		 	 	no, none).
 is_control_option(metamap,  '', longest_lexicon_match, 	 	no, none).
@@ -212,20 +213,19 @@ is_control_option(metamap,  '', prune, no,
                   aspec(prune, mandatory, integer, none, no_default,
                         'Max num of candidates to allow before pruning')).
 is_control_option(metamap,  '', restore, 	 	 	no, none).
-is_control_option(metamap,  '', 'UDA',   no,
-		  aspec('UDA', mandatory, none, none, no_default,
-                        'Must specify a filename.')).
+is_control_option(metamap,  '', 'UDA',   			no,
+		  aspec('UDA', mandatory, file, read, no_default, 'Must specify a filename.')).
 is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLn1',		 	no, none).
 
-is_control_option(metamap,  '', lexicon, no,
-                  aspec(lexicon, mandatory, none, none, no_default,
-                        'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
-is_control_option(metamap,  '', clfi, no,
-                  aspec(clfi, mandatory, none, none, no_default,
-                        'Whether to use original C code or lexAccess version of lex_form_input')).
+% is_control_option(metamap,  '', lexicon, no,
+%                   aspec(lexicon, mandatory, 'c or java', none, no_default,
+%                         'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
+% is_control_option(metamap,  '', clfi, no,
+%                   aspec(clfi, mandatory, 'c or java', none, no_default,
+%                         'Whether to use original C code or lexAccess version of lex_form_input')).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -923,7 +923,7 @@ display_one_other_module_control_option(Option, ArgSpec) :-
 	format('               --~a~a~n', [Option,ArgType]).
 
 display_control_options_for_modules(Module, _OtherModules) :-
-	format('  ~a options:~n', [Module]),
+	format('  ~a options ("<none>" means no default datatype):~n', [Module]),
 	setof(ShortOption-Option-IsDefault-ArgSpec,
 	      is_control_option(Module, ShortOption, Option, IsDefault, ArgSpec),
 	      AllOptions),
@@ -961,6 +961,8 @@ to parse new options.  RawCL should be of the form ['-<options>'], is a
 singleton list consisting of an atom beginning with a hyphen.  */
 
 pa :- pwd, args.
+
+pwd(PWD) :- environ('PWD', PWD).
 
 pwd :-
 	environ('PWD', PWD),

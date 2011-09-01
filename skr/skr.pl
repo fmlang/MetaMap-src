@@ -489,9 +489,11 @@ skr_phrase(Label, UtteranceText,
 		       WordDataCacheOut, USCCacheOut,
 		       RawTokensOut, APhrases, MMOPhraseTerm) ->
 	  true
-        ; format('~n#### ERROR: skr_phrase failed on ~w ~w~n~n', [Label, PhraseSyntax]),
+        ; format('~n#### ERROR: skr_phrase failed on ~w ~w~n~n',
+		 [Label, PhraseSyntax]),
           format(user_output,
-		 '~n#### ERROR: skr_phrase failed on ~w ~w~n~n', [Label, PhraseSyntax]),
+		 '~n#### ERROR: skr_phrase failed on ~w ~w~n~n',
+		 [Label, PhraseSyntax]),
 	  abort
         ).
 
@@ -1050,7 +1052,6 @@ get_word_token(Word, _PrevTokenStartPos, RawTokensIn, CreatedToken, NewTokenStar
 	create_new_token(Word, RawTokensIn, CreatedToken),
 	token_template(CreatedToken, _TokenType, _String, _LCString, _Pos1, pos(NewTokenStartPos,_)),
         RestRawTokens = RawTokensIn.
-
 
 create_new_token(Word, RestTokens, CreatedToken) :-
 	RestTokens = [NextToken|_],

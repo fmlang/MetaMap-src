@@ -516,8 +516,10 @@ matching_token(lc, MatchingPhraseWordAtom,
         atom_codes(MatchingPhraseWordAtom, MatchingPhraseWordCodes),
 	% apostrophe-s token should match the token w/o the apostrophe-s
 	( Type = xx ->
-	  append(MatchingPhraseWordCodes, [39,0's], LCTokenString) % 39 is apostrophe
-	; MatchingPhraseWordCodes = LCTokenString
+	  ( append(MatchingPhraseWordCodes, [39,0's], LCTokenString) % 39 is apostrophe
+	  ; MatchingPhraseWordCodes = LCTokenString
+	  )
+	; true
 	).	  
 
 
@@ -819,7 +821,9 @@ the values preferring those which do not intersect PhraseComponents.  */
 get_one_from_avl(Key,PhraseComponents,AVL,Value) :-
     avl_fetch(Key,AVL,RevValues),
     rev(RevValues,Values0),
+    % Values0 = RevValues,
     reorder_by_phrase_components(Values0,PhraseComponents,Values),
+    % ( member(X, Values), write('VARIANT':X), nl, fail ; nl),
     member(Value,Values).
 
 reorder_by_phrase_components([],_,[]) :-
@@ -1033,22 +1037,21 @@ compute_bounds/5
 xxx
 */
 
-compute_bounds([],0,-1).
-compute_bounds([[Begin,End]|Rest],LB,UB) :-
-    compute_bounds(Rest,Begin,LB,End,UB).
+compute_bounds([], 0, -1).
+compute_bounds([[Begin,End]|Rest], LB, UB) :-
+	compute_bounds(Rest, Begin, LB, End, UB).
 
-compute_bounds([],LBIn,LBIn,UBIn,UBIn).
-compute_bounds([[Begin,End]|Rest],LBIn,LBOut,UBIn,
-               UBOut) :-
-    (Begin<LBIn ->
-        LBInOut=Begin
-    ;   LBInOut=LBIn
-    ),
-    (End>UBIn ->
-        UBInOut=End
-    ;   UBInOut=UBIn
-    ),
-    compute_bounds(Rest,LBInOut,LBOut,UBInOut,UBOut).
+compute_bounds([], LBIn, LBIn, UBIn, UBIn).
+compute_bounds([[Begin,End]|Rest], LBIn, LBOut, UBIn, UBOut) :-
+	( Begin < LBIn ->
+	  LBNext = Begin
+	; LBNext = LBIn
+	),
+	( End > UBIn ->
+	  UBNext = End
+	; UBNext = UBIn
+	),
+	compute_bounds(Rest, LBNext, LBOut, UBNext, UBOut).
 
 
 /* compute_strict_coverage_value(+MatchMap, +NTokenPhraseWords, +NMetaWords,
