@@ -131,7 +131,7 @@ is_control_option(metamap, 'J', restrict_to_sts, no,
                         'List of semantic types to use for output')).
 is_control_option(metamap, 'K', ignore_stop_phrases, 		no, none).
 is_control_option(metamap, 'L', lexicon_year, 	 		no,
-                  aspec(lexicon_year, mandatory, year, none, no_default,
+                  aspec(lexicon_year, mandatory, none, none, no_default,
                         'Lexicon year')).
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
