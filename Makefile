@@ -43,13 +43,13 @@ include Makefile.include
 
 SICSTUSARGS=
 
-APPNAME=metamap
+APPNAME=metamap11
 SAVED_STATE=$(APPNAME).sav
 BINEXEC=$(APPNAME).BINARY.$(ARCH)
 
 all : build_debug build_lib build_db build_functions \
       build_miscutil build_morph build_query build_lexicon \
-      build_runtime $(BINEXEC) $(MSBINEXEC) build_mmserver 
+      build_runtime $(BINEXEC) build_mmserver 
 
 build_debug :
 	cd debug && $(MAKE)
