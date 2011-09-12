@@ -1624,9 +1624,9 @@ contains_matching_token(AAToken, Scope) :-
 %%% What a complex case.
  
 deconstructing_known_AA(Tokens, PE_Token, ScopeWithParens, AAsIn) :-
+	avl_member(KnownAcronym, AAsIn),
 	append(Tokens, [PE_Token|ScopeWithParens], TokenList),
 	suffix(TokenList, Suffix),
-	avl_member(KnownAcronym, AAsIn),
 	matching_strings(KnownAcronym, Suffix).
 
 %%% The above is intended to block the deconstruction of existing acronyms.
@@ -2883,8 +2883,8 @@ coordinate_sentences(Sentences,UI,CoordinatedSentences) :-
     coordinate_sentences(Sentences,UI,"TX",0,0,_OffsetOut,
 			     CoordinatedSentences).
 
-coordinate_sentences([],_UI,_Field,_N,OffsetIn,OffsetIn,[]) :-
-    !.
+coordinate_sentences([],_UI,_Field,_N,OffsetIn,OffsetIn,[]).
+
 coordinate_sentences([tok(field,Field,LCField,Pos)|Rest],UI,_OldField,N,
 		     OffsetIn,OffsetOut,
 		     [tok(field,Field,LCField,FieldPos,Pos)
@@ -2949,6 +2949,7 @@ coordinate_sentences([tok(aa,_AAToks,RelatedAAToks,Pos)|Rest],UI,Field,N,
 coordinate_sentences([tok(Type,Arg2,Arg3,Pos)|Rest],UI,Field,N,
 		     OffsetIn,OffsetOut,
 		     [tok(Type,Arg2,Arg3,TypePos,Pos)|CoordinatedRest]) :-
+    % field and label are handled above, so this is for sn and pe
     higher_order_type(Type),
     !,
     gather_tokens_for_position(Rest,Pos,TypeTokens,NewRest0),

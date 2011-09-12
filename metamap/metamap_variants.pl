@@ -1531,8 +1531,7 @@ gather_variants_var([Variant|RestVariants], NFR, Generator,
 	( Words = [FirstWord|_] ->
 	  % format(user_output, '      VAR: ~q:~q~n', [FirstWord,VInfo]),
 	  add_to_avl(FirstWord, VInfo, VAVLIn, VAVLInOut)
-	; abort,
-	  VAVLInOut = VAVLIn
+	; VAVLInOut = VAVLIn
 	),
 	gather_variants_var(RestVariants, NFR, Generator, GeneratorPosition,
 			    GeneratorInvolvesHead, VAVLInOut, VAVLOut).

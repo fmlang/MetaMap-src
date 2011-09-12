@@ -163,7 +163,7 @@ The default version is "normal".
 Current models for each version are: relaxed or strict.
 stop_db_access/0 calls exec_destroy_dbs to close them.  */
 
-default_version('NLM').
+default_version('USAbase').
 
 default_release('2011AA').
 
@@ -844,19 +844,34 @@ get_data_year(NormalizedYear) :-
 	).
 
 normalize_db_access_year(Year, NormalizedYear) :-
-	( Year = '99' ->
+	ensure_atom(Year, YearAtom),
+	( YearAtom = '99' ->
 	  NormalizedYear = '1999AA'
-	; Year = '1999' ->
+	; YearAtom = '1999' ->
 	  NormalizedYear = '1999AA'
-	; atom_length(Year, YearLength),
+	; atom_length(YearAtom, YearLength),
+	  atom_codes(YearAtom, Codes),
 	  ( % e.g., 08, 09, 10, etc.
 	    YearLength =:= 2,
 	    all_digits(Codes) ->
-	    concat_atom(['20', Year, 'AA'], NormalizedYear)
-	    % e.g., 2008, 2009, 2010, etc.
+	    concat_atom(['20', YearAtom, 'AA'], NormalizedYear)
 	  ; YearLength =:= 4,
 	    all_digits(Codes) ->
-	    concat_atom([Year, 'AA'], NormalizedYear)
+	    Codes = [FirstCode,SecondCode|_],
+	      % e.g., 2008, 2009, 2010, etc.
+	    ( FirstCode == 0'2 ->
+	      concat_atom([YearAtom, 'AA'], NormalizedYear)
+	      % e.g., 0809, 0910, etc.
+	    ; FirstCode == 0'0 ->
+	      atom_codes(FirstDigit, [FirstCode]),
+	      atom_codes(SecondDigit, [SecondCode]),
+	      concat_atom(['20', FirstDigit, SecondDigit, 'AB'], NormalizedYear)
+	      % e.g., 1011, 1112, etc.
+	    ; FirstCode == 0'1 ->
+	      atom_codes(FirstDigit, [FirstCode]),
+	      atom_codes(SecondDigit, [SecondCode]),
+	      concat_atom(['20', FirstDigit, SecondDigit, 'AB'], NormalizedYear)
+	    )
 	  ; YearLength =:= 4,
 	    % Nonstandard, e.g., 08AA, 09AB, 10AA, etc.
 	    Codes = [D1, D2, AB1, AB2],
@@ -871,7 +886,7 @@ normalize_db_access_year(Year, NormalizedYear) :-
 	    all_digits([D1,D2,D3,D4]),
 	    is_A_or_B(AB1),
 	    is_A_or_B(AB2) ->
-	    NormalizedYear = Year
+	    NormalizedYear = YearAtom
 	  )
 	),
 	!.
