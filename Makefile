@@ -49,7 +49,8 @@ BINEXEC=$(APPNAME).BINARY.$(ARCH)
 
 all : build_debug build_lib build_db build_functions \
       build_miscutil build_morph build_query build_lexicon \
-      build_runtime $(BINEXEC) build_mmserver 
+      build_runtime $(BINEXEC) build_mmserver build_liblm \
+      build_lcat build_lvar
 
 build_debug :
 	cd debug && $(MAKE)
@@ -77,6 +78,17 @@ build_lexicon :
 
 build_mmserver :
 	cd mmserver && $(MAKE)
+
+build_lcat : lexicon/morph/liblm.a
+	cd lexicon/lcat && $(MAKE)
+
+build_lvar : lexicon/morph/liblm.a
+	cd lexicon/lvar && $(MAKE)
+
+build_liblm : lexicon/morph/liblm.a
+
+lexicon/morph/liblm.a : 
+	cd lexicon/morph && $(MAKE) liblm.a
 
 # MetaMap targets
 $(SAVED_STATE) :
