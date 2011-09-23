@@ -1,3 +1,6 @@
+#!/bin/env make
+include ../../Makefile.include
+
 O_SYSTEM = $(shell uname)
 
 ifeq '$(O_SYSTEM)' "SunOS"
@@ -28,11 +31,11 @@ INCLUDES = -I$(INC) -I$(DEBUGINC) -I$(FUNCTIONS)
 
 # Libraries
 LIBRARIES = \
-	$(LEXICONSRC)/qp_lexicon.so \
 	$(FUNCTIONS)/lexicon.a \
 	$(SPLIBDIR)/liblm.a \
 	$(MISCUTIL)/miscutil.a \
-	$(DEBUGSRC)/debug.a
+	$(DEBUGSRC)/debug.a 
+#	$(LEXICONSRC)/qp_lexicon.s.o
 
 # Libs on compile line
 LLIBS = $(LIBRARIES)  -lm $(LIBS)

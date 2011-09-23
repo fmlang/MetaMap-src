@@ -18,7 +18,7 @@ main()
     char line[MAXLINE];
     char record[MAXLINE];
 
-    strcpy(record,"");
+    memset(record, '\0', MAXLINE);
     fgets(line,MAXLINE,stdin);
     while ( !feof( stdin) )
       {
@@ -33,7 +33,7 @@ main()
 	      {
 		printf("%d|%s\n", (keys+i)->likFlags, (keys+i)->likKey);
 	      }
-	    strcpy(record,"");
+	    memset(record, '\0', MAXLINE);
 	  }
 	
 	fgets(line,MAXLINE,stdin);

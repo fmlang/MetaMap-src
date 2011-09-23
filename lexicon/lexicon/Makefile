@@ -106,10 +106,9 @@ DYNAMIC_LINK_FLAGS = -- $(LDFLAGS)			        \
 			$(SKR_DEBUG)/get_val.o
 
 
-# all:		splfr_STATIC splfr_DYNAMIC
-all:		splfr_DYNAMIC
+all:		splfr_STATIC splfr_DYNAMIC
 
-splfr_DYNAMIC:	functions query miscutil morph qp_lexicon.pl
+splfr_STATIC:	functions query miscutil morph qp_lexicon.pl
 		$(SPLFR) $(SPLFR_STATIC_FLAGS) qp_lexicon.pl c_lexicon.c c_linfl.c $(STATIC_LINK_FLAGS)
 
 splfr_DYNAMIC:	functions query miscutil morph 
@@ -129,7 +128,7 @@ morph:
 		cd $(SKR_LEXICON)/morph && $(MAKE)
 
 clean:
-		-$(RM) *.o *.a *.s.o *.so *glue* lcheck lcheckp lterm core
+		-$(RM) *.o *.a *.s.o *.so *.s.o *glue* lcheck lcheckp lterm core
 		cd $(SKR_LEXICON)/functions && $(MAKE) clean
 		cd $(SKR_LEXICON)/query     && $(MAKE) clean
 		cd $(SKR_LEXICON)/miscutil  && $(MAKE) clean
