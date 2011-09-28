@@ -54,6 +54,7 @@
 	db_get_variants/3,
 	db_get_versioned_source_name/2,
 	default_release/1,
+	get_data_model/1,
 	get_data_version/1,
 	get_data_year/1,
 	initialize_db_access/0,
