@@ -44,6 +44,7 @@
 :- use_module(skr_db(db_access), [
 	db_get_root_source_name/2,
 	db_get_versioned_source_name/2,
+	get_data_model/1,
 	get_data_version/1,
 	get_data_year/1
     ]).
@@ -71,10 +72,11 @@ announce_removed_sources(RemovedSources) :-
 	( RemovedSources == [] ->
 	  true
 	; get_data_version(Version),
+	  get_data_model(Model),
 	  get_data_year(Release),
 	  set_message(RemovedSources, PluralIndicator, Verb),
 	  format('~n### WARNING: The UMLS source~w ~p ', [PluralIndicator,RemovedSources]),
-	  format('~w not represented in the ~w ~w data version.', [Verb,Release,Version])
+	  format('~w not represented in the ~w ~w ~w data.', [Verb,Model,Release,Version])
 	).
 
 announce_unknown_sources(UnknownSources) :-
