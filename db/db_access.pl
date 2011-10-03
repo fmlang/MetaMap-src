@@ -56,9 +56,10 @@
 	default_release/1,
 	get_data_model/1,
 	get_data_version/1,
-	get_data_year/1,
+	get_data_year/2,
 	initialize_db_access/0,
 	initialize_db_access/3,
+	model_location/4,
 	stop_db_access/0
     ]).
 
@@ -169,7 +170,7 @@ default_version('USAbase').
 default_release('2011AA').
 
 initialize_db_access :-
-	get_data_year(Year),
+	get_data_year(Year, 1),
 	get_data_version(Version),
 	get_data_model(Model),
 	initialize_db_access(Version, Year, Model).
@@ -291,7 +292,7 @@ db_get_root_source_name(VersionedSourceName, []) :-
 db_get_root_source_name_aux(VersionedSourceName, RootSourceNames) :-
 	form_simple_query("root, exists", "sab_vr", "versioned", VersionedSourceName, Query),
 	run_query(Query, simple, RootSourceNames0, 1),
-	append(RootSourceNames0, RootSourceNames).
+	RootSourceNames0 = [RootSourceNames].
 
 /* db_get_concept_cuis(+Concept, -CUIs)
 
@@ -831,15 +832,18 @@ get_data_version(Version) :-
         ).
 
 % 2008AA, 2009AB, etc.
-get_data_year(NormalizedYear) :-
+get_data_year(NormalizedYear, Announce) :-
 	default_release(DefaultYear),
 	normalize_db_access_year(DefaultYear, NormalizedDefaultYear),
 	% Is the model year explicitly specified on the command line?
 	( control_value(mm_data_year, SpecifiedYear),
 	  normalize_db_access_year(SpecifiedYear, NormalizedSpecifiedYear),
 	  NormalizedDefaultYear \== NormalizedSpecifiedYear ->
-	  send_message('##### WARNING: Overriding default model ~w with ~w.~n',
-		       [NormalizedDefaultYear, SpecifiedYear]),
+	  ( Announce is 1 ->
+	    send_message('##### WARNING: Overriding default model ~w with ~w.~n',
+			 [NormalizedDefaultYear, SpecifiedYear])
+	  ; true
+	  ),
 	  NormalizedYear = NormalizedSpecifiedYear
 	; NormalizedYear = NormalizedDefaultYear
 	).

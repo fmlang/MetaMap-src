@@ -204,7 +204,7 @@ is_control_option(metamap,  '', silent,		 	 	no, none).
 %                         'Must specify an integer value.')).
 is_control_option(metamap,  '', min_length, 	 no,
                   aspec(min_length, mandatory, integer, none, no_default,
-                        'Must specify an integer value.')).
+                        'Minimum length of concept name')).
 is_control_option(metamap,  '', phrases_only, 	 	 	no, none).
 is_control_option(metamap,  '', apostrophe_s_contraction, 	no, none).
 is_control_option(metamap,  '', warnings, 	 	 	no, none).
@@ -214,7 +214,7 @@ is_control_option(metamap,  '', prune, no,
                         'Max num of candidates to allow before pruning')).
 is_control_option(metamap,  '', restore, 	 	 	no, none).
 is_control_option(metamap,  '', 'UDA',   			no,
-		  aspec('UDA', mandatory, file, read, no_default, 'Must specify a filename.')).
+		  aspec('UDA', mandatory, file, read, no_default, 'File containing UDAs')).
 is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
@@ -343,12 +343,15 @@ is_control_option(filter_cases,w,warnings,no,none).
 is_control_option(filter_cases,h,help,no,none).
 is_control_option(filter_mrconso,s,strict_filtering,no,none).
 is_control_option(filter_mrconso,'E',end_of_processing,no,none).
-is_control_option(filter_mrconso,'S',filter_by_term_status,no,none).
+% is_control_option(filter_mrconso,'S',filter_by_term_status,no,none).
 is_control_option(filter_mrconso,x,dump_syntax_only,no,none).
 is_control_option(filter_mrconso,h,help,no,none).
 is_control_option(filter_mrconso,i,info,no,none).
 is_control_option(filter_mrconso,t,total_lines,no,
                   aspec(total_lines,mandatory,integer,none,no_default,
+                        'Total number of lines to process')).
+is_control_option(filter_mrconso,'R',mrrank_file,no,
+                  aspec(mrrank_file,mandatory,file,read,no_default,
                         'Total number of lines to process')).
 is_control_option(filter_mrconso,p,progress_bar_interval,no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,

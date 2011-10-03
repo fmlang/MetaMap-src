@@ -893,7 +893,7 @@ form_expanded_sentences_aux([Token|Rest], OrigUtterances,
 
 conditionally_announce_processing(InputLabel, Text0) :-
 	telling(CurrentOutput),
-	( CurrentOutput == user_output ->
+	( CurrentOutput == user ->
 	  true
 	; \+ control_option(silent) ->
 	  format(user_output,'~nProcessing ~a: ~s~n', [InputLabel,Text0]),

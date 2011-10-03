@@ -113,7 +113,8 @@
     ]).
 
 :- use_module(skr(skr_umls_info), [
-	convert_to_root_sources/2
+	convert_to_root_sources/2,
+	sab_tables_exist/0
     ]).
 
 :- use_module(skr(skr_utilities), [
@@ -231,6 +232,7 @@ initialize_skr(Options) :-
 	  initialize_metamap_variants(dynamic)
 	; initialize_metamap_variants(static)
 	),
+	warn_if_no_sab_files,
 	!.
 initialize_skr(_) :-
 	format('~NERROR: initialize_skr/1 failed.~n', []),
@@ -243,6 +245,16 @@ stop_skr :-
 	; true
 	),
 	close_all_streams.
+
+warn_if_no_sab_files :-
+	( sab_tables_exist ->
+	  true
+	; ( control_option(exclude_sources)
+	  ; control_option(restrict_to_sources)
+	  ) ->
+	  format(user_output, '### WARNING: Validation of UMLS sources specified on command line disabled!~n', [])
+	; true
+	).
 
 skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
 	    AAs, UDAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
