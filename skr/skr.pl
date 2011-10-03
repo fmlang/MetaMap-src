@@ -247,12 +247,19 @@ stop_skr :-
 	close_all_streams.
 
 warn_if_no_sab_files :-
+	% If the sab tables (sab_rv and sab_vr) exist, do not issue a warning.
 	( sab_tables_exist ->
 	  true
-	; ( control_option(exclude_sources)
+	% Otherwise, if the user has
+	% * not specified silent mode, and
+	% * has specified specified exclude_sources or restrict_to_sources,
+	% then issue a warning.
+	; \+ control_option(silent),
+	  ( control_option(exclude_sources)
 	  ; control_option(restrict_to_sources)
 	  ) ->
 	  format(user_output, '### WARNING: Validation of UMLS sources specified on command line disabled!~n', [])
+	% If neither of the above circumstances hold, then issue no warning.
 	; true
 	).
 
