@@ -36,21 +36,33 @@
 
 
 :- module(skr_umls_info, [
+	convert_to_root_sources/2,
 	verify_sources/1,
 	verify_sts/1,
-	convert_to_root_sources/2
+	sab_tables_exist/0			  
     ]).
 
 :- use_module(skr_db(db_access), [
 	db_get_root_source_name/2,
 	db_get_versioned_source_name/2,
+	get_data_model/1,
 	get_data_version/1,
-	get_data_year/1
+	get_data_year/2,
+	model_location/4
     ]).
 
 :- use_module(skr_lib(semtype_translation_2011AA), [
 	is_abbrev_semtype/1
     ]).
+
+:- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2
+    ]).
+
+:- use_module(library(file_systems), [
+	file_exists/2
+   ]).
+
 
 /* verify_sources(+Sources)
    verify_sources_aux(+Sources, -UnknownSources, RemovedSources)
@@ -71,10 +83,11 @@ announce_removed_sources(RemovedSources) :-
 	( RemovedSources == [] ->
 	  true
 	; get_data_version(Version),
-	  get_data_year(Release),
+	  get_data_model(Model),
+	  get_data_year(Release, 0),
 	  set_message(RemovedSources, PluralIndicator, Verb),
 	  format('~n### WARNING: The UMLS source~w ~p ', [PluralIndicator,RemovedSources]),
-	  format('~w not represented in the ~w ~w data version.', [Verb,Release,Version])
+	  format('~w not represented in the ~w ~w ~w data.', [Verb,Model,Release,Version])
 	).
 
 announce_unknown_sources(UnknownSources) :-
@@ -128,17 +141,43 @@ is_umls_source(Source, ZeroOrOne) :-
 	; is_umls_versioned_source(Source, ZeroOrOne)
 	).
 
+sab_tables_exist :-
+	get_data_model(Model),
+	get_data_version(Version),
+	get_data_year(Year, 0),
+	model_location(Version, Year, Model, Location),
+	concat_atom([Location, '/', sab_rv], SAB_RV_TABLE),
+	concat_atom([Location, '/', sab_vr], SAB_VR_TABLE),
+	file_exists(SAB_RV_TABLE, read),
+	file_exists(SAB_VR_TABLE, read).	
+
 is_umls_root_source(RootSource, ZeroOrOne) :-
-	db_get_versioned_source_name(RootSource, Results),
-	member([_VersionedSource,ZeroOrOne], Results).
+	( sab_tables_exist ->
+	  db_get_versioned_source_name(RootSource, Results),
+	  member([_VersionedSource,ZeroOrOne], Results)
+	; ZeroOrOne is 1
+	).
 
 is_umls_versioned_source(VersionedSource, ZeroOrOne) :-
-	db_get_root_source_name(VersionedSource, [_RootSource,ZeroOrOne]).
+	( sab_tables_exist ->
+	  db_get_root_source_name(VersionedSource, [_RootSource,ZeroOrOne])
+	; ZeroOrOne is 1
+	).
 
+% Versioned-to-root is one-to-one
 convert_versioned_source_to_root(VersionedSource, RootSource, ZeroOrOne) :-
 	db_get_root_source_name(VersionedSource, [RootSource,ZeroOrOne]).
 
-convert_root_source_to_version(RootSource, VersionedSource, ZeroOrOne) :-
+% Root-to-versioned is one-to-many, e.g.,
+% CPT --> CPT2005
+% CPT --> CPT2011
+% LNC --> LNC215
+% LNC --> LNC234
+% ICD9CM --> ICD9CM_1998
+% ICD9CM --> ICD9CM_2005
+% ICD9CM --> ICD9CM_2011
+
+convert_root_source_to_versioned(RootSource, VersionedSource, ZeroOrOne) :-
 	db_get_versioned_source_name(RootSource, Results),
 	member([VersionedSource,ZeroOrOne], Results).
 
