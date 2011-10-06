@@ -52,7 +52,7 @@ else
     SEXT=so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32
+        LDFLAGS=$(LINKFLAGS)
         LIBS = 
 	SEXT=bundle
     endif

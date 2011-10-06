@@ -59,7 +59,7 @@ else
     SEXT=so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32 -shared
+        LDFLAGS=$(LINKFLAGS)
 	LIBS=db_access_glue.o
         C_NLS_DB_DYNAMIC_LIB=c_nls_db.bundle
 	SEXT=bundle
@@ -67,7 +67,7 @@ else
   endif
 endif
 
-CFLAGS= ${BASIC_CFLAGS} -c
+CFLAGS= ${DEFAULT_CFLAGS} -c
 
 SKR_BERKELEY_DB=./berkeley_db
 
@@ -77,7 +77,7 @@ BTREE_QLIB_O = ${SKR_BERKELEY_DB}/btreeQlib.o
 # BERKELEY_LIB_A is set in SKRenv.09
 DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_A} 
 
-LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
+LINK_FLAGS = -LD -L${BERKELEY_LIB} -ldb
 
 SPLFR_BASIC_FLAGS =  --vv --keep
 SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
