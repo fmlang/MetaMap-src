@@ -59,7 +59,7 @@ else
     SEXT=so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=$(LINKFLAGS)
+        LDFLAGS=$(LINKFLAGS) -bundle
 	LIBS=db_access_glue.o
         C_NLS_DB_DYNAMIC_LIB=c_nls_db.bundle
 	SEXT=bundle

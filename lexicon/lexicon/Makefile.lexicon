@@ -84,7 +84,7 @@ SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
 SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC="${CC}" --cflag="${INCLUDES}" $(addprefix --cflag=, $(CFLAGS))
 
-STATIC_LINK_FLAGS = -- ${SKR_LEXICON}/functions/linfl.o		\
+STATIC_LINK_FLAGS = -LD ${SKR_LEXICON}/functions/linfl.o		\
  		       ${SKR_LEXICON}/functions/tokenize.o	\
  		       ${SKR_LEXICON}/morph/lm.o		\
  		       ${SKR_LEXICON}/morph/util.o		\
