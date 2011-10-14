@@ -180,15 +180,15 @@ above but with different positions for the <AA> and <position> arguments.
 
 form_field_tokens([], []).
 form_field_tokens([[Field,TokenizedField]|Rest], [[Field,Tokens]|TokenizedRest]) :-
-	lowercase_list(TokenizedField, LCTokenizedField),
-	form_simple_tokens(TokenizedField, LCTokenizedField, 0, Tokens),
-	form_field_tokens(Rest, TokenizedRest).
+        lowercase_list(TokenizedField, LCTokenizedField),
+        form_simple_tokens(TokenizedField, LCTokenizedField, 0, Tokens),
+        form_field_tokens(Rest, TokenizedRest).
 
 form_simple_tokens([], [], _, []).
 form_simple_tokens([Text|RestText], [LCText|RestLCText], CurrentPos,
             [tok(Type,Text,LCText,pos(StartPos,EndPos))|RestTokens]) :-
         set_token_type(Text, Type),
-	set_start_and_end_pos(CurrentPos, Text, StartPos, EndPos, NextPos),
+        set_start_and_end_pos(CurrentPos, Text, StartPos, EndPos, NextPos),
         form_simple_tokens(RestText, RestLCText, NextPos, RestTokens).
 
 % If CurrentPos is specified as X/Y, we want to explicitly specify

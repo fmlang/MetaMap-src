@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -59,7 +58,8 @@
 	replace_tabs_in_strings/2,
 	split_string/4,
 	split_string_completely/3,
-	trim_whitespace/2
+	trim_whitespace/2,
+	trim_whitespace_right/2
     ]).
 
 :- use_module(skr_lib(ctypes), [
@@ -798,15 +798,25 @@ extract_ui(Field, UI) :-
 	; UI  = "00000000"
 	).
 
-extract_coord_sents_from_fields(UI, Fields, TextFields2, NonTextFields,
+extract_coord_sents_from_fields(UI, Fields, TextFields, NonTextFields,
 				Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL) :-
 	extract_text_fields(Fields, TextFields0, NonTextFields),
 	padding_string(Padding),
 	unpad_fields(TextFields0, Padding, TextFields1),
-	find_and_coordinate_sentences(UI, TextFields1, Sentences, CoordinatedSentences,
+	right_trim_last_string(TextFields1, TextFields2),
+	find_and_coordinate_sentences(UI, TextFields2, Sentences, CoordinatedSentences,
 				      AAs, UDAList, UDA_AVL),
-	update_text_fields_with_UDAs(TextFields0, UDAList, TextFields2),
+	update_text_fields_with_UDAs(TextFields0, UDAList, TextFields),
 	!.
+
+right_trim_last_string(TextFieldsIn, TextFieldsOut) :-
+	% get the last [FieldName, Fieldtrings] in TextFieldsIn
+	append(TextFieldsIn0, [[LastFieldName, LastTextFieldStrings]], TextFieldsIn),
+	% get the last String in FieldStrings
+	append(LastTextFieldStrings0, [LastTextFieldLastString], LastTextFieldStrings),
+	trim_whitespace_right(LastTextFieldLastString, TrimmedLastTextFieldLastString),
+	append(LastTextFieldStrings0, [TrimmedLastTextFieldLastString], LastTextFieldStrings1),
+	append(TextFieldsIn0, [[LastFieldName, LastTextFieldStrings1]], TextFieldsOut).
 
 update_text_fields_with_UDAs([], _UDAList, []).
 update_text_fields_with_UDAs([[FieldName,Strings]|RestField], UDAList,
