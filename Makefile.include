@@ -12,6 +12,7 @@
 ARCH=$(shell uname)
 
 export CP = cp
+export MV = mv
 export RM = rm
 export LD = gcc
 export CC = gcc

@@ -89,7 +89,7 @@ all:		splfr_DYNAMIC ${FACTS} ${RULES}
 liblm.a:	${LM_OBJ} lm_translated_rules
 		${AR} ${ARFLAGS} $@ ${LM_OBJ}
 		${RANLIB} $@
-		${MOVE} $@ ${LIBDIR}/$@
+		${CP} $@ ${LIBDIR}/$@
 
 lm_translated_rules:	lm_rule_tran lm.rules rpp
 		./rpp < lm.rules | ./lm_rule_tran > $@
@@ -100,7 +100,7 @@ lm_rule_tran:	${LM_RULE_TRANSLATOR_OBJ}
 # libdm.a:	${DM_OBJ}
 # 		${AR} ${ARFLAGS} $@ ${DM_OBJ}
 # 		${RANLIB} $@
-# 		${MOVE} $@ ${LIBDIR}/$@
+# 		${CP} $@ ${LIBDIR}/$@
 
 dm_translated_rules:	dm_rule_tran dm.rul rpp
 		./rpp < dm.rul | ./dm_rule_tran > $@
