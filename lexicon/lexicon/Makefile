@@ -94,7 +94,7 @@ STATIC_LINK_FLAGS = -- $(SKR_LEXICON)/functions/linfl.o		\
 		       $(SKR_LEXICON)/miscutil/miscutil.o	\
 		       $(SKR_DEBUG)/get_val.o
 
-DYNAMIC_LINK_FLAGS = -- $(LDFLAGS)			        \
+DYNAMIC_LINK_FLAGS = -- $(SOLDFLAGS)			        \
 			$(BERKELEY_LIB_SO)			\
 			$(SKR_LEXICON)/functions/linfl.o	\
 		        $(SKR_LEXICON)/morph/lm.o		\
@@ -128,7 +128,7 @@ morph:
 		cd $(SKR_LEXICON)/morph && $(MAKE)
 
 clean:
-		-$(RM) *.o *.a *.s.o *.so *.s.o *glue* lcheck lcheckp lterm core
+		-$(RM) *.o *.a *.s.o *.${SOEXT} *.s.o *glue* lcheck lcheckp lterm core
 		cd $(SKR_LEXICON)/functions && $(MAKE) clean
 		cd $(SKR_LEXICON)/query     && $(MAKE) clean
 		cd $(SKR_LEXICON)/miscutil  && $(MAKE) clean

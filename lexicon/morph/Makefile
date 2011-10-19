@@ -32,7 +32,6 @@
 
 include ../../Makefile.include
 
-RANLIB = /bin/true
 RM = /bin/rm -f
 MOVE = mv
 
@@ -133,4 +132,4 @@ rpp.o:		rpp.c
 		${CC} ${CFLAGS} ${INCLUDES} -c rpp.c
 
 clean:
-		-${RM} *.o *.a *.so core *glue* $(FACTS) $(RULES) 
+		-${RM} *.o *.a *.${SOEXT} core *glue* $(FACTS) $(RULES) 

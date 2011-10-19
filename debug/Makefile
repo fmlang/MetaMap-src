@@ -39,13 +39,13 @@ SRC = debug.c get_val.c
 
 OBJ = ${SRC:%.c=%.o}
 
-all : debug.so debug.a
+all : debug.${SOEXT} debug.a
 
 %.o : %.c
 	${CC} -c ${CFLAGS} ${INCLUDES} -o $@ $<
 
-debug.so : ${OBJ}
-	${CC} ${CFLAGS} -shared -o $@ $?
+debug.${SOEXT} : ${OBJ}
+	${CC} ${CFLAGS} ${SOFLAGS} -o $@ $?
 
 debug.a :  ${OBJ}
 	${AR} ${ARFLAGS} $@ $?

@@ -52,14 +52,12 @@ ifeq '$(O_SYSTEM)' "SunOS"
   C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
 else
   ifeq '$(O_SYSTEM)' "Linux"
-    LDFLAGS=-m32 -shared
     LIBS = -lpthread
     C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32 -shared
 	LIBS=db_access_glue.o
-        C_NLS_DB_DYNAMIC_LIB=c_nls_db.dylib
+        C_NLS_DB_DYNAMIC_LIB=c_nls_db.bundle
     endif
   endif
 endif

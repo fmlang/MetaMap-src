@@ -47,21 +47,19 @@ include ../Makefile.include
 O_SYSTEM = $(shell uname)
 
 C_NLS_DB_STATIC_LIB=c_nls_db.a
+C_NLS_DB_DYNAMIC_LIB=c_nls_db.${SOEXT}	
 SPINCDIR=${SICSTUS_HOME}/include/sicstus
+
 ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
   LIBS = #-lsocket -lnsl -lrt
-  C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LDFLAGS=-m32 -shared
     LIBS = -lpthread
-    C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32 -shared
-	LIBS=db_access_glue.o
-        C_NLS_DB_DYNAMIC_LIB=c_nls_db.dylib
+      LIBS=db_access_glue.o
     endif
   endif
 endif
@@ -84,7 +82,7 @@ SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}
 
 # all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
-all:		BDB splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB} db_access.so
+all:		BDB splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB} db_access.${SOEXT}
 
 
 # all:
@@ -104,7 +102,7 @@ c_nls_db.a:	c_nls_db.o ${BTREE_QLIB_O} ${BTREE_QLIB_A}
 
 ${C_NLS_DB_DYNAMIC_LIB} :	c_nls_db.o
 		-${RM} -f $@
-		${LD} ${LDFLAGS} -o ${C_NLS_DB_DYNAMIC_LIB} c_nls_db.o -I${SPINCDIR} ${DBLIBS} -lm ${LIBS}
+		${LD} ${SOLDFLAGS} -o ${C_NLS_DB_DYNAMIC_LIB} c_nls_db.o -I${SPINCDIR} ${DBLIBS} -lm ${LIBS}
 
 c_nls_db.o:	c_nls_db.c ${BTREE_QLIB} ${SKR_BERKELEY_DB}/embed.h
 		${CC} ${WARNINGS} ${CFLAGS} c_nls_db.c -I${SKR_BERKELEY_DB} -I${SPINCDIR}
@@ -116,7 +114,7 @@ splfr_DYNAMIC:	${BTREE_QLIB_O}
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}
 
 clean:
-		-${RM} -f *.o *.a *.so *glue* && cd berkeley_db && $(MAKE) -f Makefile clean
+		-${RM} -f *.o *.a *.${SOEXT} *glue* && cd berkeley_db && $(MAKE) -f Makefile clean
 #		@echo NOTHING to clean here
 
 

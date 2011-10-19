@@ -52,3 +52,5 @@ $(SAVED_STATE) : loader.pl
 $(BINEXEC) : $(SAVED_STATE)
 	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
 
+clean : 
+	$(RM) -f $(BINEXEC) $(SAVED_STATE) $(MSBINEXEC) $(MSSAVED_STATE) *.${SOEXT} *.po

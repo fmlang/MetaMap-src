@@ -46,7 +46,9 @@ export TOOLS_SRC=$(SKR)/tools
 O_SYSTEM = $(shell uname)
 
 ifeq '$(O_SYSTEM)' "Linux"
+  RANLIB = /bin/true
   export DEFAULT_CFLAGS = -g -O -m32 -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -D__DEBUG
+  export SOFLAGS = -m32 -shared
   export SOLDFLAGS = -m32 -shared
   export LDFLAGS = -m32
   export LINKFLAGS = -m32 -shared
@@ -64,21 +66,37 @@ ifeq '$(O_SYSTEM)' "Linux"
   export SICSTUS_LIB = $(SICSTUS)/lib
   export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-4.2.0/bin
   export SICSTUS_LIBRARY = $(SICSTUS)/lib/sicstus-4.2.0/library
-  export SICSTUS_NATIVE_LIB = $(SICSTUS_LIBRARY)/x86-linux-glibc2.5
+  export LIBS = -lpthread
+  export SOEXT=so
+  export LSOEXT=so
+  export JSOEXT=so
+  export ARCHDIR = x86-linux-glibc2.5
+  export SICSTUS_NATIVE_LIB = $(SICSTUS_LIBRARY)/$(ARCHDIR)
 else
   ifeq '$(O_SYSTEM)' "Darwin"
+    RANLIB = ranlib
     export DEFAULT_CFLAGS = -g -O -m32 -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -I/usr/include/malloc -D__DEBUG
-    export LINKFLAGS = -m32 -shared
+    export SOFLAGS = -m32 -bundle
+    export SOLDFLAGS = -m32 -bundle
+    export LINKFLAGS = -m32 -bundle
     export LDFLAGS = -m32
     export BERKELEY_VERSION = /usr/local/db-4.8.24
     export BERKELEY_INC = $(BERKELEY_VERSION)/include
     export BERKELEY_LIB = $(BERKELEY_VERSION)/lib
     export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb.a
     export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb.dylib
-    export SICSTUS = /usr/local/sicstus-4.2.0
+    export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb.a
+    export BERKELEY_LIB_DYNAMIC = $(BERKELEY_LIB)/libdb.dylib
+    export SICSTUS = /usr/local/sicstus4.2.0
     export SICSTUS_BIN = $(SICSTUS)/bin
+    export SICSTUS_LIB = $(SICSTUS)/lib
+    export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-4.2.0/bin
     export SICSTUS_LIBRARY = $(SICSTUS)/lib/sicstus-4.2.0/library
-    export SICSTUS_NATIVE_LIB = $(SICSTUS_LIBRARY)/x86-linux-glibc2.5
+    export SOEXT=bundle
+    export LSOEXT=dylib
+    export JSOEXT=jnilib
+    export ARCHDIR = i386-darwin-9.8.0
+    export SICSTUS_NATIVE_LIB = $(SICSTUS_LIBRARY)/$(ARCHDIR)
   endif
 endif
 
@@ -96,9 +114,6 @@ export LINK_FILES=$(SKR_DEBUG)/debug.o \
            $(SKR_DEBUG)/get_val.o \
            $(SKR_LEXICON)/morph/dm.o \
            $(SKR_DB)/c_nls_db.a \
-           $(SKR_SRC_HOME)/nls_signal.so \
-           $(SKR_SRC_HOME)/qp_lexicon.so \
-           $(SKR_SRC_HOME)/qp_morph.so \
            $(BERKELEY_LIB_DYNAMIC) \
            $(XDR_STATIC_LIB)
 

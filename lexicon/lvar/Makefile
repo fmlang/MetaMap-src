@@ -23,6 +23,7 @@ INC=../include
 DEBUGSRC=../../debug
 DEBUGINC=$(DEBUGSRC)/include
 FUNCTIONS=../functions
+MORPH=../morph
 
 BDBLIB=$(BERKELEY)/lib
 
@@ -32,7 +33,7 @@ INCLUDES = -I$(INC) -I$(DEBUGINC) -I$(FUNCTIONS)
 # Libraries
 LIBRARIES = \
 	$(FUNCTIONS)/lexicon.a \
-	$(SPLIBDIR)/liblm.a \
+	$(MORPH)/liblm.a \
 	$(MISCUTIL)/miscutil.a \
 	$(DEBUGSRC)/debug.a 
 #	$(LEXICONSRC)/qp_lexicon.s.o
@@ -41,7 +42,7 @@ LIBRARIES = \
 LLIBS = $(LIBRARIES)  -lm $(LIBS)
 
 # compiler flags
-CFLAGS=-g -m32 $(INCLUDES)
+CFLAGS=-g -m32 $(INCLUDES) $(DEFAULT_CFLAGS)
 LDFLAGS=-m32
 
 # Source files

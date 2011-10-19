@@ -100,7 +100,7 @@ $(BINEXEC) : $(SAVED_STATE)
 RT_DIR=$(SKR_SRC_HOME)/sp-4.2.0
 RT_BIN=$(RT_DIR)/sicstus-4.2.0/bin
 RT_LIB=$(RT_DIR)/sicstus-4.2.0/library
-RT_NATIVE_LIB=$(RT_LIB)/x86-linux-glibc2.5
+RT_NATIVE_LIB=$(RT_LIB)/$(ARCHDIR)
 
 RT_PO_FILES = $(RT_LIB)/bdb.po        \
 	$(RT_LIB)/between.po          \
@@ -118,20 +118,20 @@ RT_PO_FILES = $(RT_LIB)/bdb.po        \
 	$(RT_LIB)/timeout.po          \
 	$(RT_LIB)/typesio.po          
 
-RT_DLLS = $(RT_NATIVE_LIB)/fastrw.so $(RT_NATIVE_LIB)/jasper.so \
-	$(RT_NATIVE_LIB)/random.so $(RT_NATIVE_LIB)/timeout.so \
-	$(RT_NATIVE_LIB)/bdb.so $(RT_NATIVE_LIB)/clpfd.so  \
-	$(RT_NATIVE_LIB)/codesio.so $(RT_NATIVE_LIB)/timeout.s.o \
+RT_DLLS = $(RT_NATIVE_LIB)/fastrw.$(SOEXT) $(RT_NATIVE_LIB)/jasper.$(SOEXT) \
+	$(RT_NATIVE_LIB)/random.$(SOEXT) $(RT_NATIVE_LIB)/timeout.$(SOEXT) \
+	$(RT_NATIVE_LIB)/bdb.$(SOEXT) $(RT_NATIVE_LIB)/clpfd.$(SOEXT)  \
+	$(RT_NATIVE_LIB)/codesio.$(SOEXT) $(RT_NATIVE_LIB)/timeout.s.o \
 	$(RT_NATIVE_LIB)/bdb.s.o $(RT_NATIVE_LIB)/clpfd.s.o \
 	$(RT_NATIVE_LIB)/codesio.s.o $(RT_NATIVE_LIB)/fastrw.s.o \
 	$(RT_NATIVE_LIB)/jasper.s.o $(RT_NATIVE_LIB)/jasper.s.o \
-	$(SKR_SRC_HOME)/c_nls_db.so $(SKR_SRC_HOME)/db_access.so \
-	$(SKR_SRC_HOME)/debug.so $(SKR_SRC_HOME)/nls_signal.so \
-	$(SKR_SRC_HOME)/qp_morph.so $(SKR_SRC_HOME)/qp_lexicon.so 
+	$(SKR_SRC_HOME)/c_nls_db.$(SOEXT) $(SKR_SRC_HOME)/db_access.$(SOEXT) \
+	$(SKR_SRC_HOME)/debug.$(SOEXT) $(SKR_SRC_HOME)/nls_signal.$(SOEXT) \
+	$(SKR_SRC_HOME)/qp_morph.$(SOEXT) $(SKR_SRC_HOME)/qp_lexicon.$(SOEXT) 
 
 build_runtime: make_rtdirs copy_dlls
-	$(CP) $(SICSTUS_LIB)/libspnative.so           $(RT_DIR)
-	$(CP) $(SICSTUS_LIB)/libsprt4-2-0*.so         $(RT_DIR)
+	$(CP) $(SICSTUS_LIB)/libspnative.$(JSOEXT)           $(RT_DIR)
+	$(CP) $(SICSTUS_LIB)/libsprt4-2-0*.$(LSOEXT)         $(RT_DIR)
 	$(CP) $(SICSTUS_OBJECTS)/sprt.sav             $(RT_BIN)
 	$(CP) $(SICSTUS_LIBRARY)/avl.po               $(RT_LIB)
 	$(CP) $(SICSTUS_LIBRARY)/bdb.po               $(RT_LIB)
@@ -152,26 +152,26 @@ build_runtime: make_rtdirs copy_dlls
 
 copy_dlls : $(RT_DLLS) 
 
-$(RT_NATIVE_LIB)/random.so : $(SICSTUS_NATIVE_LIB)/random.so $(RT_NATIVE_LIB)
-	$(CP) $(SICSTUS_NATIVE_LIB)/random.so  $(RT_NATIVE_LIB)
+$(RT_NATIVE_LIB)/random.$(SOEXT) : $(SICSTUS_NATIVE_LIB)/random.$(SOEXT) $(RT_NATIVE_LIB)
+	$(CP) $(SICSTUS_NATIVE_LIB)/random.$(SOEXT)  $(RT_NATIVE_LIB)
 
-$(RT_NATIVE_LIB)/timeout.so : $(SICSTUS_NATIVE_LIB)/timeout.so $(RT_NATIVE_LIB)
-	$(CP) $(SICSTUS_NATIVE_LIB)/timeout.so $(RT_NATIVE_LIB)
+$(RT_NATIVE_LIB)/timeout.$(SOEXT) : $(SICSTUS_NATIVE_LIB)/timeout.$(SOEXT) $(RT_NATIVE_LIB)
+	$(CP) $(SICSTUS_NATIVE_LIB)/timeout.$(SOEXT) $(RT_NATIVE_LIB)
 
-$(RT_NATIVE_LIB)/bdb.so : $(SICSTUS_NATIVE_LIB)/bdb.so $(RT_NATIVE_LIB)
-	$(CP) $(SICSTUS_NATIVE_LIB)/bdb.so     $(RT_NATIVE_LIB)
+$(RT_NATIVE_LIB)/bdb.$(SOEXT) : $(SICSTUS_NATIVE_LIB)/bdb.$(SOEXT) $(RT_NATIVE_LIB)
+	$(CP) $(SICSTUS_NATIVE_LIB)/bdb.$(SOEXT)     $(RT_NATIVE_LIB)
 
-$(RT_NATIVE_LIB)/clpfd.so : $(SICSTUS_NATIVE_LIB)/clpfd.so $(RT_NATIVE_LIB)
-	$(CP) $(SICSTUS_NATIVE_LIB)/clpfd.so   $(RT_NATIVE_LIB)
+$(RT_NATIVE_LIB)/clpfd.$(SOEXT) : $(SICSTUS_NATIVE_LIB)/clpfd.$(SOEXT) $(RT_NATIVE_LIB)
+	$(CP) $(SICSTUS_NATIVE_LIB)/clpfd.$(SOEXT)   $(RT_NATIVE_LIB)
 
-$(RT_NATIVE_LIB)/codesio.so : $(SICSTUS_NATIVE_LIB)/codesio.so $(RT_NATIVE_LIB)
-	$(CP) $(SICSTUS_NATIVE_LIB)/codesio.so $(RT_NATIVE_LIB)
+$(RT_NATIVE_LIB)/codesio.$(SOEXT) : $(SICSTUS_NATIVE_LIB)/codesio.$(SOEXT) $(RT_NATIVE_LIB)
+	$(CP) $(SICSTUS_NATIVE_LIB)/codesio.$(SOEXT) $(RT_NATIVE_LIB)
 
-$(RT_NATIVE_LIB)/fastrw.so : $(SICSTUS_NATIVE_LIB)/fastrw.so  $(RT_NATIVE_LIB)
-	$(CP) $(SICSTUS_NATIVE_LIB)/fastrw.so  $(RT_NATIVE_LIB)
+$(RT_NATIVE_LIB)/fastrw.$(SOEXT) : $(SICSTUS_NATIVE_LIB)/fastrw.$(SOEXT)  $(RT_NATIVE_LIB)
+	$(CP) $(SICSTUS_NATIVE_LIB)/fastrw.$(SOEXT)  $(RT_NATIVE_LIB)
 
-$(RT_NATIVE_LIB)/jasper.so : $(SICSTUS_NATIVE_LIB)/jasper.so $(RT_NATIVE_LIB)
-	$(CP) $(SICSTUS_NATIVE_LIB)/jasper.so  $(RT_NATIVE_LIB)
+$(RT_NATIVE_LIB)/jasper.$(SOEXT) : $(SICSTUS_NATIVE_LIB)/jasper.$(SOEXT) $(RT_NATIVE_LIB)
+	$(CP) $(SICSTUS_NATIVE_LIB)/jasper.$(SOEXT)  $(RT_NATIVE_LIB)
 
 $(RT_NATIVE_LIB)/random.s.o : $(SICSTUS_NATIVE_LIB)/random.s.o $(RT_NATIVE_LIB)
 	$(CP) $(SICSTUS_NATIVE_LIB)/random.s.o  $(RT_NATIVE_LIB)
@@ -198,23 +198,23 @@ $(RT_NATIVE_LIB)/jasper.s.o : $(SICSTUS_NATIVE_LIB)/jasper.s.o $(RT_NATIVE_LIB)
 	$(CP) $(SICSTUS_NATIVE_LIB)/jasper.s.o  $(RT_NATIVE_LIB)
 
 
-$(SKR_SRC_HOME)/c_nls_db.so : $(SKR_DB)/c_nls_db.so
-	$(CP) $(SKR_DB)/c_nls_db.so $(SKR_SRC_HOME)/c_nls_db.so
+$(SKR_SRC_HOME)/c_nls_db.$(SOEXT) : $(SKR_DB)/c_nls_db.$(SOEXT)
+	$(CP) $(SKR_DB)/c_nls_db.$(SOEXT) $(SKR_SRC_HOME)/c_nls_db.$(SOEXT)
 
-$(SKR_SRC_HOME)/db_access.so : $(SKR_DB)/db_access.so
-	$(CP) $(SKR_DB)/db_access.so $(SKR_SRC_HOME)/db_access.so
+$(SKR_SRC_HOME)/db_access.$(SOEXT) : $(SKR_DB)/db_access.$(SOEXT)
+	$(CP) $(SKR_DB)/db_access.$(SOEXT) $(SKR_SRC_HOME)/db_access.$(SOEXT)
 
-$(SKR_SRC_HOME)/debug.so : $(SKR_DEBUG)/debug.so
-	$(CP) $(SKR_DEBUG)/debug.so $(SKR_SRC_HOME)/debug.so
+$(SKR_SRC_HOME)/debug.$(SOEXT) : $(SKR_DEBUG)/debug.$(SOEXT)
+	$(CP) $(SKR_DEBUG)/debug.$(SOEXT) $(SKR_SRC_HOME)/debug.$(SOEXT)
 
-$(SKR_SRC_HOME)/nls_signal.so : $(SKR_LIB)/nls_signal.so
-	$(CP) $(SKR_LIB)/nls_signal.so $(SKR_SRC_HOME)/nls_signal.so 
+$(SKR_SRC_HOME)/nls_signal.$(SOEXT) : $(SKR_LIB)/nls_signal.$(SOEXT)
+	$(CP) $(SKR_LIB)/nls_signal.$(SOEXT) $(SKR_SRC_HOME)/nls_signal.$(SOEXT) 
 
-$(SKR_SRC_HOME)/qp_morph.so : $(SKR_MORPH)/qp_morph.so
-	$(CP) $(SKR_MORPH)/qp_morph.so 	$(SKR_SRC_HOME)/qp_morph.so 
+$(SKR_SRC_HOME)/qp_morph.$(SOEXT) : $(SKR_MORPH)/qp_morph.$(SOEXT)
+	$(CP) $(SKR_MORPH)/qp_morph.$(SOEXT) 	$(SKR_SRC_HOME)/qp_morph.$(SOEXT) 
 
-$(SKR_SRC_HOME)/qp_lexicon.so  : $(SKR_LEXICON)/lexicon/qp_lexicon.so
-	$(CP) $(SKR_LEXICON)/lexicon/qp_lexicon.so $(SKR_SRC_HOME)/qp_lexicon.so 
+$(SKR_SRC_HOME)/qp_lexicon.$(SOEXT)  : $(SKR_LEXICON)/lexicon/qp_lexicon.$(SOEXT)
+	$(CP) $(SKR_LEXICON)/lexicon/qp_lexicon.$(SOEXT) $(SKR_SRC_HOME)/qp_lexicon.$(SOEXT) 
 
 RT_DIRS=$(RT_BIN) $(RT_LIB) $(RT_NATIVE_LIB)
 
@@ -230,8 +230,8 @@ $(RT_NATIVE_LIB) :
 	$(MKDIR) -p $(RT_NATIVE_LIB)
 
 clean : clean_debug clean_lib clean_db clean_lexicon clean_morph \
-clean_functions clean_query clean_miscutil clean_rtdir
-	$(RM) -f $(BINEXEC) $(SAVED_STATE) $(MSBINEXEC) $(MSSAVED_STATE) *.so 
+clean_functions clean_query clean_miscutil clean_rtdir clean_mmserver
+	$(RM) -f $(BINEXEC) $(SAVED_STATE) $(MSBINEXEC) $(MSSAVED_STATE) *.${SOEXT} *.po
 
 clean_debug :
 	cd debug && $(MAKE) clean
