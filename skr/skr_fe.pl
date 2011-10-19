@@ -140,6 +140,7 @@
 	split_atom_completely/3,
 	trim_whitespace/2,
 	trim_whitespace_left/3,
+	trim_whitespace_left/2,
 	trim_whitespace_right/2
    ]).
 
@@ -893,7 +894,7 @@ form_expanded_sentences_aux([Token|Rest], OrigUtterances,
 
 conditionally_announce_processing(InputLabel, Text0) :-
 	telling(CurrentOutput),
-	( CurrentOutput == user_output ->
+	( CurrentOutput == user ->
 	  true
 	; \+ control_option(silent) ->
 	  format(user_output,'~nProcessing ~a: ~s~n', [InputLabel,Text0]),
@@ -966,8 +967,9 @@ convert_one_field_to_blanks(CharsIn,
 	  TextFieldsNext = RestTextFields,
 	  NonTextFieldsNext = NonTextFieldsIn
 	; FirstNonTextField \== [],
-	  prefix(CharsIn, FirstNonTextField) ->
-	  convert_non_text_field(FirstNonTextField, FirstNonTextFieldLines, CharsIn,
+	  trim_whitespace_left(CharsIn, TrimmedCharsIn),
+	  prefix(TrimmedCharsIn, FirstNonTextField) ->
+	  convert_non_text_field(FirstNonTextField, FirstNonTextFieldLines, TrimmedCharsIn,
 				 ConvertedField, CharsNext),
 	  TextFieldsNext = TextFieldsIn,
 	  NonTextFieldsNext = RestNonTextFields
