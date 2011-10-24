@@ -28,22 +28,40 @@
 #
 ############################################################################
 
-CFLAGS = ${DEFAULT_CFLAGS}
+O_SYSTEM = $(shell uname)
+
+ifeq '$(O_SYSTEM)' "SunOS"
+  SO_FILETYPE=so	
+  SHAREFLAGS=-shared
+else
+  ifeq '$(O_SYSTEM)' "Linux"
+    SO_FILETYPE=so	
+    SHAREFLAGS=-shared
+  else 
+    ifeq '$(O_SYSTEM)' "Darwin"
+	SO_FILETYPE=bundle
+	SHAREFLAGS=-bundle
+    endif
+  endif
+endif
+
+CFLAGS = ${BASIC_CFLAGS}
 INC = .
-INCLUDES = -Iinclude
+INCLUDES = -I${INC}/include
 HDR = nls_srvr.h
 # SRC = add_str.c cfg_util.c debug.c get_val.c is_null.c llip.c luip.c messages.c strcmp.c strip.c utils.c
-SRC = debug.c get_val.c 
+SRC =  get_val.c debug.c
 
 OBJ = ${SRC:%.c=%.o}
 
-all : debug.so debug.a
+# all : debug.${SO_FILETYPE} debug.a
+all : debug.a
 
 %.o : %.c
 	${CC} -c ${CFLAGS} ${INCLUDES} -o $@ $<
 
-debug.so : ${OBJ}
-	${CC} ${CFLAGS} -shared -o $@ $?
+debug.${SO_FILETYPE} : ${OBJ}
+	${CC} ${CFLAGS} ${SHAREFLAGS} -o $@ $?
 
 debug.a :  ${OBJ}
 	${AR} ${ARFLAGS} $@ $?

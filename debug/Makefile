@@ -1,4 +1,3 @@
-#!/usr/bin/make -f 
 
 #############################################################################
 #
@@ -29,28 +28,30 @@
 #
 ############################################################################
 
-# MetaMap Server (mmserver) makefile
-#
-# To use set environment variable "SKR" to location of SKR directory,
-# usually ${HOME}/specialist/SKR.
-#
-#   $ make SKR=${HOME}/specialist/SKR
-#
-
 include ../Makefile.include
 
-APPNAME=mmserver11
-SAVED_STATE=$(APPNAME).sav
-BINEXEC=$(APPNAME).BINARY.$(ARCH)
+CFLAGS = ${DEFAULT_CFLAGS}
+INC = .
+INCLUDES = -I$(INC)/include
+HDR = nls_srvr.h
+# SRC = add_str.c cfg_util.c debug.c get_val.c is_null.c llip.c luip.c messages.c strcmp.c strip.c utils.c
+SRC = debug.c get_val.c 
 
-all : $(BINEXEC) 
+OBJ = ${SRC:%.c=%.o}
 
-# mmserver targets
-$(SAVED_STATE) : loader.pl
-	sicstus $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
+all : debug.${SOEXT} debug.a
 
-$(BINEXEC) : $(SAVED_STATE)
-	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+%.o : %.c
+	${CC} -c ${CFLAGS} ${INCLUDES} -o $@ $<
 
-clean : 
-	$(RM) -f $(BINEXEC) $(SAVED_STATE) $(MSBINEXEC) $(MSSAVED_STATE) *.${SOEXT} *.po
+debug.${SOEXT} : ${OBJ}
+	${CC} ${CFLAGS} ${SOFLAGS} -o $@ $?
+
+debug.a :  ${OBJ}
+	${AR} ${ARFLAGS} $@ $?
+
+clean :
+	rm -f *.o *.a *.so
+
+test : test.c debug.a
+	${CC} ${CFLAGS} $? -o $@

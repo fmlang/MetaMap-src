@@ -1,4 +1,3 @@
-#!/usr/bin/make -f 
 
 #############################################################################
 #
@@ -29,28 +28,63 @@
 #
 ############################################################################
 
-# MetaMap Server (mmserver) makefile
+#/*==========================================================
 #
-# To use set environment variable "SKR" to location of SKR directory,
-# usually ${HOME}/specialist/SKR.
+#%SOURCE FILE
+#	Makefile.lib
 #
-#   $ make SKR=${HOME}/specialist/SKR
+#%DESCRIPTION OF FILE
+#	Make file
 #
+#%REVISED
+#	30Aug2006 FML
+#	based on Makefile.lexical and Makefile.nls_signal
+#	
+#%SCCS:	@(#)Makefile.lib	1.1 09/15/06
+#
+#==========================================================*/
 
-include ../Makefile.include
+O_SYSTEM = $(shell uname)
 
-APPNAME=mmserver11
-SAVED_STATE=$(APPNAME).sav
-BINEXEC=$(APPNAME).BINARY.$(ARCH)
+ifeq '$(O_SYSTEM)' "SunOS"
+  LD = ld
+  LDFLAGS=-G -shared
+  LIBS =
+else
+  ifeq '$(O_SYSTEM)' "Linux"
+    LD = gcc
+    LDFLAGS=-m32 -shared
+    LIBS = -lpthread
+  endif
+endif
 
-all : $(BINEXEC) 
+CFLAGS=${DEFAULT_CFLAGS}
 
-# mmserver targets
-$(SAVED_STATE) : loader.pl
-	sicstus $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
+SPLFR_BASIC_FLAGS = --verbose --keep
+SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
+SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 
-$(BINEXEC) : $(SAVED_STATE)
-	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+SPLFR = splfr --conf CC=${CC} ${addprefix --cflag=, ${CFLAGS}}
 
-clean : 
-	$(RM) -f $(BINEXEC) $(SAVED_STATE) $(MSBINEXEC) $(MSSAVED_STATE) *.${SOEXT} *.po
+# all:		nls_signal.o nls_signal.so nls_signal.a
+# 
+# nls_signal.a:	nls_signal.o 
+# 		${AR} ${ARFLAGS} $@ $<
+# 
+# nls_signal.so:	nls_signal.o
+# 		${LD} ${LDFLAGS} $< -o nls_signal.so ${LIBS}
+# 
+# nls_signal.o:	nls_signal.c 
+# 		${CC} ${CFLAGS} -c $< -I${SPINCDIR}
+
+# all:		splfr_DYNAMIC splfr_STATIC
+all:		splfr_DYNAMIC
+
+splfr_DYNAMIC:
+		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} nls_signal.pl nls_signal.c
+
+splfr_STATIC:
+		${SPLFR} ${SPLFR_STATIC_FLAGS} nls_signal.pl nls_signal.c
+
+clean:
+		-${RM} -f *.o *.a *.so *glue*

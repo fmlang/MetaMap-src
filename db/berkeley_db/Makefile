@@ -1,4 +1,3 @@
-#!/usr/bin/make -f 
 
 #############################################################################
 #
@@ -29,28 +28,45 @@
 #
 ############################################################################
 
-# MetaMap Server (mmserver) makefile
-#
-# To use set environment variable "SKR" to location of SKR directory,
-# usually ${HOME}/specialist/SKR.
-#
-#   $ make SKR=${HOME}/specialist/SKR
-#
+# File:	    Makefile
+# Module:   Berkeley DB
+# Author:   Jim
 
-include ../Makefile.include
+include ../../Makefile.include
 
-APPNAME=mmserver11
-SAVED_STATE=$(APPNAME).sav
-BINEXEC=$(APPNAME).BINARY.$(ARCH)
+CFLAGS= ${DEFAULT_CFLAGS}
 
-all : $(BINEXEC) 
+DBLIBS1 = ./btreeQlib.a ${BERKELEY_LIB_A}
+INCLUDES = -I${BERKELEY_INC}
 
-# mmserver targets
-$(SAVED_STATE) : loader.pl
-	sicstus $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
+O_SYSTEM = $(shell uname)
 
-$(BINEXEC) : $(SAVED_STATE)
-	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+ifeq '$(O_SYSTEM)' "SunOS"
+  LIBS = 
+  DBLIBS = $(DBLIBS1) -lsocket -lnsl -lrt
+else
+  ifeq '$(O_SYSTEM)' "Linux"
+    LIBS = -lpthread
+    DBLIBS = $(DBLIBS1) -lnsl -lrt
+  else 
+    ifeq '$(O_SYSTEM)' "Darwin"
+        DBLIBS = $(DBLIBS1)
+    endif
+  endif
+endif
 
-clean : 
-	$(RM) -f $(BINEXEC) $(SAVED_STATE) $(MSBINEXEC) $(MSSAVED_STATE) *.${SOEXT} *.po
+all:		btreeQlib.a create_bulk sql
+
+clean:
+		-${RM} -f *.o *.a *.qof *.so core create_bulk sql
+
+btreeQlib.a:	btreeQlib.c embed.h
+		${CC} ${CFLAGS} -O -c ${INCLUDES} btreeQlib.c
+		${AR} ${ARFLAGS} $@ btreeQlib.o
+
+create_bulk:	create_bulk.c
+		${CC} ${CFLAGS} ${INCLUDES} -o create_bulk create_bulk.c ${DBLIBS}
+
+sql:		sql.c btreeQlib.a
+		${CC} ${CFLAGS} -O ${INCLUDES} -o sql sql.c ${DBLIBS}
+

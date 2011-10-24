@@ -287,7 +287,7 @@ int main(
         close all open files 
       ----------------------------------------------------------- */
   DPR(DF119,"Close all open files");
-  fclose(recFp);
+  if (recFp != NULL) fclose(recFp);
 
 
   close_lex_btree();

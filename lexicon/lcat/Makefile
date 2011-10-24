@@ -1,4 +1,4 @@
-
+include ../../Makefile.include
 CC=gcc
 PIC=-fpic
 
@@ -17,13 +17,13 @@ else
 endif
 
 INCLUDES=-I../include -I../../debug/include
-CFLAGS=-g -m32 $(INCLUDES)
+CFLAGS=-g -m32 $(INCLUDES)  $(DEFAULT_CFLAGS)
 
 LIBLEXBTREE=../query/lex_btree.a
 LIBDEBUG=../../debug/debug.a
 LIBMISCUTIL=../miscutil/miscutil.a
 LIBFUNCS=../functions/lexicon.a
-LIBLM=../lib/liblm.a	
+LIBLM=../morph/liblm.a	
 
 LEXLIBS=$(LIBLEXBTREE) $(LIBDEBUG) $(LIBMISCUTIL) $(LIBFUNCS) $(LIBLM) \
      $(BERKELEY_LIB)/libdb.a -lm 

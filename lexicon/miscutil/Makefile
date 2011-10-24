@@ -1,4 +1,3 @@
-#!/usr/bin/make -f 
 
 #############################################################################
 #
@@ -29,28 +28,45 @@
 #
 ############################################################################
 
-# MetaMap Server (mmserver) makefile
+#/*==========================================================
 #
-# To use set environment variable "SKR" to location of SKR directory,
-# usually ${HOME}/specialist/SKR.
+#%SOURCE FILE
+#	Makefile
 #
-#   $ make SKR=${HOME}/specialist/SKR
+#%DESCRIPTION OF FILE
+#	Make file.
 #
+#%REVISED
+#	28Sep94 divita -- Initial Version
+#
+#%SCCS:	@(#)Makefile.miscutil	1.1 09/15/06
+#==========================================================*/
 
-include ../Makefile.include
+include ../../Makefile.include
 
-APPNAME=mmserver11
-SAVED_STATE=$(APPNAME).sav
-BINEXEC=$(APPNAME).BINARY.$(ARCH)
+#-----------------------------
+# Library to make
+#-----------------------------
+LIBRARY = miscutil.a 
+CFLAGS= ${DEFAULT_CFLAGS}
 
-all : $(BINEXEC) 
+#-----------------------------
+# Include paths
+#-----------------------------
+INCLUDES = -I${SKR_LEXICON}/include -I${SKR_DEBUG}/include
 
-# mmserver targets
-$(SAVED_STATE) : loader.pl
-	sicstus $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
+#-----------------------------
+# Object modules
+#-----------------------------
+OBJ = miscutil.o
 
-$(BINEXEC) : $(SAVED_STATE)
-	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+all:	${LIBRARY}
 
-clean : 
-	$(RM) -f $(BINEXEC) $(SAVED_STATE) $(MSBINEXEC) $(MSSAVED_STATE) *.${SOEXT} *.po
+${LIBRARY}:	${OBJ}
+		${AR} ${ARFLAGS} ${LIBRARY} ${OBJ}
+
+.c.o:
+	${CC} -c ${CFLAGS} ${INCLUDES} $<
+
+clean:
+	${RM} -f *.o *.a

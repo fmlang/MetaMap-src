@@ -37,31 +37,29 @@
 #	Make file.
 #
 #%REVISED
-#	30Aug95 divita -- Initial Version
+	#	30Aug95 divita -- Initial Version
 #
 #
 #==========================================================*/
 
+include ../Makefile.include
+
 O_SYSTEM = $(shell uname)
 
 C_NLS_DB_STATIC_LIB=c_nls_db.a
+C_NLS_DB_DYNAMIC_LIB=c_nls_db.${SOEXT}	
 SPINCDIR=${SICSTUS_HOME}/include/sicstus
+
 ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
   LIBS = #-lsocket -lnsl -lrt
-  C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
-  SEXT=so
 else
   ifeq '$(O_SYSTEM)' "Linux"
+    LDFLAGS=-m32 -shared
     LIBS = -lpthread
-    C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
-    SEXT=so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=$(LINKFLAGS) -bundle
-	LIBS=db_access_glue.o
-        C_NLS_DB_DYNAMIC_LIB=c_nls_db.bundle
-	SEXT=bundle
+      LIBS=db_access_glue.o
     endif
   endif
 endif
@@ -76,7 +74,7 @@ BTREE_QLIB_O = ${SKR_BERKELEY_DB}/btreeQlib.o
 # BERKELEY_LIB_A is set in SKRenv.09
 DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_A} 
 
-LINK_FLAGS = -LD -L${BERKELEY_LIB} -ldb
+LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
 
 SPLFR_BASIC_FLAGS =  --vv --keep
 SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
@@ -84,27 +82,27 @@ SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}
 
 # all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
-all:		BDB splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
-		mv db_access.${SEXT} ..
+all:		BDB splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB} db_access.${SOEXT}
+
 
 # all:
 # 		@echo NOTHING TO DO HERE
 
 BDB:
-		cd berkeley_db ; make -f Makefile.berkeley_db
+		cd berkeley_db && $(MAKE) -f Makefile
 
 ${BTREE_QLIB_A}:
-		cd berkeley_db ; make -f Makefile.berkeley_db
+		cd berkeley_db && $(MAKE) -f Makefile
 
 # ${BTREE_QLIB}:
-#		cd berkeley_db;  make -f Makefile.berkeley_db
+#		cd berkeley_db && $(MAKE) -f Makefile
 
 c_nls_db.a:	c_nls_db.o ${BTREE_QLIB_O} ${BTREE_QLIB_A}
 		${AR} ${ARFLAGS} $@ $?
 
 ${C_NLS_DB_DYNAMIC_LIB} :	c_nls_db.o
-		-${RM} $@
-		${LD} ${LDFLAGS} -o ${C_NLS_DB_DYNAMIC_LIB} c_nls_db.o -I${SPINCDIR} ${DBLIBS} -lm ${LIBS}
+		-${RM} -f $@
+		${LD} ${SOLDFLAGS} -o ${C_NLS_DB_DYNAMIC_LIB} c_nls_db.o -I${SPINCDIR} ${DBLIBS} -lm ${LIBS}
 
 c_nls_db.o:	c_nls_db.c ${BTREE_QLIB} ${SKR_BERKELEY_DB}/embed.h
 		${CC} ${WARNINGS} ${CFLAGS} c_nls_db.c -I${SKR_BERKELEY_DB} -I${SPINCDIR}
@@ -116,7 +114,7 @@ splfr_DYNAMIC:	${BTREE_QLIB_O}
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}
 
 clean:
-		-${RM} *.o *.a *.${SEXT} *glue*; cd berkeley_db ; make -f Makefile.berkeley_db clean
+		-${RM} -f *.o *.a *.${SOEXT} *glue* && cd berkeley_db && $(MAKE) -f Makefile clean
 #		@echo NOTHING to clean here
 
 
