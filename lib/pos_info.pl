@@ -94,7 +94,7 @@
 create_EXP_raw_token_list([], _PreviousToken, _CurrentPos, _TokenState, _InputString, []).
 create_EXP_raw_token_list([CurrentToken|RestTokensIn], PreviousToken, CurrentPos, TokenState,
 		          InputStringIn, NewTokens) :-
-	% CurrentToken  = tok(CurrentTokenType, _CurrentString, _CurrentLCString, _CurrentPos),
+	% CurrentToken  = tok(CurrentTokenType, _CurrentString, _CurrentLCString, _CurrentPI),
 	% format(user_output, 'TOK: ~p~n', [CurrentToken]),
 	token_template(CurrentToken, CurrentTokenType,
 		       _CurrentString, _CurrentLCString, _CurrentPos),
