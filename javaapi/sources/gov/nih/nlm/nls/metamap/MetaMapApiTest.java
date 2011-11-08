@@ -277,6 +277,7 @@ public class MetaMapApiTest {
 	while ((line = ib.readLine()) != null) {
 	  inputBuf.append(line).append('\n');
 	}
+	ib.close();
 	frontEnd.process(inputBuf.toString(), output, options);
       } else {
 	frontEnd.process(termBuf.toString(), output, options);
