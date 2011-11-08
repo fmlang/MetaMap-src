@@ -81,7 +81,7 @@ SPLFR = splfr --conf CC="${CC}" $(addprefix --cflag=, $(CFLAGS))
 
 LINK_FLAGS = -- ${LOCAL_LIBS} ${LIBS} -lc ${DM_OBJ} ../miscutil/miscutil.o ../../debug/debug.o
 
-# all we need to make is morph.so and morph.a; liblm.a is not needed except for
+# all we need to make is morph.so and morph.a; liblm.a is not needed except by lvar and linsert
 
 # all:		splfr_STATIC splfr_DYNAMIC ${FACTS} ${RULES}
 all:		splfr_DYNAMIC ${FACTS} ${RULES}
