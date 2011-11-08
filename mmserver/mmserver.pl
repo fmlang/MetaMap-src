@@ -154,7 +154,9 @@ reset_options :-
  	add_to_control_options(IOptions).
 
 process_string(Input,Output) :-
-	trim_whitespace_right(Input, TrimmedInput),
+	trim_whitespace_right(Input, TrimmedInput0),
+	remove_final_CRLF(TrimmedInput0, TrimmedInput1),
+	remove_final_CRLF(TrimmedInput1, TrimmedInput),
 	TagOption = tag,
 	split_string_completely(TrimmedInput,"\n",Strings),
 	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
@@ -173,6 +175,16 @@ process_string(Input,Output) :-
 	output_should_be_bracketed(BracketedOutput),
 	postprocess_text_mmserver(Strings, BracketedOutput, InterpretedArgs,
 		 IOptionsFinal,  ExpRawTokenList, AAs, MMResults, Output).
+
+remove_final_CRLF(TrimmedInput0, TrimmedInput) :-
+	( append(AllButLast, [Last], TrimmedInput0),
+	  ( Last is 10
+	  ; Last is 13
+	  ) ->
+	  TrimmedInput = AllButLast
+	; TrimmedInput = TrimmedInput0
+	).
+	
 
 postprocess_text_mmserver(Lines0, BracketedOutput, InterpretedArgs,
 			  IOptions,  ExpRawTokenList, AAs, MMResults, AllMMO) :-
