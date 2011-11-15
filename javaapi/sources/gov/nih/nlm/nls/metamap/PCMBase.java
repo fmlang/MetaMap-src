@@ -49,8 +49,10 @@ public class PCMBase implements PCM {
   public final List<Ev> getCandidates() throws Exception  {
     List<Ev> evList = new ArrayList<Ev>();
     PBTerm prologList = this.candidatesTerm.getArgument(1);
+    PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
-      evList.add(new EvImpl(TermUtils.getListElement(prologList, i)));
+      evList.add(new EvImpl(term.head()));
+      term = term.tail();
     }
     return evList;
   }
@@ -63,8 +65,10 @@ public class PCMBase implements PCM {
   public final List<Ev> getCandidateList() throws Exception  {
     List<Ev> evList = new ArrayList<Ev>();
     PBTerm prologList = this.candidatesTerm.getArgument(1);
+    PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
-      evList.add(new EvImpl(TermUtils.getListElement(prologList,i)));
+      evList.add(new EvImpl(term.head()));
+      term = term.tail();
     }
     return evList;
   }
@@ -78,8 +82,10 @@ public class PCMBase implements PCM {
   public final List<Map> getMappings() throws Exception {
     List<Map> mapList = new ArrayList<Map>();
     PBTerm prologList = this.mappingsTerm.getArgument(1);
+    PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
-      mapList.add(new MappingImpl(TermUtils.getListElement(prologList,i)));
+      mapList.add(new MappingImpl(term.head()));
+      term = term.tail();
     }
     return mapList;
   }
@@ -93,8 +99,10 @@ public class PCMBase implements PCM {
   public final List<Mapping> getMappingList() throws Exception {
     List<Mapping> mapList = new ArrayList<Mapping>();
     PBTerm prologList = this.mappingsTerm.getArgument(1);
+    PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
-      mapList.add(new MappingImpl(TermUtils.getListElement(prologList,i)));
+      mapList.add(new MappingImpl(term.head()));
+      term = term.tail();
     }
     return mapList;
   }
@@ -226,10 +234,12 @@ public class PCMBase implements PCM {
     public List<MatchMap> getMatchMapList() throws Exception {
       PBTerm prologList = this.evTerm.getArgument(7);
       List<MatchMap> matchMapList = new ArrayList<MatchMap>();
+      PBTerm term = prologList;
       for (int i = 1; i <= prologList.length(); i++) {
-	if (TermUtils.getListElement(prologList,i).isListCell()) {
-	  matchMapList.add(new MatchMapImpl(TermUtils.getListElement(prologList,i)));
+	if (term.head().isListCell()) {
+	  matchMapList.add(new MatchMapImpl(term.head()));
 	}
+	term = term.tail();
       }
       return matchMapList;
     }
@@ -285,8 +295,10 @@ public class PCMBase implements PCM {
     {
       List<Ev> evList = new ArrayList<Ev>();
       PBTerm prologList = this.mapTerm.getArgument(2);
+      PBTerm term = prologList;
       for (int i = 1; i <= prologList.length(); i++) {
-	evList.add(new EvImpl(TermUtils.getListElement(prologList, i)));
+	evList.add(new EvImpl(term.head()));
+	term = term.tail();
       }
       return evList;
     }
