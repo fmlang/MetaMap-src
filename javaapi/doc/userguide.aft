@@ -1,6 +1,8 @@
 *Title: Using the MetaMap Java API
 *Author: Willie Rogers
 
+*TOC
+
 * Purpose
 
 MetaMap maps terms occuring in text to UMLS Metathesaurus concepts. As
@@ -12,11 +14,11 @@ with programmatic access to MetaMap mapping engine.
 
 * MetaMap API's Underlying Architecture
 
-MetaMap mapping engine is written primarily in Quintus Prolog; to
+MetaMap mapping engine is written primarily in SICStus Prolog; to
 facilitate its use by Java programs, the system uses PrologBeans to
 provide a loose coupling between the Java API and the mapping engine.
-See the Quintus Prolog PrologBeans documentation for more information
-(http://www.sics.se/isl/quintus/html/quintus/pbn.html).
+See the SICStus Prolog PrologBeans documentation for more information
+(http://www.sics.se/sicstus/docs/latest4/html/sicstus.html/lib_002dprologbeans.html).
 
 * Pre-requisites
 
@@ -51,11 +53,11 @@ to setup the files for javaapi.
 $ ./bin/install.sh
 ^>>
 
-* Using the metamap server
+* Using the MetaMap server
 
 ** Starting supporting servers
 
-The metamap server (mmserver) must first be running to use the Java
+The MetaMap server (mmserver) must first be running to use the Java
 API.  If the SKR/Medpost Tagger is not already running start it using
 the following command:
 
@@ -70,9 +72,9 @@ start it also.
 $ ./bin/wsdserverctl start
 ^>>
 
-** Running the metamap server
+** Running the MetaMap server
 
-Then start the metamap server:
+Then start the MetaMap server:
 
 ^<<
 $ ./bin/mmserver{year}
@@ -262,7 +264,7 @@ MetaMapApi api = new MetaMapApiImpl("resource.example.org");
 ^>>
 
 
-Metamap options available in the api: 
+MetaMap options available in the api: 
 
 ^<<
    -@ --WSD <hostname>                   : Which WSD server to use.
@@ -450,12 +452,13 @@ String machineOutput = result.getMachineOutput();
 
 * Advanced Configuration
 
-** Running the metamap server on an alternate host
+** Accepting the MetaMap server connections from remote hosts
 
-To run the metamap server on a host other than localhost (127.0.0.1),
-the default modify the environment variable ACCEPTED_HOSTS the script
-/bin/mmserver{year} to contain all of the clients you wish to have access
-to the MetaMap server.
+To allow the MetaMap server to accept connections from clients on a
+host other than localhost (127.0.0.1, the default) modify the
+environment variable ACCEPTED_HOSTS the script public_mm/bin/SKRrun.11
+to contain all of the client hosts you wish to have access to the
+MetaMap server.
 
 For example, change the entry:
 
@@ -473,10 +476,11 @@ export ACCEPTED_HOSTS
 
 all of the entries must be ip-addresses, hostnames will not work.
 
-** Running the  metamap server on an alternate port
+** Running the MetaMap server on an alternate port
 
-To run the metamap server on a port other than the default port (8066)
-modify the environment variable "MMSERVER_PORT" in the script bin/mmserver{year}.
+To run the MetaMap server on a port other than the default port (8066)
+modify the environment variable "MMSERVER_PORT" in the script
+public_mm/bin/SKRrun.{year}.
 
 E.G. to change the port to 8888:
 
@@ -513,6 +517,6 @@ currently available in the MetaMap API.
 * For more information
 
 	[SICStus Prolog] http://www.sics.se/sicstus/
-	[Quintus Prolog] http://www.sics.se/quintus/
-	[PrologBeans] http://www.sics.se/sicstus/docs/3.12.9/html/prologbeans/
+	[PrologBeans Docs] http://www.sics.se/sicstus/docs/latest4/html/sicstus.html
+	[PrologBeans Java API Docs] http://www.sics.se/sicstus/docs/3.12.9/html/prologbeans/
 	[MetaMap] http://metamap.nlm.nih.gov/
