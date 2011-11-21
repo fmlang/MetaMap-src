@@ -91,8 +91,10 @@ public class ResultImpl implements Result {
 
   public void traverse(PrintStream out)
   {
+    PBTerm term = this.mmoTermList;
     for (int i = 1; i<this.mmoTermList.length(); i++) {
-      out.println(TermUtils.getListElement(mmoTermList, i));
+      out.println(term.head());
+      term = term.tail();
     }
   }
 
@@ -101,9 +103,11 @@ public class ResultImpl implements Result {
   public String getMachineOutput()
   {
     StringBuffer sb = new StringBuffer();
+    PBTerm term = this.mmoTermList;
     for (int i = 1; i <= this.mmoTermList.length(); i++) {
-      PBTerm listTerm = TermUtils.getListElement(mmoTermList, i);
+      PBTerm listTerm = term.head();
       sb.append(listTerm.toString()).append("\n");
+      term = term.tail();
     }
     return sb.toString();
   }
@@ -117,8 +121,10 @@ public class ResultImpl implements Result {
     List<AcronymsAbbrevs> aasList = new ArrayList<AcronymsAbbrevs>();
     PBTerm listTerm = TermUtils.getListElement(mmoTermList, ACRONYMS_ABBREVS_INDEX);
     PBTerm prologList = listTerm.getArgument(1);
+    PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
-      aasList.add(new AcronymsAbbrevsImpl(TermUtils.getListElement(prologList, i)));
+      aasList.add(new AcronymsAbbrevsImpl(term.head()));
+      term = term.tail();
     }
     return aasList;
   }
@@ -132,8 +138,10 @@ public class ResultImpl implements Result {
     List<AcronymsAbbrevs> aasList = new ArrayList<AcronymsAbbrevs>();
     PBTerm listTerm = TermUtils.getListElement(mmoTermList, ACRONYMS_ABBREVS_INDEX);
     PBTerm prologList = listTerm.getArgument(1);
+    PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
-      aasList.add(new AcronymsAbbrevsImpl(TermUtils.getListElement(prologList, i)));
+      aasList.add(new AcronymsAbbrevsImpl(term.head()));
+      term = term.tail();
     }
     return aasList;
   }
@@ -147,8 +155,10 @@ public class ResultImpl implements Result {
     List<Negation> negList = new ArrayList<Negation>();
     PBTerm listTerm = TermUtils.getListElement(mmoTermList, NEGATIONLIST_INDEX);
     PBTerm prologList = listTerm.getArgument(1);
+    PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
-      negList.add(new NegationImpl(TermUtils.getListElement(prologList, i)));
+      negList.add(new NegationImpl(term.head()));
+      term = term.tail();
     }
     return negList;
   }
@@ -162,8 +172,10 @@ public class ResultImpl implements Result {
     List<Negation> negList = new ArrayList<Negation>();
     PBTerm listTerm = TermUtils.getListElement(mmoTermList, NEGATIONLIST_INDEX);
     PBTerm prologList = listTerm.getArgument(1);
+    PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
-      negList.add(new NegationImpl(TermUtils.getListElement(prologList, i)));
+      negList.add(new NegationImpl(term.head()));
+      term = term.tail();
     }
     return negList;
   }
@@ -174,11 +186,10 @@ public class ResultImpl implements Result {
    * @return a list of <code>Utterance</code> terms 
    */
   public List<Utterance> getUtteranceList() throws Exception {
-
     List<Utterance> utteranceList = new ArrayList<Utterance>();
     for (int i = FIRST_UTTERANCE_INDEX; i<=this.mmoTermList.length(); i++) {
-      if (TermUtils.getListElement(mmoTermList, i).getName().equals("utterance")) {
-	utteranceList.add(new UtteranceImpl(TermUtils.getListElement(mmoTermList, i), i, this));
+      if (TermUtils.getListElement(this.mmoTermList, i).getName().equals("utterance")) {
+    	utteranceList.add(new UtteranceImpl(TermUtils.getListElement(this.mmoTermList, i), i, this));
       }
     }
     return utteranceList;
@@ -246,8 +257,10 @@ public class ResultImpl implements Result {
     public List<Integer> getCountList() {
       List<Integer> countList = new ArrayList<Integer>();
       PBTerm prologlist = aasTerm.getArgument(1).getArgument(2);
+      PBTerm term = prologlist;
       for (int i = 1; i <= prologlist.length(); i++) {
-	countList.add(new Integer((int)TermUtils.getListElement(prologlist, i).intValue()));
+      	countList.add(new Integer((int)term.head().intValue()));
+	term = term.tail();
       }
       return countList;
     };
@@ -256,8 +269,10 @@ public class ResultImpl implements Result {
       /* get the second argument which contains the prolog list
        * containing the cuis */
       PBTerm prologlist = aasTerm.getArgument(2);
+      PBTerm term = prologlist;
       for (int i = 1; i <= prologlist.length(); i++) {
-	cuiList.add(TermUtils.getListElement(prologlist, 1).toString());
+	cuiList.add(term.head().toString());
+	term = term.tail();
       }
       return cuiList;
     };
@@ -300,11 +315,13 @@ public class ResultImpl implements Result {
     public List<ConceptPair> getConceptPairList() throws Exception {
       List<ConceptPair> pairList = new ArrayList<ConceptPair>();
       PBTerm plist = this.negTerm.getArgument(4);
+      PBTerm pTerm = plist;
       for (int i = 1; i <= plist.length(); i++) {
-	PBTerm term = TermUtils.getListElement(plist, i);
-	pairList.add
-	  (new ConceptPairImpl(term.getArgument(1).toString(),
-			       term.getArgument(2).toString()));
+      	PBTerm term = pTerm.head();
+      	pairList.add
+      	  (new ConceptPairImpl(term.getArgument(1).toString(),
+      			       term.getArgument(2).toString()));
+	pTerm = pTerm.tail();
       }
       return pairList;
     }

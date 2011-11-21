@@ -29,7 +29,7 @@
 ############################################################################
 
 #!/bin/sh
-JAVA=/nfsvol/cgsb_share/jdk1.4.1/bin/java
+JAVA_HOME=/nfsvol/nls/tools/Linux-i686/jdk1.6.0_11
 
 if [ ! -n "${WSD}" ]
 then
@@ -42,7 +42,7 @@ then
   export WSD
 fi
 
-#JAVA=${JAVA_HOME}/bin/java
+JAVA=${JAVA_HOME}/bin/java
 JAR_FILE=$WSD/WSD_Server/lib/wsd.jar:$WSD/WSD_Server/lib/kss-api.jar:$WSD/WSD_Server/lib/thirdparty.jar:$WSD/WSD_Server/lib/db.jar:$WSD/WSD_Server/lib/log4j-1.2.8.jar
 JVMOPTIONS="-Xmx1g -Dserver.config.file=$WSD/WSD_Server/config/disambServer.cfg"
 LD_LIBRARY_PATH=$WSD/WSD_Server/lib:/net/pax/usr/local/BerkeleyDB.4.1/lib:$LD_LIBRARY_PATH
