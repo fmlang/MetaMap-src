@@ -73,7 +73,7 @@
 	token_template/6,
 	usage/0,
 	verify_xml_format/2,
-	write_MMO_terms/1,
+	write_MMO_terms/2,
 	write_raw_token_lists/2,
 	write_sentences/2,
 	write_token_list/3
@@ -336,6 +336,7 @@ make_atom(String, Atom) :-
 
 
 do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputStream) :-
+	verify_model_settings,
 	verify_tagger_output_settings(TaggerOutputSettings),
 	verify_single_output_format(SingleOutputFormat),
         verify_xml_settings(XMLSettings),
@@ -358,6 +359,15 @@ do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputSt
 			    TaggerServerSettings, WSDServerSettings],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, FullYear).
+
+verify_model_settings :-
+	( control_option(strict_model),
+	  control_option(relaxed_model) ->
+	  send_message('WARNING: Both strict_model and relaxed_model have been specified.~n', []),
+	  send_message('         The strict_model will be used.~n', [])
+	; true
+	).
+
 
 % Error if both tagger_output and formal_tagger_output are set
 verify_tagger_output_settings(Result) :-
@@ -403,8 +413,7 @@ verify_mmi_settings(Result) :-
 	warning_check([show_cuis], fielded_mmi_output),
 	fatal_error_check([tagger_output, hide_plain_syntax, hide_candidates,
 			   number_the_candidates, hide_semantic_types,
-			   show_preferrred_names_only, negex, hide_mappings,
-			   sources, dump_aas],
+			   show_preferrred_names_only, negex, hide_mappings, sources],
 			  fielded_mmi_output, 0, Result).
 verify_mmi_settings(0).
 
@@ -922,8 +931,9 @@ get_aa_term(MMOutput, AAs) :-
 	FirstMMOutput = mm_output(_ExpandedUtterance, _Citation, _ModifiedText, _Tagging,
 				  AAs, _Syntax, _MMOPhrases, _ExtractedPhrases).
 
-write_MMO_terms(MMOTerms) :-
-	( control_option(machine_output) ->
+write_MMO_terms(PrintMMO, MMOTerms) :-
+	( PrintMMO =:= 1,
+	  control_option(machine_output) ->
 	  write_MMO_terms_aux(MMOTerms)
 	; true
 	).

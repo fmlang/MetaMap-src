@@ -324,8 +324,8 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	% [MergedPhrase|RestMergedPhrases]
 	merge_aa_phrases(RestCompositePhrases, CompositePhrase, AAs, UDAs,
 			 MergedPhrase, RestMergedPhrases, MergeOptions),
-	append(CompositeOptions, MergeOptions, AllOptions0),
-	sort(AllOptions0, AllOptions),
+	append(CompositeOptions, MergeOptions, AllAddedOptions0),
+	sort(AllAddedOptions0, AllAddedOptions),
 	% AllUtteranceText is never used in skr_phrase; it's there only for gap analysis,
 	% which is no longer used!!
 	skr_phrase(InputLabel, AllUtteranceText,
@@ -335,7 +335,7 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 		   RawTokensNext, APhrases, FirstMMOPhrase),
 	set_var_GVCs_to_null(GVCs),
 	extract_phrases_from_aps(APhrases, Phrases),
-	subtract_from_control_options(AllOptions),
+	subtract_from_control_options(AllAddedOptions),
 	% add_semtypes_to_phrases_if_necessary(Phrases0,FirstEPPhrases),
 	skr_phrases_1(RestMergedPhrases, InputLabel, AllUtteranceText,
 		      AAs, UDAs, CitationTextAtom,
@@ -685,7 +685,8 @@ generate_initial_evaluations(Label, UtteranceText,
 	% and that's all we care about if this option is on.
 	% Moreover, setting Evaluations0 to [] will short-circuit
 	% all subsequent evaluation processing.
-	( control_option(phrases_only) ->
+	( ( control_option(aas_only)
+	  ; control_option(phrases_only) ) ->
 	  Evaluations0 = [],
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
@@ -3028,7 +3029,7 @@ filter_out_redundant_evaluations([First|Rest], FilteredEvaluations) :-
 	rev(RevFilteredEvaluations, FilteredEvaluations).
 
 filter_out_redundant_evaluations_aux([], []).
-filter_out_redundant_evaluations_aux([First|Rest],Result) :-
+filter_out_redundant_evaluations_aux([First|Rest], Result) :-
 	( evaluation_is_redundant(Rest, First) ->
 	  Result = FilteredRest
 	; Result = [First|FilteredRest]

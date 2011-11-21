@@ -64,7 +64,7 @@
 	ensure_atom/2
     ]).
 
-:- use_module(skr_lib(semtype_translation_2011AA), [
+:- use_module(skr_lib(semtype_translation_2011AB), [
 	expand_semtypes/2
     ]).
 
@@ -270,6 +270,7 @@ construct_related_evaluations([First|Rest], [First:FirstRelated|RestRelated]) :-
 	\+ control_option(allow_duplicate_concept_names),
 	!,
 	First = ev(_,_,_,Concept,_,_,_,_,_,_SourceInfo,_PosInfo),
+	% format(user_output, 'FIRST: ~q~n', [First]),
 	construct_related_evaluations_6(Rest, Concept, [], RevFirstRelated, [], RevNewRest),
 	rev(RevFirstRelated, FirstRelated),
 	rev(RevNewRest, NewRest),
@@ -278,6 +279,7 @@ construct_related_evaluations([First|Rest], [First:FirstRelated|RestRelated]) :-
 	% control_option(allow_duplicate_concept_names),
 	!,
 	First = ev(_,CUI,_,Concept,_,_,_,_,_,_SourceInfo,_PosInfo),
+	% format(user_output, 'FIRST: ~q~n', [First]),
 	construct_related_evaluations_7(Rest, CUI, Concept, [], RevFirstRelated, [], RevNewRest),
 	rev(RevFirstRelated, FirstRelated),
 	rev(RevNewRest, NewRest),
@@ -287,6 +289,7 @@ construct_related_evaluations_6([], _Concept, RelatedIn,RelatedIn, UnrelatedIn, 
 construct_related_evaluations_6([First|Rest], Concept, RelatedIn, RelatedOut,
 				UnrelatedIn, UnrelatedOut) :-
 	First = ev(_,_,_,Concept,_,_,_,_,_,_SourceInfo,_PosInfo),
+	% format(user_output, 'REL:   ~q~n', [First]),
 	!,
 	construct_related_evaluations_6(Rest, Concept,
 					[First|RelatedIn], RelatedOut, UnrelatedIn, UnrelatedOut).
@@ -300,6 +303,7 @@ construct_related_evaluations_7([], _CUI, _Concept,
 construct_related_evaluations_7([First|Rest], CUI, Concept,
 			       RelatedIn, RelatedOut, UnrelatedIn, UnrelatedOut) :-
 	First = ev(_,CUI,_,Concept,_,_,_,_,_SourceInfo,_PosIinfo),
+	% format(user_output, 'REL:   ~q~n', [First]),
 	!,
 	construct_related_evaluations_7(Rest, CUI, Concept,
 					[First|RelatedIn], RelatedOut, UnrelatedIn, UnrelatedOut).

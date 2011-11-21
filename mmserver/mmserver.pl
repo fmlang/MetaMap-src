@@ -17,7 +17,7 @@
    ]).
 
 :- use_module(skr(skr_fe), [
-	postprocess_sentences/9,
+	postprocess_sentences/10,
 	initialize_skr/4,
 	process_text/11
    ]).
@@ -183,4 +183,4 @@ postprocess_text_mmserver(Lines0, BracketedOutput, InterpretedArgs,
 	generate_negex_output(NegationTerms),
 	postprocess_sentences(OrigUtterances, NegationTerms, InterpretedArgs, IOptions, AAs,
 			      Sentences, BracketedOutput, DisambMMOutput,
-			      AllMMO).
+			      0, AllMMO).
