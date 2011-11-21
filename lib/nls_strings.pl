@@ -57,6 +57,7 @@
 	replace_all_substrings/4,
 	replace_nonprints_in_strings/2,
 	replace_tabs_in_strings/2,
+	safe_number_codes/2,
 	split_string/4,
 	split_atom_completely/3,
 	split_string_completely/3,

@@ -47,11 +47,11 @@
 	db_get_versioned_source_name/2,
 	get_data_model/1,
 	get_data_version/1,
-	get_data_year/2,
-	model_location/4
+	get_data_release/2,
+	model_location/5
     ]).
 
-:- use_module(skr_lib(semtype_translation_2011AA), [
+:- use_module(skr_lib(semtype_translation_2011AB), [
 	is_abbrev_semtype/1
     ]).
 
@@ -84,7 +84,7 @@ announce_removed_sources(RemovedSources) :-
 	  true
 	; get_data_version(Version),
 	  get_data_model(Model),
-	  get_data_year(Release, 0),
+	  get_data_release(Release, 0),
 	  set_message(RemovedSources, PluralIndicator, Verb),
 	  format('~n### WARNING: The UMLS source~w ~p ', [PluralIndicator,RemovedSources]),
 	  format('~w not represented in the ~w ~w ~w data.', [Verb,Model,Release,Version])
@@ -144,8 +144,8 @@ is_umls_source(Source, ZeroOrOne) :-
 sab_tables_exist :-
 	get_data_model(Model),
 	get_data_version(Version),
-	get_data_year(Year, 0),
-	model_location(Version, Year, Model, Location),
+	get_data_release(Year, 0),
+	model_location(Version, Year, Model, _BasePath, Location),
 	concat_atom([Location, '/', sab_rv], SAB_RV_TABLE),
 	concat_atom([Location, '/', sab_vr], SAB_VR_TABLE),
 	file_exists(SAB_RV_TABLE, read),

@@ -96,6 +96,7 @@
     ]).
 
 :- use_module(text(text_objects),[
+	dump_all_avl/4,
 	extract_token_strings/2
    ]).		     
 
@@ -117,13 +118,15 @@
         environ/2
    ]).
 
-do_MMI_processing(OrigUtterances, BracketedOutput, _Sentences, DisambMMOutput) :-
+do_MMI_processing(OrigUtterances, BracketedOutput, AAs, DisambMMOutput) :-
 	% Do MMI processing, if requested
 	( control_option(fielded_mmi_output) ->
 	  conditionally_skr_begin_write(BracketedOutput),
-          current_output(Stream),
+          current_output(OutputStream),
 	  get_UIAtom(OrigUtterances, UIAtom),
-	  process_citation(UIAtom, DisambMMOutput, Stream),
+	  % The "pmid" argument specifies that the PMID should be the first field in he AA output
+	  dump_all_avl(AAs, pmid, UIAtom, OutputStream),
+	  process_citation(UIAtom, DisambMMOutput, OutputStream),
 	  conditionally_skr_end_write(BracketedOutput)
         ; true
 	).
@@ -511,7 +514,7 @@ process_tf_1([FirstTF|RestTFs],
 	set_aatf_rank(TitleFlag, Spec, NFreq, Rank),
 	normalize_value(NZ, Rank, NormalizedRank),
 	NegNRank is -NormalizedRank,
-	FirstAATF = aatf(NegNRank,Concept,STs,CUI,Tuples),
+	FirstAATF = aatf(NegNRank,Concept,STs,CUI,Tuples,TreeCodes),
 	% Just to allow the debugger to examine FirstAATF
 	FirstAATF \== [],
 	process_tf_1(RestTFs,
@@ -602,7 +605,7 @@ set_aatf_rank(TitleFlag, Spec, NFreq, Rank) :-
 	).
 
 dump_aatf_info_fielded([], _UIAtom, _Stream).
-dump_aatf_info_fielded([aatf(NegRank,Concept,STs,CUI,Tuples)|Rest],
+dump_aatf_info_fielded([aatf(NegRank,Concept,STs,CUI,Tuples,TreeCodes)|Rest],
 			UIAtom, Stream) :-
 	reverse_sort_tuples(Tuples, SortedTuples),
 	ScaledRank is -1000.0 * NegRank,
@@ -611,6 +614,8 @@ dump_aatf_info_fielded([aatf(NegRank,Concept,STs,CUI,Tuples)|Rest],
 	% format(Stream,'SortedTuples: ~p~nTitleflag: ~p~n',[SortedTuples,TitleFlag]),
 	dump_output(Stream, UIAtom, ScaledRank, Concept, CUI, STs, TuplesNoPosInfo, FieldsAtom),
 	print_MMI_pos_info(PosInfo, Stream),
+	print_treecode_info(TreeCodes, Stream),
+	nl(Stream),
 	dump_aatf_info_fielded(Rest, UIAtom, Stream).
 
 dump_output(Stream, UIAtom, ScaledRank, Concept, CUI, STs, TuplesNoPosInfo, FieldsAtom) :-
@@ -627,7 +632,17 @@ extract_pos_info([Term-Field-NSent-Text-PosInfo|RestTuples],
 		 [PosInfo|RestPosInfo]) :-
 	extract_pos_info(RestTuples, RestTuplesNoPosInfo, RestPosInfo).
 
-print_MMI_pos_info([], Stream) :- nl(Stream).
+print_treecode_info([], _Stream).
+print_treecode_info([FirstTreeCode|RestTreeCodes], Stream) :-
+	format(Stream, '~s', [FirstTreeCode]),
+	( foreach(TreeCode, RestTreeCodes),
+	  param(Stream)
+	  do
+	  format(Stream, ';~s', [TreeCode])
+	).
+
+
+print_MMI_pos_info([], Stream) :- format(Stream, '|', []).
 print_MMI_pos_info([FirstPosInfo|RestPosInfo], Stream) :-
 	FirstPosInfo = [StartPos/Length|RestPairs],
 	format(Stream, '|~d:~d', [StartPos, Length]),

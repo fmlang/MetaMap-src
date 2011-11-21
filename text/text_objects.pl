@@ -34,6 +34,7 @@
 % Purpose:  To provide support for text objects (sentences, parentheticals, AAs, ...)
 
 :- module(text_objects, [
+	dump_all_avl/4,
 	extract_token_strings/2,
 	extract_an_lc_strings/2,
 	find_and_coordinate_sentences/7
@@ -616,13 +617,28 @@ find_all_aas(Sentences, UIString, OutputStream, AAs) :-
 	last(Sentences, LastToken),
 	arg(4, LastToken, pos(_,LastPos)),
 	find_aas(Sentences, LastPos, AAs0, AAs),
-	( control_option(dump_aas),
-	  \+ control_option(machine_output) ->
-	  atom_codes(UIAtom, UIString),
-	  dump_all_avl(AAs, UIAtom, OutputStream)
-	; true
-	),
+	maybe_dump_aas(UIString, AAs, OutputStream),
 	!.
+
+maybe_dump_aas(UIString, AAs, OutputStream) :-
+	( ( control_option(dump_aas)
+	  ; control_option(aas_only)
+	  ),
+	  \+ control_option(machine_output),
+	  \+ xml_output_on ->
+	  atom_codes(UIAtom, UIString),
+	  % The "aa" argument specifies that "AA" should be the first field in he AA output
+	  dump_all_avl(AAs, aa, UIAtom, OutputStream)
+	; true
+	).
+
+xml_output_on :-
+	( control_option('XMLf') -> true
+	; control_option('XMLn') -> true
+	; control_option('XMLf1') -> true
+	; control_option('XMLn1')
+	).
+
 
 add_final_ws_token(Sentences, Sentences1) :-
 	last(Sentences, LastToken),
@@ -634,7 +650,15 @@ add_final_ws_token(Sentences, Sentences1) :-
 	append(Sentences, [ExtraWSToken], Sentences1).
 
 
-dump_all_avl(AVL, UI, OutputStream) :-
+% The FirstField argument should be either "aa" or "pmid",
+% and determines whether the first two fields should be
+% AA|PMID  -- for --dump_aas output, e.g.,
+% AA|00000000|HA|heart attack|1|2|3|12
+% or
+% PMID|AA  -- for --fielded_mmi_output, e.g.,
+% 00000000|AA|HA|heart attack|1|2|3|12
+
+dump_all_avl(AVL, FirstField, UI, OutputStream) :-
 	% Key is e.g., "HA"
 	% Values is e.g., "Heart Attack"
 	% avl_member(Key, AVL, Values),
@@ -643,7 +667,7 @@ dump_all_avl(AVL, UI, OutputStream) :-
 	avl_to_list(AVL, AAListTokens),
 	reformat_aa_output_list(AAListTokens, UI, AAList),
 	sort(AAList, SortedAAList),
-	write_avl_data(SortedAAList, OutputStream),
+	write_avl_data(SortedAAList, FirstField, OutputStream),
 	flush_output(OutputStream).
 	
 
@@ -665,16 +689,24 @@ reformat_one_aa(AA, Expansion, UI, ReformattedAAData) :-
 			    AATokenLength-AATextLength-
 			    ExpansionTokenLength-ExpansionTextLength.
 
-write_avl_data([], _OutputStream).
-write_avl_data([FirstAAData|RestAAs], OutputStream) :-
+write_avl_data([], _FirstField, _OutputStream).
+write_avl_data([FirstAAData|RestAAs], FirstField, OutputStream) :-
 	FirstAAData = UI-AATextAtom-ExpansionTextAtom-
 		      AATokenLength-AATextLength-
 		      ExpansionTokenLength-ExpansionTextLength,
-	format(OutputStream, 'AA|~w|~w|~w|',
-	       [UI, AATextAtom, ExpansionTextAtom]),
-	format(OutputStream, '~w|~w|~w|~w~n',
-	       [AATokenLength, AATextLength, ExpansionTokenLength, ExpansionTextLength]),
-	write_avl_data(RestAAs, OutputStream).
+	output_fields(FirstField, OutputStream, UI, AATextAtom, ExpansionTextAtom,
+		      AATokenLength, AATextLength, ExpansionTokenLength, ExpansionTextLength),
+	write_avl_data(RestAAs, FirstField, OutputStream).
+
+output_fields(FirstField, OutputStream, UI, AATextAtom, ExpansionTextAtom,
+	      AATokenLength, AATextLength, ExpansionTokenLength,  ExpansionTextLength) :-
+	set_field_order(FirstField, UI, Field1, Field2),
+	format(OutputStream, '~w|~w|~w|~w|~w|~w|~w|~w~n',
+	       [Field1,Field2,AATextAtom,ExpansionTextAtom,AATokenLength,
+		AATextLength, ExpansionTokenLength, ExpansionTextLength]).
+
+set_field_order(aa,   UI, 'AA', UI).
+set_field_order(pmid, UI,   UI, 'AA').
 
 find_aas([], _LastPos, AAsIn, AAsIn).
 find_aas([tok(sn,_,_,Pos)|Rest], LastPos, AAsIn, AAsOut) :-
@@ -3167,8 +3199,8 @@ create_UDAs(InputStream, UDAs) :-
 	   % tokenize_text(AACodes, TokenizedAACodes),
 	   % tokenize_text(ExpansionCodes, TokenizedExpansionCodes),
 	   % form_simple_tokens(TokenizedExpansionCodes, LCTokenizedExpansionCodes, 0/0, ExpansionTokens),
-	   UDA = AACodes:ExpansionCodes,
-	   format(user_output, 'UDA: ~s:~s~n', [AACodes,ExpansionCodes])
+	   UDA = AACodes:ExpansionCodes
+	   % format(user_output, 'UDA: ~s:~s~n', [AACodes,ExpansionCodes])
 	).
 
 % The shorter string is deemed to be the AA, and the longer, the expansion.

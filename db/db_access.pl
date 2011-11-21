@@ -54,12 +54,13 @@
 	db_get_variants/3,
 	db_get_versioned_source_name/2,
 	default_release/1,
+	fatal_error/2,
 	get_data_model/1,
 	get_data_version/1,
-	get_data_year/2,
+	get_data_release/2,
 	initialize_db_access/0,
 	initialize_db_access/3,
-	model_location/4,
+	model_location/5,
 	stop_db_access/0
     ]).
 
@@ -79,6 +80,7 @@
 	concatenate_items_to_string/2,
 	eliminate_multiple_meaning_designator_string/2,
 	is_print_string/1,
+	split_string_completely/3,
 	trim_whitespace/2
     ]).
 
@@ -98,6 +100,7 @@
 :- use_module(library(file_systems), [
 	directory_exists/1,
 	directory_exists/2,
+	directory_members_of_directory/3,
 	file_exists/2
    ]).
 
@@ -137,24 +140,54 @@ foreign(exec_destroy_dbs, c, exec_destroy_dbs).
 
 % :- abolish(foreign/3, [force(true)]).
 
-verify_valid_dbs(Location) :-
+verify_valid_dbs(Location, BasePath, ChosenRelease) :-
 	( \+ directory_exists(Location) ->
-	  fatal_error('~n~nERROR: Database directory ~q does not exist.~n',
-		      [Location]),
+	  fatal_error('~n~nERROR: Database directory ~q does not exist.~n', [Location]),
+	  announce_valid_models(BasePath, ChosenRelease),	  
 	  halt
 	;  \+ directory_exists(Location, [read]) ->
-	  fatal_error('~n~nERROR: Database directory ~q exists but is not readable.~n',
-		      [Location]),
+	  fatal_error('~n~nERROR: Database directory ~q exists but is not readable.~n', [Location]),
 	  halt
 	;  \+ directory_exists(Location, [execute]) ->
-	  fatal_error('~n~nERROR: Database directory ~q exists but is not executable.~n',
-		      [Location]),
+	  fatal_error('~n~nERROR: Database directory ~q exists but is not executable.~n', [Location]),
 	  halt
 	; exec_init_dbs(Location)
 	).
 
+announce_valid_models(BasePath, ChosenRelease) :-
+	concat_atom(['DB.*.', ChosenRelease, '.base'], Glob),
+	% Suppose ChosenRelease is, e.g, 2010AA;
+	% that's the value selected via the "-V" flag, or the default release.
+	% Generate the list of all subdirectories of BasePath
+	% (which is the 'MODEL_LOCATION_BASE_DIR' env var (e.g., /nfsvol/nls3aux18/DB))
+	% that match the glob 'DB.*.base'.
+	% For the 2011AA release, that will be ['Base', 'USAbase', and 'NLM'].
+	directory_members_of_directory(BasePath, Glob, RelAbsList),
+	% directory_members_of_directory/3 returns a list of
+	% RelativePath-AbsolutePath terms, so remove the AbsolutePath terms.
+	( foreach(Relative-_Absolute, RelAbsList),
+	  foreach(Relative, RelList)
+	do true
+	),
+	% RelativePath is of the form DB.Version.Release.Model,
+	% so extract the Version component
+	( foreach(Dir, RelList),
+	  foreach(Release, Versions)
+	do
+	  atom_codes(Dir, DirCodes),
+	  split_string_completely(DirCodes, ".", [_DB,ReleaseCodes,_Version,_Model]),
+	  atom_codes(Release, ReleaseCodes)
+	),
+	announce_valid_models_1(Versions, ChosenRelease).
+
+announce_valid_models_1([], ChosenRelease) :-
+	fatal_error('       There is no ~w release!~n', [ChosenRelease]).	
+announce_valid_models_1([H|T], ChosenRelease) :-	
+	fatal_error('       For the ~w release, the valid models are: ~w~n', [ChosenRelease, [H|T]]).
+
+
 /* initialize_db_access
-   initialize_db_access(+Version, +Year, +Model)
+   initialize_db_access(+Version, +Release, +Model)
    stop_db_access
 
 initialize_db_access/0 calls verify_valid_dbs to validate the BDB directory
@@ -165,37 +198,45 @@ The default version is "normal".
 Current models for each version are: relaxed or strict.
 stop_db_access/0 calls exec_destroy_dbs to close them.  */
 
-default_version('USAbase').
-
+% default_version('USAbase').
+default_version(DefaultVersion) :-
+	get_data_release(Release, 0),
+	atom_codes(Release, [A,B,C,D,_E,_F]),
+	number_codes(FourDigitRelease, [A,B,C,D]),
+	( FourDigitRelease >= 2011 ->
+	  DefaultVersion = 'USAbase'
+	; DefaultVersion = 'NLM'
+	).
+	
 default_release('2011AA').
 
 initialize_db_access :-
-	get_data_year(Year, 1),
+	get_data_release(Release, 1),
 	get_data_version(Version),
 	get_data_model(Model),
-	initialize_db_access(Version, Year, Model).
+	initialize_db_access(Version, Release, Model).
 
-initialize_db_access(Version, Year, Model) :-
-	db_access_status(Version, Year, Model),
+initialize_db_access(Version, Release, Model) :-
+	db_access_status(Version, Release, Model),
 	!.
-initialize_db_access(Version, Year, Model) :-
+initialize_db_access(Version, Release, Model) :-
 	set_var_table(VarTable),
 	% Version is one of normal (default), nal, level0, etc.
 	% Model   is one of strict (default), relaxed
-	model_location(Version, Year, Model, Location),
-	verify_valid_dbs(Location),
-	assert(db_access_status(Version, Year, Model)),
-	conditionally_announce_database_info(Version, Year, Model, Location, VarTable),
+	model_location(Version, Release, Model, BasePath, Location),
+	verify_valid_dbs(Location, BasePath, Release),
+	assert(db_access_status(Version, Release, Model)),
+	conditionally_announce_database_info(Version, Release, Model, Location, VarTable),
 	!.
-initialize_db_access(Version, Year, Model) :-
+initialize_db_access(Version, Release, Model) :-
 	fatal_error('~NERROR: Cannot open Berkeley DB databases (~a ~a ~a model).~n',
-		    [Version,Year,Model]),
+		    [Version,Release,Model]),
 	halt.
 
-conditionally_announce_database_info(Version, Year, Model, Location, VarTable) :-
+conditionally_announce_database_info(Version, Release, Model, Location, VarTable) :-
 	( \+ control_option(silent) ->
 	   format('Berkeley DB databases (~a ~a ~a model) are open.~n',
-		  [Version, Year, Model]),
+		  [Version, Release, Model]),
 	  format('Static variants will come from table ~s in ~w.~n',[VarTable,Location]),
 	  announce_variant_info
 	; true
@@ -232,9 +273,9 @@ stop_db_access :-
 	retractall(db_access_status(_,_,_)),
 	exec_destroy_dbs.
 
-model_location(Version, Year, ModelName, Location) :-
+model_location(Version, Release, ModelName, Path, Location) :-
 	model_location_base_dir(Path),
-	concat_atom([Path, '/DB.', Version, '.', Year, '.', ModelName],  Location).
+	concat_atom([Path, '/DB.', Version, '.', Release, '.', ModelName],  Location).
 
 model_location_base_dir(Path) :- environ('MODEL_LOCATION_BASE_DIR', Path).
 
@@ -614,8 +655,8 @@ db_get_mwi_word_data(Table, Word, _DebugFlags, []) :-
 	halt.
 
 possibly_widen_table(NarrowTable, WideTable, Widen) :-
-	db_access_status(Version, Year, Model),
-	model_location(Version, Year, Model, Location),
+	db_access_status(Version, Release, Model),
+	model_location(Version, Release, Model, _BasePath, Location),
 	concat_atom([NarrowTable, '_WIDE'], MaybeWideTable),
 	concat_atom([Location, '/', MaybeWideTable], WideTablePath),
 	( file_exists(WideTablePath, read) ->
@@ -832,74 +873,79 @@ get_data_version(Version) :-
         ).
 
 % 2008AA, 2009AB, etc.
-get_data_year(NormalizedYear, Announce) :-
-	default_release(DefaultYear),
-	normalize_db_access_year(DefaultYear, NormalizedDefaultYear),
+get_data_release(NormalizedRelease, Announce) :-
+	default_release(DefaultRelease),
+	normalize_db_access_year(DefaultRelease, NormalizedDefaultRelease),
 	% Is the model year explicitly specified on the command line?
-	( control_value(mm_data_year, SpecifiedYear),
-	  normalize_db_access_year(SpecifiedYear, NormalizedSpecifiedYear),
-	  NormalizedDefaultYear \== NormalizedSpecifiedYear ->
+	( control_value(mm_data_year, SpecifiedRelease),
+	  normalize_db_access_year(SpecifiedRelease, NormalizedSpecifiedRelease),
+	  NormalizedDefaultRelease \== NormalizedSpecifiedRelease ->
 	  ( Announce is 1 ->
 	    send_message('##### WARNING: Overriding default model ~w with ~w.~n',
-			 [NormalizedDefaultYear, SpecifiedYear])
+			 [NormalizedDefaultRelease, SpecifiedRelease])
 	  ; true
 	  ),
-	  NormalizedYear = NormalizedSpecifiedYear
-	; NormalizedYear = NormalizedDefaultYear
+	  NormalizedRelease = NormalizedSpecifiedRelease
+	; NormalizedRelease = NormalizedDefaultRelease
 	).
 
-normalize_db_access_year(Year, NormalizedYear) :-
-	ensure_atom(Year, YearAtom),
-	( YearAtom = '99' ->
-	  NormalizedYear = '1999AA'
-	; YearAtom = '1999' ->
-	  NormalizedYear = '1999AA'
-	; atom_length(YearAtom, YearLength),
-	  atom_codes(YearAtom, Codes),
+normalize_db_access_year(Release, NormalizedRelease) :-
+	ensure_atom(Release, ReleaseAtom),
+	( ReleaseAtom = '99' ->
+	  NormalizedRelease = '1999AA'
+	; ReleaseAtom = '1999' ->
+	  NormalizedRelease = '1999AA'
+	; atom_length(ReleaseAtom, ReleaseLength),
+	  atom_codes(ReleaseAtom, Codes),
 	  ( % e.g., 08, 09, 10, etc.
-	    YearLength =:= 2,
+	    ReleaseLength =:= 2,
 	    all_digits(Codes) ->
-	    concat_atom(['20', YearAtom, 'AA'], NormalizedYear)
-	  ; YearLength =:= 4,
+	    concat_atom(['20', ReleaseAtom, 'AA'], NormalizedRelease)
+	  ; ReleaseLength =:= 4,
 	    all_digits(Codes) ->
 	    Codes = [FirstCode,SecondCode|_],
 	      % e.g., 2008, 2009, 2010, etc.
 	    ( FirstCode == 0'2 ->
-	      concat_atom([YearAtom, 'AA'], NormalizedYear)
+	      concat_atom([ReleaseAtom, 'AA'], NormalizedRelease)
 	      % e.g., 0809, 0910, etc.
 	    ; FirstCode == 0'0 ->
 	      atom_codes(FirstDigit, [FirstCode]),
 	      atom_codes(SecondDigit, [SecondCode]),
-	      concat_atom(['20', FirstDigit, SecondDigit, 'AB'], NormalizedYear)
+	      concat_atom(['20', FirstDigit, SecondDigit, 'AB'], NormalizedRelease)
 	      % e.g., 1011, 1112, etc.
 	    ; FirstCode == 0'1 ->
 	      atom_codes(FirstDigit, [FirstCode]),
 	      atom_codes(SecondDigit, [SecondCode]),
-	      concat_atom(['20', FirstDigit, SecondDigit, 'AB'], NormalizedYear)
+	      concat_atom(['20', FirstDigit, SecondDigit, 'AB'], NormalizedRelease)
 	    )
-	  ; YearLength =:= 4,
+	  ; ReleaseLength =:= 4,
 	    % Nonstandard, e.g., 08AA, 09AB, 10AA, etc.
 	    Codes = [D1, D2, AB1, AB2],
 	    is_digit(D1),
 	    is_digit(D2),
 	    is_A_or_B(AB1),
 	    is_A_or_B(AB2) ->
-	    concat_atom(['20', Year], NormalizedYear)
-	  ; YearLength =:= 6,
+	    choose_century(D1, Century),
+	    concat_atom([Century, Release], NormalizedRelease)
+	  ; ReleaseLength =:= 6,
 	    % e.g., 2008AA, 2009AB, 2010AA, etc.
 	    Codes = [D1, D2, D3, D4, AB1, AB2],
 	    all_digits([D1,D2,D3,D4]),
 	    is_A_or_B(AB1),
 	    is_A_or_B(AB2) ->
-	    NormalizedYear = YearAtom
+	    NormalizedRelease = ReleaseAtom
 	  )
 	),
 	!.
+normalize_db_access_year(Release, _NormalizedRelease) :-
+	format(user_output, 'ERROR: There is no ~w Model Release.~n', [Release]),
+	halt.
 
-normalize_db_access_year(Year, _NormalizedYear) :-
-	format(user_output, 'ERROR in specifying Model Year (~w)~n', [Year]),
-	fail.
-
+choose_century(Digit, Century) :-
+	( Digit =< 0'5 ->
+	  Century = '20'
+	; Century = '19'
+	).
 
 all_digits([]).
 all_digits([H|T]) :- is_digit(H), all_digits(T).
@@ -919,7 +965,7 @@ get_data_model(Model) :-
 
 debug_db_get_mwi_data_1(DebugFlags) :-
 	( memberchk(7, DebugFlags) ->
-	  format('~ndb_get_mwi_word_data: Input is an atom.~n',[]),
+	  format('~ndb_get_mwi_word_data: Input is an atom.~n', []),
 	  ttyflush
 	; true
 	).

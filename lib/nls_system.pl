@@ -33,7 +33,7 @@
 % Purpose:  Provide various system-related predicates.
 
 
-:- module(nls_system,[
+:- module(nls_system, [
 	args/0,
 	% called by MetaMap API -- do not change signature!
 	add_to_control_options/1,
@@ -70,13 +70,18 @@
     ]).
 
 
-:- use_module(skr_lib(nls_strings),[
+:- use_module(skr_lib(nls_strings), [
 	number_codes_list/2,
 	concatenate_items_to_atom/2,
+	safe_number_codes/2,
 	split_atom_completely/3
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
+:- use_module(skr_db(db_access), [
+	fatal_error/2
+    ]).
+
+:- use_module(skr_lib(sicstus_utils), [
 	can_open_file/2,
 	midstring/4,
 	midstring/5
@@ -92,7 +97,7 @@
    ]).
 
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	rev/2
     ]).
 
@@ -193,9 +198,10 @@ is_control_option(metamap,   z, term_processing, 		no, none).
 is_control_option(metamap,  '', debug, 			 	no,
                   aspec(debug, mandatory, list, none, no_default, 'Debugging settings')).
 is_control_option(metamap,  '', help, 		 	 	no, none).
-is_control_option(metamap,  '', longest_lexicon_match, 	 	no, none).
+% is_control_option(metamap,  '', longest_lexicon_match, 	 	no, none).
 is_control_option(metamap,  '', negex,		 	 	no, none).
 is_control_option(metamap,  '', silent,		 	 	no, none).
+is_control_option(metamap,  '', aas_only,                	no, none).
 % is_control_option(metamap,  '', max_ambiguity,	 	 no,
 %                   aspec(max_ambiguity, mandatory, integer, none, 0,
 %                         'Maximum allowable degree of ambiguity')).
@@ -212,7 +218,7 @@ is_control_option(metamap,  '', no_prune,	 	 	no, none).
 is_control_option(metamap,  '', prune, no,
                   aspec(prune, mandatory, integer, none, no_default,
                         'Max num of candidates to allow before pruning')).
-is_control_option(metamap,  '', restore, 	 	 	no, none).
+% is_control_option(metamap,  '', restore, 	 	 	no, none).
 is_control_option(metamap,  '', 'UDA',   			no,
 		  aspec('UDA', mandatory, file, read, no_default, 'File containing UDAs')).
 is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
@@ -692,7 +698,7 @@ is_control_option(xfer_to_occs,h,help,no,none).
 get_control_options_for_modules/2 computes the set of all legal control
 Options for Module(s) (an atom or list of atoms).  */
 
-get_control_options_for_modules([],[]) :-
+get_control_options_for_modules([], []) :-
     !.
 get_control_options_for_modules(Module,Options) :-
     atom(Module),
@@ -845,9 +851,9 @@ display_current_control_options_aux :-
 	% unless --silent is set from the command line.
 	\+ control_option(silent),
 	!,
-	format(user_output, 'Control options:',[]),
+	format(user_output, 'Control options:', []),
 	( \+ control_option(Option) ->
-	  format(user_output, ' NONE~n~n',[])
+	  format(user_output, ' NONE~n~n', [])
 	; nl(user_output),
 	  control_option(Option),
 	  display_one_control_option(Option),
@@ -859,8 +865,8 @@ display_current_control_options_aux.
 display_one_control_option(Option) :-
 	% ( control_value(Option,_Any,Value) ->
 	( control_value(Option,Value) ->
-	  format(user_output, '  ~a=~p~n',[Option,Value])
-	; format(user_output, '  ~a~n',[Option])
+	  format(user_output, '  ~a=~p~n', [Option,Value])
+	; format(user_output, '  ~a~n', [Option])
 	).
 
 display_mandatory_metamap_options :-
@@ -946,7 +952,7 @@ display_control_options_for_modules(Module, OtherModules) :-
 	fail.
 
 display_control_options_for_modules(_Module, _OtherModules) :-
-	format('~n',[]).
+	format('~n', []).
 
 
 /* parse_command_line(-CommandLine)
@@ -958,7 +964,7 @@ of single-character options is signalled by an initial '-'; a verbose option is
 signalled by '--'.  Thus, for
              parser -vt --semantics infile outfile
 parse_command_line would produce
-             command_line([v,t,semantics],[infile,outfile]).
+             command_line([v,t,semantics], [infile,outfile]).
 parse_command_line/3 is both an auxiliary predicate and an alternative used
 to parse new options.  RawCL should be of the form ['-<options>'], is a
 singleton list consisting of an atom beginning with a hyphen.  */
@@ -1085,52 +1091,52 @@ unambiguously found in Options.  Single-character options must be Module
 options.  Ambiguous or unknown Options cause failure.  */
 
 interpret_options(Options, AllOptions, Module, IOptions) :-
-	% format('All options: ~p~n',[AllOptions]),
-	% format('Options: ~p~n',[Options]),
+	% format('All options: ~p~n', [AllOptions]),
+	% format('Options: ~p~n', [Options]),
 	compute_completions(Options, AllOptions, Module, OptionCompletions),
-	% format('Option completions: ~p~n',[OptionCompletions]),
+	% format('Option completions: ~p~n', [OptionCompletions]),
 	resolve_options(Options, OptionCompletions, [], IOptions0, ok, StatusOut),
 	rev(IOptions0, IOptions),
-	% format('Interpreted options: ~p~n',[IOptions]),
+	% format('Interpreted options: ~p~n', [IOptions]),
 	!,
 	StatusOut == ok.
 
-compute_completions([],_AllOptions,_Module,[]).
+compute_completions([],_AllOptions,_Module, []).
 compute_completions([First|Rest],AllOptions,Module,
                     [FirstCompletion|RestCompletions]) :-
     compute_completion(First,AllOptions,Module,FirstCompletion),
     compute_completions(Rest,AllOptions,Module,RestCompletions).
 
-compute_completion(_Item,[],_Module,[]).
-compute_completion(Item,_AllOptions,Module,[iopt(Option,ArgSpec)]) :-
+compute_completion(_Item, [],_Module, []).
+compute_completion(Item,_AllOptions,Module, [iopt(Option,ArgSpec)]) :-
     ( is_control_option(Module,Item,Option,_,ArgSpec) ->
       true
     ; is_control_option(Module,_,Item,_,ArgSpec) ->
       Option = Item
     ),
     !.
-% compute_completion(Item,[Option|Rest],Module,
+% compute_completion(Item, [Option|Rest],Module,
 %                    [iopt(Option,ArgSpec)|ComputedRest]) :-
 %     midstring(Option,Item,_,0),  % Item is a prefix of Option
 %     is_control_option(Module,_,Option,_,ArgSpec),
 %     !,
 %     compute_completion(Item,Rest,Module,ComputedRest).
-compute_completion(Item,[_Option|Rest],Module,ComputedRest) :-
+compute_completion(Item, [_Option|Rest],Module,ComputedRest) :-
     compute_completion(Item,Rest,Module,ComputedRest).
 
 resolve_options(Options,OptionCompletions,IOptionsIn,IOptionsOut,
                 StatusIn,StatusOut) :-
     resolve_items(Options,OptionCompletions,options,IOptionsIn,IOptionsOut,
-                  [],[],StatusIn,StatusOut).
+                  [], [],StatusIn,StatusOut).
 
-resolve_items([],[],_Type,IOptionsIn,IOptionsIn,IArgsIn,IArgsIn,
+resolve_items([], [],_Type,IOptionsIn,IOptionsIn,IArgsIn,IArgsIn,
               StatusIn,StatusIn).
-resolve_items([Item|RestItems],[ItemCompletion|RestCompletions],Type,
+resolve_items([Item|RestItems], [ItemCompletion|RestCompletions],Type,
               IOptionsIn,IOptionsOut,IArgsIn,IArgsOut,StatusIn,StatusOut) :-
     length(ItemCompletion,NCompletions),
     (   NCompletions =:= 0 ->
         (Type==options ->
-            format('~nERROR: Unknown option ~p~n',[Item]),
+            format('~nERROR: Unknown option ~p~n', [Item]),
             IOptionsInOut=IOptionsIn,
             StatusInOut=error
         ;   IOptionsInOut=IOptionsIn,
@@ -1140,13 +1146,13 @@ resolve_items([Item|RestItems],[ItemCompletion|RestCompletions],Type,
     ;   NCompletions =:= 1 ->
         ItemCompletion=[SingletonCompletion],
         (member(SingletonCompletion,IOptionsIn) ->
-            format('WARNING: Duplicate option ~p ignored.~n',[Item]),
+            format('WARNING: Duplicate option ~p ignored.~n', [Item]),
             IOptionsInOut=IOptionsIn
         ;   IOptionsInOut=[SingletonCompletion|IOptionsIn]
         ),
         IArgsInOut=IArgsIn,
         StatusInOut=StatusIn
-    ;   format('~nERROR: Ambiguous option ~p (~p).~n',[Item,ItemCompletion]),
+    ;   format('~nERROR: Ambiguous option ~p (~p).~n', [Item,ItemCompletion]),
         IOptionsInOut=IOptionsIn,
         IArgsInOut=IArgsIn,
         StatusInOut=error
@@ -1205,7 +1211,7 @@ below).
 */
 
 interpret_args(IOptions,ArgSpecs,Args,IArgs) :-
-    interpret_option_args(IOptions,Args,ArgsInOut,[],IArgsInOut,ok,StatusInOut),
+    interpret_option_args(IOptions,Args,ArgsInOut, [],IArgsInOut,ok,StatusInOut),
     interpret_args(ArgSpecs,ArgsInOut,IArgsInOut,IArgsOut,
                    StatusInOut,StatusOut),
     rev(IArgsOut,IArgs),
@@ -1217,29 +1223,29 @@ interpret_option_args([iopt(_,none)|Rest],ArgsIn,ArgsOut,IArgsIn,IArgsOut,
                       StatusIn,StatusOut) :-
     interpret_option_args(Rest,ArgsIn,ArgsOut,IArgsIn,IArgsOut,
                           StatusIn,StatusOut).
-interpret_option_args([iopt(_Option,ArgSpec)|Rest],[Arg|ArgsInOut],ArgsOut,
+interpret_option_args([iopt(_Option,ArgSpec)|Rest], [Arg|ArgsInOut],ArgsOut,
                       IArgsIn,IArgsOut,StatusIn,StatusOut) :-
     interpret_arg(ArgSpec,Arg,IArgsIn,IArgsInOut,StatusIn,StatusInOut),
     interpret_option_args(Rest,ArgsInOut,ArgsOut,IArgsInOut,IArgsOut,
                           StatusInOut,StatusOut).
-interpret_option_args([iopt(_Option,ArgSpec)|Rest],[],[],IArgsIn,IArgsOut,
+interpret_option_args([iopt(_Option,ArgSpec)|Rest], [], [],IArgsIn,IArgsOut,
                       StatusIn,StatusOut) :-
     interpret_arg(ArgSpec,'<null>',IArgsIn,IArgsInOut,StatusIn,StatusInOut),
-    interpret_option_args(Rest,[],[],IArgsInOut,IArgsOut,StatusInOut,StatusOut).
+    interpret_option_args(Rest, [], [],IArgsInOut,IArgsOut,StatusInOut,StatusOut).
 
-interpret_args([],[],IArgsIn,IArgsIn,StatusIn,StatusIn) :-
+interpret_args([], [],IArgsIn,IArgsIn,StatusIn,StatusIn) :-
     !.
-interpret_args([ArgSpec|RestArgSpecs],[Arg|RestArgs],IArgsIn,IArgsOut,
+interpret_args([ArgSpec|RestArgSpecs], [Arg|RestArgs],IArgsIn,IArgsOut,
                StatusIn,StatusOut) :-
     interpret_arg(ArgSpec,Arg,IArgsIn,IArgsInOut,StatusIn,StatusInOut),
     interpret_args(RestArgSpecs,RestArgs,IArgsInOut,IArgsOut,
                    StatusInOut,StatusOut).
 interpret_args([],Args,IArgsIn,IArgsIn,StatusIn,StatusIn) :-
     !,
-    format('WARNING: Extra arguments ~p ignored.~n',[Args]).
-interpret_args([ArgSpec|RestArgSpecs],[],IArgsIn,IArgsOut,StatusIn,StatusOut) :-
+    format('WARNING: Extra arguments ~p ignored.~n', [Args]).
+interpret_args([ArgSpec|RestArgSpecs], [],IArgsIn,IArgsOut,StatusIn,StatusOut) :-
     interpret_arg(ArgSpec,'<null>',IArgsIn,IArgsInOut,StatusIn,StatusInOut),
-    interpret_args(RestArgSpecs,[],IArgsInOut,IArgsOut,StatusInOut,StatusOut).
+    interpret_args(RestArgSpecs, [],IArgsInOut,IArgsOut,StatusInOut,StatusOut).
 
 interpret_arg(ArgSpec,'<null>',IArgsIn,IArgsOut,StatusIn,StatusOut) :-
     !,
@@ -1249,7 +1255,7 @@ interpret_arg(ArgSpec,'<null>',IArgsIn,IArgsOut,StatusIn,StatusOut) :-
         (Option==mandatory ->
             format('~nERROR: Mandatory argument~n            ~p (~p)~n',
                    [SpecName,Description]),
-            format('       has no value.~n',[]),
+            format('       has no value.~n', []),
             StatusOut=error
         ;   StatusOut=StatusIn
         )
@@ -1262,34 +1268,34 @@ interpret_arg(ArgSpec,'<null>',IArgsIn,IArgsOut,StatusIn,StatusOut) :-
                             DefaultValue,
                             IArgsIn,IArgsOut,StatusIn,StatusOut)) ->
                 true
-            ;   format('~nERROR: Cannot interpret~n',[]),
-                format('       ~p (~p).~n',[SpecName,Description]),
+            ;   format('~nERROR: Cannot interpret~n', []),
+                format('       ~p (~p).~n', [SpecName,Description]),
                 IArgsOut=IArgsIn,
                 StatusOut=error
             )
-        ;   format('~nERROR: Cannot compute default for~n',[]),
-            format('       ~p (~p).~n',[SpecName,Description]),
+        ;   format('~nERROR: Cannot compute default for~n', []),
+            format('       ~p (~p).~n', [SpecName,Description]),
             IArgsOut=IArgsIn,
             StatusOut=error
         )
     ).
 % user_input
 interpret_arg(ArgSpec,user_input,
-              IArgsIn,[iarg(SpecName,ArgSpec,[name(user_input),
+              IArgsIn, [iarg(SpecName,ArgSpec, [name(user_input),
                                               stream(user_input)])|IArgsIn],
               StatusIn,StatusIn) :-
     !,
     ArgSpec=aspec(SpecName,_Option,file,_SubType,_Default,_Description).
 % user_output
 interpret_arg(ArgSpec,user_output,
-              IArgsIn,[iarg(SpecName,ArgSpec,[name(user_output),
+              IArgsIn, [iarg(SpecName,ArgSpec, [name(user_output),
                                               stream(user_output)])|IArgsIn],
               StatusIn,StatusIn) :-
     !,
     ArgSpec=aspec(SpecName,_Option,file,_SubType,_Default,_Description).
 % file argument
 interpret_arg(ArgSpec,Arg,
-              IArgsIn,[iarg(SpecName,ArgSpec,[Att|RestAtts])|IArgsIn],
+              IArgsIn, [iarg(SpecName,ArgSpec, [Att|RestAtts])|IArgsIn],
               StatusIn,StatusOut) :-
     ArgSpec=aspec(SpecName,Option,file,SubType,_Default,_Description),
     !,
@@ -1313,7 +1319,7 @@ interpret_arg(ArgSpec,Arg,
 	(can_open_file(Arg,Mode) ->
 	    StatusOut=StatusIn
 	;   Option==mandatory,
-	    format('~nERROR: ~p is not ~p.~n',[Arg,SubType]),
+	    format('~nERROR: ~p is not ~p.~n', [Arg,SubType]),
 	    StatusOut=error
 	)
     ;   format('~nERROR: Unknown subtype ~p for type file at argument ~p.~n',
@@ -1323,14 +1329,14 @@ interpret_arg(ArgSpec,Arg,
     ).
 % symbolic argument
 interpret_arg(ArgSpec,Arg,
-              IArgsIn,[iarg(SpecName,ArgSpec,[Att])|IArgsIn],
+              IArgsIn, [iarg(SpecName,ArgSpec, [Att])|IArgsIn],
               StatusIn,StatusOut) :-
     ArgSpec=aspec(SpecName,_Option,none,_SubType,_Default,_Description),
     !,
     Att=name(Arg),
     StatusOut=StatusIn.
 % list argument
-interpret_arg(ArgSpec, Arg, IArgsIn, [iarg(SpecName,ArgSpec,[value(Atts)])|IArgsIn],
+interpret_arg(ArgSpec, Arg, IArgsIn, [iarg(SpecName,ArgSpec, [value(Atts)])|IArgsIn],
               StatusIn, StatusOut) :-
 	ArgSpec = aspec(SpecName,_Option,list,_SubType,_Default,_Description),
 	!,
@@ -1343,17 +1349,21 @@ interpret_arg(ArgSpec, Arg, IArgsIn, [iarg(SpecName,ArgSpec,[value(Atts)])|IArgs
 	).
 % numeric argument
 interpret_arg(ArgSpec,Arg,
-              IArgsIn,[iarg(SpecName,ArgSpec,[Att])|IArgsIn],
+              IArgsIn, [iarg(SpecName,ArgSpec, [Att])|IArgsIn],
               StatusIn,StatusOut) :-
     !,
     ArgSpec=aspec(SpecName,_Option,Type,_SubType,_Default,_Description),
     atom_codes(Arg,ArgString),  % argument is numeric
-    number_codes(ArgValue,ArgString),
+    ( safe_number_codes(ArgValue,ArgString) ->
+      true
+    ; fatal_error('Must specify an integer, and not "~w" to specify ~w.~n', [Arg,SpecName]),
+      abort
+    ),
     Att=value(ArgValue),
     (((Type==integer, integer(ArgValue));
       (Type==number, number(ArgValue))) ->
 	StatusOut=StatusIn
-    ;   format('~nERROR: ~p is not of type ~p.~n',[Arg,Type]),
+    ;   format('~nERROR: ~p is not of type ~p.~n', [Arg,Type]),
 	StatusOut=error
     ).
 
@@ -1361,12 +1371,12 @@ parse_list(InputString,List) :-
     phrase(l_item_list(List0),InputString),
     remove_null_strings(List0,List).
 
-remove_null_strings([],[]) :-
+remove_null_strings([], []) :-
     !.
 remove_null_strings([""|Rest],ModifiedRest) :-
     !,
     remove_null_strings(Rest,ModifiedRest).
-remove_null_strings([First|Rest],[First|ModifiedRest]) :-
+remove_null_strings([First|Rest], [First|ModifiedRest]) :-
     remove_null_strings(Rest,ModifiedRest).
 
 
@@ -1394,7 +1404,7 @@ compute_default_value(Default,IArgs,DefaultValue) :-
     compute_default_components(Default,IArgs,DefaultComponents),
     concatenate_items_to_atom(DefaultComponents,DefaultValue).
 
-compute_default_components([],_IArgs,[]).
+compute_default_components([],_IArgs, []).
 compute_default_components([DefaultItem|RestDefaultItems],IArgs,
                            [Component|RestComponents]) :-
     ((midstring(DefaultItem,'<',StrippedLeft,0),
@@ -1415,24 +1425,24 @@ get_from_iargs/4 returns the Value for Attribute of Arg found in IArgs
 get_from_attributes/3 are auxiliaries.
 get_from_iargs/4 and get_from_attributes/3 are nondeterminate.  */
 
-get_from_iargs(_Arg,_Attribute,[],_Value) :-
+get_from_iargs(_Arg,_Attribute, [],_Value) :-
     !,
     fail.
-get_from_iargs(Arg,Attribute,[IArg|_Rest],Value) :-
+get_from_iargs(Arg,Attribute, [IArg|_Rest],Value) :-
     get_from_iarg(Arg,Attribute,IArg,Value).
-get_from_iargs(Arg,Attribute,[_IArg|Rest],Value) :-
+get_from_iargs(Arg,Attribute, [_IArg|Rest],Value) :-
     get_from_iargs(Arg,Attribute,Rest,Value).
 
 get_from_iarg(Arg,Attribute,iarg(Arg,_ArgSpec,Attributes),Value) :-
     get_from_attributes(Attribute,Attributes,Value).
 
-get_from_attributes(_Attribute,[],_Value) :-
+get_from_attributes(_Attribute, [],_Value) :-
     !,
     fail.
-get_from_attributes(Attribute,[AttributeTerm|_Rest],Value) :-
+get_from_attributes(Attribute, [AttributeTerm|_Rest],Value) :-
     functor(AttributeTerm,Attribute,1),
     arg(1,AttributeTerm,Value).
-get_from_attributes(Attribute,[_First|Rest],Value) :-
+get_from_attributes(Attribute, [_First|Rest],Value) :-
     get_from_attributes(Attribute,Rest,Value).
 
 illegal_default_component(user_input).
@@ -1440,7 +1450,7 @@ illegal_default_component(user_output).
 
 conditionally_announce_program_name(ProgramName, FullYear) :-
 	( \+ control_option(silent) ->
-	  format(user_output, '~n~w (~a)~n~n',[ProgramName,FullYear])
+	  format(user_output, '~n~w (~a)~n~n', [ProgramName,FullYear])
 	; true
 	).
 

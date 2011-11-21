@@ -41,7 +41,7 @@
 	convert_to_root_sources/2
     ]).
 
-:- use_module(skr_lib(semtype_translation_2011AA), [
+:- use_module(skr_lib(semtype_translation_2011AB), [
 	is_abbrev_semtype/1
     ]).
 

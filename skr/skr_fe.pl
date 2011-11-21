@@ -44,7 +44,7 @@
 	% called by MetaMap API -- do not change signature!
 	initialize_skr/4,
 	% called by MetaMap API -- do not change signature!
-	postprocess_sentences/9,
+	postprocess_sentences/10,
 	% called by MetaMap API -- do not change signature!
 	process_text/11
    ]).
@@ -112,7 +112,7 @@
 	token_template/5,
 	token_template/6,
 	usage/0,
-        write_MMO_terms/1,
+        write_MMO_terms/2,
         write_raw_token_lists/2,
         write_sentences/2
    ]).
@@ -394,7 +394,7 @@ trim_whitespace_from_last_string([NextString|RestStrings], FirstString, [FirstSt
 
    postprocess_sentences(+OrigUtterances, +NegationTerms, +InterpretedArgs, +IOptions,
 			 +Sentences, +CoordSentences, +BracketedOutput, +DisambMMOutput,
-			 _AllMMO)
+			 PrintMMO, _AllMMO)
    postprocess_phrases(+MMOPhrases, +ExtractedPhrases,
                        +Sentences, +CoordSentencesIn, -CoordSentencesOut,
                        +N, +M, +Label, -PhraseMMO)
@@ -585,7 +585,8 @@ postprocess_text(Lines0, BracketedOutput, InterpretedArgs,
 	% If the phrases_only debug option is set, don't do postprocessing,
 	% because we've already computed and displayed the phrase lengths,
 	% and that's all we care about if this option is on.
-	( control_option(phrases_only) ->
+	( ( control_option(aas_only)
+	  ; control_option(phrases_only) ) ->
 	  true
 	; postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
 			     IOptions,  ExpRawTokenList, AAs, MMResults) ->
@@ -603,22 +604,23 @@ postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
 	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
 	generate_negex_output(NegationTerms),
 	postprocess_sentences(OrigUtterances, NegationTerms, InterpretedArgs, IOptions, AAs,
-			      Sentences, BracketedOutput, DisambMMOutput, AllMMO),
+			      Sentences, BracketedOutput, DisambMMOutput, 1, AllMMO),
 	% All the XML output for the current citation is handled here
 	generate_and_print_xml(AllMMO),
-	do_MMI_processing(OrigUtterances, BracketedOutput, Sentences, DisambMMOutput),
+	do_MMI_processing(OrigUtterances, BracketedOutput, AAs, DisambMMOutput),
 	do_formal_tagger_output.
 
 %%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
+% PrintMMO is 1 for printing MMO (as MetaMap does), and 0 for not print MMO (as the Java API does).
 postprocess_sentences(OrigUtterances, NegExList, IArgs, IOptions, AAs,
-		      Sentences, BracketedOutput, DisambMMOutput, AllMMO) :-
+		      Sentences, BracketedOutput, DisambMMOutput, PrintMMO, AllMMO) :-
 	AllMMO = HeaderMMO,
 	HeaderMMORest = UtteranceMMO,
 	generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
 			       HeaderMMO, HeaderMMORest),
 	postprocess_sentences_1(OrigUtterances, Sentences,
 				BracketedOutput, 1, AAs, DisambMMOutput, UtteranceMMO, []),
-	write_MMO_terms(AllMMO).
+	write_MMO_terms(PrintMMO, AllMMO).
 
 postprocess_sentences_1([], _Sentences, _BracketedOutput, _N, _AAs, [], MMO, MMO) :- !.
 postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences,
