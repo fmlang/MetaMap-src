@@ -452,7 +452,7 @@ String machineOutput = result.getMachineOutput();
 
 * Advanced Configuration
 
-** Accepting the MetaMap server connections from remote hosts
+** Accepting the client connections from remote hosts
 
 To allow the MetaMap server to accept connections from clients on a
 host other than localhost (127.0.0.1, the default) modify the
