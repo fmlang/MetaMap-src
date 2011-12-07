@@ -264,7 +264,7 @@ initialize_skr(InitialOptions, InitialArgs, FinalArgs, FinalOptions) :-
 skr_fe/1 calls either process_all/1 or batch_skr/1 (which redirects
 I/O streams and then calls process_all/1) depending on InterpretedArgs.  */
 
-skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions) :-
+skr_fe(InterpretedArgs, ProgramName, DefaultRelease, IOptions) :-
 	set_tag_option_and_mode(TagOption, TagMode),
 	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
 	get_WSD_server_hosts_and_port(WSDServerHosts, WSDForced, WSDServerPort),
@@ -279,12 +279,12 @@ skr_fe(InterpretedArgs, ProgramName, FullYear, IOptions) :-
 	( InputStream = user_input,
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
-          process_all(ProgramName, FullYear, InputStream, OutputStream, TagOption,
+          process_all(ProgramName, DefaultRelease, InputStream, OutputStream, TagOption,
 		      TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      WSDServerHosts, WSDForced, WSDServerPort,
 		      InterpretedArgs, IOptions)
           % batch_skr is for batch processing
-        ; batch_skr(InterpretedArgs, ProgramName, FullYear,
+        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 		    TaggerServerHosts, TaggerForced, TaggerServerPort,
 		    WSDServerHosts, WSDForced, WSDServerPort,
 		    TagOption, TagMode, IOptions, InputStream)
@@ -311,14 +311,14 @@ set_tag_option_and_mode(TagOption, TagMode) :-
 	  TagMode   = ''
 	).
 
-/* batch_skr(+InterpretedArgs, +ProgramName, +FullYear,
+/* batch_skr(+InterpretedArgs, +ProgramName, +DefaultRelease,
    	     +TagOption, +TagMode, +IOptions)
 
 batch_skr/6 controls batch processing.  It gets input and output
 file names from InterpretedArgs and redirects I/O to them.
 Meta concepts are computed for each noun phrase in the input.  */
 
-batch_skr(InterpretedArgs, ProgramName, FullYear,
+batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 	  TaggerServerHosts, TaggerForced, TaggerServerPort,
 	  WSDServerHosts, WSDForced, WSDServerPort,
 	  TagOption, TagMode, IOptions, InputStream) :-
@@ -329,7 +329,7 @@ batch_skr(InterpretedArgs, ProgramName, FullYear,
 	conditionally_print_header_info(InputFile, TagMode, OutputFile, TagOption),
 	set_input(InputStream),
 	set_output(OutputStream),
-	( process_all(ProgramName, FullYear, InputStream, OutputStream,
+	( process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
 		      TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      WSDServerHosts, WSDForced, WSDServerPort,
 		      InterpretedArgs, IOptions) ->
@@ -348,11 +348,11 @@ processing (MetaMapping, MMI processing, Semantic interpretation).
 user_input and user_output may have been redirected to files.)
 If TagOption is 'tag', then tagging is done. */
 
-process_all(ProgramName, FullYear, InputStream, OutputStream,
+process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
 	    TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	    WSDServerHosts, WSDForced, WSDServerPort,
 	    InterpretedArgs, IOptions) :-
-	do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputStream),
+	do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream),
 	process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		      WSDServerHosts, WSDForced, WSDServerPort,
 		      InterpretedArgs, IOptions).

@@ -838,12 +838,12 @@ set_all_control_values(Option, IArgs) :-
 	fail.
 set_all_control_values(_, _).
 
-/* display_current_control_options(+ProgramName, +FullYear)
+/* display_current_control_options(+ProgramName, +DefaultRelease)
 
 display_current_control_options/2 displays program name and year and currently set options.  */
 
-display_current_control_options(ProgramName, FullYear) :-
-	conditionally_announce_program_name(ProgramName, FullYear),
+display_current_control_options(ProgramName, DefaultRelease) :-
+	conditionally_announce_program_name(ProgramName, DefaultRelease),
 	display_current_control_options_aux.
 
 display_current_control_options_aux :-
@@ -1448,9 +1448,11 @@ get_from_attributes(Attribute, [_First|Rest],Value) :-
 illegal_default_component(user_input).
 illegal_default_component(user_output).
 
-conditionally_announce_program_name(ProgramName, FullYear) :-
+conditionally_announce_program_name(ProgramName, DefaultRelease) :-
 	( \+ control_option(silent) ->
-	  format(user_output, '~n~w (~a)~n~n', [ProgramName,FullYear])
+	  atom_codes(DefaultRelease,    [D1,D2,D3,D4|_]),
+	  atom_codes(ReleaseYear, [D1,D2,D3,D4]),
+	  format(user_output, '~n~w (~a)~n~n', [ProgramName,ReleaseYear])
 	; true
 	).
 
