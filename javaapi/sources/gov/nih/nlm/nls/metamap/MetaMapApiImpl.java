@@ -378,10 +378,18 @@ public class MetaMapApiImpl implements MetaMapApi {
       throw new RuntimeException(e);
     }
   }
-  
+
+  /** Disconnect from Prolog server.  Note: calls finalize() */
+  public void disconnect() {
+    finalize();
+  }
 
   protected void finalize() {
-    System.err.println("finalize");
-    System.err.flush();
+    // System.err.println("finalize");
+    // System.err.flush();
+    if (this.session.isConnected()) {
+      this.session.disconnect();
+      this.connected = false;
+    }
   }
 }
