@@ -1,5 +1,6 @@
 package gov.nih.nlm.nls.metamap;
 
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -190,12 +191,29 @@ public class MetaMapApiTest {
     System.out.println("    --output <filename> : send output to file.");
   }
 
+  /** @param inFile File class referencing input file. */
+  static String readInputFile(File inFile) 
+    throws java.io.FileNotFoundException,
+	   java.io.IOException
+  {
+    BufferedReader ib = new BufferedReader(new FileReader(inFile));
+    StringBuffer inputBuf = new StringBuffer();
+    String line = "";
+    while ((line = ib.readLine()) != null) {
+      inputBuf.append(line).append('\n');
+    }
+    ib.close();
+    return inputBuf.toString();
+  }
+
   public static void main(String[] args) 
     throws Exception
   {
     String serverhost = MetaMapApi.DEFAULT_SERVER_HOST; 
     int serverport = MetaMapApi.DEFAULT_SERVER_PORT; 	// default port
     int timeout = -1; // use default timeout
+    String inFilename = null;
+    InputStream input = System.in;
     PrintStream output = System.out;
     if (args.length < 1) {
       printHelp();
@@ -248,6 +266,10 @@ public class MetaMapApiTest {
         } else if (args[i].equals("--metamap_server_timeout") ) {
           i++;
           timeout = Integer.parseInt(args[i]);
+	} else if (args[i].equals("--input") ) {
+          i++;
+	  inFilename = args[i];
+	  System.out.println("output file: " + args[i]);
 	} else if (args[i].equals("--output") ) {
           i++;
           output = new PrintStream(args[i]);
@@ -267,21 +289,21 @@ public class MetaMapApiTest {
     if (timeout > -1) {
       frontEnd.setTimeout(timeout);
     }
-    if (termBuf.length() > 0) {
+    if (inFilename != null) {
+      File inFile = new File(inFilename.trim()); 
+      if (inFile.exists()) {
+	System.out.println("input file: " + inFilename);
+	frontEnd.process(readInputFile(inFile), output, options);
+      }
+    } else if (termBuf.length() > 0) {
       File inFile = new File(termBuf.toString().trim()); 
       if (inFile.exists()) {
 	System.out.println("input file: " + termBuf);
-	BufferedReader ib = new BufferedReader(new FileReader(inFile));
-	StringBuffer inputBuf = new StringBuffer();
-	String line = "";
-	while ((line = ib.readLine()) != null) {
-	  inputBuf.append(line).append('\n');
-	}
-	ib.close();
-	frontEnd.process(inputBuf.toString(), output, options);
+	frontEnd.process(readInputFile(inFile), output, options);
       } else {
 	frontEnd.process(termBuf.toString(), output, options);
       }
+      frontEnd.api.disconnect();
     } else {
       printHelp();
       System.exit(0);
