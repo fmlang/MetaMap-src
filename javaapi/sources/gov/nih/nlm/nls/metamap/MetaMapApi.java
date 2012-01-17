@@ -202,4 +202,7 @@ public interface MetaMapApi {
    * @param hostname hostname of non-local metamap server
    */
   public void setHost(String hostname);
+
+  /** disconnect from server. */
+  void disconnect();
 }
