@@ -82,7 +82,7 @@ SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}
 
 # all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
-all:		BDB splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB} db_access.${SOEXT}
+all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB} db_access.${SOEXT}
 
 
 # all:
