@@ -122,6 +122,7 @@
 	ex_lbracket_tok/1,
 	ex_rbracket_tok/1,
 	gather_whitespace/3,
+	higher_order_tok/1,
 	higher_order_type/1,
 	hyphen_punc/1,
 	ic_tok/1,
@@ -2532,8 +2533,12 @@ match_less_than_token(aatok(_,_,_,_,_,MatchTokenPos,MatchTokenCharPos,_),
 	).
 
 
-store_aa(AATokens0, ExpansionTokens0, AAsIn, AAsOut) :-
-	filter_out_ws_tokens(AATokens0, AATokens),
+store_aa(AATokens, ExpansionTokens0, AAsIn, AAsOut) :-
+	% We do *not* want to trim ws tokens from the AATokens,
+	% because the text could be something like
+	% "multiple endocrine neoplasia type 1 ( MEN-1 )".
+	% This example (w/o the spaces) was flagged by Sugato Bagchi on 12/20/2011.
+	% trim_ws_tokens(AATokens0, AATokens),
 	% Trim only the definition; internal whitespace is needed later (I think).
 	% filter_out_ws_tokens(ExpansionTokens0, ExpansionTokens),
 	trim_ws_tokens(ExpansionTokens0, ExpansionTokens1),
@@ -2779,6 +2784,7 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences, AAs, 
 	% annotate_with_aas(FakeAAs, Sentences0, Sentences1),
 	annotate_with_aas(AAList, Sentences0, Sentences1),
 	empty_avl(UDA_AVL0),
+	% UDA_AVL contains those UDAs that were actually found in the text
 	annotate_with_UDAs(Sentences1, UDA_AVL0, UDAList, UDA_AVL, Sentences2),
 	% format(user_output, '~nSentences1:~n', []),
 	add_sentence_labels(Sentences2, UI, Sentences),
@@ -3070,7 +3076,6 @@ deaugment_aas([], []).
 deaugment_aas([_AAText-AA-Def|Rest], [AA-Def|DeaugmentedRest]) :-
 	deaugment_aas(Rest, DeaugmentedRest).
 
-% annotate_with_UDAs(Sentences1, UDA_AVL0, UDAList, UDA_AVL, Sentences2),
 annotate_with_UDAs([], AVL, _UDAs, AVL, []).
 annotate_with_UDAs([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedTokens) :-
 	% Don't try to expand UDAs from non-alphanumeric tokens
@@ -3123,7 +3128,7 @@ insert_aa_def([First|Rest],DefPos,Def,AA,NewToken,[First|ModifiedRest]) :-
 
 insert_all_aa([],_,_,[]).
 insert_all_aa([First|Rest],AA,DefToken,SentencesOut) :-
-    match_tokens_igwsho(AA,[First|Rest],Match,_),
+    match_tokens_ignore_ws_ho(AA,[First|Rest],Match,_),
     !,
     compute_token_position(Match,MatchPos),
     NewToken=tok(aa,Match,[DefToken],MatchPos),
@@ -3132,37 +3137,58 @@ insert_all_aa([First|Rest],AA,DefToken,SentencesOut) :-
 insert_all_aa([First|Rest],AA,DefToken,[First|ModifiedRest]) :-
     insert_all_aa(Rest,AA,DefToken,ModifiedRest).
 
-/* match_tokens_igwsho(+Pattern, +Tokens, -Match, -RestTokens)
+/* match_tokens_ignore_ws_ho(+Pattern, +Tokens, -Match, -RestTokens)
 
-match_tokens_igwsho/4 matches the tokens in Pattern with those in Tokens
+match_tokens_ignore_ws_ho/4 matches the tokens in Pattern with those in Tokens
 producing Match and RestTokens. Matching is done respecting case. The
 match must begin with the first token in Tokens which MUST NOT be wsho
 (whitespace or higher-order); otherwise, wsho tokens are ignored.  */
 
-match_tokens_igwsho(Pattern,[First|Rest],Match,RestTokens) :-
-    First=tok(Type,_,_,_),
-    ((Type==ws; higher_order_type(Type)) ->
-        !,
-        fail
-    ;   match_tokens_igwsho_aux(Pattern,[First|Rest],Match,RestTokens)
-    ).
+match_tokens_ignore_ws_ho(AATokens, [FirstSentenceToken|RestSentenceTokens],
+			  Match, RestTokens) :-
+	\+ ws_tok(FirstSentenceToken),
+	\+ higher_order_tok(FirstSentenceToken),
+	match_tokens_ignore_ws_ho_aux(AATokens, [FirstSentenceToken|RestSentenceTokens],
+				      Match, RestTokens).
 
-match_tokens_igwsho_aux([],Tokens,[],Tokens) :-
-    !.
-match_tokens_igwsho_aux(Pattern,[tok(ws,_,_,_)|Rest],Match,SentencesOut) :-
-    !,
-    match_tokens_igwsho_aux(Pattern,Rest,Match,SentencesOut).
+%    First=tok(Type,_,_,_),
+%    ((Type==ws; higher_order_type(Type)) ->
+%        !,
+%        fail
+%    ;   match_tokens_ignore_ws_ho_aux(Pattern,[First|Rest],Match,RestTokens)
+%    ).
+
+match_tokens_ignore_ws_ho_aux([], SentenceTokens, [], SentenceTokens).
+match_tokens_ignore_ws_ho_aux([tok(_,Text,_,_)|RestAATokens],
+			      [tok(Type,Text,LCText,Pos)|RestSentences],
+			      [tok(Type,Text,LCText,Pos)|RestMatch],
+			      SentencesOut) :-
+	match_tokens_ignore_ws_ho_aux(RestAATokens, RestSentences, RestMatch, SentencesOut).
+% First Sentence token is ws, so ignore it
+match_tokens_ignore_ws_ho_aux([FirstAAToken|RestAATokens],
+			      [FirstSentenceToken|RestSentenceTokens],
+			      Match, SentencesOut) :-
+	ws_tok(FirstSentenceToken),
+	!,
+	match_tokens_ignore_ws_ho_aux([FirstAAToken|RestAATokens], RestSentenceTokens,
+				      Match, SentencesOut).
+% % First AA token is ws, so ignore it
+% match_tokens_ignore_ws_ho_aux([FirstAAToken|RestAATokens],
+% 			      [FirstSentenceToken|RestSentenceTokens],
+% 			      Match, SentencesOut) :-
+% 	ws_tok(FirstAAToken),
+% 	!,
+% 	match_tokens_ignore_ws_ho_aux(RestAATokens, [FirstSentenceToken|RestSentenceTokens],
+%				      Match, SentencesOut).
+
 % Must comment out this clause, because it allows
 % splitting an acronym across sentences!!
-% match_tokens_igwsho_aux(Pattern,[tok(Type,_,_,_)|Rest],Match,SentencesOut) :-
+% match_tokens_ignore_ws_ho_aux(Pattern,[tok(Type,_,_,_)|Rest],Match,SentencesOut) :-
 %     higher_order_type(Type),
 %     !,
-%     match_tokens_igwsho_aux(Pattern,Rest,Match,SentencesOut).
-match_tokens_igwsho_aux([tok(_,Text,_,_)|RestP],
-                        [tok(Type,Text,LCText,Pos)|RestSentences],
-                        [tok(Type,Text,LCText,Pos)|RestMatch],
-                        SentencesOut) :-
-    match_tokens_igwsho_aux(RestP,RestSentences,RestMatch,SentencesOut).
+%     match_tokens_ignore_ws_ho_aux(Pattern,Rest,Match,SentencesOut).
+
+
 
 get_UDAs(UDAs) :-
 	( control_value('UDA', FileName) ->
@@ -3214,7 +3240,7 @@ determine_AA_and_expansion(String1, String2, Shorter, Longer) :-
 	  Longer  = String1
 	).
 
-% We need to remove from UDAs and LC_UDAs any UDA that is
+% We need to remove from the UDA any UDA that is
 % (1) itself an author-defined AA, or
 % (2) part of an author-defined AA expansion
 resolve_AA_conflicts([], UDAs, UDAs).
@@ -3233,7 +3259,7 @@ resolve_one_AA_conflict([FirstUDA|RestUDAs], AuthorDefinedAA, UDAsOut) :-
 % A UDA conflicts with an author-defined AA if the UDA
 % * is itself an author-defined AA, or
 % * a word in the expansion of an author-defined AA
-aa_conflict_exists([UDA]:_UDAExpansion, AATokens-[AAExpansion]) :-
+aa_conflict_exists(UDA:_UDAExpansion, AATokens-[AAExpansion]) :-
 	lower(UDA, LCUDA),
 	( member(tok(TokenType,_Text,LCText,_Pos), AATokens)
 	; member(tok(TokenType,_Text,LCText,_Pos), AAExpansion)
