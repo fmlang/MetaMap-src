@@ -354,7 +354,9 @@ punc_mark1(':').
 punc_mark1('(').
 punc_mark1(')').
 punc_mark1(';').
-punc_mark1('/').
+% 12/15/2011: Per e-mail from Tom, we have changed the semantics of "/"
+% to *not* be a phrase-breaking character.
+% punc_mark1('/').
 punc_mark1('<').
 punc_mark1('>').
 punc_mark1('=').

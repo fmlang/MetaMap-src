@@ -335,7 +335,7 @@ make_atom(String, Atom) :-
 	).
 
 
-do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputStream) :-
+do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream) :-
 	verify_model_settings,
 	verify_tagger_output_settings(TaggerOutputSettings),
 	verify_single_output_format(SingleOutputFormat),
@@ -358,7 +358,7 @@ do_sanity_checking_and_housekeeping(ProgramName, FullYear, InputStream, OutputSt
 			    AcrosAbbrsSettings, DerivationalVariantsSettings,
 			    TaggerServerSettings, WSDServerSettings],
 			   InputStream, OutputStream),
-	display_current_control_options(ProgramName, FullYear).
+	display_current_control_options(ProgramName, DefaultRelease).
 
 verify_model_settings :-
 	( control_option(strict_model),
@@ -746,7 +746,7 @@ generate_variants_output(GVCs, BracketedOutput) :-
 	    true
 	  ; ( BracketedOutput == 1 ->
 	      skr_begin_write('Variants')
-	    ; format('~n', [])
+	    ; format('~n', [])
 	    ),
 	    write_all_variants(GVCs),
 	    ( BracketedOutput == 1 ->
