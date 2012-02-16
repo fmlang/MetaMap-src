@@ -1236,3 +1236,4 @@ collapse_pos_info([Next|Rest], First, CollapsedPosInfo) :-
 	; CollapsedPosInfo = [First|RestCollapsed],
 	  collapse_pos_info(Rest, Next, RestCollapsed)
 	).
+

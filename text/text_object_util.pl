@@ -414,3 +414,4 @@ token_sequence_length([], LastToken, StartPos, TokensLength) :-
 	TokensLength is EndPos - StartPos.
 token_sequence_length([NextToken|RestTokens], _ThisToken, StartPos, TokensLength) :-
 	token_sequence_length(RestTokens, NextToken, StartPos, TokensLength).
+
