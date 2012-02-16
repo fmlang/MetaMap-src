@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -61,12 +60,9 @@
 	is_space/1
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
-	ttyflush/0
-    ]).
-
 :- use_module(text(text_object_util),[
 	aa_tok/1,
+	an_pn_tok/1,
 	aadef_tok/1,
 	ex_lbracket_char/1,
 	ex_lbracket_tok/1,
@@ -84,7 +80,9 @@
 
 :- use_module(library(lists),[
 	append_length/3,
-	sublist/4
+	last/2,
+	sublist/4,
+	sublist/5
     ]).
 
 
@@ -188,7 +186,7 @@ handle_token_type(TokenType, PrevToken, TokenState,
 		  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 		  RestNewTokens) :-
 	( TokenType == ws ->
-	  handle_ws_token_type(TokenState,
+	  handle_ws_token_type(TokenState, PrevToken,
 			       InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			       InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 			       RestNewTokens)
@@ -208,7 +206,34 @@ handle_token_type(TokenType, PrevToken, TokenState,
 	).	  
 
 
-handle_ws_token_type(_TokenState,
+% If ...
+%   * the previous token was an aa whose final token is a ws, and
+%   * the current input string does not begin with a ws,
+% that means that the AA was something like "(TGF )" (e.g., from PMID 14704634),
+% so let allow that anyway.
+handle_ws_token_type(_TokenState, PrevToken,
+		     InputStringIn,   CurrentToken, CurrentPos, RestTokens,
+		     InputStringNext, NewTokens,    NextPos,    RestTokensNext,
+		     RestNewTokens) :-
+	% If the input string does NOT begin with a ws char...
+	InputStringIn \= [32|_],
+	% ...and the previous token is an AA ...
+	token_template(PrevToken, PrevTokenType,
+		       _PrevTokenCurrentString, _PrevTokenCurrentLCString, _PrevTokenCurrentPos),
+	PrevTokenType == aa,
+	% ...whose last AA token matches the current token,
+	arg(2, PrevToken, AATokens),
+	last(AATokens, LastAAToken),
+	token_template(LastAAToken, LastAATokenType,
+		       _LastAATokenCurrentString, _LastAATokenCurrentLCString, _LastAATokenCurrentPos),
+	LastAATokenType == ws,
+	!,
+	InputStringNext = InputStringIn,
+	NextPos is CurrentPos,
+	add_raw_pos_info_1(CurrentToken, CurrentPos, NewCurrentToken),
+	NewTokens = [NewCurrentToken|RestNewTokens],
+	RestTokensNext = RestTokens.	
+handle_ws_token_type(_TokenState, _PrevToken,
 		     InputStringIn,   CurrentToken, CurrentPos, RestTokens,
 		     InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 		     RestNewTokens) :-
@@ -226,6 +251,101 @@ handle_ws_token_type(_TokenState,
 	  % The top-level predicate recurses on RestTokensNext,
 	  % which, in this case, happens to be just RestTokens.
 	  RestTokensNext = RestTokens.
+
+% Here's what happens when we hit an aadef token. Suppose the text is
+% With time-of-flight secondary ion mass-spectrometry (ToF
+%       SIMS) measurements.
+%
+% The input string is
+% "time-of-flight secondary ion mass-spectrometry (ToF       SIMS) measurements."
+%
+% The token list is
+%
+% [tok(aadef,
+%      [tok(lc,"time","time",pos(14,18)),
+%       tok(pn,"-","-",pos(18,19)),
+%       tok(lc,"of","of",pos(19,21)),
+%       tok(pn,"-","-",pos(21,22)),
+%       tok(lc,"flight","flight",pos(22,28)),
+%       tok(ws," "," ",pos(28,29)),
+%       tok(lc,"secondary","secondary",pos(29,38)),
+%       tok(ws," "," ",pos(38,39)),
+%       tok(lc,"ion","ion",pos(39,42)),
+%       tok(ws," "," ",pos(42,43)),
+%       tok(lc,"mass","mass",pos(43,47)),
+%       tok(pn,"-","-",pos(47,48)),
+%       tok(lc,"spectrometry","spectrometry",pos(48,60))],
+%      [tok(mc,"ToF","tof",pos(62,65)),
+%       tok(ws," "," ",pos(65,66)),
+%       tok(uc,"SIMS","sims",pos(66,70))],pos(14,60)),
+%  tok(lc,"time","time",pos(14,18)),
+%  tok(pn,"-","-",pos(18,19)),
+%  tok(lc,"of","of",pos(19,21)),
+%  tok(pn,"-","-",pos(21,22)),
+%  tok(lc,"flight","flight",pos(22,28)),
+%  tok(ws," "," ",pos(28,29)),
+%  tok(lc,"secondary","secondary",pos(29,38)),
+%  tok(ws," "," ",pos(38,39)),
+%  tok(lc,"ion","ion",pos(39,42)),
+%  tok(ws," "," ",pos(42,43)),
+%  tok(lc,"mass","mass",pos(43,47)),
+%  tok(pn,"-","-",pos(47,48)),
+%  tok(lc,"spectrometry","spectrometry",pos(48,60)),
+% ------------------------------------------------------- (1)
+%  tok(ws," "," ",pos(60,61)),
+% ------------------------------------------------------- (2)
+%  tok(pe,[],1,pos(61,71)),
+%  tok(pn,"(","(",pos(61,62)),
+%  tok(aa,
+%      [tok(mc,"ToF","tof",pos(62,65)),
+%       tok(ws," "," ",pos(65,66)),
+%       tok(uc,"SIMS","sims",pos(66,70))],
+%      [tok(aadef,[tok(lc,"time","time",pos(14,18)),
+% 		 tok(pn,"-","-",pos(18,19)),
+% 		 tok(lc,"of","of",pos(19,21)),
+% 		 tok(pn,"-","-",pos(21,22)),
+% 		 tok(lc,"flight","flight",pos(22,28)),
+% 		 tok(ws," "," ",pos(28,29)),
+% 		 tok(lc,"secondary","secondary",pos(29,38)),
+% 		 tok(ws," "," ",pos(38,39)),
+% 		 tok(lc,"ion","ion",pos(39,42)),
+% 		 tok(ws," "," ",pos(42,43)),
+% 		 tok(lc,"mass","mass",pos(43,47)),
+% 		 tok(pn,"-","-",pos(47,48)),
+% 		 tok(lc,"spectrometry","spectrometry",pos(48,60))],
+% 	        [tok(mc,"ToF","tof",pos(62,65)),
+% 		 tok(ws," "," ",pos(65,66)),
+% 		 tok(uc,"SIMS","sims",pos(66,70))],pos(14,60))],pos(62,70)),
+%  tok(mc,"ToF","tof",pos(62,65)),
+%  tok(ws," "," ",pos(65,66)),
+%  tok(uc,"SIMS","sims",pos(66,70)),
+%  tok(pn,")",")",pos(70,71)),
+% ------------------------------------------------------- (3)
+%  tok(ws," "," ",pos(71,72)),
+%  tok(lc,"measurements","measurements",pos(72,84)),
+%  tok(pn,".",".",pos(84,85))]
+% 
+% (1) create_new_tokens_and_consume_strings/9 and remove_tokens_no_consume/3
+%     * matches up the AADef tokens in the
+%       second arg of the aadef token ("time"..."spectrometry"),
+%     * consume those tokens,
+%     * create new ones with the new pos info, and
+%     * remove those strings from the input string, leaving " (ToF       SIMS) measurements.";
+% At this point, the remaining tokens are those below the "----- (1)" line.
+% (2) consume_ws_tokens/4 removes the ws token;
+% Now, the remaining tokens are those below the "----- (2)" line.
+% (3) trim_whitespace_left/3 removes any whitespace
+%     from the beginning of the input string, leaving "(ToF       SIMS) measurements.";
+% (4) token_template/5 determines the end pos of the current pe token, i.e., 71;
+% (5) consume_tokens_through_rbracket_end_pos/3 consumes all tokens through that position;
+% Now, the remaining tokens are those below the "----- (3)" line.
+% (6) consume_token_strings/5 then walks off the strings in the tokens
+%     between "----- (2)" and "----- (3)", as follows:
+%     * higher-order and annotation tokens (pe, aa) are ignored
+%     * ws tokens consume the ws at the beginning of the string
+%       PLUS any other leading whitespace
+%     * an and pn tokens match the beginning of the input string,
+%       and the tokens strings are walked off the input string.
 
 handle_special_token_type(aadef, _PrevToken,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
@@ -268,21 +388,25 @@ handle_special_token_type(aadef, PrevToken,
 	consume_ws_tokens(RestTokens1, RestTokens2, 0, _NumWSTokens1),
 	trim_whitespace_left(InputString1, InputString2, NumBlanksTrimmed1),
 	NextPos2 is NextPos1 + NumBlanksTrimmed1,
-	% remove all following tokens up to and including
-	% the exclusive right-bracket token, which can be done by
+	% Remove all following tokens up to and including the matching
+	% exclusive right-bracket token, which can be done by
 	% identifying PeTokenEndPos, the end pos of the pe token,
 	% which should be the first token in RestTokens2,
-	% and consuming all tokens whose end pos is =< PeTokenEndPos
-	% (and any whitespace after that?).
-	% RestTokens3 = RestTokens2,
-	% RestTokens3 = [PeToken|RestTokens4],
-	% token_template(PeToken, pe, _String, _LCString, PeTokenPosInfo),
-	% PeTokenPosInfo = pos(PeTokenStartPos, PeTokenEndPos),
-	NumPeTokens = 0,
-	consume_tokens_through_ex_rbracket(RestTokens2, NumPeTokens, RestTokens3),
+	% and consuming all tokens until an ex_rbracket token
+	% whose end pos is equal to PETokenEndPos.
+	RestTokens2 = [PEToken|RestRestTokens2],
+	% FirstRestTokens2 should be a pe tok
+	% I cannot rely on the posinfo in the pe token,
+	% because it's the orig pos info!
+	token_template(PEToken, pe, _FirstString, _FirstLCString,
+		       pos(_PETokenStartPos, PETokenEndPos)),
+	consume_tokens_through_rbracket_end_pos(RestRestTokens2, PETokenEndPos, RestTokens3),
+	append(TokensConsumed, RestTokens3, RestRestTokens2),
 	consume_ws_tokens(RestTokens3, RestTokensNext, 0, _NumWSTokens3),
-	consume_chars_through_ex_rbracket(InputString2, NumPeTokens, NextPos2,
-					  InputString3, NextPos3),
+	% NumCharsToConsume is PETokenEndPos - PETokenStartPos,
+	% sublist(InputString2, InputString3, NumCharsToConsume, _Length, 0),
+	consume_token_strings(TokensConsumed, InputString2, InputString3, 0, NumCharsConsumed),
+	NextPos3 is NextPos2 + NumCharsConsumed,
 	trim_whitespace_left(InputString3, InputStringNext, NumBlanksTrimmed3),
 	NextPos is NextPos3 + NumBlanksTrimmed3,
 	!.
@@ -293,11 +417,79 @@ handle_special_token_type(aadef, _PrevToken,
 			  RestNewTokens) :-
 	format(user_output, '#### WARNING: aadef token failed:~n', []),
 	write_token_list([CurrentToken], 0, 1),
-	ttyflush,
 	InputStringNext = InputStringIn,
 	RestNewTokens = NewTokens,
 	NextPos is CurrentPos,
 	RestTokensNext = RestTokensIn.
+
+
+
+% Here's what happens when we hit an aa token. Suppose the text is
+% AAdef:
+% decolorization of diazo dye Acid Red 151 (AR
+%      151) from simulated dye solution
+
+% AA:
+%     (4.0-7.0), and initial dye concentration (100-200 mg/L) on the
+%     biodegradation of AR             151.
+
+
+% Where "AR 151" is
+% tok(aadef,
+%     [tok(ic,"Acid","acid",pos(37,41)),
+%      tok(ws," "," ",pos(41,42)),
+%      tok(ic,"Red","red",pos(42,45)),
+%      tok(ws," "," ",pos(45,46)),
+%      tok(nu,"151","151",pos(46,49))],
+%     [tok(uc,"AR","ar",pos(51,53)),
+%      tok(ws," "," ",pos(53,54)),
+%      tok(nu,"151","151",pos(54,57))],pos(37,49))
+% 
+% The input string is "AR 151."
+% The token list is
+% 
+%  tok(aa,
+%      [tok(uc,"AR","ar",pos(106,108)),
+%       tok(ws," "," ",pos(108,109)),
+%       tok(nu,"151","151",pos(121,124))],
+%      [tok(aadef,
+% 	  [tok(ic,"Acid","acid",pos(37,41)),
+% 	   tok(ws," "," ",pos(41,42)),
+% 	   tok(ic,"Red","red",pos(42,45)),
+% 	   tok(ws," "," ",pos(45,46)),
+% 	   tok(nu,"151","151",pos(46,49))],
+% 	  [tok(uc,"AR","ar",pos(51,53)),
+% 	   tok(ws," "," ",pos(53,54)),
+% 	   tok(nu,"151","151",pos(54,57))],pos(37,49))],pos(106,124)),
+%  tok(uc,"AR","ar",pos(106,108)),
+%  tok(ws," "," ",pos(108,109)),
+%  tok(ws," "," ",pos(109,110)),
+%  tok(ws," "," ",pos(110,111)),
+%  tok(ws," "," ",pos(111,112)),
+%  tok(ws," "," ",pos(112,113)),
+%  tok(ws," "," ",pos(113,114)),
+%  tok(ws," "," ",pos(114,115)),
+%  tok(ws," "," ",pos(115,116)),
+%  tok(ws," "," ",pos(116,117)),
+%  tok(ws," "," ",pos(117,118)),
+%  tok(ws," "," ",pos(118,119)),
+%  tok(ws," "," ",pos(119,120)),
+%  tok(ws," "," ",pos(120,121)),
+%  tok(nu,"151","151",pos(121,124)),
+%  tok(pn,".",".",pos(124,125))]
+% 
+% and the current token is the aa token above.
+% 
+% (1) get_aa_tokens_start_and_end_pos/3 gets the starting and ending character positions
+%     of the AA, e.g., 106-->124;
+% (2) get_aa_tokens_length/5 gets the length of the AA, e.g., 18;
+% (3) create_new_tokens_no_consume/7 creates new tokens with the updated pos info;
+%     the new tokens correspond to the original tokens, but the updated pos info
+%     reflects the token span of the AA;
+% (4) remove_aa_tokens/4 removes the AA tokens from the remaining token list,
+%     taking into account the possibility of multiple consecutive ws tokens;
+% (5) consume_aa_token_strings/4 removes the strings in the AA tokens
+%     from the input string.
 
 handle_special_token_type(aa, _PrevToken,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
@@ -315,6 +507,7 @@ handle_special_token_type(aa, _PrevToken,
 	  % We need to march off characters in InputStringIn
 	  % skipping over blanks, until we consume every string in AATokenList
 	  get_aa_tokens_start_and_end_pos(AATokenList, AAStartPos, AAEndPos),          
+	  % Not sure why I do this, rather than simply canculate AAEndPos - AAStartPos +1.
 	  get_aa_tokens_length(AATokenList, InputStringIn, 0, 0, AALength),
 	  % adjust_start_and_end_pos(InputStringIn, TempCurrentPos,
 	  %			     TempAAStartPos, TempAAEndPos,
@@ -386,6 +579,45 @@ remove_final_hyphen_token(AADefTokens0, AADefTokens) :-
 	; AADefTokens = AADefTokens0
 	).
 
+% We have a list of tokens, e.g.,
+% [tok(pn,"(","(",pos(61,62)),
+%  tok(mc,"ToF","tof",pos(62,65)),
+%  tok(ws," "," ",pos(65,66)),
+%  tok(uc,"SIMS","sims",pos(66,70)),
+%  tok(pn,")",")",pos(70,71))]
+% and an input string, e.g., "(ToF       SIMS) measurements."
+
+% We need to consume the strings in the tokens off the beginning of the input string,
+% !!BUT!! a ws token needs special treatment, because the AA could span a line,
+% and contain extra embedded white space, e.g.,
+
+%       3-mercaptopropyl-silylated glass plates and capillaries. The brushes were
+%       characterized with time-of-flight secondary ion mass-spectrometry (ToF
+%       SIMS), atomic force microscopy and contact angle measurements. Fructose
+%       caused a well-expressed drop spreading on the surface of copolymer-grafted
+
+consume_token_strings([], InputString, InputString, NumCharsConsumed, NumCharsConsumed).
+consume_token_strings([FirstToken|RestTokens], InputStringIn, InputStringOut,
+		      NumCharsConsumedIn, NumCharsConsumedOut) :-
+	consume_token_chars(FirstToken, InputStringIn, InputStringNext,
+			    NumCharsConsumedIn, NumCharsConsumedNext),
+	consume_token_strings(RestTokens, InputStringNext, InputStringOut,
+			      NumCharsConsumedNext, NumCharsConsumedOut).
+
+consume_token_chars(FirstToken, InputStringIn, InputStringNext,
+		    NumCharsConsumedIn, NumCharsConsumedNext) :-
+	( higher_order_or_annotation_tok(FirstToken) ->
+	  InputStringNext = InputStringIn,
+	  NumCharsConsumedNext is NumCharsConsumedIn	  
+	; ws_tok(FirstToken) ->
+	  trim_whitespace_left(InputStringIn, InputStringNext, NumBlanksTrimmed),
+	  NumCharsConsumedNext is NumCharsConsumedIn + NumBlanksTrimmed
+	; an_pn_tok(FirstToken) ->
+	  token_template(FirstToken, _TokenType, TokenString, _LCTokenString, pos(StartPos,EndPos)),
+	  append(TokenString, InputStringNext, InputStringIn),
+	  NumCharsConsumedNext is NumCharsConsumedIn + EndPos - StartPos
+       ).
+
 % If the next token is not a ws token, strip off any whitespace,
 % and return the new InputString and the number of whitespace chars removed.
 remove_untokenized_whitespace([], InputString, InputString, 0).
@@ -442,15 +674,20 @@ get_aa_tokens_length([FirstAAToken|RestAATokens], InputStringIn, _PrevNumLeftBla
 % (2) all leading blanks (i.e., trim_left)
 get_one_token_pos_length(AAToken, InputStringIn,
 			 InputStringOut, StringLength, NumLeftBlanksTrimmed) :-
-	token_template(AAToken,
-		       _TokenType, TokenString, _LCTokenString, _PosInfo),
-	append(Prefix, InputString0, InputStringIn),
-	append(TokenString, InputStringNext, InputString0),
-	length(Prefix, PrefixLength),
-	length(TokenString, TokenStringLength),
-	StringLength is PrefixLength + TokenStringLength,	
-	trim_whitespace_left_1(InputStringNext, 0, InputStringOut, NumLeftBlanksTrimmed).
-
+	( ws_tok(AAToken) ->
+	  InputStringOut = InputStringIn,
+	  StringLength is 0,
+	  NumLeftBlanksTrimmed is 0
+	; token_template(AAToken,
+			 _TokenType, TokenString, _LCTokenString, _PosInfo) ->
+	  append(Prefix, InputString0, InputStringIn),
+	  append(TokenString, InputStringNext, InputString0),
+	  !,
+	  length(Prefix, PrefixLength),
+	  length(TokenString, TokenStringLength),
+	  StringLength is PrefixLength + TokenStringLength,
+	  trim_whitespace_left_1(InputStringNext, 0, InputStringOut, NumLeftBlanksTrimmed)
+	).
 %%% get_aa_tokens_start_and_end_pos([FirstAAToken|RestAATokens], InputStringIn,
 %%% 				FirstAAStartPos, LastAAEndPos) :-
 %%% 	arg(4, FirstAAToken, FirstPosTerm),
@@ -509,23 +746,35 @@ final_match([FirstToken|RestTokens0], LastAAToken, RestTokens) :-
 	).
 
 remove_aa_tokens([], LastAAToken, [NextTokenIn|TempRestTokens], RestTokens) :-
-	( aa_tok(NextTokenIn) ->
+	( LastAAToken == NextTokenIn ->
+	  RestTokens = TempRestTokens
+	; aa_tok(NextTokenIn) ->
 	  arg(2, NextTokenIn, [LastAAToken|_]),
 	  final_match(TempRestTokens, LastAAToken, RestTokens)
 	; aadef_tok(NextTokenIn) ->
 	  arg(2, NextTokenIn, [LastAAToken|_]),
 	  TempRestTokens = [LastAAToken|RestTokens]
-	; LastAAToken == NextTokenIn,
+	  % When an AA appears in the text, there can be additional whitespace,
+	  % e.g., the AA "(MSCT-CA)" can appear later in the text as "MSCT  -  CA".
+	; ws_tok(NextTokenIn) ->
+	  remove_aa_tokens([], LastAAToken, TempRestTokens, RestTokens)
+	  % This case handles horrors such as "the apparent diffusivity (D )"
+	; ws_tok(LastAAToken) ->
 	  RestTokens = TempRestTokens
 	).
 	
 remove_aa_tokens([NextAAToken|RestAATokens], AAToken, [NextTokenIn|RestTokensIn], RestTokensOut) :-
-	( aa_tok(NextTokenIn) ->
-	  remove_aa_tokens([NextAAToken|RestAATokens], AAToken,RestTokensIn, RestTokensOut)
+	( AAToken == NextTokenIn ->
+	  remove_aa_tokens(RestAATokens, NextAAToken, RestTokensIn, RestTokensOut)
+	; aa_tok(NextTokenIn) ->
+	  remove_aa_tokens([NextAAToken|RestAATokens], AAToken, RestTokensIn, RestTokensOut)
+	; ws_tok(NextTokenIn) ->
+	  remove_aa_tokens([NextAAToken|RestAATokens], AAToken, RestTokensIn, RestTokensOut)
 	; aadef_tok(NextTokenIn) ->
-	  remove_aa_tokens([NextAAToken|RestAATokens], AAToken,RestTokensIn, RestTokensOut)
-	; AAToken == NextTokenIn,
-	  remove_next_whitespace_tokens(RestTokensIn, RestTokensNext),
+	  remove_aa_tokens([NextAAToken|RestAATokens], AAToken, RestTokensIn, RestTokensOut)
+	  % If there's a ws token in the AA, remove all the next ws tokens in the token list
+	; ws_tok(AAToken) ->
+	  remove_next_whitespace_tokens([NextTokenIn|RestTokensIn], RestTokensNext),
 	  remove_aa_tokens(RestAATokens, NextAAToken, RestTokensNext, RestTokensOut)
 	).
 
@@ -562,23 +811,29 @@ create_new_tokens_no_consume([FirstToken|RestTokens], CurrPos,
 consume_aa_token_strings([], LastAAToken, InputStringIn, InputStringOut) :-
 	arg(2, LastAAToken, FirstTokenString),
 	sublist(InputStringIn, FirstTokenString, PrefixLength, TextLength),
+	!,
 	% Don't allow skipping too far forward in input string!
 	limit_forward_skip(LastAAToken, PrefixLength),
 	NumCharsConsumed is PrefixLength + TextLength,
-	append_length(InputStringOut, InputStringIn, NumCharsConsumed).
+	append_length(InputStringNext, InputStringIn, NumCharsConsumed),
+	( ws_tok(LastAAToken) ->
+	  trim_whitespace_left(InputStringNext, InputStringOut, _NumBlanksTrimmed)
+	; InputStringOut = InputStringNext
+	).
 	% Can't simply append because of cases where the first token is an aa!
 	% append(FirstTokenString, InputStringOut, InputStringIn).
 consume_aa_token_strings([NextAAToken|RestAATokens], AAToken, InputStringIn, InputStringOut) :-
 	arg(2, AAToken, AATokenString),
 	sublist(InputStringIn, AATokenString, PrefixLength, TextLength),
+	!,
 	NumCharsConsumed is PrefixLength + TextLength,
 	% Don't allow skipping too far forward in input string,
 	% unless we're at the very beginning of the citation!
 	limit_forward_skip(AAToken, PrefixLength),
 	append_length(InputString1, InputStringIn, NumCharsConsumed),
 	% append(AATokenString, InputString1, InputStringIn),
-	remove_whitespace_chars(InputString1, 0, InputStringNext, _NumBlanksRemoved),
-	consume_aa_token_strings(RestAATokens, NextAAToken, InputStringNext, InputStringOut).
+	% remove_whitespace_chars(InputString1, 0, InputStringNext, _NumBlanksRemoved),
+	consume_aa_token_strings(RestAATokens, NextAAToken, InputString1, InputStringOut).
 
 limit_forward_skip(AAToken, PrefixLength) :-
 	% AAToken = tok(_TokenType, _String, _LCString, pos(StartPos,_EndPos)),
@@ -600,79 +855,15 @@ remove_whitespace_chars([H|T], NumBlanksRemovedIn,
 	  NumBlanksRemovedOut is NumBlanksRemovedIn
         ).
 
-% Consume tokens until an ex_rbracket_tok is encountered AND NumPeTokensIn == 1.
-% This refinement is designed to handle obnoxious AADefs like "(GABA(A))".
-consume_tokens_through_ex_rbracket([FirstToken|RestTokensIn], NumPeTokensIn, RestTokensOut) :-
-	( ex_rbracket_tok(FirstToken),
-	  NumPeTokensIn =:= 1 ->
-	  RestTokensOut = RestTokensIn
-	; ex_rbracket_tok(FirstToken) ->
-	  % NumPeTokensIn > 1
-	  NumPeTokensNext is NumPeTokensIn - 1,
-	  consume_tokens_through_ex_rbracket(RestTokensIn, NumPeTokensNext, RestTokensOut)
-	; ex_lbracket_tok(FirstToken) ->
-	  NumPeTokensNext is NumPeTokensIn + 1,
-	  consume_tokens_through_ex_rbracket(RestTokensIn, NumPeTokensNext, RestTokensOut)
-	; consume_tokens_through_ex_rbracket(RestTokensIn, NumPeTokensIn, RestTokensOut)
+% consume tokens though (and including) the first ex_bracket token
+% whose endpos matches the original pe token's endpos
+consume_tokens_through_rbracket_end_pos([FirstToken|RestTokens], TargetEndPos, NewRestTokens) :-
+	token_template(FirstToken, _TokenType, _String, _LCString, pos(_StartPos,EndPos)),
+	( EndPos =:= TargetEndPos,
+	  ex_rbracket_tok(FirstToken) ->
+	  NewRestTokens = RestTokens
+	; consume_tokens_through_rbracket_end_pos(RestTokens, TargetEndPos, NewRestTokens)
 	).
-
-consume_chars_through_ex_rbracket([FirstChar|RestChars], NumPeTokensIn, PosIn, InputStringOut, PosOut) :-
-	( ex_rbracket_char(FirstChar),
-	  NumPeTokensIn =:= 1 ->
-	  InputStringOut = RestChars,
-	  PosOut is PosIn + 1
-	; ex_rbracket_char(FirstChar) ->
-	  % NumPeTokensIn > 1
-	  NumPeTokensNext is NumPeTokensIn - 1,
-  	  PosNext is PosIn + 1,
-	  consume_chars_through_ex_rbracket(RestChars, NumPeTokensNext, PosNext, InputStringOut, PosOut)
-	; ex_lbracket_char(FirstChar) ->
-	  NumPeTokensNext is NumPeTokensIn + 1,
-	  PosNext is PosIn + 1,
-	  consume_chars_through_ex_rbracket(RestChars, NumPeTokensNext, PosNext, InputStringOut, PosOut)
-	; PosNext is PosIn + 1,
-	  consume_chars_through_ex_rbracket(RestChars, NumPeTokensIn, PosNext, InputStringOut, PosOut)
-	).
-	  
-	
-
-
-% consume_tokens_through_ex_rbracket([FirstToken|RestTokens], InputStringIn,  PosIn,
-% 				   NewTokenList, InputStringOut, PosOut) :-
-% 	% Simply skip over the pe and aa tokens
-% 	( higher_order_or_annotation_tok(FirstToken) ->
-% 	  InputStringNext = InputStringIn,
-% 	  PosNext = PosIn
-% 	% Consume regular token
-% 	; remove_untokenized_whitespace([FirstToken|RestTokens], InputStringIn,
-% 	  				InputString1, NumBlanksRemoved1),
-% 	  arg(2, FirstToken, CharString),
-% 	  append(CharString, InputStringTemp, InputString1),
-% 	  length(CharString, CharStringLength),
-% 	  PosTemp is PosIn + CharStringLength,
-% 	  % This is in case the acronym occurs at the beginning of a line
-% 	  % in a citation -- after that damn whitespace that doesn't get tokenized!
-% 	  remove_untokenized_whitespace(RestTokens, InputStringTemp,
-% 	  				InputStringNext, NumBlanksRemoved2),
-% 	  PosNext is PosTemp + NumBlanksRemoved1 + NumBlanksRemoved2
-% 	),
-% 	% Right-bracket token (")" or "]")
-% 	( ex_rbracket_tok(FirstToken) ->
-% 	  NewTokenList = RestTokens,
-% 	  InputStringOut = InputStringNext,
-% 	  PosOut is PosNext
-% 	; consume_tokens_through_ex_rbracket(RestTokens,   InputStringNext, PosNext,
-% 					     NewTokenList, InputStringOut,  PosOut)
-% 	).
-
-% remove_and_consume_ws_tokens([FirstToken|TokensIn], InputStringIn, TokensOut, InputStringOut) :-
-% 	( ws_tok(FirstToken) ->
-% 	  arg(2, FirstToken, WhiteSpace),
-% 	  append(WhiteSpace, InputStringNext, InputStringIn),
-% 	  remove_and_consume_ws_tokens(TokensIn, InputStringNext, TokensOut, InputStringOut)
-% 	; TokensOut = [FirstToken|TokensIn],
-% 	  InputStringOut = InputStringIn
-% 	).
 
 % There are pathological cases in which an aa token intervenes
 % between an aadef token and the individual expansion tokens.
@@ -911,9 +1102,10 @@ consume_strings([], _TokenIndex, _FirstPrefixLength, InputString, InputString).
 consume_strings([FirstToken|RestTokens], TokenIndex, FirstPrefixLength,
 		InputStringIn, InputStringOut) :-
 	arg(2, FirstToken, TokenString),
-	remove_whitespace_chars(InputStringIn, 0, InputStringTemp, _NumBlanksRemoved),
+	% remove_whitespace_chars(InputStringIn, 0, InputStringTemp, _NumBlanksRemoved),
 	% Must change this call to append to a call to substring
 	% append(TokenString, InputStringNext, InputStringTemp),
+	InputStringTemp = InputStringIn,
 	sublist(InputStringTemp, TokenString, PrefixLength, TextLength),
 	NumCharsConsumed is PrefixLength + TextLength,
 	set_first_prefix_length(TokenIndex, PrefixLength, FirstPrefixLength),
@@ -1044,3 +1236,4 @@ collapse_pos_info([Next|Rest], First, CollapsedPosInfo) :-
 	; CollapsedPosInfo = [First|RestCollapsed],
 	  collapse_pos_info(Rest, Next, RestCollapsed)
 	).
+

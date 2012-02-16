@@ -39,6 +39,7 @@
 	aadef_tok/1,
 	alpha_type/1,
 	an_tok/1,
+	an_pn_tok/1,
 	an_type/1,
 	annotation_type/1,
 	at_an_tok/1,
@@ -96,6 +97,8 @@ an_type(ic).
 an_type(mc).
 an_type(an).
 an_type(nu).
+
+pn_type(pn).
 
 field_or_label_type(field).
 field_or_label_type(label).
@@ -172,6 +175,19 @@ an_tok(tok(Type,_,_,_)) :-
 % The arity-5 tok is needed here for merge_sentences_aux/5 in text_objects.pl
 an_tok(tok(Type,_,_,_,_)) :-
     an_type(Type).
+
+
+an_pn_tok(tok(Type,_,_,_)) :-
+	( an_type(Type) ->
+	  true
+	; pn_type(Type)
+	).
+% The arity-5 tok is needed here for merge_sentences_aux/5 in text_objects.pl
+an_pn_tok(tok(Type,_,_,_,_)) :-
+	( an_type(Type) ->
+	  true
+	; pn_type(Type)
+	).
 
 
 % contains_alpha_tok([]) :-
@@ -398,3 +414,4 @@ token_sequence_length([], LastToken, StartPos, TokensLength) :-
 	TokensLength is EndPos - StartPos.
 token_sequence_length([NextToken|RestTokens], _ThisToken, StartPos, TokensLength) :-
 	token_sequence_length(RestTokens, NextToken, StartPos, TokensLength).
+
