@@ -57,11 +57,9 @@ public class MblDisambiguator implements DisambiguationMethod  {
   /** Logger */
   private static Logger logger = Logger.getLogger(MblDisambiguator.class);
 
-  /** necessary libraries: libWsdMbl.so, libTimbl.so */
-  static {
-    System.loadLibrary("Timbl");
-    System.loadLibrary("WsdMbl");
-  }
+  /** Have sharable libraries been loaded, necessary libraries:
+   * libWsdMbl.so, libTimbl.so. */
+  static boolean librariesLoaded = false;
 
   /** MBL disambiguator classifier directory */
   String classifierDirectory = 
@@ -78,6 +76,12 @@ public class MblDisambiguator implements DisambiguationMethod  {
   /** default constructors */
   public MblDisambiguator()
   {
+    if (! librariesLoaded) {
+      /** necessary libraries: libWsdMbl.so, libTimbl.so */
+      System.loadLibrary("Timbl");
+      System.loadLibrary("WsdMbl");
+      librariesLoaded = true;
+    }
     setEnvironment(classifierDirectory, reviewedResultsDirectory);
   }
 
