@@ -55,7 +55,7 @@ struct query_struct parse_query(const char *line);
 int get_config(char *tablename);
 struct res_rows_struct *parse_results(struct query_struct query,
 				      int config_ptr, char *result);
-void get_value_from_field(int pos, char *to, char *from);
+void get_value_from_field_jgm(int pos, char *to, char *from);
 int find_fieldpos(char *find, int config_ptr);
 struct results_struct return_results(struct query_struct query, int config_ptr);
 struct results_struct return_result(struct query_struct query, int config_ptr);
