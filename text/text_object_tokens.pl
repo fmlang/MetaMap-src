@@ -469,9 +469,9 @@ trim_ws_tokens/2 filters out whitespace tokens
 from the beginning and end of TokensIn producing TokensOut.  */
 
 
-trim_ws_tokens([], []) :- !.
-trim_ws_tokens(TokensIn, TokensOut) :-
-	trim_left_ws_tokens(TokensIn, TokensInOut),
+trim_ws_tokens([], []).
+trim_ws_tokens([FirstToken|RestTokens], TokensOut) :-
+	trim_left_ws_tokens([FirstToken|RestTokens], TokensInOut),
 	rev(TokensInOut, RevTokensInOut),
 	trim_left_ws_tokens(RevTokensInOut, RevTokensOut),
 	rev(RevTokensOut, TokensOut).

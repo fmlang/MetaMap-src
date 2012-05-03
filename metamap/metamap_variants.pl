@@ -50,7 +50,7 @@
 	get_derivational_variants_for_form/3,
 	get_categories_for_form/2,
 	get_spellings_and_inflections_for_form/4,
-	get_citation_forms_for_form/3,
+	get_citation_forms_for_form_with_cats/3,
 	get_base_forms_for_form/3
     ]).
 
@@ -968,7 +968,7 @@ xxx
 
 %% temp
 get_bases(WordAtom,Categories,BaseAtoms) :-
-    get_citation_forms_for_form(WordAtom,Categories,BaseAtoms0),
+    get_citation_forms_for_form_with_cats(WordAtom,Categories,BaseAtoms0),
     !,
     lowercase_list(BaseAtoms0,BaseAtoms1),
     sort(BaseAtoms1,BaseAtoms).

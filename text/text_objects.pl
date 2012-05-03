@@ -51,7 +51,7 @@
     ]).
 
 :- use_module(skr(skr_text_processing), [
-	get_skr_text_1/2
+	get_skr_text_2/2
    ]).
 
 :- use_module(skr(skr_utilities), [
@@ -381,16 +381,11 @@ can_begin_sentence_1(_Tokens, y).
 
 
 
-find_field_sentences([], []) :-
-    !.
+find_field_sentences([], []) :- !.
 find_field_sentences([[Field,Tokens]|Rest],
 		     [[Field,Sentences]|RestFieldSentences]) :-
-    find_sentences(Tokens,'dummy.ab.1',Sentences),
-    find_field_sentences(Rest,RestFieldSentences).
-
-find_sentences(Tokens,Label,Sentences) :-
-    find_sentences(Tokens, [],0,Label,Sentences),
-    !.
+	find_sentences(Tokens, [], 0, 'dummy.ab.1', Sentences),
+	find_field_sentences(Rest, RestFieldSentences).
 
 find_sentences([], [], _, _, []) :- !.
 find_sentences([], RevPre, Level, Label, [SnTok|Sentence]) :-
@@ -467,47 +462,48 @@ test_bracketing_distance(Rest, NewRest) :-
 	  CharPosDiff < 2000
 	).
 
-find_bracketing([], _NumTokensConsumed, RevPre, Level, LBList, Label, "", RevPre, []) :-
-	% out of input
-	( control_option(warnings) ->
-	  rev(RevPre, Pre),
-	  extract_text(Pre,PreText),
-	  convert_item_list_to_string(LBList,LBListString),
-	  concatenate_items_to_atom(['Unbalanced bracketing [level ',Level,', lbs ',LBListString,']'],
-				    Message),
-	  write_warning(PreText, wub, Label, Message)
-	; true
-	),
-	fail.
-find_bracketing([Token|Rest], _NumTokensConsumed, RevPre, Level,
-		[LB|RestLB], Label, LBToClear, [Token|RevPre], Rest) :-
+%%% find_bracketing([], _NumTokensConsumed, RevPre, Level, LBList, Label, "", RevPre, []) :-
+%%% 	% out of input
+%%% 	( control_option(warnings) ->
+%%% 	  rev(RevPre, Pre),
+%%% 	  extract_text(Pre,PreText),
+%%% 	  convert_item_list_to_string(LBList,LBListString),
+%%% 	  concatenate_items_to_atom(['Unbalanced bracketing [level ',Level,', lbs ',LBListString,']'],
+%%% 				    Message),
+%%% 	  write_warning(PreText, wub, Label, Message)
+%%% 	; true
+%%% 	),
+%%% 	fail.
+find_bracketing([Token|Rest], _NumTokensConsumed, RevPre, _Level,
+		[LB|_RestLB], _Label, LBToClear, [Token|RevPre], Rest) :-
 	% look for closing bracket (BEFORE looking for another opening bracket)
 	rbracket_tok(Token),
+	!,
 	% if it's non-exclusive, we must NOT be at whitespace
 	( ne_rbracket_tok(Token) ->
-	  \+at_ws_tok(RevPre)
+	  \+ at_ws_tok(RevPre)
 	;  true
 	),
 	% Token=tok(pn,RB,RB,_),
-	token_template(Token, pn,RB,RB, _PosInfo),
+	token_template(Token, pn, RB, RB, _PosInfo),
 	(  brackets(LB, RB) ->
 	   LBToClear = ""
 	; multi_brackets(LBToClear, RB) ->
 	  true
-	; rb_closes_one_of([LB|RestLB], RB, Left, _MatchingLB, _Right) ->
-	  % extra bracketing
-	  ( control_option(warnings) ->
-	    rev([Token|RevPre], PreT),
-            extract_text(PreT, PreTText),
-            convert_item_list_to_string(Left, LeftString),
-            concatenate_items_to_atom(['Extra bracketing [level ',Level,', skipped ',LeftString,'] at'],
-				      Message),
-            write_warning(PreTText, wxb, Label, Message)
-	  ; true
-	  ),
-	  !,
-	  fail
-	; fail
+%%% 	; rb_closes_one_of([LB|RestLB], RB, Left, _MatchingLB, _Right) ->
+%%% 	  % extra bracketing
+%%% 	  ( control_option(warnings) ->
+%%% 	    rev([Token|RevPre], PreT),
+%%%             extract_text(PreT, PreTText),
+%%%             convert_item_list_to_string(Left, LeftString),
+%%%             concatenate_items_to_atom(['Extra bracketing [level ',Level,', skipped ',LeftString,'] at'],
+%%% 				      Message),
+%%%             write_warning(PreTText, wxb, Label, Message)
+%%% 	  ; true
+%%% 	  ),
+%%% 	  !,
+%%% 	  fail
+%%% 	; fail
 	),
 	% bracketed text must be non-null
 	( RevPre = [_] ->
@@ -520,6 +516,7 @@ find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
 		LBList, Label, LBToClearOut, RevBExpr, RestOut) :-
 	% look for nested bracketing expression (AFTER looking for closing bracket)
 	lbracket_tok(Token),
+	!,
 	% if it's non-exclusive, we must be at whitespace or an exclusive lb
 	( ne_lbracket_tok(Token) ->
 	  at_whitespace_or_exlb_tok(RevPre)
@@ -565,11 +562,12 @@ find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
 	).
 find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
 		LBList, Label, LBToClear, RevBExpr, RestOut) :-
-	NumTokensConsumed < 100,
+	% NumTokensConsumed < 4600,
+	% format(user_output, 'NTC = ~d~n', [NumTokensConsumed]),
+	% format(user_output, '~d:~*c~n', [NumTokensConsumed,NumTokensConsumed,42]),
 	NumTokensConsumed1 is NumTokensConsumed + 1,
  	find_bracketing(RestIn, NumTokensConsumed1, [Token|RevPre], Level,
 			LBList, Label, LBToClear, RevBExpr, RestOut).
-
 
 construct_sentence_token(RevPre, Level, Token, Pre) :-
 	token_template(Token, sn,"", Level, Pos),
@@ -2012,7 +2010,7 @@ match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
 	  MatchingTokens = [Token|RestMatchingTokens],
 	  match_initial_to_char(1, NextDepth, AALength, RestTokens, Char, " ",
 				RestMatchingTokens, LeftOverTokens)
-	; Depth < 2 * AALength,
+	; Depth < AALength,
 	  Tokens = [Token|RestTokens],
 	  Token = tok(_,_,LCText,_),
 	  an_tok(Token),
@@ -3189,7 +3187,6 @@ match_tokens_ignore_ws_ho_aux([FirstAAToken|RestAATokens],
 %     match_tokens_ignore_ws_ho_aux(Pattern,Rest,Match,SentencesOut).
 
 
-
 get_UDAs(UDAs) :-
 	( control_value('UDA', FileName) ->
 	  check_valid_file_type(FileName, 'User-defined AA'),
@@ -3201,7 +3198,7 @@ get_UDAs(UDAs) :-
 
 create_UDAs(InputStream, UDAs) :-
 	% read in the contents of the UDA file
-	get_skr_text_1(InputStream, UDALines),
+	get_skr_text_2(InputStream, UDALines),
 	(  foreach(Line, UDALines),
 	   fromto(Strings, S0, S, [])
 	   % remove all leading and trailing blanks from the entire line

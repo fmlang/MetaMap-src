@@ -53,6 +53,11 @@
 	tokenize_text_utterly/2
     ]).
 
+:- use_module(skr(skr_utilities), [
+	get_all_candidate_features/3,
+	get_candidate_feature/3
+    ]).
+
 :- use_module(skr_db(db_access),[
 	initialize_db_access/3,
 	db_get_mesh_mh/2,
@@ -79,7 +84,6 @@
 	concat_atom/3,
 	index/3,
 	lower/2,
-	ttyflush/0,
 	upper/2
    ]).
 
@@ -294,8 +298,11 @@ get_pre_tf_in_mapping([Candidate|Rest], CitationTextAtom, Field, NSent, [TF0|Res
 
 
 get_pre_tf_in_candidate(Candidate, CitationTextAtom, Field, NSent, TF0) :-
-	Candidate = ev(NegValue,CUI,MetaTerm,MetaConcept,_MetaWords,STs,
-		       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,PosInfo),
+	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,semtypes,posinfo],
+				   Candidate,
+				   [NegValue,CUI,MetaTerm,MetaConcept,STs,PosInfo]),
+	% Candidate = ev(NegValue,CUI,MetaTerm,MetaConcept,_MetaWords,STs,_MatchMap,
+	% 	       _InvolvesHead,_IsOvermatch,_SourceInfo,PosInfo,_Pruned),
 	Value is -NegValue,
 	atom_codes(MetaConcept, ConceptString),
 	atom_codes(MetaTerm, TermString),
@@ -305,8 +312,9 @@ get_pre_tf_in_candidate(Candidate, CitationTextAtom, Field, NSent, TF0) :-
 	TF0 = tf0(ConceptString,STs,TermString,Value,Text,Field,CUI,NSent,CollapsedPosInfo),
 	!.
 get_pre_tf_in_candidate(Candidate, _CitationTextAtom, _Field, _NSent, _TF0) :-
-	Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+	get_candidate_feature(metaconcept, Candidate, MetaConcept),
+	% Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
+	% 	       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
 	format(user_output, 'ERROR: get_pre_tf_in_mapping/5 failed for ~p~n', [MetaConcept]),
 	format('ERROR: get_pre_tf_in_mapping/5 failed for ~p~n', [MetaConcept]),
 	abort.

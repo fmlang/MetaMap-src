@@ -43,6 +43,11 @@
         tokenize_text_utterly/2
    ]).
 
+:- use_module(skr(skr_utilities), [
+	get_candidate_feature/3,
+	get_all_candidate_features/3
+   ]).
+
 :- use_module(skr_lib(flatten), [
 	flatten/2
    ]).
@@ -270,13 +275,11 @@ maplist_contains_range([Map|MapList], TokenStart, TokenLength) :-
 	; maplist_contains_range(MapList, TokenStart, TokenLength)
 	).
 
-evlist_contains_range([Ev|Evlist], TokenStart, TokenLength) :-
-	Ev = ev(_NegScore, _CUI, _ConceptName, _PreferredName, _WordMatch,
-		_SemTypes, _MatchMap, _InvolvesHead, _IsOverMatch,
-		_SourceInfo, PositionList),
+evlist_contains_range([FirstCandidate|RestCandidates], TokenStart, TokenLength) :-
+	get_candidate_feature(posinfo, FirstCandidate, PositionList),
 	( positionlist_contains_range(PositionList, TokenStart, TokenLength) ->
 	  true
-	; evlist_contains_range(Evlist, TokenStart, TokenLength)
+	; evlist_contains_range(RestCandidates, TokenStart, TokenLength)
 	).
 
 %% Is the Token within the mapping?
@@ -547,11 +550,11 @@ negationlist_from_maplist([Map|MapList], Type, TriggerPhraseText, TriggerStartPo
 				  TriggerStartPos, TriggerLength, NegationTermList).
 
 negationlist_from_evlist([], _, _, _, _, []).
-negationlist_from_evlist([Ev|List], Type, TriggerPhraseText, TriggerStartPos,
+negationlist_from_evlist([FirstCandidate|RestCandidates], Type, TriggerPhraseText, TriggerStartPos,
 			 TriggerLength, NegationTerms) :-
-	Ev = ev(_NegScore, CUI, ConceptName, _PreferredName, _WordMatch,
-		SemTypes, _MatchMap, _InvolvesHead, _IsOverMatch,
-		_SourceInfo, MappingPosInfo),
+	get_all_candidate_features([cui,metaterm,semtypes,posinfo],
+				   FirstCandidate,
+				   [CUI,ConceptName,SemTypes,MappingPosInfo]),
 	% format('SemGroup=~q, CUI=~q, ConceptName=~q, SemTypes=~q~n',
 	%        [[fndg,dsyn,sosy,cgab,acab,lbtr,inpo,biof,phsf,menp,mobd,comd,anab,emod,patf],
 	%         CUI,ConceptName,SemTypes]),
@@ -571,7 +574,7 @@ negationlist_from_evlist([Ev|List], Type, TriggerPhraseText, TriggerStartPos,
 				 ConceptName, CUI, ConceptPosInfo),
 	  NegationTerms = [NegationTerm|RestNegationTerms]
 	),
-	negationlist_from_evlist(List, Type, TriggerPhraseText,
+	negationlist_from_evlist(RestCandidates, Type, TriggerPhraseText,
 				 TriggerStartPos, TriggerLength, RestNegationTerms).
 
 % remove negation terms after conjunctions if there are any conjunctions.

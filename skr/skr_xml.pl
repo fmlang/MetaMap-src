@@ -44,6 +44,10 @@
 	final_negation_template/6
    ]).
 
+:- use_module(metamap(metamap_utilities), [
+	candidate_term/15
+   ]).
+
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
@@ -229,7 +233,9 @@ generate_xml_phrase_list([MMOPhraseTerm,MMOCandidatesTerm,MMOMappingsTerm|RestMM
 				
 generate_one_xml_phrase(MMOPhraseTerm, MMOCandidatesTerm, MMOMappingsTerm, XMLPhrase) :-
 	MMOPhraseTerm     = phrase(TempMMOPhraseAtom,PhraseSyntax,PhraseStartPos/PhraseLength,ReplPos),
-	MMOCandidatesTerm = candidates(MMOCandidatesList),
+	MMOCandidatesTerm = candidates(TotalCandidateCount,
+				       ExcludedCandidateCount,PrunedCandidateCount,
+				       RemainingCandidateCount,MMOCandidatesList),
 	MMOMappingsTerm   = mappings(MMOMappingsList),
 	atom_codes(TempMMOPhraseAtom, TempMMOPhraseString),
 	replace_blanks_with_crs(ReplPos, TempMMOPhraseString, PhraseStartPos, MMOPhraseString),
@@ -238,7 +244,11 @@ generate_one_xml_phrase(MMOPhraseTerm, MMOCandidatesTerm, MMOMappingsTerm, XMLPh
 	generate_xml_phrase_start_pos(PhraseStartPos, XMLPhraseStartPos),
 	generate_xml_phrase_length(PhraseLength, XMLPhraseLength),
 	% generate_xml_replacement_pos(ReplPos, XMLReplPos),
-	generate_xml_phrase_candidates_term(MMOCandidatesList, XMLCandidatesTerm),
+	CandidatesTag = 'Candidates',
+	generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+					    ExcludedCandidateCount, PrunedCandidateCount,
+					    RemainingCandidateCount, MMOCandidatesList,
+					    XMLCandidatesTerm),
 	generate_xml_phrase_mappings_term(MMOMappingsList, XMLMappingsTerm),
 	create_xml_element('Phrase',
 			   [],
@@ -246,12 +256,35 @@ generate_one_xml_phrase(MMOPhraseTerm, MMOCandidatesTerm, MMOMappingsTerm, XMLPh
 			    XMLCandidatesTerm,XMLMappingsTerm],
 			   XMLPhrase).
 
-generate_xml_phrase_candidates_term(CandidatesList, XMLCandidatesTerm) :-
-	length(CandidatesList, CandidatesLength),
-	number_codes(CandidatesLength, Count),
-	generate_xml_candidates_list(CandidatesList, XMLCandidatesList),
-	create_xml_element('Candidates',
-			   ['Count'=Count],
+generate_candidate_count_attribute(CandidateCount, CountType, CandidateCountAttribute) :-
+	( CandidateCount =:= -1 ->
+	  CandidateCountAttribute = []
+	; number_codes(CandidateCount, CandidateCountCodes),
+	  CandidateCountAttribute = [CountType=CandidateCountCodes]
+	).
+
+% We want the Candidates tag to contain only the Count attribute inside Mappings,
+% e.g., <Candidates Count="1">,
+% but the ExcludedCount and PrunedCount tags otherwise,
+% e.g., <Candidates Count="2" ExcludedCount="0" PrunedCount="0">.
+generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+				    ExcludedCandidateCount, PrunedCandidateCount,
+				    RemainingCandidateCount, MMOCandidatesList,
+				    XMLCandidatesTerm) :-
+	generate_candidate_count_attribute(TotalCandidateCount, 'Total',
+					   TotalCandidateCountAttribute),
+	generate_candidate_count_attribute(ExcludedCandidateCount, 'Excluded',
+					   ExcludedCandidateCountAttribute),
+	generate_candidate_count_attribute(PrunedCandidateCount, 'Pruned',
+					   PrunedCandidateCountAttribute),
+	generate_candidate_count_attribute(RemainingCandidateCount, 'Remaining',
+					   RemainingCandidateCountAttribute),
+	generate_xml_candidates_list(MMOCandidatesList, XMLCandidatesList),
+	append([TotalCandidateCountAttribute,ExcludedCandidateCountAttribute,
+		PrunedCandidateCountAttribute,RemainingCandidateCountAttribute],
+	       CountAttributeList),
+	create_xml_element(CandidatesTag,
+			   CountAttributeList,
 			   XMLCandidatesList,
 			   XMLCandidatesTerm).
 
@@ -262,9 +295,10 @@ generate_xml_candidates_list([FirstMMOCandidate|RestMMOCandidates],
 	generate_xml_candidates_list(RestMMOCandidates, RestXMLCandidates).
 
 generate_one_xml_candidate(MMOCandidate, XMLCandidate) :-
-	MMOCandidate = ev(CandidateScore,CUI,CandidateMatched,PreferredName,MatchedWords,
-			  SemTypes,MatchMap,IsHead,IsOverMatch,Sources,PosInfo),
-	generate_xml_candidate_score(CandidateScore, XMLCandidateScore),
+	candidate_term(NegValue, CUI, CandidateMatched, PreferredName, MatchedWords,
+		       SemTypes, MatchMap, _LSComponents, _TargetLSComponent,
+		       IsHead, IsOverMatch, Sources, PosInfo, Status, MMOCandidate),
+	generate_xml_candidate_score(NegValue, XMLNegValue),
 	generate_xml_CUI(CUI, XMLCUI),
 	generate_xml_concept_matched(CandidateMatched, XMLCandidateMatched),
 	generate_xml_preferred_name(PreferredName, XMLPreferredName),
@@ -275,19 +309,20 @@ generate_one_xml_candidate(MMOCandidate, XMLCandidate) :-
 	generate_xml_is_overmatch(IsOverMatch, XMLIsOverMatch),	
 	generate_xml_sources(Sources, XMLSources),
 	generate_xml_pos_info(PosInfo, 'ConceptPIs', 'ConceptPI', XMLPosInfo),
+	generate_xml_status(Status, XMLStatus),
         create_xml_element('Candidate',
                            [],
-                           [XMLCandidateScore,XMLCUI,XMLCandidateMatched,XMLPreferredName,
+                           [XMLNegValue,XMLCUI,XMLCandidateMatched,XMLPreferredName,
                             XMLMatchedWords,XMLSemTypes,XMLMatchMap,XMLIsHead,
-                            XMLIsOverMatch,XMLSources,XMLPosInfo],
-                           XMLCandidate).
+                            XMLIsOverMatch,XMLSources,XMLPosInfo,XMLStatus],
+                            XMLCandidate).
 
-generate_xml_candidate_score(CandidateScore, XMLCandidateScore) :-
-	number_codes(CandidateScore, CandidateScoreString),
+generate_xml_candidate_score(NegValue, XMLNegValue) :-
+	number_codes(NegValue, NegValueString),
 	create_xml_element('CandidateScore',
 			   [],
-			   [pcdata(CandidateScoreString)],
-			   XMLCandidateScore).
+			   [pcdata(NegValueString)],
+			   XMLNegValue).
 
 generate_xml_CUI(CUI, XMLCUI) :-
 	atom_codes(CUI, CUIString),
@@ -414,6 +449,14 @@ generate_xml_is_head(IsHead, XMLIsHead) :-
 			   [],
 			   [pcdata(IsHeadString)],
 			   XMLIsHead).
+
+generate_xml_status(Status, XMLStatus) :-
+	number_codes(Status, StatusString),
+	create_xml_element('Status',
+			   [],
+			   [pcdata(StatusString)],
+			   XMLStatus).
+
 generate_xml_is_overmatch(IsOverMatch, XMLIsOverMatch) :-
 	atom_codes(IsOverMatch, IsOverMatchString),
 	create_xml_element('IsOverMatch',
@@ -526,7 +569,20 @@ generate_xml_mappings_list([FirstMMOMapping|RestMMOMappings],
 generate_one_xml_mapping(MMOMapping, XMLMapping) :-
 	MMOMapping = map(MappingScore, CandidatesList),
 	generate_xml_mapping_score(MappingScore, XMLMappingScore),
-	generate_xml_phrase_candidates_term(CandidatesList, XMLCandidatesTerm),
+	length(CandidatesList, TotalCandidateCount),
+	ExcludedCandidateCount is -1,
+	PrunedCandidateCount is -1,
+	RemainingCandidateCount is -1,
+	% We want the Candidates tag to contain only the Count attribute inside Mappings,
+	% e.g., <Candidates Count="1">,
+	% but the ExcludedCount and PrunedCount tags otherwise,
+	% e.g., <Candidates Count="2" ExcludedCount="0" PrunedCount="0">
+
+	CandidatesTag = 'MappingCandidates',
+	generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+					    ExcludedCandidateCount, PrunedCandidateCount,
+					    RemainingCandidateCount, CandidatesList,
+					    XMLCandidatesTerm),
 	create_xml_element('Mapping',
 			   [],
 			   [XMLMappingScore,XMLCandidatesTerm],

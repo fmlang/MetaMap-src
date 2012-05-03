@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -34,34 +33,42 @@
 % Purpose:  MetaMap Machine output to XML converter
 % Source:   
 
-:- module(mmoxml,[
+:- module(mmoxml, [
 	mmo_terms_to_xml_chars/3
     ]).
 
-:- use_module(metamap(metamap_tokenization),[
+:- use_module(metamap(metamap_utilities), [
+	candidate_term/15
+    ]).
+
+:- use_module(metamap(metamap_tokenization), [
 	get_phrase_item_name/2,
 	get_phrase_item_subitems/2,
 	get_subitem_value/2                                    
     ]).
 
-:- use_module(skr_lib(xml),[
+:- use_module(skr(skr_utilities), [
+	get_all_candidate_features/3
+   ]).
+
+:- use_module(skr_lib(xml), [
 	xml_parse/3
    ]).
 
-:- use_module(library(codesio),[
+:- use_module(library(codesio), [
 	with_output_to_codes/2
     ]).
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	append/2,
 	last/3
     ]).
 
-:- use_module(library(sets),[
+:- use_module(library(sets), [
 	list_to_set/2
     ]).
 
-% :- use_module(library(xml),[
+% :- use_module(library(xml), [
 % 	xml_parse/3
 %    ]).
 
@@ -124,7 +131,9 @@ get_phrase_list(MMOTermListIn, PhraseNum, [PhraseTerm|PhraseTerms], MMOTermListO
 	  atom_codes(PhraseString0, PhraseString),
 	  RestMMOTermListIn1 = [MMOCandidateTerm|RestMMOTermListIn2],
 	  RestMMOTermListIn2 = [MMOMappingsTerm|RestMMOTermListIn3],
-	  MMOCandidateTerm = candidates(Candidates),
+	  MMOCandidateTerm = candidates(_TotalCandidateCount,
+					_ExcludedCandidateCount,_PrunedCandidateCount,
+					_RemainingCandidateCount, Candidates),
 	  MMOMappingsTerm = mappings(Mappings),
 	  handle_syntax(Syntax, PhraseElementsTerm),
 	  handle_candidates(Candidates, CandidatesTerm),
@@ -188,9 +197,13 @@ handle_candidates(Evaluations,CandidatesTerm) :-
         CandidatesTerm = element(candidates,[],EvTerms).
 
 handle_evaluations([], []).
-handle_evaluations([First|Rest], [EvTerm|EvTerms]) :-
-	First = ev(Score0,Cui0,ConceptName0,PrefName0,MatchedWords0,
-		   SemTypes0, MatchMap0,HeadFlag0,OverMatchFlag0,Sources0,PosInfo0),
+handle_evaluations([FirstCandidate|RestCandidates], [EvTerm|EvTerms]) :-
+	% WSD doesn't need to know about LSComponents, TargetLSComponent, or Status
+	candidate_term(Score0, Cui0, ConceptName0, PrefName0, MatchedWords0, SemTypes0,
+		       MatchMap0, _LSComponents, _TargetLSComponent,
+		       HeadFlag0, OverMatchFlag0, Sources0, PosInfo0, _Status, FirstCandidate),
+	% First = ev(Score0,Cui0,ConceptName0,PrefName0,MatchedWords0,SemTypes0,
+	% 	   MatchMap0,HeadFlag0,OverMatchFlag0,Sources0,PosInfo0,_Status0),
 	number_codes(Score0, Score),
 	atom_codes(Cui0, Cui),
 	atom_codes(ConceptName0, ConceptName),
@@ -218,7 +231,7 @@ handle_evaluations([First|Rest], [EvTerm|EvTerms]) :-
 			  overmatch_flag=OverMatchFlag,
 			  sources=Sources,
 			  pos_info=PosInfo],[]),
-	handle_evaluations(Rest, EvTerms).
+	handle_evaluations(RestCandidates, EvTerms).
 
 handle_mappings(Mappings, MappingsTerm) :-
 	handle_mapping_list(Mappings, MapTerms),
@@ -332,10 +345,20 @@ matching_ev_terms([H|T], EvTerm,  MatchingEvTerms, LeftoverEvTerms) :-
 % (2) They differ in at least one of Concept Name, Preferred Name, Semantic Types.
 
 ev_terms_match(EvTerm1, EvTerm2) :-
-	EvTerm1 = ev(NegScore1, _Cui1, ConceptName1, PreferredName1, _WordMatch1,
-		     SemTypes1, MatchMap1, HeadFlag1, OverMatch1, _Sources1, _PosInfo1),
-	EvTerm2 = ev(NegScore2, _Cui2, ConceptName2, PreferredName2, _WordMatch2,
-		     SemTypes2, MatchMap2, HeadFlag2, OverMatch2, _Sources2, _PosInfo2),
+	get_all_candidate_features([negvalue,metaterm,metaconcept,semtypes,
+				    matchmap,involveshead,isovermatch],
+				   EvTerm1,
+				   [NegScore1,ConceptName1,PreferredName1,SemTypes1,
+				    MatchMap1,HeadFlag1,OverMatch1]),
+	get_all_candidate_features([negvalue,metaterm,metaconcept,semtypes,
+				    matchmap,involveshead,isovermatch],
+				   EvTerm2,
+				   [NegScore2,ConceptName2,PreferredName2,SemTypes2,
+				    MatchMap2,HeadFlag2,OverMatch2]),
+	% EvTerm1 = ev(NegScore1, _Cui1, ConceptName1, PreferredName1, _WordMatch1,
+	% 	       SemTypes1, MatchMap1, HeadFlag1, OverMatch1, _Sources1, _PosInfo1),
+	% EvTerm2 = ev(NegScore2, _Cui2, ConceptName2, PreferredName2, _WordMatch2,
+	% 	       SemTypes2, MatchMap2, HeadFlag2, OverMatch2, _Sources2, _PosInfo2),
 	NegScore1 =:= NegScore2,
 	MatchMap1 == MatchMap2,
 	HeadFlag1 == HeadFlag2,

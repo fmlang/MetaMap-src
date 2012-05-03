@@ -99,7 +99,7 @@ generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions
 	retokenize(Words1, Words),
 	assemble_definitions(Words, Definitions0),
 	remove_null_atom_defns(Definitions0, Definitions),
-	once(generate_variant_info(Definitions, VarInfoList)),
+	generate_variant_info(Definitions, VarInfoList),
 	% ChromosomeFound is 0,
 	% LeftOverWords = [],
 	% PrevTagWord = '',
@@ -118,13 +118,10 @@ generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions
 % WordListsIn is a list of lists of tokens, e.g.,
 % [[finkelstein, '\'', s, test, positive]]
 re_attach_apostrophe_s_syntax(WordListsIn, TagList, WordListsOut) :-
-	( control_option(apostrophe_s_contraction) ->
-	  WordListsOut = WordListsIn
-	; (  foreach(ListIn,  WordListsIn),
+	(  foreach(ListIn,  WordListsIn),
 	     foreach(ListOut, WordListsOut),
 	     param(TagList)
 	  do re_attach_apostrophe_s_to_prev_word(ListIn, TagList, ListOut)
-	  )
 	).
 
 % Given a list of tokens, transform the sequence of atoms <any token>, <apostrophe>, <s>

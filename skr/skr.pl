@@ -40,8 +40,10 @@
 	get_phrase_tokens/4,
 	% called by MetaMap API -- do not change signature!
 	initialize_skr/1,
-	% print_duplicate_info/4 is not explicitly called by any other module,
-	% but it must still be imported because it's called via debug_call.
+	% print_candidate_grid/7 and print_duplicate_info/5 are not
+	% explicitly called by any other module,
+	% but they must still be exported because they're called via debug_call.
+	print_candidate_grid/6,
 	print_duplicate_info/4,
 	skr_phrases/18,
 	print_all_aevs/1,
@@ -97,6 +99,7 @@
     ]).
 
 :- use_module(metamap(metamap_utilities), [
+	candidate_term/15,
 	extract_relevant_sources/3,
 	extract_nonexcluded_sources/3,
 	extract_source_name/2,
@@ -121,6 +124,9 @@
 	debug_call/2,
 	debug_message/3,
 	expand_split_word_list/2,
+	fatal_error/2,
+	get_candidate_feature/3,
+	get_all_candidate_features/3,
 	replace_crs_with_blanks/4,
 	split_word/3,
 	token_template/5,
@@ -197,12 +203,17 @@
 	close_all_streams/0
     ]).
 
+:- use_module(library(between), [
+	between/3
+    ]).
+
 :- use_module(library(lists), [
 	append/2,
 	keys_and_values/3,
 	last/2,
 	rev/2,
-	select/3
+	select/3,
+	sumlist/2
     ]).
 
 :- use_module(library(sets), [
@@ -508,11 +519,7 @@ skr_phrase(Label, UtteranceText,
 		       WordDataCacheOut, USCCacheOut,
 		       RawTokensOut, APhrases, MMOPhraseTerm) ->
 	  true
-        ; format('~n#### ERROR: skr_phrase failed on ~w ~w~n~n',
-		 [Label, PhraseSyntax]),
-          format(user_output,
-		 '~n#### ERROR: skr_phrase failed on ~w ~w~n~n',
-		 [Label, PhraseSyntax]),
+        ; fatal_error('~n#### ERROR: skr_phrase failed on ~w ~w~n~n', [Label, PhraseSyntax]),
 	  abort
         ).
 
@@ -536,22 +543,18 @@ skr_phrase_1(Label, UtteranceTextString,
 				     TokenPhraseHeadWords, WordDataCacheOut,
 				     USCCacheOut, Evaluations0),
 	refine_evaluations(Evaluations0, EvaluationsAfterSTs, Evaluations),
-	debug_call(candidates, length(Evaluations0, InitialCandidatesCount)),
-	debug_call(candidates, length(Evaluations,  RefinedCandidatesCount)),
+	length(Evaluations0, TotalCandidateCount),
+	length(Evaluations,  RefinedCandidateCount),
+	ExcludedCandidateCount is TotalCandidateCount - RefinedCandidateCount,
 	debug_message(candidates,
 		      '### ~d Initial Candidates~n### ~d Refined Candidates~n',
-		      [InitialCandidatesCount, RefinedCandidatesCount]),
+		      [TotalCandidateCount, RefinedCandidateCount]),
 	debug_evaluations(Evaluations),
 
-	% Construct mappings only if the mappings option is set; this is new
-	% and eases the problem of mapping computation when not desired (e.g.,
-	% in browse mode)
-	% length(Evaluations, EvaluationsLength),
-	% format(user_output, '~n### Generating Mappings from ~q Evaluations~n', [EvaluationsLength]),
-	generate_best_mappings(Evaluations, OrigPhraseTextString, PhraseSyntax,
-			       PhraseWordInfoPair, Variants, APhrases0, _BestCandidates, Mappings0),
-	sort(Mappings0, Mappings1),
-	truncate_mappings(Mappings1, APhrases0, Mappings, APhrases),
+	generate_best_mappings(Evaluations, OrigPhraseTextString, PhraseSyntax, PhraseWordInfoPair,
+			       Variants, APhrases, _BestCandidates, Mappings0, PrunedCandidateCount),
+	RemainingCandidateCount is RefinedCandidateCount - PrunedCandidateCount,
+	sort(Mappings0, Mappings),
 	% length(Mappings, MappingsLength),
 	% format(user_output, 'There are ~d Mappings~n', [MappingsLength]),
 	% I have here the data structures to call disambiguate_mmo/2
@@ -561,9 +564,18 @@ skr_phrase_1(Label, UtteranceTextString,
 	% format(user_output, 'GVCs:       ~q~n', [gvcs(GVCs)]),
 	% format(user_output, 'EV0:        ~q~n', [ev0(Evaluations0)]),
 	% format(user_output, 'APhrases:   ~q~n', [aphrases(APhrases)]),
+	mark_excluded_evaluations(EvaluationsAfterSTs),
+	% mark_excluded_evaluations(Evaluations),
+	%  format(user_output, 'Total=~d; Excluded=~d; Pruned=~d; Remaining=~d~n',
+	%        [TotalCandidateCount,ExcludedCandidateCount,
+	% 	PrunedCandidateCount,RemainingCandidateCount]),
 	MMOPhraseTerm = phrase(phrase(OrigPhraseTextAtom,PhraseSyntax,
 				      PhraseStartPos/PhraseLength,ReplacementPositions),
-			       candidates(Evaluations),
+			       candidates(TotalCandidateCount,
+					  ExcludedCandidateCount,
+					  PrunedCandidateCount,
+					  RemainingCandidateCount,
+					  Evaluations),
 			       mappings(Mappings),
 			       pwi(PhraseWordInfoPair),
 			       gvcs(GVCs),
@@ -571,6 +583,18 @@ skr_phrase_1(Label, UtteranceTextString,
 			       % to include best candidates only in output
 			       ev0(EvaluationsAfterSTs),
 			       aphrases(APhrases)).
+
+mark_excluded_evaluations(EvaluationsAfterSTs) :-
+	(  foreach(Candidate, EvaluationsAfterSTs)
+	do get_candidate_feature(status, Candidate, Status),
+	   % If the Status field is still uninstantiated,
+	   % this candidate was refined out of existence,
+	   % so the Status field can be set to 2
+	   ( Status is 1 ->
+	     true
+	   ; true
+	   )
+	).
 
 debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords) :-
 	( phrase_debugging ->
@@ -672,8 +696,9 @@ matching_tokens_4(tok(TokenType, TokenString, TokenLCString, Pos1),
 		  
 	
 get_AA_text(AATokens, AATextString) :-
-	extract_token_strings(AATokens, AATokenStrings),
-	interleave_string(AATokenStrings, " ", AATextString).
+	extract_token_strings(AATokens, AATextString).
+	% extract_token_strings(AATokens, AATokenStrings),
+	% interleave_string(AATokenStrings, " ", AATextString).
 
 generate_initial_evaluations(Label, UtteranceText,
 			     PhraseTextString, Phrase, Variants,
@@ -749,19 +774,17 @@ stop_analysis(Atom, String, Tags) :-
 	  Length < MinLength
 	).
 
-refine_evaluations(Evaluations0, EvaluationsAfterSTs, Evaluations) :-
-	( control_option(truncate_candidates_mappings) ->
-	  truncate_list(Evaluations0, TruncatedEvaluations, 100, _NETruncated)
-	; TruncatedEvaluations = Evaluations0
-	),
+refine_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	( control_option(restrict_to_sources) ->
 	  control_value(restrict_to_sources, Sources),
-	  filter_evaluations_to_sources(TruncatedEvaluations, Sources, EvaluationsAfterSources)
+	  filter_evaluations_to_sources(Evaluations0, Sources, EvaluationsAfterSources)
 	; control_option(exclude_sources) ->
 	  control_value(exclude_sources, Sources),
-	  filter_evaluations_excluding_sources(TruncatedEvaluations, Sources, EvaluationsAfterSources)
-	; EvaluationsAfterSources = TruncatedEvaluations
-	),
+	  filter_evaluations_excluding_sources(Evaluations0, Sources, EvaluationsAfterSources)
+	; EvaluationsAfterSources = Evaluations0
+	).
+
+refine_evaluations_by_semtypes(EvaluationsAfterSources, EvaluationsAfterSTs) :-
 	( control_option(restrict_to_sts) ->
 	  control_value(restrict_to_sts, STs),
 	  filter_evaluations_to_sts(EvaluationsAfterSources, STs, EvaluationsAfterSTs)
@@ -769,12 +792,18 @@ refine_evaluations(Evaluations0, EvaluationsAfterSTs, Evaluations) :-
 	  control_value(exclude_sts, STs),
 	  filter_evaluations_excluding_sts(EvaluationsAfterSources, STs, EvaluationsAfterSTs)
 	; EvaluationsAfterSTs = EvaluationsAfterSources
-	),
+	).
+
+refine_evaluations_by_subsumption(EvaluationsAfterSTs, FinalEvaluations) :-
  	( \+ control_option(compute_all_mappings) ->
- 	  filter_out_subsumed_evaluations(EvaluationsAfterSTs, Evaluations)
- 	; Evaluations = EvaluationsAfterSTs
+ 	  filter_out_subsumed_evaluations(EvaluationsAfterSTs, FinalEvaluations)
+ 	; FinalEvaluations = EvaluationsAfterSTs
  	).
 
+refine_evaluations(InitialEvaluations, EvaluationsAfterSTs, FinalEvaluations) :-
+	refine_evaluations_by_sources(InitialEvaluations, EvaluationsAfterSources),
+	refine_evaluations_by_semtypes(EvaluationsAfterSources, EvaluationsAfterSTs),
+	refine_evaluations_by_subsumption(EvaluationsAfterSTs, FinalEvaluations).
 
 debug_evaluations(Evaluations) :-
 	( control_value(debug, DebugFlags),
@@ -786,23 +815,21 @@ debug_evaluations(Evaluations) :-
 	).
 
 generate_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-		       Variants, APhrases0, BestCandidates, Mappings0) :-
+		       Variants, APhrases0, BestCandidates, Mappings0, PrunedCount) :-
+	  % Construct mappings only if necessary
 	( check_generate_best_mappings_control_options ->
 	  % format(user_output, 'About to call construct_best_mappings~n', []), ttyflush,
 	  construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-				  Variants, APhrases0, BestCandidates, Mappings0)
+				  Variants, APhrases0, BestCandidates, Mappings0, PrunedCount)
 	  % length(Mappings0, Mappings0Length),
 	  % format(user_output, 'Done with construct_best_mappings:~d ~n', [Mappings0Length]), ttyflush
 	; APhrases0 = [],
-          Mappings0 = []
-	).
-
-truncate_mappings(Mappings0, APhrases0, Mappings, APhrases) :-
-	( control_option(truncate_candidates_mappings) ->
-	  truncate_list(Mappings0,Mappings,8,_NMTruncated),
-	  truncate_list(APhrases0,APhrases,8,_NMTruncated)
-	; Mappings = Mappings0,
-          APhrases = APhrases0
+          Mappings0 = [],
+	  % If no mappings were constructed, no candidates were pruned;
+	  % this next call will assign Status 0 to all candidates.
+	  mark_pruned_evaluations(Evaluations, Evaluations),
+	  % Don't prune any candidates if we don't generate mappings!
+	  PrunedCount is 0
 	).
 
 extract_syntactic_tags([], []).
@@ -857,7 +884,6 @@ compute_evaluations(Label, UtteranceText,
 	% format(user_output, '~N### All GVCs DONE!~n', []),
 	sort(Evaluations0, Evaluations1),
 	maybe_filter_evaluations_by_threshold(Evaluations1, Evaluations2),
-
 	debug_compute_evaluations_4(DebugFlags, Evaluations2),
 	filter_out_redundant_evaluations(Evaluations2, Evaluations),
 	add_semtypes_to_evaluations(Evaluations),
@@ -1347,18 +1373,21 @@ filter_evaluations_to_sources(EvaluationsIn, Sources, EvaluationsOut) :-
 	filter_evaluations_to_sources_aux(EvaluationsIn, RootSources, EvaluationsOut).
 
 filter_evaluations_to_sources_aux([], _, []).
-filter_evaluations_to_sources_aux([First|Rest], RootSources, Results) :-
-	First = ev(NegValue,CUI,MetaTerm,_MetaConcept,MetaWords,SemTypes,
-		   MatchMap,InvolvesHead,IsOvermatch,Sources,PosInfo),
+filter_evaluations_to_sources_aux([FirstCandidate|RestCandidates], RootSources, Results) :-
+	candidate_term(NegValue, CUI, MetaTerm, _MetaConcept, MetaWords, SemTypes,MatchMap,
+		       LSComponents, TargetLSComponent, InvolvesHead, IsOvermatch,
+		       Sources, PosInfo, Status, FirstCandidate),
 	db_get_cui_sourceinfo(CUI, SourceInfo0),
 	extract_relevant_sources(SourceInfo0, RootSources, SourceInfo),
 	( SourceInfo == [] ->
 	  Results = ModRest
 	; extract_source_name(SourceInfo, SourceName),
-	  Results = [ev(NegValue,CUI,MetaTerm,SourceName,MetaWords,SemTypes,
-			MatchMap,InvolvesHead,IsOvermatch,Sources,PosInfo)|ModRest]
+	  candidate_term(NegValue, CUI, MetaTerm, SourceName, MetaWords, SemTypes, MatchMap,
+			 LSComponents, TargetLSComponent, InvolvesHead, IsOvermatch,
+			 Sources, PosInfo, Status, NewCandidate),
+	  Results = [NewCandidate|ModRest]
 	),
-	filter_evaluations_to_sources_aux(Rest, RootSources, ModRest).
+	filter_evaluations_to_sources_aux(RestCandidates, RootSources, ModRest).
 
 /* filter_evaluations_excluding_sources(+EvaluationsIn, +Sources,
                                         -EvaluationsOut)
@@ -1378,18 +1407,21 @@ filter_evaluations_excluding_sources(EvaluationsIn, Sources, EvaluationsOut) :-
 	filter_evaluations_excluding_sources_aux(EvaluationsIn, RootSources, EvaluationsOut).
 
 filter_evaluations_excluding_sources_aux([], _, []).
-filter_evaluations_excluding_sources_aux([First|Rest], RootSources, Results) :-
-	First = ev(NegValue,CUI,MetaTerm,_MetaConcept,MetaWords,SemTypes,
-		   MatchMap,InvolvesHead,IsOvermatch,SourceInfo,PosInfo),
+filter_evaluations_excluding_sources_aux([FirstCandidate|RestCandidates], RootSources, Results) :-
+	candidate_term(NegValue, CUI, MetaTerm, _MetaConcept, MetaWords, SemTypes,
+		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+		       IsOvermatch, Sources, PosInfo, Status, FirstCandidate),
 	db_get_cui_sourceinfo(CUI, SourceInfo0),
 	extract_nonexcluded_sources(SourceInfo0, RootSources, ExtractedSourceInfo),
 	( ExtractedSourceInfo == [] ->
 	  Results = ModRest
 	; extract_source_name(ExtractedSourceInfo, SourceName),
-	  Results=[ev(NegValue,CUI,MetaTerm,SourceName,MetaWords,SemTypes,
-		      MatchMap,InvolvesHead,IsOvermatch,SourceInfo,PosInfo)|ModRest]
+	  candidate_term(NegValue, CUI, MetaTerm, SourceName, MetaWords, SemTypes,
+			 MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+			 IsOvermatch, Sources, PosInfo, Status, NewCandidate),
+	  Results = [NewCandidate|ModRest]
 	),
-	filter_evaluations_excluding_sources_aux(Rest, RootSources, ModRest).
+	filter_evaluations_excluding_sources_aux(RestCandidates, RootSources, ModRest).
 
 
 /* filter_evaluations_to_sts(+EvaluationsIn, +STs, -EvaluationsOut)
@@ -1398,15 +1430,14 @@ filter_evaluations_to_sts/3 removes those evaluations from EvaluationsIn
 which do not represent concepts with some ST in STs producing EvaluationsOut. */
 
 filter_evaluations_to_sts([], _, []).
-filter_evaluations_to_sts([First|Rest], STs, Filtered) :-
-	First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
-		   _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-	intersection(SemTypes, STs, Intersection),
+filter_evaluations_to_sts([FirstCandidate|RestCandidates], STs, Filtered) :-
+	get_candidate_feature(semtypes, FirstCandidate, FirstCandidateSemTypes),
+	intersection(FirstCandidateSemTypes, STs, Intersection),
 	( Intersection == [] ->
 	  Filtered = FilteredRest
-	; Filtered = [First|FilteredRest]
+	; Filtered = [FirstCandidate|FilteredRest]
 	),
-	filter_evaluations_to_sts(Rest, STs, FilteredRest).
+	filter_evaluations_to_sts(RestCandidates, STs, FilteredRest).
 
 /* filter_evaluations_excluding_sts(+EvaluationsIn, +STs, -EvaluationsOut)
 
@@ -1415,18 +1446,17 @@ EvaluationsIn which represent concepts with any ST in STs producing
 EvaluationsOut. */
 
 filter_evaluations_excluding_sts([], _, []).
-filter_evaluations_excluding_sts([First|Rest], STs, Filtered) :-
-	First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
-		   _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-	intersection(SemTypes, STs, Intersection),
+filter_evaluations_excluding_sts([FirstCandidate|RestCandidates], STs, Filtered) :-
+	get_candidate_feature(semtypes, FirstCandidate, FirstCandidateSemTypes),
+	intersection(FirstCandidateSemTypes, STs, Intersection),
 	( Intersection == [] ->
-	  Filtered = [First|FilteredRest]
+	  Filtered = [FirstCandidate|FilteredRest]
 	; Filtered = FilteredRest
 	),
-	filter_evaluations_excluding_sts(Rest, STs, FilteredRest).
+	filter_evaluations_excluding_sts(RestCandidates, STs, FilteredRest).
 
-construct_best_mappings(Evaluations, PhraseTextString, Phrase,
-			PhraseWordInfoPair, Variants, APhrases, Evaluations, BestMaps) :-
+construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
+			Variants, APhrases, Evaluations, BestMaps, PrunedCount) :-
 	% special clause for detecting structures such as
 	% amino acid sequences (e.g., His-Ala-Asp-Gly-...); and
 	% other hyphenated structures (e.g., (D)-C-Q-W- A-V-G-H-L-C-NH2)
@@ -1437,11 +1467,11 @@ construct_best_mappings(Evaluations, PhraseTextString, Phrase,
 	apply_shortcut_processing_rules(LCFilteredWords, PhraseTextString),
 	!,
 	AllMappings = [],
+	PrunedCount is 0,
 	construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 				  Variants, APhrases, BestMaps).
-
-construct_best_mappings(Evaluations, PhraseTextString, Phrase,
-			PhraseWordInfoPair, Variants, APhrases, BestCandidates, BestMaps) :-
+construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
+			Variants, APhrases, BestCandidates, BestMaps, PrunedCount) :-
 	% consider doing construction, augmentation and filtering more linearly
 	% to increase control and to avoid keeping non-optimal results when
 	% control_option(compute_all_mappings) is not in effect
@@ -1451,22 +1481,51 @@ construct_best_mappings(Evaluations, PhraseTextString, Phrase,
 			'~n### Calling construct_all_mappings on ~w AEvs~n',
 			[EvaluationsLength]),
 	  % write_aevs(AEvaluations),
-	  construct_all_mappings(Evaluations, PhraseTextString,
-				 BestAEvs, DuplicateCandidates, AllMappings),
+	  compute_phrase_words_length(PhraseWordInfoPair, NPhraseWords),
+	  construct_all_mappings(Evaluations, PhraseTextString, NPhraseWords, Variants,
+				 BestAEvs, DuplicateCandidates, AllMappings, PrunedCount),
 	  % construct_all_mappings_OLD(AEvaluations, AllMappings)
 	  % user:'=?'(AllMappings, OldAllMappings),
 	  debug_call(trace, length(AllMappings, AllMappingsLength)),
 	  debug_message(trace, '~n### DONE with construct_all_mappings: ~w~n', [AllMappingsLength])
 	; AllMappings = []
 	),
-	debug_message(mappings, '~N### Adding duplicate candidates to mappings.~n', []),
+	debug_message(mappings, '~N### Adding duplicate candidates to mappings~n', []),
+	% The next three predicates need to be merged!
+	% AllMappings contains ev(_) structures, but DuplicateCandidates contains aev(_)s.
 	add_dup_candidates_to_all_mappings(AllMappings, DuplicateCandidates, AllMappingsWithDups),
-	debug_message(mappings, '~N### Distributing duplicate candidates over mappings.~n', []),
-	distribute_duplicate_candidates(AllMappingsWithDups, AllDistributedMappings),
-	append(AllDistributedMappings, AllAppendedMappings),
-	construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllAppendedMappings,
+	debug_message(mappings, '~N### Distributing duplicate candidates over mappings~n', []),
+	% I can avoid the next append by using difference lists in distribute_duplicate_candidates
+	distribute_duplicate_candidates(AllMappingsWithDups, AllDistributedMappings0),
+	append(AllDistributedMappings0, AllDistributedMappings),
+	length(AllDistributedMappings, AllDistributedMappingsCount),
+	debug_message(mappings, '~N### ~d Mappings with Duplicates.~n', [AllDistributedMappingsCount]),
+	test_mappings_limit(AllDistributedMappingsCount),
+	% Cut away all the choice points left by the pruning code!
+	!,
+	construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllDistributedMappings,
 				  Variants, APhrases, BestMaps),
-	deaugment_mapping_evaluations(BestAEvs, BestCandidates).
+	deaugment_evaluations(BestAEvs, BestCandidates).
+
+test_mappings_limit(MappingsCount) :-
+	  % If no_prune is not set, then determine the max allowable number of mappings
+	( \+ control_option(no_prune) ->
+	   ( control_value(mappings_limit, MaxMappingsCount) ->
+	     true
+	   ; MaxMappingsCount is 500000
+	   ),
+	   MappingsCount < MaxMappingsCount
+	  % If no_prune is set, simply succeed.	
+	; true
+	).	
+
+compute_phrase_words_length(PhraseWordInfoPair, NPhraseWords) :-
+	  PhraseWordInfoPair = _AllPhraseWordInfo:FilteredPhraseWordInfo,
+	  % PhraseWordInfo = FilteredPhraseWordInfo,
+	  FilteredPhraseWordInfo = pwi(PhraseWordL, _PhraseHeadWordL, _PhraseMap),
+	  PhraseWordL = wdl(_, LCPhraseWords),
+	  length(LCPhraseWords, NPhraseWords).
+	
 
 apply_shortcut_processing_rules(LCFilteredWords, _PhraseTextString) :-
 	contains_n_amino_acids(LCFilteredWords, 3) .
@@ -1479,11 +1538,11 @@ apply_shortcut_processing_rules(LCFilteredWords, _PhraseTextString) :-
 
 construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 			  Variants, APhrases, BestMappings) :-
-	debug_message(trace, '~N### Calling augment_phrase_with_mappings~n', []),
+	debug_message(mappings, '~N### Calling augment_phrase_with_mappings~n', []),
 	augment_phrase_with_mappings(AllMappings, Phrase, PhraseWordInfoPair, Variants, APhrases0),
 	% The sort is now done inside augment_phrase_with_mappings
 	% sort(APhrases0,APhrases1),
-	debug_message(trace, '~N### Calling conditionally_filter_best_aphrases~n', []),
+	debug_message(mappings, '~N### Calling conditionally_filter_best_aphrases~n', []),
 	conditionally_filter_best_aphrases(APhrases0, APhrases),
 	% Aphrases is a list of terms of the form
 	% ap(NegValue,LPhraseOut,LPhraseMapOut,Mapping).
@@ -1493,10 +1552,10 @@ construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 	debug_message(mappings, '~n### ~d Best Mappings~n', [BestMappingsCount]),
 	debug_message(mappings, '~N### Done with aphrases_maps~n', []).
 
-% Given a mapping
+% Given a mapping consisting of N candidates
 % [C1,C2,...,CN]
 % and a list of duplicate concepts
-% [C1:[C1D1,C1D2,...], C2:[C2D1,C2D2,...],...,CN:[CnD1,CND2,...]]
+% [C1:[C1D1,C1D2,...], C2:[C2D1,C2D2,...],...,CN:[CND1,CND2,...]]
 % in which [C1D1,C1D2,...] are the duplicate concepts of C1, etc.,
 % we want to replace each concept in the mapping
 % with a list containing that concept and all its duplicates:
@@ -1504,12 +1563,20 @@ construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 % [[C1,C1D1,C1D2...], [C2,C2D1,C2D2,...],...,[CN,CND1,CND2,...]].
 
 % For a simpler example, let's represent candidates as single chars.
-% Suppose the list of mappings is
+% The list [a,b,c] therefore represents a mapping consisting of
+% the three candidates a, b, and c.
+
+% Suppose we have list of five mappings
 % [ [a,b,c],  [a,c,e],  [a,b,d],  [b,c,d],  [b,c,e]]
 % and the list of duplicate candidates is
 % [a:[h,i,j],  c:[p,q,r],  d:[x,y,z]]
-% so a's duplicates are h, i, and j, and so forth.
-% We want to end up with
+% thus,
+% * a's duplicates are h, i, and j;
+% * c's duplicates are p, q, and r; and
+% * d's duplicates are x, y, and z.
+% We first replace each concept in the mapping
+% with a list containing that concept and all its duplicates (if any):
+% That results in
 % [ [[a,h,i,j], [b],       [c,p,q,r]],
 %   [[a,h,i,j], [c,p,q,r], [e]],
 %   [[a,h,i,j], [b],       [d,x,y,z]],
@@ -1531,9 +1598,14 @@ construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 %
 %   [[b,c,e], [b,p,e], [b,q,e], [b,r,e]]]
 
+% AllMappings is a list of terms of the form NegValue-[Candidate1, C2, ..., CN]
+% and the candidate list is a mapping.
+% DupCandidateList is a list of terms of the form Candidate:[Dup1, Dup2, ..., DupN]
+% AllMappingsWithDups is a list of terms of the form NegValue-[DuplicateList1, DL2, ..., DLN]
+% where DuplicateList1 contains all the duplicate candidates for Candididate1, etc.
 add_dup_candidates_to_all_mappings(AllMappings, DupCandidateList, AllMappingsWithDups) :-
-	(  foreach(Mapping,         AllMappings),
-	   foreach(MappingWithDups, AllMappingsWithDups),
+	(  foreach(NegValue-Mapping,         AllMappings),
+	   foreach(NegValue-MappingWithDups, AllMappingsWithDups),
 	   param(DupCandidateList)
 	do (  foreach(Candidate,         Mapping),
 	      foreach(CandidateWithDups, MappingWithDups),
@@ -1545,25 +1617,52 @@ add_dup_candidates_to_all_mappings(AllMappings, DupCandidateList, AllMappingsWit
 	   )
 	).
 
+% As above,
+% AllMappingsWithDups is a list of terms of the form NegValue-[DuplicateList1, DL2, ..., DLN]
+% where DuplicateList1 contains all the duplicate candidates for Candididate1, etc.
 distribute_duplicate_candidates(AllMappingsWithDups, AllDistributedMappings) :-
-	(  foreach(MappingWithDups,    AllMappingsWithDups),
-	   foreach(DistributedMapping, AllDistributedMappings)
-	do ( length(MappingWithDups, Length),
-	     length(VarList,         Length),
-	     % VarList is a list of free variables
-	     setof(VarList, member_list(VarList, MappingWithDups), DistributedMapping)
-	   )
+	(  foreach(NegValue-OneMappingWithDups,    AllMappingsWithDups),
+	   foreach(OneDistributedMapping, AllDistributedMappings)
+	do distribute_candidates(OneMappingWithDups, NegValue, OneDistributedMapping)
 	).
 
-member_list(ListOfVariables, ListOfLists) :-
-	   % For each free variable Element1 in ListOfVariables,
-	(  foreach(Element1, ListOfVariables),
-	   % for each sublist SubListOfLists in ListOfLists,
-	   foreach(SubList, ListOfLists)
-	   % instantiate Element1 to a member of SubListOfLists
-	do member(Element1, SubList)
-	).
-		   
+% dist([[a,h,i,j], [b], [c,p,q,r]], Result).
+% Result = [[a,b,c], [a,b,p], [a,b,q], [a,b,r],
+%           [h,b,c], [h,b,p], [h,b,q], [h,b,r],
+%	    [i,b,c], [i,b,p], [i,b,q], [i,b,r],
+%	    [j,b,c], [j,b,p], [j,b,q], [j,b,r]]
+
+% Distribute the candidates for ONE mapping.
+distribute_candidates([H|T], NegValue, Dist) :- dist1(T, H, NegValue, Dist).
+
+% Can this be made tail recursive?
+dist1([], Last, NegValue, Dist) :- listify(Last, NegValue, Dist).
+dist1([Next|Rest], First, NegValue, Dist) :-
+	dist1(Rest, Next, NegValue, Dist1),
+	prefix_all_lists(First, NegValue, Dist1, Dist).
+
+% listify([[a,b,c,d], List) instantiates List to [[a], [b], [c], [d]].
+listify([], _NegValue, []).
+listify([First|Rest], NegValue, [NegValue-[First]|ModifiedRest]) :-
+        listify(Rest, NegValue, ModifiedRest).
+
+% prefix_all_lists(ListOfNewHeads, ListOfLists, NewListofLists)
+% add each element of ListOfNewHeads as a new head to each list in ListOfLists,
+% resulting in NewListsOfLists, e.g.,
+% prefix_all_lists([#,*], [[a,b,c], [d,e,f], [g,h,i]], NewListOfLists).
+% instatiates NewList to [[#,a,b,c],[#,d,e,f],[#,g,h,i],[*,a,b,c],[*,d,e,f],[*,g,h,i]].
+
+prefix_all_lists(ListOfNewHeads, NegValue, ListOfLists, NewListofLists) :-
+	prefix_all_lists_aux(ListOfNewHeads, NegValue, ListOfLists, NewListofLists, []).
+
+prefix_all_lists_aux([], _NegValue, _ListOfLists, Result, Result).
+prefix_all_lists_aux([H|T], NegValue, List, ResultIn, ResultOut) :-
+	prefix_one_element(List, H, NegValue,ResultIn, ResultNext),
+	prefix_all_lists_aux(T, NegValue, List, ResultNext, ResultOut).
+
+prefix_one_element([], _First, _NegValue, Result, Result).
+prefix_one_element([NegValue-H|T], First, NegValue, [NegValue-[First|H]|ResultNext], ResultOut) :-
+	prefix_one_element(T, First, NegValue, ResultNext, ResultOut).
 
 conditionally_filter_best_aphrases([], []).
 conditionally_filter_best_aphrases([H|T], APhrases) :-
@@ -1576,7 +1675,6 @@ conditionally_filter_best_aphrases([H|T], APhrases) :-
 
 contains_n_amino_acids(LCWords, N) :-
 	contains_n_amino_acids(LCWords, 0, N).
-
 
 contains_n_amino_acids([First|Rest], I, N) :-
 	( I =:= N ->
@@ -1639,16 +1737,18 @@ augment_evaluations([First|Rest], [AugmentedFirst|AugmentedRest]) :-
 % * changes the functor from ev/11 to aev/14,
 % * adds the merged phrase component of the MatchMap, and
 % * adds the span of the entire MatchMap.
-augment_one_evaluation(First, AugmentedFirst) :-
-	First = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-		   MatchMap,InvolvesHead,IsOvermatch,SourceInfo,PosInfo),
+augment_one_evaluation(Candidate, AugmentedCandidate) :-
+	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
+		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+		       IsOvermatch, SourceInfo, PosInfo, Status, Candidate),
 	extract_components(MatchMap, PhraseComponents0, _MetaComponents),
 	sort(PhraseComponents0, PhraseComponents1),
 	merge_contiguous_components(PhraseComponents1, PhraseComponents),
 	compute_component_span(PhraseComponents, Low, High),
-	AugmentedFirst = aev(PhraseComponents,Low,High,
-			     NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-			     MatchMap,InvolvesHead,IsOvermatch,SourceInfo,PosInfo).
+	augmented_candidate_term(PhraseComponents, Low, High,
+				 NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
+				 MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+				 IsOvermatch, SourceInfo, PosInfo, Status, AugmentedCandidate).
 
 filter_best_aphrases([], _BestValue, []).
 filter_best_aphrases([First|Rest], BestValue, Filtered) :-
@@ -1672,107 +1772,131 @@ print_all_aevs([H|T]) :-
 	format(user_output, '~q~n', [Print]),
 	print_all_aevs(T).
 
-remove_duplicate_evs(Evaluations,
-		     DuplicateEvs, AEvaluationsNoDups,
-		     DuplicateEvCount, NoDuplicatesCount) :-
+remove_duplicate_aevs(RemainingAEvaluations, DuplicateEvs,
+		      AEvaluationsNoDups, DuplicateEvCount, NoDuplicatesCount) :-
 	PrevDups = [],
-	find_duplicate_evs(Evaluations, PrevDups, DuplicateEvs, EvaluationsNoDups),
-	get_dup_count(DuplicateEvs, DuplicateEvCount),
-	augment_evaluations(EvaluationsNoDups, AEvaluationsNoDups), 
+	find_duplicate_aevs(RemainingAEvaluations, PrevDups, DuplicateEvs, AEvaluationsNoDups),
+	compute_total_dup_count(DuplicateEvs, DuplicateEvCount),
 	length(AEvaluationsNoDups, NoDuplicatesCount),
 	debug_call(dups, print_duplicate_info(DuplicateEvs, DuplicateEvCount,
 					      AEvaluationsNoDups, NoDuplicatesCount)).
 
 print_duplicate_info(DuplicateEvs, DuplicateEvCount, AEvaluationsNoDups, NoDuplicatesCount) :-
-	format(user_output, '~n### DUPLICATES (~d):~n', [DuplicateEvCount]),
+	% DuplicateEvs is the list of terms of the form C:[D1,D2,...,Dn] 
+	format(user_output, '~n### DUPLICATES (~d)~n', [DuplicateEvCount]),
 	print_duplicate_evs(DuplicateEvs),
 	format(user_output, '~n### NON-DUPLICATES (~d):~n', [NoDuplicatesCount]),
 	print_all_aevs(AEvaluationsNoDups).
 
+compute_duplicate_counts(DuplicateEvs, DuplicateCountList, Product) :-
+	(  foreach(Candidate:DuplicateList, DuplicateEvs),
+	   foreach(Candidate:DuplicateCount1, DuplicateCountList)
+	do length(DuplicateList, DuplicateCount),
+	   DuplicateCount1 is DuplicateCount + 1
+	),
+	(  foreach(_Candidate2:DuplicateCount2, DuplicateCountList),
+	   fromto(1, S0, S, Product)
+	do S is S0 * DuplicateCount2
+	).
+	
 calc_percent_removed(DiscardedAEvaluationsLength, AEvaluationsLength, PercentRemoved) :-
 	( AEvaluationsLength =:= 0 ->
 	  PercentRemoved is 0
 	; PercentRemoved is (DiscardedAEvaluationsLength/AEvaluationsLength)*100
 	).
 
-possibly_prune_aevs(AEvaluations, PhraseTextString, KeptAEvaluations) :-
+maybe_prune_aevs(AEvaluations, PruningThreshhold, PhraseTextString, KeptAEvaluations, PrunedCount) :-
 	% If pruning been explicitly specified (via --prune), or
 	% default pruning of 30 has not been explicitly disabled (via --no_prune),
-	% then get the pruning threshhold AEvMaxNum.
-	( get_pruning_threshold(AEvMaxNum),
-	  length(AEvaluations, AEvaluationsLength),
-	  AEvaluationsLength > AEvMaxNum ->
-	  debug_message(pruning, '### PRUNING candidates for input "~s"~n', [PhraseTextString]),
-	  debug_call(pruning, print_all_aevs(AEvaluations)),
+	% then get the pruning threshhold PruningThreshhold.
+	( length(AEvaluations, AEvaluationsLength),
+	  AEvaluationsLength > PruningThreshhold ->
+	  debug_message(prune, '### PRUNING to ~d candidates for input "~s"~n',
+			[PruningThreshhold, PhraseTextString]),
+	  debug_call(prune, print_all_aevs(AEvaluations)),
 	  PruningLevel is 1,
 	  MaxPruningLevel is 5,
  	  min_max_phrase_components(AEvaluations, 9999, _PhraseMin, 0, PhraseMax),
 	  RestoreNum is 0,
-  	  prune_aevs_all(PruningLevel, MaxPruningLevel, RestoreNum, AEvMaxNum,
+  	  prune_aevs_all(PruningLevel, MaxPruningLevel, RestoreNum, PruningThreshhold,
 			 PhraseMax, AEvaluations, KeptAEvaluations),
 	  length(KeptAEvaluations, KeptAEvaluationsLength),
-	  debug_message(pruning, '~n### ~d Final Kept Candidates~n', [KeptAEvaluationsLength]),
-	  debug_call(pruning, print_all_aevs(KeptAEvaluations))
-	; KeptAEvaluations = AEvaluations
+	  debug_message(prune, '~n### ~d Final Kept Candidates~n', [KeptAEvaluationsLength]),
+  	  debug_message(candidates, '~n### ~d Candidates ***PRUNED*** to ~d~n',
+			[AEvaluationsLength,KeptAEvaluationsLength]),
+	  PrunedCount is AEvaluationsLength - KeptAEvaluationsLength,
+	  debug_call(prune, print_all_aevs(KeptAEvaluations))
+	; KeptAEvaluations = AEvaluations,
+	  PrunedCount is 0
 	).
 
-get_pruning_threshold(AEvMaxNum) :-
-	( control_value(prune, AEvMaxNum) ->
-	  true
-	; \+ control_option(no_prune) ->
-	  AEvMaxNum is 35
+get_pruning_threshhold(NoDuplicateCount, ActualPruningThreshhold) :-
+	  % If --no_prune has been specified on the command line,
+	  % use NoDuplicateCount as the threshhold, period.
+	( control_option(no_prune) ->
+	  ActualPruningThreshhold is NoDuplicateCount
+	  % If a pruning threshhold has been explicitly specified on the command line
+	  % using --prune, then use that value as the threshhold, period.
+	; control_value(prune, PruningThreshhold) ->
+	  ActualPruningThreshhold is PruningThreshhold
+	  % Otherwise, the default action is to start with NoDuplicateCount,
+	  % and allow backtracking, subtracting 1 at a time,
+	  % until an acceptable number of candidates has been reached.
+	; InitPruningThreshhold is NoDuplicateCount,
+	  between(0, NoDuplicateCount, Subtract),
+	  ActualPruningThreshhold is InitPruningThreshhold - Subtract
 	 ).
 
-prune_aevs_all(PruningLevel, MaxPruningLevel, RestoreNumIn, AEvMaxNum, PhraseMax,
+prune_aevs_all(PruningLevel, MaxPruningLevel, _RestoreNumIn, PruningThreshhold, PhraseMax,
 	       AEvaluationsIn, KeptAEvaluations) :-
-	% Is the pruning level =< the maximum pruning level (4 -- set in possibly_prune_aevs/4)?
+	% Is the pruning level =< the maximum pruning level (4 -- set in maybe_prune_aevs/4)?
 	( PruningLevel =< MaxPruningLevel,
 	  % Continue pruning iff
 	  % (1) We still have too many candidates, AND
 	  % (2) No candidates were restored in the previous pruning round.
 	  length(AEvaluationsIn, RemainingAEvCount),
-	  RemainingAEvCount > AEvMaxNum,
-	  RestoreNumIn =:=  0 ->
-	  debug_message(pruning, '~n### Doing LEVEL-~d pruning on ~d Candidates~n~n',
+	  RemainingAEvCount > PruningThreshhold ->
+	  % RestoreNumIn =:= 0 ->
+	  debug_message(prune, '~n### Doing LEVEL-~d pruning on ~d Candidates~n~n',
 			[PruningLevel,RemainingAEvCount]),
  	  AEvIndex is 0,
  	  NumPositions is 0,
   	  PositionsIn = [],
  	  PreviousPositionsCoveredAndScores = [],
-	  prune_and_restore(PruningLevel, MaxPruningLevel, AEvMaxNum, AEvaluationsIn,
+	  prune_and_restore(PruningLevel, MaxPruningLevel, PruningThreshhold, AEvaluationsIn,
 			    PreviousPositionsCoveredAndScores, AEvIndex, NumPositions,
 			    PhraseMax, PositionsIn, AEvaluationsNext, RestoreNumNext),
 	  NextPruningLevel is PruningLevel + 1,
 	  prune_aevs_all(NextPruningLevel, MaxPruningLevel, RestoreNumNext,
-			 AEvMaxNum, PhraseMax, AEvaluationsNext, KeptAEvaluations)
+			 PruningThreshhold, PhraseMax, AEvaluationsNext, KeptAEvaluations)
 	  % Otherwise, we're done.
 	; KeptAEvaluations = AEvaluationsIn
 	).
 
 % PPCS == PreviousPositionsCoveredAndScores
-prune_and_restore(PruningLevel, _MaxPruningLevel, AEvMaxNum, AEvaluationsIn, PPCS,
+prune_and_restore(PruningLevel, _MaxPruningLevel, PruningThreshhold, AEvaluationsIn, PPCS,
 		  AEvIndex, NumPositions, PhraseMax, PositionsIn, AEvaluationsOut, MinRestoreNum) :-
-	prune_LEVEL(AEvaluationsIn, PruningLevel, AEvMaxNum, AEvIndex, NumPositions,
+	prune_LEVEL(AEvaluationsIn, PruningLevel, PruningThreshhold, AEvIndex, NumPositions,
 		    PhraseMax, PPCS, PositionsIn,
 		    DiscardedAEvaluations, AEvaluationsNext),
 	length(AEvaluationsIn, AEvaluationsInLength),
 	length(DiscardedAEvaluations, DiscardedAEvaluationsLength),
 	length(AEvaluationsNext, AEvaluationsNextLength),
 	calc_percent_removed(DiscardedAEvaluationsLength, AEvaluationsInLength, PercentRemoved),
-	debug_message(pruning,
+	debug_message(prune,
 		      '~n### LEVEL-~d pruning removed ~d% (~d of ~d) candidates, leaving ~d~n',
 		      [PruningLevel,PercentRemoved,DiscardedAEvaluationsLength,
 		       AEvaluationsInLength,AEvaluationsNextLength]),
 
-	MinRestoreNum is max(AEvMaxNum-AEvaluationsNextLength, 0),
-	debug_message(pruning, '### Restoring at least ~d Candidates~n', [MinRestoreNum]),
+	MinRestoreNum is max(PruningThreshhold-AEvaluationsNextLength, 0),
+	debug_message(prune, '### Restoring at least ~d Candidates~n', [MinRestoreNum]),
 	PreviousPositionsCoveredAndScores = [],
 	restore_discarded_aevs(DiscardedAEvaluations, MinRestoreNum,
 			       PreviousPositionsCoveredAndScores,
 			       AEvaluationsNext, AEvaluationsOut),
 	length(AEvaluationsOut, AEvaluationsOutLength),
 	ActualRestoreNum is AEvaluationsOutLength - AEvaluationsNextLength,
-	debug_message(pruning, '### Restored ~d Candidates~n', [ActualRestoreNum]).
+	debug_message(prune, '### Restored ~d Pruned Candidates~n', [ActualRestoreNum]).
 
 % Pruning level 1:
 % If the aggregate phrase components of the current candidate's MatchMap
@@ -1815,23 +1939,23 @@ prune_and_restore(PruningLevel, _MaxPruningLevel, AEvMaxNum, AEvaluationsIn, PPC
 %     with only one, and then expand final mappings with others.
 
 
-prune_LEVEL([], _Level, _AEvMaxNum, _AEvIndex, _NumPositions,
+prune_LEVEL([], _Level, _PruningThreshhold, _AEvIndex, _NumPositions,
 	      _PhraseMax, _PPCS, _Positions, [], []).
-prune_LEVEL([FirstAEv|RestAEvs], Level, AEvMaxNum, AEvIndexIn, NumPositionsIn, PhraseMax,
+prune_LEVEL([FirstAEv|RestAEvs], Level, PruningThreshhold, AEvIndexIn, NumPositionsIn, PhraseMax,
 	      PPCSIn, PositionsIn, DiscardedAEvs, KeptAEvs) :-
 	AEvIndexNext is AEvIndexIn + 1,
-	test_phrase_components_LEVEL(Level, AEvMaxNum, FirstAEv, PhraseMax,
+	test_phrase_components_LEVEL(Level, PruningThreshhold, FirstAEv, PhraseMax,
 				     PositionsIn, NumPositionsIn, PPCSIn,
 				     PositionsNext, NumPositionsNext, AEvIndexNext,
 				     PPCSNext,
 				     DiscardedAEvs, RestDiscardedAEvs,
 				     KeptAEvs, RestKeptAEvs),
-	prune_LEVEL(RestAEvs, Level, AEvMaxNum, AEvIndexNext, NumPositionsNext,
+	prune_LEVEL(RestAEvs, Level, PruningThreshhold, AEvIndexNext, NumPositionsNext,
 		    PhraseMax, PPCSNext, PositionsNext,
 		    RestDiscardedAEvs, RestKeptAEvs).
 
 
-test_phrase_components_LEVEL(1, _AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, PPCSIn,
+test_phrase_components_LEVEL(1, _PruningThreshhold, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, PPCSIn,
 			     PositionsNext, NumPositionsNext, ThisAEvIndex, PPCSNext,
 			     DiscardedAEvs, RestDiscardedAEvs, KeptAEvs, RestKeptAEvs) :-
 	get_aev_info(ThisAEv, NegValue, ThisAEvPrintVersion, PhrasePositions, _MetaPositions),
@@ -1853,11 +1977,11 @@ test_phrase_components_LEVEL(1, _AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, Num
 	  DiscardedAEvs = RestDiscardedAEvs,
 	  KeptAEvs = [ThisAEvIndex-ThisAEv|RestKeptAEvs]
 	),
-	debug_message(pruning,
+	debug_message(prune,
 		      '~w ~d ~d/~d: ~q~n',
 		      [Message,ThisAEvIndex,NumPositionsNext,PhraseMax,ThisAEvPrintVersion]).
 
-test_phrase_components_LEVEL(2, _AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, PPCSIn,
+test_phrase_components_LEVEL(2, _PruningThreshhold, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, PPCSIn,
 			     PositionsNext, NumPositionsNext, ThisAEvIndex, PPCSNext,
 			     DiscardedAEvs, RestDiscardedAEvs, KeptAEvs, RestKeptAEvs) :-
 	get_aev_info(ThisAEv, NegValue, ThisAEvPrintVersion, PhrasePositions, _MetaPositions),
@@ -1890,11 +2014,11 @@ test_phrase_components_LEVEL(2, _AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, Num
 	  DiscardedAEvs = RestDiscardedAEvs,
 	  KeptAEvs = [ThisAEvIndex-ThisAEv|RestKeptAEvs]
 	),
-	debug_message(pruning,
+	debug_message(prune,
 		      '~w ~d ~d/~d: ~q~n',
 		      [Message,ThisAEvIndex,NumPositionsNext,PhraseMax,ThisAEvPrintVersion]).
 	
-test_phrase_components_LEVEL(3, _AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, PPCSIn,
+test_phrase_components_LEVEL(3, _PruningThreshhold, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, PPCSIn,
 			     PositionsNext, NumPositionsNext, ThisAEvIndex, PPCSNext,
 			     DiscardedAEvs, RestDiscardedAEvs, KeptAEvs, RestKeptAEvs) :-
 	get_aev_info(ThisAEv, NegValue, ThisAEvPrintVersion, PhrasePositions, _MetaPositions),
@@ -1930,11 +2054,11 @@ test_phrase_components_LEVEL(3, _AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, Num
 	  DiscardedAEvs = RestDiscardedAEvs,
 	  KeptAEvs = [ThisAEvIndex-ThisAEv|RestKeptAEvs]
 	),
-	debug_message(pruning,
+	debug_message(prune,
 		      '~w ~d ~d/~d: ~q~n',
 		      [Message,ThisAEvIndex,NumPositionsNext,PhraseMax,ThisAEvPrintVersion]).
 
-test_phrase_components_LEVEL(4, _AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, _PPCSIn,
+test_phrase_components_LEVEL(4, _PruningThreshhold, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, _PPCSIn,
 			     PositionsNext, NumPositionsNext, ThisAEvIndex, _PPCSNext,
 			     DiscardedAEvs, RestDiscardedAEvs, KeptAEvs, RestKeptAEvs) :-
 	get_aev_info(ThisAEv, NegValue, ThisAEvPrintVersion, PhrasePositions, _MetaPositions),
@@ -1968,11 +2092,11 @@ test_phrase_components_LEVEL(4, _AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, Num
 	  KeptAEvs = [ThisAEvIndex-ThisAEv|RestKeptAEvs]
 	  % This branch should never be taken; if it is, something is grievously wrong
 	),
-	debug_message(pruning,
+	debug_message(prune,
 		      '~w ~d ~d/~d: ~q~n',
 		      [Message,ThisAEvIndex,NumPositionsNext,PhraseMax,ThisAEvPrintVersion]).
 
-test_phrase_components_LEVEL(5, AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, PPCSIn,
+test_phrase_components_LEVEL(5, PruningThreshhold, ThisAEv, PhraseMax, PositionsIn, NumPositionsIn, PPCSIn,
 			     PositionsNext, NumPositionsNext, ThisAEvIndex, PPCSNext,
 			     DiscardedAEvs, RestDiscardedAEvs, KeptAEvs, RestKeptAEvs) :-
 	get_aev_info(ThisAEv, NegValue, ThisAEvPrintVersion, PhrasePositions, _MetaPositions),
@@ -1985,15 +2109,15 @@ test_phrase_components_LEVEL(5, AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, NumP
 	  PPCSNext = PPCSIn,
 	  DiscardedAEvs = RestDiscardedAEvs,
 	  KeptAEvs = [ThisAEvIndex-ThisAEv|RestKeptAEvs]
-	  % If the Index of this AEv is > AEvMaxNum, toss it
-	; ThisAEvIndex > AEvMaxNum ->
+	  % If the Index of this AEv is > PruningThreshhold, toss it
+	; ThisAEvIndex > PruningThreshhold ->
 	  Message = 'TOSS',
 	  PositionsNext = PositionsIn,
 	  NumPositionsNext is NumPositionsIn,
 	  PPCSNext = PPCSIn,
 	  DiscardedAEvs = [ThisAEvIndex-ThisAEv|RestDiscardedAEvs],
 	  KeptAEvs = RestKeptAEvs
-	  % If the Index of this AEv is > AEvMaxNum AND
+	  % If the Index of this AEv is > PruningThreshhold AND
 	  % this AEv has the same score as the previous candidate's, keep it
 	  % Otherwise, simply keep it.
 	; Message = 'KEEP',
@@ -2002,7 +2126,7 @@ test_phrase_components_LEVEL(5, AEvMaxNum, ThisAEv, PhraseMax, PositionsIn, NumP
 	  DiscardedAEvs = RestDiscardedAEvs,
 	  KeptAEvs = [ThisAEvIndex-ThisAEv|RestKeptAEvs]
 	),
-	debug_message(pruning,
+	debug_message(prune,
 		      '~w ~d ~d/~d: ~q~n',
 		      [Message,ThisAEvIndex,NumPositionsNext,PhraseMax,ThisAEvPrintVersion]).
 
@@ -2021,7 +2145,7 @@ restore_discarded_aevs([DiscardedIndex-FirstDiscardedAEv|RestDiscardedAEvs],
 	  NextRestoreNum is max(RestoreNum-1, 0),
 	  PPCSNext = PPCSIn,
 	  NextKeptAEvs = KeptAEvs,
-	  debug_message(pruning, 'RESTORED: ~q~n', [PrintVersion]),
+	  debug_message(prune, 'RESTORED: ~q~n', [PrintVersion]),
 	  NextDiscardedAEvs = RestDiscardedAEvs,
 	  FinalAEvs = [FirstDiscardedAEv|RestFinalAEvs]
 	  % We've restored enough candidates, and the current discarded candidate
@@ -2038,7 +2162,7 @@ restore_discarded_aevs([DiscardedIndex-FirstDiscardedAEv|RestDiscardedAEvs],
 	  PPCSNext = PPCSIn,
 	  NextKeptAEvs = KeptAEvs,
 	  NextDiscardedAEvs = RestDiscardedAEvs,
-	  debug_message(pruning, 'RESTORED: ~q~n', [PrintVersion]),
+	  debug_message(prune, 'RESTORED: ~q~n', [PrintVersion]),
 	  FinalAEvs = [FirstDiscardedAEv|RestFinalAEvs]
 	  % DiscardedIndex is the index of the next discarded AEv.
 	  % KeptIndex is the index of the next kept AEv.
@@ -2066,7 +2190,7 @@ update_aev_lists(RestoreNum, KeptAEvs, DiscardedIndex, FirstDiscardedAEv, PPCSIn
 	    NextKeptAEvs = KeptAEvs,
 	    FinalAEvs = [FirstDiscardedAEv|RestFinalAEvs],
 	    get_aev_info(FirstDiscardedAEv, NegValue, PrintVersion, PhrasePositions, _MetaPositions),
-	    debug_message(pruning, 'RESTORED: ~q~n', [PrintVersion])
+	    debug_message(prune, 'RESTORED: ~q~n', [PrintVersion])
 	    % Otherwise, we add the first KeptAEv to FinalAEvs; no need to decrement RestoreNum
 	  ; NextRestoreNum is RestoreNum,
 	    FinalAEvs = [FirstKeptAEv|RestFinalAEvs],
@@ -2077,17 +2201,16 @@ update_aev_lists(RestoreNum, KeptAEvs, DiscardedIndex, FirstDiscardedAEv, PPCSIn
 	  ).
 
 get_ev_info(ThisEv, NegValue, ThisEvPrintVersion, PhrasePositions, MetaPositions) :-
-	ThisEv = ev(NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		    MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+	get_all_candidate_features([negvalue,matchmap], ThisEv, [NegValue,MatchMap]),
 	ev_print_version(ThisEv, ThisEvPrintVersion),
 	extract_components(MatchMap, PhraseComponents, MetaComponents),
 	positions_covered(MetaComponents, MetaPositions),
 	positions_covered(PhraseComponents, PhrasePositions).
 
 get_aev_info(ThisAEv, NegValue, ThisAEvPrintVersion, PhrasePositions, MetaPositions) :-
-	ThisAEv = aev(PhraseComponents,_Low,_High,
-		      NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		      MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+	get_all_aev_features([phrasecomponents,negvalue,matchmap],
+			     ThisAEv,
+			     [PhraseComponents,NegValue,MatchMap]),
 	aev_print_version(ThisAEv, ThisAEvPrintVersion),
 	extract_components(MatchMap, _PhraseComponents0, MetaComponents),
 	positions_covered(MetaComponents, MetaPositions),
@@ -2112,9 +2235,7 @@ proper_subset(Set1, Set2) :-
 % determine the lowest and highest phrase components in the AEvs
 min_max_phrase_components([], PhraseMin, PhraseMin, PhraseMax, PhraseMax).
 min_max_phrase_components([FirstAEv|RestAEvs], PhraseMinIn, PhraseMin, PhraseMaxIn, PhraseMax) :-
-        FirstAEv = aev(_PhraseComponents,Low,High,
-                       _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-                       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+	get_all_aev_features([low,high], FirstAEv, [Low,High]),
         update_phrase_components(Low, PhraseMinIn, PhraseMinNext,
                                  High, PhraseMaxIn, PhraseMaxNext),
         min_max_phrase_components(RestAEvs, PhraseMinNext, PhraseMin, PhraseMaxNext, PhraseMax).
@@ -2137,49 +2258,53 @@ update_phrase_components(Low, PhraseMinIn, PhraseMinNext,
 
 % Uusing the portrayed representation of Candidates defined at the end of this file,
 % one element of the list could be
-% aev(C0175730):[aev(C1704731),aev(C1704730),aev(C1704474),aev(C1561954),aev(C1547937)]
+% aev(C0175730):[aev(C1704731),aev(C1704730)a,ev(C1704474),aev(C1561954),aev(C1547937)]
 % Most will be
 % aev(C0019168):[]
 % meaning that candidate aev(C0019168) had no other candidates
 % with matching Score and PhraseComponents.
 
-find_duplicate_evs(Evs, PrevDuplicates, Duplicates, NoDuplicates) :-
-	  find_duplicate_evs_aux(Evs, PrevDuplicates, Duplicates0),
+find_duplicate_aevs(AEvs, PrevDuplicates, Duplicates, NoDuplicates) :-
+	  find_duplicate_aevs_aux(AEvs, PrevDuplicates, Duplicates0),
 	  separate_dups(Duplicates0, Duplicates, NoDuplicates).
 
 % Partition the list described above into terms showing duplicates, e.g.,
 % aev(C0175730):[aev(C1704731),aev(C1704730),aev(C1704474),aev(C1561954),aev(C1547937)]
 % and terms showing no duplicates, e.g.,
 % aev(C0019168):[]
+% Also, de-augment the aev(_) structures in the terms showing duplicates to
+% ev(C0175730):[ev(C1704731),ev(C1704730),ev(C1704474),ev(C1561954),ev(C1547937)]
 separate_dups([], [], []).
 separate_dups([H|T], Duplicates, NoDuplicates) :-
 	H = ThisAEv:ThisAEvDuplicates,
 	( ThisAEvDuplicates == [] ->
 	  NoDuplicates = [ThisAEv|RestNoDuplicates],
 	  Duplicates = RestDuplicates
-	; Duplicates = [H|RestDuplicates],
+	; deaugment_evaluations([ThisAEv|ThisAEvDuplicates], [ThisEv|ThisEvDuplicates]),
+	  DeaugmentedH = ThisEv:ThisEvDuplicates,
+	  Duplicates = [DeaugmentedH|RestDuplicates],
 	  NoDuplicates = [ThisAEv|RestNoDuplicates]
 	),
 	separate_dups(T, RestDuplicates, RestNoDuplicates).
 
 % This is the looser version, which requires only two features to match:
 % Score, and Phrase Component of MatchMap
-find_duplicate_evs_aux([], Dups, Dups).
-find_duplicate_evs_aux([FirstAEv|RestAEvs], DupsIn, DupsOut) :-
- 	get_ev_info(FirstAEv, NegScore, _PrintVersion, PhrasePositions, _MetaPositions),
+find_duplicate_aevs_aux([], Dups, Dups).
+find_duplicate_aevs_aux([FirstAEv|RestAEvs], DupsIn, DupsOut) :-
+ 	get_aev_info(FirstAEv, NegScore, _PrintVersion, PhrasePositions, _MetaPositions),
 	update_dups(DupsIn, NegScore, PhrasePositions, FirstAEv, DupsNext),
-	find_duplicate_evs_aux(RestAEvs, DupsNext, DupsOut).
+	find_duplicate_aevs_aux(RestAEvs, DupsNext, DupsOut).
 
 
 update_dups([], _NegScore, _PhrasePosCovered, ThisAEv, [ThisAEv:[]]).
-update_dups([FirstDupEv:DupsFound|RestDupEvs], NegScore, PhrasePositions, ThisEv, DupsOut) :-
-	get_ev_info(FirstDupEv, FirstDupNegScore,
+update_dups([FirstDupAEv:DupsFound|RestDupAEvs], NegScore, PhrasePositions, ThisAEv, DupsOut) :-
+	get_aev_info(FirstDupAEv, FirstDupNegScore,
 		    _Print, FirstDupPhrasePositions, _FirstDupMetaPositions),
 	( NegScore =:= FirstDupNegScore,
 	  PhrasePositions == FirstDupPhrasePositions ->
-	  DupsOut = [FirstDupEv:[ThisEv|DupsFound]|RestDupEvs]
-	; DupsOut = [FirstDupEv:DupsFound|RestDupsOut],
-	  update_dups(RestDupEvs, NegScore, PhrasePositions, ThisEv, RestDupsOut)
+	  DupsOut = [FirstDupAEv:[ThisAEv|DupsFound]|RestDupAEvs]
+	; DupsOut = [FirstDupAEv:DupsFound|RestDupsOut],
+	  update_dups(RestDupAEvs, NegScore, PhrasePositions, ThisAEv, RestDupsOut)
 	).
 
 print_duplicate_evs(DuplicateEvs) :-
@@ -2196,7 +2321,7 @@ print_duplicate_evs(DuplicateEvs) :-
 % [C0:Dups0, C1:Dups1, C2:Dups2, ... CN:DupsN], 
 % we need to calculate the sum of the lenghts of all the Dups lists
 % to know how many duplicate candidates we've accumulated.
-get_dup_count(Duplicates, DuplicatesCount) :-
+compute_total_dup_count(Duplicates, DuplicatesCount) :-
 	(  foreach(Dup, Duplicates),
 	   fromto(0, In, Out, DuplicatesCount)
 	do Dup = _:DupList,
@@ -2204,41 +2329,198 @@ get_dup_count(Duplicates, DuplicatesCount) :-
 	   Out is In + DupListLength
 	).
 
-deaugment_all(DuplicateAEvs, DuplicateEvs) :-
-	(  foreach(AEv:DupAEvs, DuplicateAEvs),
-	   foreach(Ev:DupEvs,   DuplicateEvs)
-	do deaugment_one_mapping_evaluation(AEv, Ev),
-	   deaugment_mapping_evaluations(DupAEvs, DupEvs)
+calculate_matrix_sparseness(AEvaluations, PhraseLength, Sparseness) :-
+	length(AEvaluations, CandidateCount),
+	(  foreach(Candidate, AEvaluations),
+	   fromto(0, In, Out, Sum),
+	   param(PhraseLength)
+	do arg(2, Candidate, MinPos),
+	   arg(3, Candidate, MaxPos),
+	   Out is In + MaxPos - MinPos + 1
+	),
+	Sparseness is 100*Sum/(PhraseLength*CandidateCount).
+
+print_candidate_grid(AEvaluations, DuplicateCount, CountWithDuplicates,
+		     NoDuplicateCount, PhraseLength, Sparseness) :-
+	print_candidate_grid_scale(PhraseLength, 0),
+	length(AEvaluations, CandidateCount),
+	( foreach(AugmentedCandidate, AEvaluations),
+	  for(I, 1, CandidateCount),
+	  param(PhraseLength)
+	  do
+	  get_all_aev_features([low,high,negvalue,cui,metawords],
+			       AugmentedCandidate,
+			       [Low,High,NegValue,CUI,MetaWords]),
+	  number_codes(I, Codes),
+	  length(Codes, CodesLength),
+	  Padding is 3 - CodesLength,
+	  format(user_output, '~*c~d ', [Padding,32,I]),
+	  print_candidate_grid_coverage(0, Low, High, CUI, NegValue, MetaWords, PhraseLength)
+	),
+	print_candidate_grid_scale(PhraseLength, 0),
+	announce_grid_data(DuplicateCount, CountWithDuplicates,
+			   NoDuplicateCount, PhraseLength,Sparseness).
+
+
+
+print_candidate_grid_scale(PhraseLength, PrevInteger) :-
+	format(user_output, '    |', []),
+	print_candidate_grid_scale_1(PhraseLength, PrevInteger).
+
+print_candidate_grid_scale_1(PhraseLength, PrevInteger) :-
+	( PhraseLength is 0 ->
+	  format(user_output, '|~n', [])
+	; NextInteger is ( PrevInteger + 1 ) rem 10,
+	  ( NextInteger is 0 ->
+	    Symbol = '|'
+	  ; Symbol is NextInteger
+	  ),
+	  format(user_output, '~w', [Symbol]),
+	  PhraseLengthMinus1 is PhraseLength - 1,
+	  print_candidate_grid_scale_1(PhraseLengthMinus1, NextInteger)
 	).
 
-construct_all_mappings(Evaluations, PhraseTextString, BestAEvaluations, DuplicateEvs, FinalMappings) :-
-	remove_duplicate_evs(Evaluations,
-			     DuplicateEvs, AEvaluationsNoDups,
-			     DuplicateEvCount, NoDuplicatesCount),
-	debug_message(candidates, '~N### ~d Duplicate Candidates~n', [DuplicateEvCount]),
-	debug_message(candidates, '~N### ~d Non-duplicate Candidates~n', [NoDuplicatesCount]),
+announce_grid_data(DuplicateCount, CountWithDuplicates, NoDuplicateCount, PhraseLength,Sparseness) :-
+	TotalCount is DuplicateCount + NoDuplicateCount,
+	format(user_output,
+	       '### Total/# Dups/# w/Dups/# Base/PhraseLength/Sparseness: ', []),
+	format(user_output, '~d/~d/~d/~d/~d/~2f...',
+	       [TotalCount,DuplicateCount,CountWithDuplicates,
+		NoDuplicateCount,PhraseLength,Sparseness]).	
+
+evaluate_candidate_grid([], _DuplicateEvCount, _DuplicateEvsLength,
+			_NoDuplicateCount, _NPhraseWords, _Sparseness).
+% DuplicateCount   == number of total duplicate candidates
+% CountWithDups    == number of candidates having a duplicate
+% NoDuplicateCount == number of candidates after removing duplicates
+evaluate_candidate_grid([H|T], DuplicateCount, CountWithDuplicates,
+			NoDuplicateCount, PhraseLength, Sparseness) :-
+	AEvaluations = [H|T],
+	calculate_matrix_sparseness(AEvaluations, PhraseLength, Sparseness),
+	debug_call(grid, print_candidate_grid(AEvaluations, DuplicateCount,
+					      CountWithDuplicates, NoDuplicateCount,
+					      PhraseLength, Sparseness)).
+
+print_candidate_grid_coverage(CurrPos, MinPos, MaxPos, CUI, NegValue, Words, PhraseLength) :-	
+	CurrPos =< PhraseLength,
+	!,
+	% first position: print '|'
+	( CurrPos =:=  0 ->
+	  Char = '|'
+	% before MinPos: print ' '
+	; CurrPos < MinPos ->
+	  Char = ' '
+	% within the interval: print '*'
+	; CurrPos >= MinPos,
+	  CurrPos =< MaxPos ->
+	  Char = '*'
+	% beyond MaxPos, but not yet at end of phrase: print ' '
+	; CurrPos > MaxPos,
+	  CurrPos =< PhraseLength ->
+	  Char = ' '
+	),
+	format(user_output, '~w', [Char]),
+	NextPos is CurrPos + 1,
+	print_candidate_grid_coverage(NextPos, MinPos, MaxPos, CUI, NegValue, Words, PhraseLength).
+print_candidate_grid_coverage(_CurrPos, _MinPos, _MaxPos, CUI, NegValue, Words, _PhraseLength) :-
+	% reached the end of the phrase: print '|', words, and newline.
+	% All done!
+	PosScore is -1 * NegValue,
+	( PosScore is 1000 ->
+	  Padding = ''
+	; Padding = ' '
+	),	format(user_output, '|  ~w ~w~d ~q~n', [CUI,Padding,PosScore,Words]).
+
+% 25/28/14.00 fails on
+% Phrase: "r-proteins L16-L29-S17-L14-L24-L5-S14-S8-L6-L18-S5-L30-L15-SecY-adenylate
+%          kinase (Adk)-methionine aminopeptidase (Map)-initiation factor 1 
+%          (IF1)-L36-S13-S11-alpha subunit"
+% from PMID 8635744.
+% 24/16/15.36 fails on
+% Phrase: "with ultra-high spatial resolution black blood inner volume three-dimensional
+%         fast spin echo magnetic resonance imaging"
+% from PMID 18080213 with JavaLex
+
+test_candidate_grid_sparseness(AEvaluations, NoDuplicateCount, Sparseness) :-
+	\+ control_option(no_prune),
+	\+ control_option(prune),
+	AEvaluations = [_|_],
+	!,
+	  % If NoDuplicateCount >= 45, fail regardless of anything else
+	( NoDuplicateCount >= 45 ->
+	  % print the "NO", but fail
+ 	  debug_message(grid, 'NO~n',  []), fail
+
+	  % If NoDuplicateCount >= 25 and Sparseness is =< 22...
+	; NoDuplicateCount >= 24,
+	  Sparseness =< 22 ->
+	  % print the "NO", but fail
+ 	  debug_message(grid, 'NO~n',  []), fail
+
+	  % Otherwise, proceed
+	; debug_message(grid, 'YES~n',  [])
+	).
+test_candidate_grid_sparseness(_AEvaluations,_NoDuplicateCount, _Sparseness) :-
+	debug_message(grid, 'OK~n',  []).	
+	
+% RemainingCandidates is the list of candidates remaining after pruning
+mark_pruned_evaluations(AllCandidates, RemainingCandidates) :-
+	(  foreach(Candidate, AllCandidates),
+	   param(RemainingCandidates)
+	do get_candidate_feature(status, Candidate, Status),
+	   ( memberchk(Candidate, RemainingCandidates) ->
+	     Status is 0
+	   ; Status is 2
+	   )
+	).
+
+construct_all_mappings(Evaluations, PhraseTextString, NPhraseWords, Variants,
+		       BestAEvaluations, DuplicateEvs, FinalMappings, PrunedCount) :-
+	augment_evaluations(Evaluations, AEvaluations), 
+	length(Evaluations, EvaluationsCount),
+	get_pruning_threshhold(EvaluationsCount, PruningThreshhold),
+	maybe_prune_aevs(AEvaluations, PruningThreshhold,
+			 PhraseTextString, RemainingAEvaluations, PrunedCount),
+	deaugment_evaluations(RemainingAEvaluations, RemainingEvs),
+	mark_pruned_evaluations(Evaluations, RemainingEvs),	
+	remove_duplicate_aevs(RemainingAEvaluations,
+			      DuplicateEvs, AEvaluationsNoDups,
+			      DuplicateEvCount, NoDuplicateCount),
+	% compute_duplicate_counts(DuplicateEvs, DuplicateCountList, Product),
+	% format(user_output, '### PRODUCT = ~d~n', [Product]), ttyflush,	
+	% DuplicateEvs contains ev(_) structures; AEvaluationsNoDups contains aev(_)s!!
+	debug_call([candidates,grid], length(DuplicateEvs, DuplicateEvsLength)),
+	debug_message(candidates, '~N### ~d Duplicates of ~d Candidates;',
+	      [DuplicateEvCount,DuplicateEvsLength]),
+	debug_message(candidates, ' ~d Base Candidates~n', [NoDuplicateCount]),
 	BestAEvaluations = AEvaluationsNoDups,
-	possibly_prune_aevs(AEvaluationsNoDups, PhraseTextString, PrunedAEvaluations),
+	% Compute mappings' confidence value upstream -- where mappings are first constructed!
+	evaluate_candidate_grid(AEvaluationsNoDups, DuplicateEvCount, DuplicateEvsLength,
+				NoDuplicateCount, NPhraseWords, Sparseness),
+	test_candidate_grid_sparseness(AEvaluationsNoDups, NoDuplicateCount, Sparseness),
+	% !,
 	Depth is 1,
 	MappingsCountIn is 0,
-	expand_aevs(PrunedAEvaluations, Depth, MappingsCountIn, MappingsTree, RawMappingsCount),
-	debug_message(mappings, '~N### Assembling~n', []),
+	debug_call(candidates, length(AEvaluationsNoDups, NoDupsCount)),
+	debug_message(candidates, '### Expanding ~d Candidates~n', [NoDupsCount]),
+	% format(user_output, 'Phrase: "~s"~n', [PhraseTextString]),
+	expand_aevs(AEvaluationsNoDups, Depth, MappingsCountIn, MappingsTree, RawMappingsCount),
+	debug_message(candidates, '~N### Assembling mappings from ~d Candidates~n', [NoDupsCount]),
 	% This is the NEW way of flattening--order is preserved,
 	% and no need for explicit flattening.
-	assemble_all_mappings_dl(MappingsTree, [], [], FlattenedNestedMappings1),
-	% format(user_output, 'M1: ~p~n~nM2: ~p', [FlattenedNestedMappings,FlattenedNestedMappings1]),
-	debug_message(mappings, '~n### ~d Raw Mappings~n', [RawMappingsCount]),	
-	% postprocess_all_mappings_lists(FlattenedNestedMappings1, 1, ChunkSize,
-	% 			       NestedMappingsLength, InitiallyFilteredMappings),
-	% flatten_mappings(InitiallyFilteredMappings, [], FlattenedMappings),
+	% assemble_all_mappings_ds also computes the Confidence Value for each mapping
+	assemble_all_mappings_dl(MappingsTree, NPhraseWords, Variants,
+				 [], [], FlattenedNestedMappings1),
+	debug_message(mappings, '### ~d Raw Mappings~n', [RawMappingsCount]),	
 	debug_call(mappings, length(FlattenedNestedMappings1, FlattenedMappingsLength)),
-	length(FlattenedNestedMappings1, FlattenedMappingsLength),
 	debug_message(mappings,
 		      '~N### Deaugmenting and Reordering ~w mappings~n',
 		      [FlattenedMappingsLength]),
+	maybe_keep_best_mappings_only(FlattenedNestedMappings1, FlattenedNestedMappings2),
 	% Prepending is just an efficiency measure to minimize
 	% the amount of unification done in subsumption testing
-	deaugment_reorder_and_prepend_all_mappings(FlattenedNestedMappings1, Mappings3),
+	% deaugment_reorder_and_prepend_all_mappings(FlattenedNestedMappings1, Mappings3),
+	reorder_and_prepend_all_mappings(FlattenedNestedMappings2, Mappings3),
 	% We want to avoid calling filter_out_subsumed_mappings if possible,
 	% because it's extremely computationally intensive.
 	% Counterintuitively, we must call filter_out_subsumed_mappings
@@ -2250,58 +2532,89 @@ construct_all_mappings(Evaluations, PhraseTextString, BestAEvaluations, Duplicat
 	ChunkSize = 1000,
 	debug_message(mappings, '~N### Filtering out subsumed mappings.~n', []),
  	filter_out_subsumed_mappings_chunked(Mappings3, ChunkSize, FinalMappings0),
-	keys_and_values(FinalMappings0, _Keys, FinalMappings),
-	length(FinalMappings, FinalMappingsCount),
+	remove_prepending_data(FinalMappings0, FinalMappings),
+	% compute_duplicate_mapping_count(FinalMappings, DuplicateCountList, DuplicateMappingsCount),
+	% format(user_output, 'DMC = ~d~n', [DuplicateMappingsCount]),
+	% maybe_keep_best_mappings_only(FinalMappings1, FinalMappings),
+	debug_call(mappings, length(FinalMappings, FinalMappingsCount)),
 	debug_message(mappings,
 		      '### ~d Initial Mappings; ~d Final Mappings~n',
-		      [FlattenedMappingsLength,FinalMappingsCount]).	
+		      [FlattenedMappingsLength,FinalMappingsCount]).
 
-% postprocess_all_mappings_lists([], _N, _ChunkSize, _Mappings0Length, []).
-% postprocess_all_mappings_lists([H|T], N, ChunkSize, Mappings0Length, [NewH|NewT]) :-
-% 	debug_message(trace, '~N### Postprocessing list ~w of ~w~n', [N, Mappings0Length]),
-%         postprocess_one_mappings_list(H, ChunkSize, NewH),
-% 	N1 is N + 1,
-%         postprocess_all_mappings_lists(T, N1, ChunkSize, Mappings0Length, NewT).
-%         
-% postprocess_one_mappings_list(Mappings0, ChunkSize, Mappings4) :-
-%         Mappings0 = [H|_],
-%         ( is_aev_or_ev_term(H) ->
-%           Mappings1 = [Mappings0]
-%         ; Mappings1 = Mappings0
-%         ),
-%         flatten_mappings(Mappings1, [], Mappings2),
-%         deaugment_and_reorder_all_mappings(Mappings2, Mappings3),
-%         filter_out_subsumed_mappings_chunked(Mappings3, ChunkSize, Mappings4).
+remove_prepending_data(MappingsIn, MappingsOut) :-
+	( foreach(Score:_PrependData-Mapping, MappingsIn),
+	  foreach(Score-Mapping, MappingsOut)
+	do
+	  true
+	).
 
-% At this stage, a mapping is a list of aev/14 terms.
-% The Mappings0 variable coming out of assemble_all_mappings/3
-% contains mappings nested to varying depths, so we must flatten the list
-% to create a list of lists of aev/14 terms -- i.e., a list of Mappings.
+compute_duplicate_mapping_count(FinalMappings, DuplicateCountList, DuplicateMappingsCount) :-
+	(  foreach(_Score-CandidateList, FinalMappings),
+	   foreach(Multiplier, MultiplierList),
+	   param(DuplicateCountList)
+	do compute_duplicate_mapping_multiplier(CandidateList, DuplicateCountList, Multiplier)
+	),
+	sumlist(MultiplierList, DuplicateMappingsCount).
 
-% This predicate also has the side effect of reversing the order
-% of the lists, which, mirabile dictu, is actually desireable!
-% flatten_mappings([], FlattenedMappings, FlattenedMappings).
-% flatten_mappings([H|T], FlattenedMappingsIn, FlattenedMappingsOut) :-
-% 	( is_a_mapping(H) ->
-% 	 FlattenedMappingsNext = [H|FlattenedMappingsIn]
-% 	; flatten_mappings(H, FlattenedMappingsIn, FlattenedMappingsNext)
-% 	),
-%         flatten_mappings(T, FlattenedMappingsNext, FlattenedMappingsOut).
-% 
-% % This method keeps mappings in the same order.
-% flatten_mappings_keep([], FlattenedMappings, FlattenedMappings).
-% flatten_mappings_keep([H|T], FlattenedMappingsIn, FlattenedMappingsOut) :-
-% 	( is_a_mapping(H) ->
-% 	  FlattenedMappingsIn = [H|FlattenedMappingsNext]
-% 	; flatten_mappings_keep(H, FlattenedMappingsIn, FlattenedMappingsNext)
-% 	),
-%         flatten_mappings_keep(T, FlattenedMappingsNext, FlattenedMappingsOut).
+compute_duplicate_mapping_multiplier(Mapping, DuplicateCountList, Multiplier) :-
+	(  foreach(Candidate, Mapping),
+	   foreach(DuplicateCount, AllDuplicateCounts),
+	   param(DuplicateCountList)
+	do ( memberchk(Candidate:DuplicateCount, DuplicateCountList) ->
+	     true
+	   ; DuplicateCount is 1
+	   )
+	),
+	list_product(AllDuplicateCounts, Multiplier).
+	
+list_product(List, Product) :-
+	list_product_aux(List, 1, Product).
 
-% is_a_mapping([]).
-% is_a_mapping([H|_T]) :- is_aev_or_ev_term(H).
-% 
-% is_aev_or_ev_term(aev(_,_,_,_,_,_,_,_,_,_,_,_,_,_)).
-% is_aev_or_ev_term(ev(_,_,_,_,_,_,_,_,_,_,_)).
+list_product_aux([], Product, Product).
+list_product_aux([H|T], ProductIn, ProductOut) :-
+	ProductNext is ProductIn * H,
+	list_product_aux(T, ProductNext, ProductOut).
+
+maybe_keep_best_mappings_only(FlattenedNestedMappings1, FlattenedNestedMappings2) :-
+	( \+ control_option(compute_all_mappings) ->
+	   compute_min_mapping_score(FlattenedNestedMappings1, 0, MinScore),
+	   keep_mappings_with_min_score(FlattenedNestedMappings1, MinScore, FlattenedNestedMappings2)
+	; FlattenedNestedMappings2 = FlattenedNestedMappings1
+	).
+
+compute_min_mapping_score([], MinScore, MinScore).
+compute_min_mapping_score([FirstMappingWithScore|RestMappingsWithScore], MinScoreIn, MinScoreOut) :-
+	FirstMappingWithScore = FirstScore-_FirstMapping,
+	( FirstScore < MinScoreIn ->
+	  MinScoreNext is FirstScore
+	; MinScoreNext is MinScoreIn
+	),
+	compute_min_mapping_score(RestMappingsWithScore, MinScoreNext, MinScoreOut).
+
+% Allowing mappings with a score that is within 95% of the MinScore is a fudge,
+% but it's necessary because of "organized obstruction in upper lobe" (with term_processing)
+% This mapping, consisting of three candidates, scores -762
+%   637 C1300196:Organised (Organized) [Functional Concept]
+%   804 C0028778:Obstruction [Pathologic Function]
+%   637 C1428707:Lobe (AKT1S1 gene) [Gene or Genome]
+% but this mapping, consisting of four candidates, scores only -757
+%   637 C1300196:Organised (Organized) [Functional Concept]
+%   804 C0028778:Obstruction [Pathologic Function]
+%   637 C1282910:Upper [Spatial Concept]
+%   637 C1428707:Lobe (AKT1S1 gene) [Gene or Genome]
+% Even though it includes an extra word ("upper").
+% The lower-scoring (-757) mapping subsumes the higher-scoring one.
+% This behavior is anomalous and needs investigating.
+
+keep_mappings_with_min_score([], _MinScore, []).
+keep_mappings_with_min_score([FirstMappingWithScore|RestMappingsWithScore], MinScore, KeptMappings) :-
+	FirstMappingWithScore = FirstScore-_FirstMapping,
+	( FirstScore < 0.95 * MinScore ->
+	  KeptMappings = [FirstMappingWithScore|RestKeptMappings]
+	; KeptMappings = RestKeptMappings
+	),
+	keep_mappings_with_min_score(RestMappingsWithScore, MinScore, RestKeptMappings).
+
 
 % In the description below, "AEv" represents an aev/14 term.
 
@@ -2330,7 +2643,9 @@ expand_aevs([H|T], Depth, MappingsCountIn, MappingsTree, MappingsCountOut) :-
 create_initial_mappings([], []).
 create_initial_mappings([FirstAEv|RestAEvs], [FirstInitMapping|RestInitMappings]) :-
 	% Create a set of init mappings for only the top scoring candidates
-	FirstAEv = aev(PhraseComponents,Low,High,_,_,_,_,_,_,_,_,_,_SrcInfo,_PosInfo),
+	get_all_aev_features([phrasecomponents,low,high],
+			     FirstAEv,
+			     [PhraseComponents,Low,High]),
 	% determine which AEvs in RestAEvs do not interact with FirstAEv
 	find_non_interacting_aevs(RestAEvs, PhraseComponents, Low, High, NonInteractingAEvs),
 	FirstInitMapping = FirstAEv-NonInteractingAEvs,
@@ -2362,14 +2677,17 @@ expand_one_mapping([H|T], AEv, Depth, MappingsCountIn, MappingsCountOut, AEv-Exp
         expand_aevs([H|T], Depth1, MappingsCountIn, ExpandedMappings, MappingsCountOut).
 
 ev_print_version(Ev, PrintEv) :-
-	Ev = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,_SemTypes,
-		_MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,metawords],
+				   Ev,
+				   [NegValue,CUI,MetaTerm,MetaConcept,MetaWords]),
 	PrintEv = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords).
 
 aev_print_version(AEv, PrintAEv) :-
-	AEv = aev(PhraseComponents,Low,High,
-		  NegValue,CUI,MetaTerm,MetaConcept,MetaWords,_SemTypes,
-		  _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+	get_all_aev_features([phrasecomponents,low,high,negvalue,cui,
+			      metaterm,metaconcept,metawords],
+			    AEv,
+			    [PhraseComponents,Low,High,NegValue,CUI,
+			     MetaTerm,MetaConcept,MetaWords]),
 	PrintAEv = aev(PhraseComponents,Low,High,
 		       NegValue,CUI,MetaTerm,MetaConcept,MetaWords).
 
@@ -2388,19 +2706,29 @@ aev_print_version(AEv, PrintAEv) :-
 % assemble_mappings_1([H|T], CurrentMapping, AEvs, Mappings) :-
 %         assemble_all_mappings([H|T], [CurrentMapping|AEvs], Mappings).
 
-assemble_all_mappings_dl([], _AEvs, Mappings, Mappings).
-assemble_all_mappings_dl([H|T], AEvs, MappingsIn, MappingsOut) :-
+assemble_all_mappings_dl([], _NPhraseWords, _Variants, _AEvs, Mappings, Mappings).
+assemble_all_mappings_dl([H|T], NPhraseWords, Variants, AEvs, MappingsIn, MappingsOut) :-
         H = X-Y,
-        assemble_mappings_1_dl(Y, X, AEvs, MappingsIn, MappingsNext),
-        assemble_all_mappings_dl(T, AEvs, MappingsNext, MappingsOut).
+        assemble_mappings_1_dl(Y, X, NPhraseWords, Variants, AEvs, MappingsIn, MappingsNext),
+        assemble_all_mappings_dl(T, NPhraseWords, Variants, AEvs, MappingsNext, MappingsOut).
 
 % A Mapping is a list of aev/14 terms
 % assemble_mappings_1_dl([], Y, AEvs, [Result|Rest], Rest) :-
-assemble_mappings_1_dl([], Y, AEvs, MappingsIn, MappingsOut) :-
-	Result = [Y|AEvs],
-	MappingsOut = [Result|MappingsIn].
-assemble_mappings_1_dl([H|T], CurrentMapping, AEvs, MappingsIn, MappingsOut) :-
-        assemble_all_mappings_dl([H|T], [CurrentMapping|AEvs], MappingsIn, MappingsOut).
+assemble_mappings_1_dl([], Y, NPhraseWords, Variants, AEvs, MappingsIn, MappingsOut) :-
+	ThisMapping = [Y|AEvs],
+	deaugment_evaluations(ThisMapping, DeaugmentedMapping),
+	% ( member(Candidate, DeaugmentedMapping),
+	%   arg(3, Candidate, Word),
+	%   format(user_output, '~w ', [Word]),
+	%   fail
+	% ; nl(user_output)
+	% ),
+	compute_confidence_value(DeaugmentedMapping, NPhraseWords, Variants, NegValue),
+	MappingsOut = [NegValue-DeaugmentedMapping|MappingsIn].
+assemble_mappings_1_dl([H|T], CurrentMapping, NPhraseWords,
+		       Variants, AEvs, MappingsIn, MappingsOut) :-
+        assemble_all_mappings_dl([H|T], NPhraseWords, Variants,
+				 [CurrentMapping|AEvs], MappingsIn, MappingsOut).
 
 aevaluations_interact(PhraseComponents0, Low0, High0,
 		      PhraseComponents1, Low1, High1) :-
@@ -2423,14 +2751,16 @@ xxx
 */
 
 find_non_interacting_aevs([], _FilterPhraseComponents, _FilterLow, _FilterHigh, []).
-find_non_interacting_aevs([First|Rest], FilterPhraseComponents, FilterLow, FilterHigh, Result) :-
-	First = aev(PhraseComponents,Low,High,_,_,_,_,_,_,_,_,_,_SrcInfo,_PosInfo),
+find_non_interacting_aevs([FirstAEv|RestAEvs], FilterPhraseComponents, FilterLow, FilterHigh, Result) :-
+	get_all_aev_features([phrasecomponents,low,high],
+			     FirstAEv,
+			     [PhraseComponents,Low,High]),
 	( aevaluations_interact(PhraseComponents, Low, High,
 				FilterPhraseComponents, FilterLow, FilterHigh) ->
 	  Result = FilteredRest
-	; Result = [First|FilteredRest]
+	; Result = [FirstAEv|FilteredRest]
 	),
-	find_non_interacting_aevs(Rest, FilterPhraseComponents,
+	find_non_interacting_aevs(RestAEvs, FilterPhraseComponents,
 				  FilterLow, FilterHigh, FilteredRest).
 
 /* components_intersect_components(+Components1, +Components2)
@@ -2462,14 +2792,27 @@ spans_overlap/4
 xxx
 */
 
+% There are two possibilities:
+% (1)
+%                 L2                H2
+%                  |-----------------|
+%        L1                H1
+%         |-----------------|
+
+% (2)
+%                 L1                H1
+%                  |-----------------|
+%        L2                H2
+%         |-----------------|
+
 spans_overlap(Low1, High1, Low2, High2) :-
-	( Low1 < Low2,
-	  Low2 < High1,
-	  High1 < High2 ->
+	( Low1 =< Low2,
+	  Low2 =< High1,
+	  High1 =< High2 ->
 	  true
-	; Low2 < Low1,
-	  Low1 < High2,
-	  High2 < High1
+	; Low2 =< Low1,
+	  Low1 =< High2,
+	  High2 =< High1
 	).
 
 /* is_proper_subspan(+Low1, +High1, +Low2, +High2)
@@ -2477,6 +2820,12 @@ spans_overlap(Low1, High1, Low2, High2) :-
 is_proper_subspan/4
 xxx
 */
+
+%   L2                        H2
+%    |-------------------------|
+%          L1          H1
+%           |-----------|
+
 
 is_proper_subspan(Low1, High1, Low2, High2) :-
 	Low2 < Low1,
@@ -2554,19 +2903,18 @@ filter_out_subsumed_mappings(Mappings, ChunkSize, ListCount, NumLists, FilteredM
 	debug_call(trace, length(Mappings, MappingsLength)),
 	debug_message(trace, '~N### Filtering ~w of ~w: ~w',
 		      		[ListCount, NumLists, MappingsLength]),
-	ttyflush,
         filter_out_subsumed_mappings_aux(Mappings, ChunkSize, 0, FilteredMappings),
 	debug_call(trace, length(FilteredMappings, FilteredMappingsLength)),
-	debug_message(trace, ' --> ~w~n', [FilteredMappingsLength]),
-	ttyflush.
+	debug_message(trace, ' --> ~w~n', [FilteredMappingsLength]).
+
 
 filter_out_subsumed_mappings_aux([], _ChunkSize, _N, []).
-filter_out_subsumed_mappings_aux([FirstData-FirstMapping|RestMappings],
+filter_out_subsumed_mappings_aux([FirstScore:FirstData-FirstMapping|RestMappings],
 				 ChunkSize, MappingsFiltered, Result) :-
 	( mapping_is_subsumed(RestMappings, FirstData-FirstMapping) ->
           Result = FilteredRest
 	  % Remove FirstData
-        ; Result = [FirstData-FirstMapping|FilteredRest]
+        ; Result = [FirstScore:FirstData-FirstMapping|FilteredRest]
         ),
 	( MappingsFiltered > 0,
 	  0 is MappingsFiltered mod ChunkSize ->
@@ -2590,7 +2938,7 @@ xxx
 
 */
 
-mapping_is_subsumed([FirstMappingData-_FirstMapping|RestMappings], ThisMappingData-ThisMapping) :-
+mapping_is_subsumed([_Score:FirstMappingData-_FirstMapping|RestMappings], ThisMappingData-ThisMapping) :-
         ( intersection(ThisMappingData, FirstMappingData, ThisMappingData) ->
           true
         ; mapping_is_subsumed(RestMappings, ThisMappingData-ThisMapping)
@@ -2603,42 +2951,43 @@ mapping_is_subsumed([FirstMappingData-_FirstMapping|RestMappings], ThisMappingDa
 
 get_data_for_mapping([], []).
 get_data_for_mapping([FirstEval|RestEvals], [FirstCUI/FirstMS|RestData]) :-
-        FirstEval = ev(_NegValue,FirstCUI,FirstMS,_MetaConcept,_MetaWords,_SemTypes,
-                       _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo),
+	get_all_candidate_features([cui,metaterm], FirstEval, [FirstCUI,FirstMS]),
         get_data_for_mapping(RestEvals, RestData).
 
 
 % This predicate combines the de-augmentation and re-ordering
 % so that the entire list need not be traversed twice.
-deaugment_reorder_and_prepend_all_mappings([], []).
-deaugment_reorder_and_prepend_all_mappings([H|T], [HNew|TNew]) :-
+% Mappings come in as ConfidenceScore-Mapping, and they are transformed to
+% ConfidenceScore:PrependingData-Mappinging (:/2 is the principal function symbol).
+reorder_and_prepend_all_mappings([], []).
+reorder_and_prepend_all_mappings([Score-H|T], [Score:HNew|TNew]) :-
 	% sort(H, SortedH),
 	% deaugment_mapping_evaluations(SortedH, DeAugmentedAndReorderedH),
-	deaugment_mapping_evaluations(H, DeAugmentedH),
-	reorder_mapping(DeAugmentedH, DeAugmentedAndReorderedH),
-	get_data_for_mapping(DeAugmentedAndReorderedH, PrependingData),
-	HNew = PrependingData-DeAugmentedAndReorderedH,
-	deaugment_reorder_and_prepend_all_mappings(T, TNew).
+	reorder_mapping(H, ReorderedH),
+	get_data_for_mapping(ReorderedH, PrependingData),
+	HNew = PrependingData-ReorderedH,
+	reorder_and_prepend_all_mappings(T, TNew).
 	
 
-/* deaugment_mapping_evaluations(+Mapping, -DeaugmentedMapping)
+/* deaugment_evaluations(+Mapping, -DeaugmentedMapping)
 
-deaugment_mapping_evaluations/2
+deaugment_evaluations/2
 xxx
 */
 
-deaugment_mapping_evaluations([], []).
-deaugment_mapping_evaluations([FirstAEv|RestAEvs], [FirstEv|RestEvs]) :-
-	deaugment_one_mapping_evaluation(FirstAEv, FirstEv),
-	deaugment_mapping_evaluations(RestAEvs, RestEvs).
+deaugment_evaluations([], []).
+deaugment_evaluations([FirstAEv|RestAEvs], [FirstEv|RestEvs]) :-
+	deaugment_one_evaluation(FirstAEv, FirstEv),
+	deaugment_evaluations(RestAEvs, RestEvs).
 
-deaugment_one_mapping_evaluation(aev(_PhraseComponents,_Low,_High,
-				     NegValue,CUI,MetaTerm,MetaConcept,
-				     MetaWords,SemTypes,MatchMap,InvolvesHead,
-				     IsOvermatch,SourceInfo,PosInfo),
-				 ev(NegValue,CUI,MetaTerm,MetaConcept,
-				    MetaWords,SemTypes,MatchMap,InvolvesHead,
-				    IsOvermatch,SourceInfo,PosInfo)).
+deaugment_one_evaluation(AEvTerm, EvTerm) :-
+	augmented_candidate_term(_PhraseComponents, _Low, _High, NegValue, CUI, MetaTerm,
+				 MetaConcept, MetaWords, SemTypes, MatchMap,
+				 LSComponents, TargetLSComponent, InvolvesHead,
+				 IsOvermatch, SourceInfo, PosInfo, Status, AEvTerm),
+	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
+		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+		       IsOvermatch, SourceInfo,  PosInfo, Status, EvTerm).
 
 /* reorder_mapping(+Mapping, -OrderedMapping)
 
@@ -2671,16 +3020,12 @@ prepend_phrase_maps_1([H|T], [PrePendedH|PrePendedT]) :-
 	prepend_one_phrase_map(H, PrePendedH),
 	prepend_phrase_maps_1(T, PrePendedT).
 
-prepend_one_phrase_map(ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-			  MatchMap,InvolvesHead,IsOvermatch,SourceInfo,PosInfo),
-		       MatchMap-ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-                                   MatchMap,InvolvesHead,IsOvermatch,SourceInfo,PosInfo)).
-
-prepend_one_phrase_map(MatchMap-ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-                                   MatchMap,InvolvesHead,IsOvermatch,SourceInfo,PosInfo),
-		       ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-			  MatchMap,InvolvesHead,IsOvermatch,SourceInfo,PosInfo)).
-
+prepend_one_phrase_map(EvTerm, MatchMap-EvTerm) :-
+	EvTerm \= _-_,
+	!,
+	get_candidate_feature(matchmap, EvTerm, MatchMap).
+prepend_one_phrase_map(MatchMap-EvTerm, EvTerm) :-
+	get_candidate_feature(matchmap, EvTerm, MatchMap).
 
 /* augment_phrase_with_mappings(+Mappings, +Phrase, +PhraseWordInfoPair, -APhrases)
    augment_lphrase_with_mappings(+Mappings, +LPhrase, +LPhraseMap, +NPhraseWords, -APhrases)
@@ -2696,39 +3041,43 @@ augment_phrase_with_mappings([], _Phrase, _PhraseWordInfoPair, _Variants, []).
 augment_phrase_with_mappings([H|T], Phrase, PhraseWordInfoPair, Variants, APhrases) :-
 	MappingsList = [H|T],
 	PhraseWordInfoPair = _AllPhraseWordInfo:FilteredPhraseWordInfo,
-	PhraseWordInfo = FilteredPhraseWordInfo,
-	PhraseWordInfo = pwi(PhraseWordL, _PhraseHeadWordL, PhraseMap),
+	% PhraseWordInfo = FilteredPhraseWordInfo,
+	FilteredPhraseWordInfo = pwi(PhraseWordL, _PhraseHeadWordL, PhraseMap),
 	PhraseWordL = wdl(_, LCPhraseWords),
 	linearize_phrase(Phrase, PhraseMap, LPhrase, LPhraseMap),
-	% temp
-	%dump_syntax_nicely('apwm LPhrase',LPhrase),
 	length(LCPhraseWords, NPhraseWords),
-	augment_lphrase_with_mappings(MappingsList, LPhrase, LPhraseMap,
+	length(MappingsList, MappingsListLength),
+	augment_lphrase_with_mappings(MappingsList, LPhrase, LPhraseMap, MappingsListLength,
 				      NPhraseWords, Variants, APhrases0),
 	sort(APhrases0, APhrases).
 
-augment_lphrase_with_mappings([], _LPhrase, _LPhraseMap, _NPW, _Vars, []).
-augment_lphrase_with_mappings([FirstMapping|RestMappings], LPhrase, LPhraseMap,
+augment_lphrase_with_mappings([], _LPhrase, _LPhraseMap, _MappingsCount, _NPW, _Vars, []).
+augment_lphrase_with_mappings([FirstMapping|RestMappings], LPhrase, LPhraseMap, MappingsCount,
 			      NPhraseWords, Variants, [AugmentedFirst|AugmentedRest]) :-
-	augment_lphrase_with_mapping(FirstMapping, LPhrase, LPhraseMap,
-				     NPhraseWords, Variants, AugmentedFirst),
-	augment_lphrase_with_mappings(RestMappings, LPhrase, LPhraseMap,
+	augment_lphrase_with_one_mapping(FirstMapping, LPhrase, LPhraseMap,
+					 NPhraseWords, Variants, AugmentedFirst),
+	% !,
+	% ( 0 is MappingsCount mod 1000 ->
+	%   format(user_output, '~d~n', [MappingsCount]),
+	%   ( 0 is MappingsCount mod 100000 ->
+	%     garbage_collect,
+	%     garbage_collect_atoms
+	%   ; true
+	%   )
+	% ; true
+	% ),
+	NextCount is MappingsCount - 1,
+	augment_lphrase_with_mappings(RestMappings, LPhrase, LPhraseMap, NextCount,
 				      NPhraseWords, Variants, AugmentedRest).
 
-augment_lphrase_with_mapping(Mapping, LPhraseIn, LPhraseMapIn, NPhraseWords, Variants, APhrase) :-
-	% temp
-	%dump_syntax_nicely('alwm LPhraseIn',LPhraseIn),
-	augment_lphrase_with_meta_concepts(LPhraseIn,LPhraseMapIn,Mapping,
-					   LPhraseInOut,LPhraseMapInOut),
-	% temp
-	%dump_syntax_nicely('alwm LPhraseInOut',LPhraseInOut),
-	augment_lphrase_with_confidence_value(LPhraseInOut,LPhraseMapInOut,Mapping,
-					      NPhraseWords,LPhraseOut,LPhraseMapOut,
-					      Variants, NegValue),
-	% temp
-	%dump_syntax_nicely('alwm LPhraseOut',LPhraseOut),
-	APhrase=ap(NegValue,LPhraseOut,LPhraseMapOut,Mapping).
-
+augment_lphrase_with_one_mapping(NegValue-Mapping, LPhraseIn, LPhraseMapIn,
+				 _NPhraseWords, _Variants, APhrase) :-
+	augment_lphrase_with_meta_concepts(Mapping, LPhraseIn, LPhraseMapIn,
+					   LPhraseInOut, LPhraseMapInOut),
+	add_confidence_value(LPhraseInOut, NegValue, LPhraseOut),
+	append(LPhraseMapInOut, [[0]], LPhraseMapOut),
+	% format(user_output, 'NegValue == ~d~n', [NegValue]),
+	APhrase = ap(NegValue,LPhraseOut,LPhraseMapOut,Mapping).
 
 /* augment_lphrase_with_meta_concepts(+LPhraseIn, +LPhraseMapIn, +Evaluations,
                                       -LPhraseOut, -LPhraseMapOut)
@@ -2740,38 +3089,55 @@ augment_lphrase_with_meta_concept/5
 xxx
 */
 
-augment_lphrase_with_meta_concepts(LPhraseIn,LPhraseMapIn,[],
-                                   LPhraseIn,LPhraseMapIn) :-
-    !.
-augment_lphrase_with_meta_concepts(LPhraseIn,LPhraseMapIn,[First|Rest],
-                                   LPhraseOut,LPhraseMapOut) :-
-    augment_lphrase_with_meta_concept(LPhraseIn,LPhraseMapIn,First,
-                                      LPhraseInOut,LPhraseMapInOut),
-    augment_lphrase_with_meta_concepts(LPhraseInOut,LPhraseMapInOut,Rest,
-                                       LPhraseOut,LPhraseMapOut).
+augment_lphrase_with_meta_concepts([], LPhraseIn, LPhraseMapIn,
+                                   LPhraseIn, LPhraseMapIn).
+augment_lphrase_with_meta_concepts([FirstConcept|RestConcepts], LPhraseIn, LPhraseMapIn,
+                                   LPhraseOut, LPhraseMapOut) :-
+	augment_lphrase_with_one_meta_concept(LPhraseIn, LPhraseMapIn, FirstConcept,
+					      LPhraseInOut, LPhraseMapInOut),
+	% format(user_output, '~q~n~q~n~n', [LPhraseIn, LPhraseInOut]),
+	augment_lphrase_with_meta_concepts(RestConcepts, LPhraseInOut, LPhraseMapInOut,
+					   LPhraseOut, LPhraseMapOut).
 
-augment_lphrase_with_meta_concept(LPhraseIn,LPhraseMapIn,Evaluation,
-                                  LPhraseOut,LPhraseMapOut) :-
-    %% AHA!!
-    Evaluation = ev(_NegValue,CUI,_MetaTerm,MetaConcept,_MetaWords,SemTypes,
-		    MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-    extract_components(MatchMap,PhraseComponents,_MetaComponents),
-    linearize_components(PhraseComponents,LComponents0),
-    append(LComponents0,LComponents),
-    rev(LComponents,[TargetLComponent|_]),
-    ( var(SemTypes) ->
-      MetaInfo=MetaConcept:CUI
-    ; MetaInfo=MetaConcept:CUI:SemTypes
-    ),
-    join_phrase_items(LPhraseIn,LPhraseMapIn,MetaInfo,
-                      LComponents,TargetLComponent,
-                      LPhraseOut,LPhraseMapOut).
+augment_lphrase_with_one_meta_concept(LPhraseIn, LPhraseMapIn, Evaluation,
+				      LPhraseOut, LPhraseMapOut) :-
+	%% AHA!!
+	get_all_candidate_features([cui,metaconcept,semtypes,lscomponents,targetlscomponent],
+				   Evaluation,
+				   [CUI,MetaConcept,SemTypes,LSComponents,TargetLSComponent]),
+	% compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
+	MetaInfo = MetaConcept:CUI:SemTypes,
+	% Initialize accumulators
+	% RevLexMatch   = [],
+	% RevInputMatch = [],
+	% RevTokens     = [],
+	% RevBases      = [],
+	% get_inputmatch_atoms_from_phrase(LPhraseIn, InputMatchAtoms),
+	% format(user_output, 'Concept:         ~q~n',    [Evaluation]),
+	% format(user_output, 'LSComponents:    ~q/~q~n', [LSComponents,TargetLSComponent]),
+	% format(user_output, 'InputMatchAtoms: ~q~n',    [InputMatchAtoms]),
+	% format(user_output, 'LPhraseMap:      ~q~n~n',  [LPhraseMapIn]),
+	join_phrase_items(LPhraseIn, LPhraseMapIn, MetaInfo,
+			  LSComponents, TargetLSComponent,
+			  LPhraseOut, LPhraseMapOut).
 
+% compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent) :-
+% 	extract_components(MatchMap, PhraseComponents, _MetaComponents),
+% 	linearize_components(PhraseComponents, LSComponents0),
+% 	% LSComponents is a list of integers representing
+% 	% all phrase positions covered by the string in the ev/11 term.
+% 	append(LSComponents0, LSComponents),
+% 	% TargetLSComponent is the last phrase position covered.
+% 	last(LSComponents, TargetLSComponent).
 
-/* join_phrase_items(+LPhraseIn, +LPhraseMapIn, +MetaInfo, +LComponents,
-                     +TargetLComponent, -LPhraseOut, -LPhraseMapOut)
+/* 
+
+Suppose LexMatch starts out as LexMatch, LexMatchTail
+
+   join_phrase_items(+LPhraseIn, +LPhraseMapIn, +MetaInfo, +LSComponents,
+                     +TargetLSComponent, -LPhraseOut, -LPhraseMapOut)
    join_phrase_items(+LPhraseIn, +LPhraseMapIn,
-                     +MetaInfo, +LComponents, +TargetLComponent,
+                     +MetaInfo, +LSComponents, +TargetLSComponent,
                      +RevLexMatch, +RevInputMatch, +RevTokens,
                      -LPhraseOut, -LPhraseMapOut)
 
@@ -2780,139 +3146,236 @@ join_phrase_items/11
 xxx
 */
 
-join_phrase_items(LPhraseIn,LPhraseMapIn,MetaInfo,
-                  LComponents,TargetLComponent,
-                  LPhraseOut,LPhraseMapOut) :-
-    join_phrase_items(LPhraseIn,LPhraseMapIn,MetaInfo,
-                      LComponents,TargetLComponent,[],[],[],[],
-                      LPhraseOut,LPhraseMapOut).
+join_phrase_items(LPhraseIn, LPhraseMapIn, MetaInfo,
+		  LSComponents, TargetLSComponent,
+		  LPhraseOut, LPhraseMapOut) :-
+	join_phrase_items_aux(LPhraseIn, LPhraseMapIn, MetaInfo,
+			      LSComponents, TargetLSComponent,
+			      [[]|LexMatchTail],   LexMatchTail,
+			      [[]|InputMatchTail], InputMatchTail,
+			      [[]|TokensTail],     TokensTail,
+			      [[]|BasesTail],      BasesTail,
+			      LPhraseOut, LPhraseMapOut).
 
-join_phrase_items([FirstItem|RestItems],[[TargetLComponent]|RestLMap],
-                  MetaInfo,LComponents,TargetLComponent,
-                  RevLexMatch,RevInputMatch,RevTokens,RevBases,
-                  [NewFirstItem|RestItems],[LComponents|RestLMap]) :-
-    !,
-    % retrieve accumulated results and finish up
-    get_phrase_item_name(FirstItem,ItemName),
-    get_phrase_item_subitems(FirstItem,Subitems0),
-    get_subitems_feature(Subitems0,lexmatch,NewLexMatch),
-    get_subitems_feature(Subitems0,inputmatch,NewInputMatch),
-    get_subitems_feature(Subitems0,tokens,NewToken),
-    get_subitems_feature(Subitems0,bases,NewBase),
-    (member(NewLexMatch,RevLexMatch) ->
-        NewRevLexMatch=RevLexMatch
-    ;   NewRevLexMatch=[NewLexMatch|RevLexMatch]
-    ),
-    rev(NewRevLexMatch,LexMatchList),
-    append(LexMatchList,LexMatch),
-    (member(NewInputMatch,RevInputMatch) ->
-        NewRevInputMatch=RevInputMatch
-    ;   NewRevInputMatch=[NewInputMatch|RevInputMatch]
-    ),
-    rev(NewRevInputMatch,InputMatchList),
-    append(InputMatchList,InputMatch),
-    NewRevTokens=[NewToken|RevTokens],
-    rev(NewRevTokens,TokenList),
-    append(TokenList,Tokens),
-    NewRevBases=[NewBase|RevBases],
-    rev(NewRevBases,BaseList),
-    append(BaseList,Bases),
-    (LexMatch==[] ->
-        Subitems1 = []
-    ;   set_subitems_feature(Subitems0,lexmatch,LexMatch,Subitems1)
-    ),
-    set_subitems_feature(Subitems1,inputmatch,InputMatch,Subitems2),
-    set_subitems_feature(Subitems2,tokens,Tokens,Subitems3),
-    set_subitems_feature(Subitems3,bases,Bases,Subitems4),
-    set_subitems_feature(Subitems4,metaconc,[MetaInfo],Subitems),
-    new_phrase_item(ItemName,Subitems,NewFirstItem).
-join_phrase_items([FirstItem|RestItems],[[FirstLMapComponent]|RestLMap],
-                  MetaInfo,LComponents,TargetLComponent,
-                  RevLexMatch,RevInputMatch,RevTokens,RevBases,
-                  JoinedRestItems,JoinedRestLMap) :-
-    member(FirstLMapComponent,LComponents),
-    !,
-    % accumulate
-    get_phrase_item_subitems(FirstItem,Subitems),
-    get_subitems_feature(Subitems,lexmatch,NewLexMatch),
-    get_subitems_feature(Subitems,inputmatch,NewInputMatch),
-    get_subitems_feature(Subitems,tokens,NewToken),
-    get_subitems_feature(Subitems,bases,NewBase),
-    (member(NewLexMatch,RevLexMatch) ->
-        NewRevLexMatch=RevLexMatch
-    ;   NewRevLexMatch=[NewLexMatch|RevLexMatch]
-    ),
-    (member(NewInputMatch,RevInputMatch) ->
-        NewRevInputMatch=RevInputMatch
-    ;   NewRevInputMatch=[NewInputMatch|RevInputMatch]
-    ),
-    NewRevTokens=[NewToken|RevTokens],
-    NewRevBases=[NewBase|RevBases],
-    join_phrase_items(RestItems,RestLMap,
-                      MetaInfo,LComponents,TargetLComponent,
-                      NewRevLexMatch,NewRevInputMatch,NewRevTokens,NewRevBases,
-                      JoinedRestItems,JoinedRestLMap).
-join_phrase_items([FirstItem|RestItems],[FirstLMap|RestLMap],
-                  MetaInfo,LComponents,TargetLComponent,
-                  RevLexMatch,RevInputMatch,RevTokens,RevBases,
-                  [FirstItem|JoinedRestItems],[FirstLMap|JoinedRestLMap]) :-
-    % just go on
-    join_phrase_items(RestItems,RestLMap,
-                      MetaInfo,LComponents,TargetLComponent,
-                      RevLexMatch,RevInputMatch,RevTokens,RevBases,
-                      JoinedRestItems,JoinedRestLMap).
+% LSComponents is the linearized phrase positions covered
+% by the string for the concept being worked on, e.g., [1,2,3].
+% TargetLSComponent is the *last* phrase position covered
+% by the string for the concept being worked on, e.g., 3..
 
-/* augment_lphrase_with_confidence_value(+LPhraseIn, +LPhraseMapIn, +Mapping,
-                                        +NPhraseWords, -LPhraseOut,
-                                        -LPhraseMapOut, -NegValue)
+% LP == "Linearized Phrase"
+% LS == "Linearized String"
 
-augment_lphrase_with_confidence_value/7
-xxx
-*/
+% Loop through all the linearized phrase items and their linearized phrase components.
 
-augment_lphrase_with_confidence_value(LPhraseIn,LPhraseMapIn,[],
-				      _NPhraseWords,LPhraseIn,LPhraseMapIn,
-				      _Variants,
-				      -1000) :-
-    !.
-augment_lphrase_with_confidence_value(LPhraseIn, LPhraseMapIn, Mapping,
-				      NPhraseWords, LPhraseOut, LPhraseMapOut,
-				      Variants, NegValue) :-
-    glean_info_from_mapping(Mapping,[],MatchMap0,[],TermLengths,
-                            0,NMetaWords,no,InvolvesHead,
-                            ExtraMetaWords),
-    sort(MatchMap0, MatchMap),
-    % We no longer consolidate MatchMaps because of
-    % the thorny issue of combining the lexical variation components.
-    % MatchMap1 = [MatchMapHead|MatchMapTail],
-    % consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
-    % the connected components are computed in the normal fashion for
-    % the phrase; but for Meta, the components are simply the lengths
-    % of the terms participating in the mapping
-    extract_components(MatchMap,PhraseComponents,_MetaComponents),
-    connect_components(PhraseComponents,PhraseCCs),
-    MetaCCs=TermLengths,
-    MatchCCs=[PhraseCCs,MetaCCs],
-    ( control_value(debug, DebugFlags),
-      memberchk(5, DebugFlags) ->
-      glean_concepts_from_mapping(Mapping,Concepts),
-      format('~n',[]),
-      wl(Concepts),
-      format('~p~n~p~n',[MatchMap,MatchCCs])
-    ; true
-    ),
-    compute_match_value(MatchMap,MatchCCs,NPhraseWords,NMetaWords,
-                        ExtraMetaWords,Variants,
-                        InvolvesHead,Value),
-    ( control_value(debug, DebugFlags),
-      memberchk(5, DebugFlags) ->
-      format('~n',[])
-    ; true
-    ),
-    NegValue is -Value,
-    add_confidence_value(LPhraseIn,Value,LPhraseOut),
-    append(LPhraseMapIn,[[0]],LPhraseMapOut).
+% Is the current linearized phrase position (FirstLPMapComponent) the same as
+% the last linearized phrase position of the string (TargetLSComponent)?
+join_phrase_items_aux([FirstLPItem|RestLPItems], [[TargetLSComponent]|RestLPMap],
+		      MetaInfo, LSComponents,      TargetLSComponent,
+		      LexMatchList, LexMatchTail, InputMatchList, InputMatchTail,
+		      TokensList, TokensTail, _BasesList, _BasesTail,
+		      [NewFirstLPItem|RestLPItems], [LSComponents|RestLPMap]) :-
+	!,	
+	% retrieve accumulated results and finish up
+	% Suppose FirstLPItem is
+	% head([lexmatch([role]),inputmatch([role]),tag(noun),tokens([role])])
+	% Then
+	% ItemName  = head (or mod, verb, etc.)
+	% SubItemsIn = [lexmatch([role]),inputmatch([role]),tag(noun),tokens([role])]
+	get_phrase_item_name(FirstLPItem,     ItemName),
+	get_phrase_item_subitems(FirstLPItem, SubItemsIn),
+	get_all_subitems_features(SubItemsIn, CurrLexMatch, CurrInputMatch, CurrTokens),
+	% get_subitems_feature(SubItemsIn, lexmatch,   CurrLexMatch),
+	% get_subitems_feature(SubItemsIn, inputmatch, CurrInputMatch),
+	% get_subitems_feature(SubItemsIn, tokens,     CurrTokens),
+	% get_subitems_feature(SubItemsIn, bases,      CurrBases),
+	% get_subitems_feature(SubItemsIn, metaconc,   CurrMetaConc),
 
+	( memberchk_var(CurrLexMatch, LexMatchList) ->
+	  LexMatchTail = []
+	; LexMatchTail = [CurrLexMatch]
+	),
+	append(LexMatchList, LexMatch),
+
+	( memberchk_var(CurrInputMatch, InputMatchList) ->
+	  InputMatchTail = []
+	; InputMatchTail = [CurrInputMatch]
+	),
+	append(InputMatchList, InputMatch),
+
+	TokensTail = [CurrTokens],
+	append(TokensList, Tokens),
+
+	% BasesTail = [CurrBases],
+	% append(BasesList, Bases),
+
+	% test_diff(lexmatch,   CurrLexMatch,   LexMatch),
+	% test_diff(inputmatch, CurrInputMatch, InputMatch),
+	% test_diff(tokens,     CurrTokens,     Tokens),
+	% test_diff(bases,      CurrBases,      Bases),
+	% test_diff(metaconc,   CurrMetaConc,   MetaInfo),
+
+	set_all_subitems_features(SubItemsIn, LexMatch, InputMatch, Tokens, MetaInfo, SubItemsOut),
+	%%% call set_subitems_feature only if InputMatch != CurrInputMatch
+	% maybe_set_subitems_feature(SubItems0, lexmatch,   CurrLexMatch,   LexMatch,   SubItems1),
+	% maybe_set_subitems_feature(SubItems1, inputmatch, CurrInputMatch, InputMatch, SubItems2),
+	% maybe_set_subitems_feature(SubItems2, tokens,     CurrTokens,     Tokens,     SubItems3),
+	% set_subitems_feature(SubItems3, metaconc, [MetaInfo], SubItems),
+	% format(user_output, 'SubItems = ~q~n', [SubItems]),
+	new_phrase_item(ItemName, SubItemsOut, NewFirstLPItem).
+
+% If the current linearized phrase position (FirstLPMapComponent)
+% is one of the linearized phrase positions of the string (LSComponent),
+% then add to the accumulators the current lexmatch, inputmatch, tokens, and bases.
+join_phrase_items_aux([FirstLPItem|RestLPItems], [[FirstLPMapComponent]|RestLPMap],
+		      MetaInfo, LSComponents, TargetLSComponent,
+		      LexMatchList, LexMatchTail, InputMatchList, InputMatchTail,
+		      TokensList, TokensTail, _BasesList, _BasesTail,
+		      JoinedRestLPItems, JoinedRestLPMap) :-
+	memberchk(FirstLPMapComponent, LSComponents),
+	!,
+	% accumulate
+	get_phrase_item_subitems(FirstLPItem, SubItems),
+	get_all_subitems_features(SubItems, CurrLexMatch, CurrInputMatch, CurrTokens),
+	% get_subitems_feature(SubItems, lexmatch,   CurrLexMatch),
+	% get_subitems_feature(SubItems, inputmatch, CurrInputMatch),
+	% get_subitems_feature(SubItems, tokens,     CurrTokens),
+	% get_subitems_feature(SubItems, bases,      CurrBases),
+
+	( memberchk_var(CurrLexMatch, LexMatchList) ->
+	  NewLexMatchTail = LexMatchTail
+	; LexMatchTail = [CurrLexMatch|NewLexMatchTail]
+	),
+
+	( memberchk_var(CurrInputMatch, InputMatchList) ->
+	  NewInputMatchTail = InputMatchTail
+	; InputMatchTail = [CurrInputMatch|NewInputMatchTail]
+	),
+
+	TokensTail = [CurrTokens|NewTokensTail],
+
+	% BasesTail = [CurrBases|NewBasesTail],
+
+	join_phrase_items_aux(RestLPItems, RestLPMap,
+			      MetaInfo, LSComponents, TargetLSComponent,
+			      LexMatchList, NewLexMatchTail, InputMatchList, NewInputMatchTail,
+			      TokensList, NewTokensTail, _BasesList, _NewBasesTail,
+			      JoinedRestLPItems, JoinedRestLPMap).
+join_phrase_items_aux([FirstLPItem|RestLPItems], [FirstLPMap|RestLPMap],
+		      MetaInfo, LSComponents, TargetLSComponent,
+		      LexMatchList, LexMatchTail, InputMatchList, InputMatchTail,
+		      TokensList, TokensTail, _BasesList, _BasesTail,
+		      [FirstLPItem|JoinedRestLPItems], [FirstLPMap|JoinedRestLPMap]) :-
+	% Preserve the FirstLPItem and its FirstLPMap unchanged,
+	% because this phrase item did not match the concept.
+	join_phrase_items_aux(RestLPItems, RestLPMap,
+			      MetaInfo, LSComponents, TargetLSComponent,
+			      LexMatchList, LexMatchTail, InputMatchList, InputMatchTail,
+			      TokensList, TokensTail, _BasesList, _BasesTail,
+			      JoinedRestLPItems, JoinedRestLPMap).
+
+% The SubItems list will be of one of these three forms:
+% [lexmatch(_),   inputmatch(_), tag(_), tokens(_)]
+% [inputmatch(_), features(_),   tokens(_)]
+% [inputmatch(_), tag(_),        tokens(_)]
+
+% The next two predicates are ugly, but avoid recursing down the SubItems list.
+get_all_subitems_features(SubItems, LexMatch, InputMatch, Tokens) :-
+	( SubItems = [lexmatch(LexMatch), inputmatch(InputMatch), tag(_), tokens(Tokens)] ->
+	  true
+	; SubItems = [inputmatch(InputMatch), features(_), tokens(Tokens)] ->
+	  LexMatch = []
+	; SubItems = [inputmatch(InputMatch), tag(_), tokens(Tokens)] ->
+	  LexMatch = []
+	  % This shouldn't be needed, but who knows...
+	; get_subitems_feature(SubItems, lexmatch,   LexMatch),
+	  get_subitems_feature(SubItems, inputmatch, InputMatch),
+	  get_subitems_feature(SubItems, tokens,     Tokens)
+	).
+			  
+set_all_subitems_features(SubItemsIn, LexMatch, InputMatch, Tokens, MetaConc, SubItemsOut) :-
+	( SubItemsIn  = [lexmatch(_), inputmatch(_), tag(Tag), tokens(_)] ->	
+	  SubItemsOut = [lexmatch(LexMatch), inputmatch(InputMatch), tag(Tag),
+			 tokens(Tokens), metaconc(MetaConc)]
+	; SubItemsIn  = [inputmatch(_), features(Features), tokens(_)] ->
+	  SubItemsOut = [lexmatch(LexMatch), inputmatch(InputMatch), features(Features),
+			 tokens(Tokens), metaconc(MetaConc)]
+	; SubItemsIn  = [inputmatch(_), tag(Tag),tokens(_)] ->
+	  SubItemsOut = [lexmatch(LexMatch), inputmatch(InputMatch), tag(Tag),
+			 tokens(Tokens), metaconc(MetaConc)]
+	; set_subitems_feature(SubItemsIn, lexmatch,   LexMatch,   SubItems1),
+	  set_subitems_feature(SubItems1,  inputmatch, InputMatch, SubItems2),
+	  set_subitems_feature(SubItems2,  tokens,     Tokens,     SubItems3),
+	  set_subitems_feature(SubItems3,  metaconc,   [MetaConc], SubItemsOut)
+	).
+
+
+% Test for membership of Element in VarList,
+% where VarList may have an uninstantiated tail, e.g., [a,b,c|Rest].
+memberchk_var(Element, VarList) :-
+	nonvar(VarList),
+	( VarList = [Element|_] ->
+	  true
+	; VarList = [_|Rest],
+	  memberchk_var(Element, Rest)
+	).
+
+maybe_set_subitems_feature(SubItemsIn, FeatureName, CurrFeature, NewFeature, SubItemsOut) :-
+	( CurrFeature = NewFeature ->
+	  SubItemsOut = SubItemsIn
+	; NewFeature == [] ->
+	  SubItemsOut = SubItemsIn	    
+	; set_subitems_feature(SubItemsIn, FeatureName, NewFeature, SubItemsOut)
+	).
+
+% test_diff(Feature, CurrFeature, NewFeature) :-
+% 	( CurrFeature == NewFeature ->
+% 	  Result = '='
+% 	; Result = '#'-CurrFeature-NewFeature
+%	),
+% 	format(user_output, 'FEATURE: ~w ~w~n', [Feature,Result]).
+
+compute_confidence_value([], _NPhraseWords, _Variants, -1000).
+compute_confidence_value([H|T], NPhraseWords, Variants, NegValue) :-
+	Mapping = [H|T],
+	glean_info_from_mapping(Mapping, [], MatchMap0, [], TermLengths,
+				0, NMetaWords, no, InvolvesHead, ExtraMetaWords),
+	% format(user_output, '~w~n', [MatchMap0]),
+	sort(MatchMap0, MatchMap),
+	% We no longer consolidate MatchMaps because of
+	% the thorny issue of combining the lexical variation components.
+	% MatchMap1 = [MatchMapHead|MatchMapTail],
+	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
+	% The connected components are computed in the normal fashion for
+	% the phrase; but for Meta, the components are simply the lengths
+	% of the terms participating in the mapping.
+	extract_components(MatchMap, PhraseComponents, _MetaComponents),
+	connect_components(PhraseComponents, PhraseCCs),
+	% sort(MetaComponents, SortedMetaComponents),
+	% connect_components(MetaComponents, NewMetaCCs),
+	MetaCCs = TermLengths,
+	MatchCCs = [PhraseCCs,MetaCCs],
+	maybe_debug_mapping_1(Mapping, MatchMap, MatchCCs),
+	compute_match_value(MatchMap, MatchCCs, NPhraseWords, NMetaWords,
+			    ExtraMetaWords, Variants, InvolvesHead, Value),
+	maybe_debug_mapping_2,
+	NegValue is -Value.
+
+maybe_debug_mapping_1(Mapping, MatchMap, MatchCCs) :-
+	( control_value(debug, DebugFlags),
+	  memberchk(5, DebugFlags) ->
+	  glean_concepts_from_mapping(Mapping, Concepts),
+	  format('~n',[]),
+	  wl(Concepts),
+	  format('~p~n~p~n',[MatchMap,MatchCCs])
+	; true
+	).
+
+maybe_debug_mapping_2 :-
+	( control_value(debug, DebugFlags),
+	  memberchk(5, DebugFlags) ->
+	  format('~n',[])
+	; true
+	).
 
 /* glean_info_from_mapping(+Mapping, +MatchMapIn, -MatchMapOut,
                            +TermLengthsIn, -TermLengthsOut,
@@ -2924,38 +3387,37 @@ glean_info_from_mapping/7
 xxx
 */
 
-glean_info_from_mapping([],MatchMapIn,MatchMapIn,
-                        TermLengthsIn,TermLengthsIn,
-                        NMetaWordsIn,NMetaWordsIn,
-                        InvolvesHeadIn,InvolvesHeadIn,[]).
-glean_info_from_mapping([First|Rest],MatchMapIn,MatchMapOut,
-                        TermLengthsIn,TermLengthsOut,
-                        NMetaWordsIn,NMetaWordsOut,
-                        InvolvesHeadIn,InvolvesHeadOut,ExtraMetaWords) :-
-    First = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
-	       MatchMap0,InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-    modify_matchmap_for_concatenation(MatchMap0,NMetaWordsIn,MatchMap),
-    append(MatchMapIn,MatchMap,MatchMapInOut),
-    length(MetaWords,NMetaWords),
-    append(TermLengthsIn,[NMetaWords],TermLengthsInOut),
-    NMetaWordsInOut is NMetaWordsIn+NMetaWords,
-    (InvolvesHead==yes ->
-        InvolvesHeadInOut=yes
-    ;   InvolvesHeadInOut=InvolvesHeadIn
-    ),
-    compute_extra_meta(MatchMap0,MetaWords,FirstExtra),
-    append(FirstExtra,RestExtra,ExtraMetaWords),
-    glean_info_from_mapping(Rest,MatchMapInOut,MatchMapOut,
-                            TermLengthsInOut,TermLengthsOut,
-                            NMetaWordsInOut,NMetaWordsOut,
-                            InvolvesHeadInOut,InvolvesHeadOut,RestExtra).
+glean_info_from_mapping([], MatchMapIn, MatchMapIn,
+                        TermLengthsIn, TermLengthsIn,
+                        NMetaWordsIn, NMetaWordsIn,
+                        InvolvesHeadIn, InvolvesHeadIn, []).
+glean_info_from_mapping([FirstCandidate|RestCandidates], MatchMapIn, MatchMapOut,
+                        TermLengthsIn, TermLengthsOut,
+                        NMetaWordsIn, NMetaWordsOut,
+                        InvolvesHeadIn, InvolvesHeadOut, ExtraMetaWords) :-
+	get_all_candidate_features([metawords,matchmap,involveshead],
+				   FirstCandidate,
+				   [MetaWords,MatchMap0,InvolvesHead]),
+	modify_matchmap_for_concatenation(MatchMap0, NMetaWordsIn, MatchMap),
+	append(MatchMapIn, MatchMap, MatchMapInOut),
+	length(MetaWords, NMetaWords),
+	append(TermLengthsIn, [NMetaWords], TermLengthsInOut),
+	NMetaWordsInOut is NMetaWordsIn + NMetaWords,
+	( InvolvesHead == yes ->
+	  InvolvesHeadInOut = yes
+	; InvolvesHeadInOut = InvolvesHeadIn
+	),
+	compute_extra_meta(MatchMap0, MetaWords, FirstExtra),
+	append(FirstExtra, RestExtra, ExtraMetaWords),
+	glean_info_from_mapping(RestCandidates, MatchMapInOut, MatchMapOut,
+				TermLengthsInOut, TermLengthsOut,
+				NMetaWordsInOut, NMetaWordsOut,
+				InvolvesHeadInOut, InvolvesHeadOut, RestExtra).
 
-glean_concepts_from_mapping([],[]) :-
-    !.
-glean_concepts_from_mapping([First|Rest],[MetaConcept|RestConcepts]) :-
-    First = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
-	       _MatchMap0,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-    glean_concepts_from_mapping(Rest,RestConcepts).
+glean_concepts_from_mapping([], []).
+glean_concepts_from_mapping([FirstCandidate|RestCandidates], [MetaConcept|RestConcepts]) :-
+	get_candidate_feature(metaconcept, FirstCandidate, MetaConcept),
+	glean_concepts_from_mapping(RestCandidates, RestConcepts).
 
 
 /* modify_matchmap_for_concatenation(+MatchMapIn, +NMetaWords, -MatchMapOut)
@@ -2964,19 +3426,31 @@ modify_matchMap_for_concatenation/3
 xxx
 */
 
-modify_matchmap_for_concatenation(MatchMapIn,0,MatchMapIn) :-
-    !.
-modify_matchmap_for_concatenation([],_NMetaWords,[]).
-modify_matchmap_for_concatenation([[PhraseComponent,MetaComponent,VarLevel]|
-                                   Rest],
+
+modify_matchmap_for_concatenation_NEW(MatchMapIn, NMetaWords, MatchMapOut) :-
+	( NMetaWords =:= 0 ->
+	  MatchMapOut = MatchMapIn
+	; MatchMapIn == [] ->
+	  MatchMapIn = []
+	; MatchMapIn = [[PhraseComponent,MetaComponent,VarLevel]|Rest],
+	  MatchMapOut = [[PhraseComponent,ModifiedMetaComponent,VarLevel]|ModifiedRest],
+	  MetaComponent = [Begin,End],
+	  NewBegin is Begin + NMetaWords,
+	  NewEnd is End + NMetaWords,
+	  ModifiedMetaComponent = [NewBegin,NewEnd],
+	  modify_matchmap_for_concatenation(Rest, NMetaWords, ModifiedRest)
+	).	
+
+modify_matchmap_for_concatenation(MatchMapIn, 0, MatchMapIn) :- !.
+modify_matchmap_for_concatenation([], _NMetaWords, []).
+modify_matchmap_for_concatenation([[PhraseComponent,MetaComponent,VarLevel]|Rest],
                                   NMetaWords,
-                                  [[PhraseComponent,ModifiedMetaComponent,
-                                    VarLevel]|ModifiedRest]) :-
-    MetaComponent=[Begin,End],
-    NewBegin is Begin+NMetaWords,
-    NewEnd is End+NMetaWords,
-    ModifiedMetaComponent=[NewBegin,NewEnd],
-    modify_matchmap_for_concatenation(Rest,NMetaWords,ModifiedRest).
+                                  [[PhraseComponent,ModifiedMetaComponent,VarLevel]|ModifiedRest]) :-
+	MetaComponent = [Begin,End],
+	NewBegin is Begin + NMetaWords,
+	NewEnd is End + NMetaWords,
+	ModifiedMetaComponent = [NewBegin,NewEnd],
+	modify_matchmap_for_concatenation(Rest, NMetaWords, ModifiedRest).
 
 
 /* add_confidence_value(+LPhraseIn, +Value, -LPhraseOut)
@@ -2985,9 +3459,10 @@ add_confidence_value/3
 xxx
 */
 
-add_confidence_value(LPhraseIn,Value,LPhraseOut) :-
-    append(LPhraseIn,[confid(Value)],LPhraseOut).
-
+% Simply cons the confid(_) term rather than appending to save memory
+add_confidence_value(LPhraseIn, Value, LPhraseOut) :-
+	% append(LPhraseIn, [confid(Value)], LPhraseOut).
+	LPhraseOut = [confid(Value)|LPhraseIn].
 
 /* filter_evaluations_by_threshold(+Evaluations, -FilteredEvaluations)
    filter_evaluations_by_threshold(+Evaluations, +Threshold,
@@ -3002,14 +3477,14 @@ filter_evaluations_by_threshold(Evaluations,FilteredEvaluations) :-
     filter_evaluations_by_threshold(Evaluations,NegThreshold,
                                     FilteredEvaluations).
 
-filter_evaluations_by_threshold([],_,[]).
-filter_evaluations_by_threshold([First|_Rest],NegThreshold,[]) :-
-    First = ev(NegValue,_,_,_,_,_,_,_,_,_SourceInfo,_PosInfo),
-    NegValue > NegThreshold,
-    !.
-filter_evaluations_by_threshold([First|Rest],NegThreshold,
-                                [First|FilteredRest]) :-
-    filter_evaluations_by_threshold(Rest,NegThreshold,FilteredRest).
+filter_evaluations_by_threshold([], _, []).
+filter_evaluations_by_threshold([FirstCandidate|_Rest], NegThreshold, []) :-
+	get_candidate_feature(negvalue, FirstCandidate, NegValue),
+	NegValue > NegThreshold,
+	!.
+filter_evaluations_by_threshold([FirstCandidate|RestCandidates], NegThreshold,
+				[FirstCandidate|FilteredRest]) :-
+	filter_evaluations_by_threshold(RestCandidates, NegThreshold, FilteredRest).
 
 
 /* filter_out_redundant_evaluations(+Evaluations, -FilteredEvaluations)
@@ -3041,19 +3516,14 @@ filter_out_redundant_evaluations_aux([First|Rest], Result) :-
 
 WATCH ORDER OF ARGS
 evaluation_is_redundant/2 determines if Evaluation involves the same
-concept and the same phrase involvement as one of Evaluations. 
-In addition, if --allow_duplicate_concept_names is in effect, then the
-CUIs must also match in order for an evaluation to be redundant. */
+concept and the same phrase involvement as one of Evaluations. */
 
-evaluation_is_redundant([ev(_,_,_,MetaConcept,_,_,MatchMap2,_,_,_SourceInfo2,_PosInfo2)|_Rest],
-                         ev(_,_,_,MetaConcept,_,_,MatchMap1,_,_,_SourceInfo1,_PosInfo1)) :-
-	\+ control_option(allow_duplicate_concept_names),
+evaluation_is_redundant([Candidate2|_Rest], Candidate1) :-
+	get_all_candidate_features([metaconcept,matchmap],
+				   Candidate2, [SameMetaConcept,MatchMap2]),
+	get_all_candidate_features([metaconcept,matchmap],
+				   Candidate1, [SameMetaConcept,MatchMap1]),
 	matchmaps_are_equivalent(MatchMap1, MatchMap2),
-	!.
-evaluation_is_redundant([ev(_,CUI,_,MetaConcept,_,_,MatchMap2,_,_,_SourceInfo2,_PosInfo2)|_Rest],
-                         ev(_,CUI,_,MetaConcept,_,_,MatchMap1,_,_,_SourceInfo2,_PosInfo2)) :-
-	control_option(allow_duplicate_concept_names),
-	matchmaps_are_equivalent(MatchMap1,MatchMap2),
 	!.
 evaluation_is_redundant([_First|Rest], Evaluation) :-
 	evaluation_is_redundant(Rest, Evaluation).
@@ -3095,16 +3565,20 @@ evaluation_is_subsumed_aux/3,4
 
 see filter_out_subsumed_evaluations/2 above.  */
 
-evaluation_is_subsumed([H|T],
-                       ev(NegValue,_,_,Concept,_,_SemTypes,MatchMap,_,_,_SourceInfo,_PosInfo)) :-
+evaluation_is_subsumed([H|T], Candidate) :-
+	get_all_candidate_features([negvalue,metaconcept,matchmap],
+				   Candidate,
+				   [NegValue,Concept,MatchMap]),
 	evaluation_is_subsumed_4([H|T], NegValue, Concept, MatchMap).
 
-evaluation_is_subsumed_4([First|Rest], NegValue1, Concept1, MatchMap1) :-
-        First = ev(NegValue2,_,_,_,_,_,MatchMap2,_,_,_SourceInfo,_PosInfo),
+evaluation_is_subsumed_4([FirstCandidate|RestCandidates], NegValue1, Concept1, MatchMap1) :-
+	get_all_candidate_features([negvalue,matchmap],
+				   FirstCandidate,
+				   [NegValue2,MatchMap2]),
         ( NegValue2 < NegValue1,
           matchmaps_are_equivalent(MatchMap1, MatchMap2) ->
           true
-        ; evaluation_is_subsumed_4(Rest, NegValue1, Concept1, MatchMap1)
+        ; evaluation_is_subsumed_4(RestCandidates, NegValue1, Concept1, MatchMap1)
         ).
 
 /* matchmaps_are_equivalent(+MatchMap1, +MatchMap2)
@@ -3129,12 +3603,12 @@ add_semtypes_to_evaluations/1 instantiates the SemTypes argument of ev/8 terms
 in Evaluations.  */
 
 add_semtypes_to_evaluations([]).
-add_semtypes_to_evaluations([ev(_NegScore,CUI,_,_MetaConcept,_,
-				SemTypes,_,_,_,_SourceInfo,_PosInfo)|Rest]) :-
+add_semtypes_to_evaluations([Candidate|RestCandidates]) :-
+	get_all_candidate_features([cui,semtypes], Candidate, [CUI,SemTypes]),
 	% db_get_concept_sts(MetaConcept, SemTypes),
 	db_get_cui_sts(CUI, SemTypes),
 	!,
-	add_semtypes_to_evaluations(Rest).
+	add_semtypes_to_evaluations(RestCandidates).
 
 get_inputmatch_atoms_from_phrase(PhraseElements, InputMatchAtoms) :-
 	get_inputmatch_lists_from_phrase(PhraseElements, InputMatchLists),
@@ -3311,20 +3785,94 @@ check_generate_initial_evaluations_1_control_options_2 :-
 	; xml_output_format(_XMLFormat)      -> true
 	).
 
-% :- use_module(skr_lib(addportray)).
-% portray_candidate(Candidate) :-
-% 	( Candidate = []-[aev(_,_,_,_,CUI,_,_,_,_,_,_,_,_,_)] ->
-% 	  writeq(final(CUI))
-% 	; Candidate = aev(_,_,_,_,CUI,_,_,_,_,_,_,_,_,_) ->
-% 	  writeq(aev(CUI))
-% 	; Candidate = ev(_,CUI,_,_,_,_,_,_,_,_,_) ->
-% 	  writeq(ev(CUI))
-% 	).
-% :- add_portray(portray_candidate).
+% Create AEv term or access its features
+augmented_candidate_term(PhraseComponents, Low, High,
+			 NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
+			 MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+			 IsOvermatch, SourceInfo, PosInfo, Status, AugmentedCandidateTerm) :-
+	AugmentedCandidateTerm = aev(PhraseComponents, Low, High,
+				     NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
+				     MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+				     IsOvermatch, SourceInfo, PosInfo, Status).
 
-% portray_aev([]-[aev(_,_,_,_,CUI,_,_,_,_,_,_,_,_,_)]) :- writeq(final(CUI)).
-% portray_aev(aev(_,_,_,_,CUI,_,_,_,_,_,_,_,_,_)) :- writeq(aev(CUI)).
-% :- add_portray(portray_aev).
-% portray_ev(ev(_,CUI,_,_,_,_,_,_,_,_,_)) :- writeq(ev(CUI)).
-% :- add_portray(portray_ev).
+get_all_aev_features(FeatureList, AEvTerm, FeatureValueList) :-
+	( foreach(ThisFeature, FeatureList),
+	   foreach(ThisFeatureValue, FeatureValueList),
+	   param(AEvTerm)
+	do get_aev_feature(ThisFeature, AEvTerm, ThisFeatureValue)
+	).
 
+get_aev_feature(phrasecomponents, AEvTerm, PhraseComponents) :-
+	AEvTerm = aev(PhraseComponents,_Low,_High,
+		      _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+get_aev_feature(low, AEvTerm, Low) :-
+	AEvTerm = aev(_PhraseComponents,Low,_High,
+		      _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+get_aev_feature(high, AEvTerm, High) :-
+	AEvTerm = aev(_PhraseComponents,_Low,High,
+		      _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+get_aev_feature(negvalue, AEvTerm, NegValue) :-
+	AEvTerm = aev(_PhraseComponents,_Low,_High,
+		      NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+get_aev_feature(cui, AEvTerm, CUI) :-
+	AEvTerm = aev(_PhraseComponents,_Low,_High,
+		      _NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+get_aev_feature(metaterm, AEvTerm, MetaTerm) :-
+	AEvTerm = aev(_PhraseComponents,_Low,_High,
+		      _NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+get_aev_feature(metaconcept, AEvTerm, MetaConcept) :-
+	AEvTerm = aev(_PhraseComponents,_Low,_High,
+		      _NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
+		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+get_aev_feature(metawords, AEvTerm, MetaWords) :-
+	AEvTerm = aev(_PhraseComponents,_Low,_High,
+		      _NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
+		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+get_aev_feature(matchmap, AEvTerm, MatchMap) :-
+	AEvTerm = aev(_PhraseComponents,_Low,_High,
+		      _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		      MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+
+:- use_module(skr_lib(addportray)).
+portray_candidate(Candidate) :-
+	( Candidate = []-[AEvTerm] ->
+	  get_aev_feature(cui, AEvTerm, CUI),
+	  writeq(final(CUI))
+	; Candidate = AEvTerm,
+	  get_aev_feature(cui, AEvTerm, CUI) ->
+	  writeq(aev(CUI))
+	; Candidate = EvTerm,
+	  get_candidate_feature(cui, EvTerm, CUI) ->
+	  writeq(ev(CUI))
+	).
+:- add_portray(portray_candidate).
+
+portray_aev([]-[AEvTerm]) :-
+	!,
+	get_aev_feature(cui, AEvTerm, CUI),
+	writeq(final(CUI)).
+portray_aev(AEvTerm) :-
+	get_aev_feature(cui, AEvTerm, CUI),
+	writeq(final(CUI)).
+:- add_portray(portray_aev).
+
+portray_ev(EvTerm) :-
+	get_candidate_feature(cui, EvTerm, CUI),
+	writeq(ev(CUI)).
+:- add_portray(portray_ev).
+ 

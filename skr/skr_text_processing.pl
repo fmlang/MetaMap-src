@@ -34,9 +34,10 @@
 
 
 :- module(skr_text_processing, [
-	extract_sentences/9,
-	get_skr_text/1,
-	get_skr_text_1/2,
+	extract_sentences/10,
+	get_skr_text/2,
+	get_skr_text_2/2,
+	medline_PMID_indicator_char/1,
 	text_field/1
 	% is_sgml_text/1,
 	% moved from labeler % needed by sgml_extractor?
@@ -48,10 +49,23 @@
     ]).
 
 :- use_module(skr(skr_utilities), [
+	ensure_atom/2,
+	fatal_error/2,
 	skr_begin_write/1,
 	skr_end_write/1,
 	skr_write_string/1
     ]).
+
+:- use_module(skr_lib(ctypes), [
+	is_lower/1,
+	is_white/1
+    ]).
+
+:- use_module(skr_lib(nls_io), [
+	fget_lines_until_skr_break/2,
+	fget_non_ws_only_line/2
+    ]).
+
 
 :- use_module(skr_lib(nls_strings), [
 	replace_nonprints_in_strings/2,
@@ -62,13 +76,8 @@
 	trim_whitespace_right/2
     ]).
 
-:- use_module(skr_lib(ctypes), [
-	is_lower/1
-    ]).
-
-:- use_module(skr_lib(nls_io), [
-	fget_lines_until_skr_break/2,
-	fget_non_ws_only_line/2
+:- use_module(skr_lib(nls_system), [
+	control_option/1
     ]).
 
 
@@ -102,16 +111,39 @@ such SKR breaking points:
 Here, a "blank" line is one containing only whitespace characters (if any).
 get_skr_text/2 has input parameter InputStream. */
 
-get_skr_text(Lines) :-
+get_skr_text(Lines, TextID) :-
 	maybe_print_prompt,
 	current_input(InputStream),
-	get_skr_text_1(InputStream, Lines).
+	get_skr_text_3(InputStream, Lines, TextID).
 
-get_skr_text_1(InputStream, [First|Rest]) :-
+
+get_skr_text_2(InputStream, [First|Rest]) :-
+        fget_non_ws_only_line(InputStream, First),
+        !,
+        fget_lines_until_skr_break(InputStream,Rest).
+get_skr_text_2(_, []).
+
+
+get_skr_text_3(InputStream, [FirstText|Rest], TextID) :-
 	fget_non_ws_only_line(InputStream, First),
 	!,
-	fget_lines_until_skr_break(InputStream,Rest).
-get_skr_text_1(_, []).
+	( control_option(sldi) ->
+	  TextID = '',
+	  FirstText = First,
+	  Rest = []
+	; control_option(sldiID) ->
+	  ( append([TempTextID, "|", TempFirstText], First) ->
+	    Rest = [],
+	    trim_whitespace(TempTextID, TextID),
+	    trim_whitespace(TempFirstText, FirstText)
+	  ; fatal_error('~nERROR: The sldiID requires input lines of the form ID|Text\n', []),
+	    halt
+	  )
+	 ; TextID = '',
+	  FirstText = First,
+	  fget_lines_until_skr_break(InputStream, Rest)
+	).
+get_skr_text_3(_, [], '').
 
 % print the "|:" read prompt iff MetaMap is being used interactively,
 % i.e., the user is interactively typing in input.
@@ -171,7 +203,7 @@ acronym/abbreviation discovery.
 
 */
 
-extract_sentences(Lines0, InputType, TextFields, NonTextFields,
+extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
 		  Sentences, CoordinatedSentences, AAs, UDA_AVL, Lines) :-
 	replace_tabs_in_strings(Lines0, Lines1),
 	replace_nonprints_in_strings(Lines1, Lines2),
@@ -186,7 +218,7 @@ extract_sentences(Lines0, InputType, TextFields, NonTextFields,
 					 AAs, UDAList, UDA_AVL),
 	  InputType = smart,
 	  NonTextFields = []
-	; form_dummy_citation(Lines2, CitationLines),
+	; form_dummy_citation(Lines2, TextID, CitationLines),
 	  extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
 					    AAs, UDAList, UDA_AVL),
@@ -195,15 +227,26 @@ extract_sentences(Lines0, InputType, TextFields, NonTextFields,
 	update_strings_with_UDAs(Lines2, UDAList, Lines),
 	!.
 
+
+medline_PMID_indicator_char(0'-).
+medline_PMID_indicator_char(0'|).
+medline_PMID_indicator_char(0':).
+medline_PMID_indicator_char(0'.).
+
 is_medline_citation([First|_]) :-
-	split_string_completely(First, " ", Tokens0),
+	medline_PMID_indicator_char(Char),
+	split_string_completely(First, [Char], Tokens0),
+	% split into at least two tokens
+	Tokens0 = [_,_|_],	
 	remove_nulls(Tokens0, Tokens),
 	Tokens = [String1, String2|_],
 	lower_chars(String1, LowerString1),
-	atom_codes(LowerAtom1, LowerString1),
+	trim_whitespace(LowerString1, TrimmedLowerString1),
+	atom_codes(LowerAtom1, TrimmedLowerString1),
 	lower_chars(String2, LowerString2),
 	atom_codes(LowerAtom2, LowerString2),
-	medline_citation_indicator(LowerAtom1, LowerAtom2).
+	medline_citation_indicator(LowerAtom1, LowerAtom2),
+	!.
 
 remove_nulls([], []).
 remove_nulls([First|Rest], Result) :-
@@ -213,8 +256,17 @@ remove_nulls([First|Rest], Result) :-
 	),
 	remove_nulls(Rest, RestResult).
 
+medline_citation_indicator('pmid',  _).
 medline_citation_indicator('pmid-', _).
-medline_citation_indicator(pmid,  '-').
+medline_citation_indicator('pmid|', _).
+medline_citation_indicator('pmid:', _).
+medline_citation_indicator('pmid.', _).
+
+% medline_citation_indicator(pmid,  '-').
+% medline_citation_indicator(pmid,  '|').
+% medline_citation_indicator(pmid,  ':').
+% medline_citation_indicator(pmid,  '.').
+
 medline_citation_indicator(ui,    '-').
 medline_citation_indicator('ui-',   _).
 
@@ -225,9 +277,16 @@ is_smart_fielded([First,_|_]) :-
 
 form_dummy_citation/1 turns Lines into a pseudo MEDLINE field, TX. */
 
-form_dummy_citation([], []).
-form_dummy_citation([First|Rest], ["UI  - 00000000",ModifiedFirst|PaddedRest]) :-
-	append("TX  - ", First, ModifiedFirst),
+form_dummy_citation(Lines, TempTextID, CitationLines) :-
+	set_text_id_and_field_type(TempTextID, TextID, FieldType),
+	form_dummy_citation_aux(Lines, TextID, FieldType, CitationLines).
+
+form_dummy_citation_aux([], _TextID, _FieldType, []).
+form_dummy_citation_aux([First|Rest], TextID, FieldType, [PseudoField,ModifiedFirst|PaddedRest]) :-
+	ensure_atom(TextID, TextIDAtom),
+	atom_codes(TextIDAtom, TextIDCodes),
+	append("UI  - ", TextIDCodes, PseudoField),
+	append([FieldType, "  - ", First], ModifiedFirst),
 	padding_string(Padding),
 	pad_lines(Rest, Padding, PaddedRest),
 	!.
@@ -238,6 +297,15 @@ pad_lines([First|Rest], Padding, [PaddedFirst|PaddedRest]) :-
 	pad_lines(Rest, Padding, PaddedRest).
 
 padding_string("      ").
+
+
+set_text_id_and_field_type(TempTextID, TextID, FieldType) :-
+	( TempTextID == '' ->
+	  TextID = '00000000',
+	  FieldType = "TX"
+	; TextID = TempTextID,
+	  FieldType = "TX"
+	).
 
 /* 
    extract_coord_sents_from_citation(+CitationLines, -TextFields, -NonTextFields,
@@ -328,8 +396,8 @@ extract_all_fields([FirstLine|RestLines], CitationFields) :-
 	!,
 	extract_all_fields_4(FieldID, FirstFieldLine, RestLines, CitationFields).
 extract_all_fields([FirstLine|RestLines], CitationFields) :-
-	format('WARNING: The following line should begin a field but does not:~n', []),
-	format('~s~nIt is being ingored.~n~n', [FirstLine]),
+	format(user_output, 'WARNING: The following line should begin a field but does not:~n', []),
+	format(user_output, '~s~nIt is being ingored.~n~n', [FirstLine]),
 	extract_all_fields(RestLines, CitationFields).
 
 extract_all_fields_4(none, _FirstFieldLine, _RestLines, []) :- !.
@@ -404,7 +472,7 @@ f_begins_field(FR) -->
 
 % Cleaned-up DCG version
 f_dense_token(T) -->
-	[Char], { \+ Char == 0' }, { \+ Char == 0'- },
+	[Char], { \+ Char == 0' }, { \+ medline_PMID_indicator_char(Char) },
 	( f_dense_token(U) ->
 	  { T = [Char|U] }
 	; { T = [Char] }
@@ -416,7 +484,7 @@ f_dense_token(T) -->
 %                  |   [Char], {\+Char==0' }, {\+Char==0'-}, {T = [Char]}.
 
 % Non-DCG version
-% f_separator(S,A,B) :-
+% f_separatorS,A,B) :-
 % 	( A = [32,45,32|C],
 % 	  f_blanks(Blanks,C,D) ->
 % 	  S = [32,45,32|Blanks],
@@ -433,13 +501,20 @@ f_dense_token(T) -->
 
 % Cleaned-up DCG version
 f_separator(S) -->
-	( " - ", f_blanks(B) ->
-	  { S = [32,45,32|B] }
-	; "- ",  f_blanks(B) ->
-	  { S = [45,32|B] }
-	; " ",   f_separator(V) ->
-	  { S = [32|V] }
-	).
+	f_blanks(_B1),
+	[Char],
+	{ medline_PMID_indicator_char(Char) },
+	f_blanks(_B2),
+	{ S = Char }.
+
+% f_separator(S) -->
+% 	( " - ", f_blanks(B) ->
+% 	  { S = [32,45,32|B] }
+% 	; "- ",  f_blanks(B) ->
+% 	  { S = [45,32|B] }
+% 	; " ",   f_separator(V) ->
+% 	  { S = [32|V] }
+%	).% 
 
 % Original DCG version
 % f_separator(S) --> [0' ,0'-,0' ], f_blanks(B), !, {S = [0' ,0'-,0' |B]}
@@ -459,7 +534,7 @@ f_separator(S) -->
 
 % Cleaned-up DCG version
 f_blanks(B) -->
-	( " " ->
+	( [Char], { is_white(Char) } ->
 	  f_blanks(C), { B = [32|C] }
 	; { B = [] }
 	).

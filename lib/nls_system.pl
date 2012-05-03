@@ -77,7 +77,7 @@
 	split_atom_completely/3
     ]).
 
-:- use_module(skr_db(db_access), [
+:- use_module(skr(skr_utilities), [
 	fatal_error/2
     ]).
 
@@ -152,12 +152,12 @@ is_control_option(metamap, 'S', tagger, no,
                   aspec(tagger, mandatory, none, none, no_default,
                         'Which tagger to use')).
 is_control_option(metamap, 'T', tagger_output, 			no, none).
-is_control_option(metamap, 'U', allow_duplicate_concept_names,  no, none).
+% is_control_option(metamap, 'U', allow_duplicate_concept_names,  no, none).
 is_control_option(metamap, 'V', mm_data_version, no,
                   aspec(mm_data_version, mandatory, none, none, no_default,
                         'Version of MetaMap data to use')).
-is_control_option(metamap, 'W', preferred_name_sources,  	no, none).
-is_control_option(metamap, 'X', truncate_candidates_mappings, 	no, none).
+% is_control_option(metamap, 'W', preferred_name_sources,  	no, none).
+% is_control_option(metamap, 'X', truncate_candidates_mappings, 	no, none).
 is_control_option(metamap, 'Y', prefer_multiple_concepts, 	no, none).
 is_control_option(metamap, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
@@ -212,12 +212,19 @@ is_control_option(metamap,  '', min_length, 	 no,
                   aspec(min_length, mandatory, integer, none, no_default,
                         'Minimum length of concept name')).
 is_control_option(metamap,  '', phrases_only, 	 	 	no, none).
-is_control_option(metamap,  '', apostrophe_s_contraction, 	no, none).
+% is_control_option(metamap,  '', apostrophe_s_contraction, 	no, none).
 is_control_option(metamap,  '', warnings, 	 	 	no, none).
+is_control_option(metamap,  '', mappings_limit, no,
+                  aspec(mappings_limit, mandatory, integer, none, no_default,
+                        'Max number of mappings to allow before backtracking into pruning')).
 is_control_option(metamap,  '', no_prune,	 	 	no, none).
 is_control_option(metamap,  '', prune, no,
                   aspec(prune, mandatory, integer, none, no_default,
-                        'Max num of candidates to allow before pruning')).
+                        'Max number of candidates to allow before pruning')).
+% sldi == "Single-Line Delimited Input"
+is_control_option(metamap,  '', sldi,	 	 		no, none).
+% sldiID == "Single-Line Delimited Input with ID"
+is_control_option(metamap,  '', sldiID,	 	 		no, none).
 % is_control_option(metamap,  '', restore, 	 	 	no, none).
 is_control_option(metamap,  '', 'UDA',   			no,
 		  aspec('UDA', mandatory, file, read, no_default, 'File containing UDAs')).
@@ -226,9 +233,15 @@ is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLn1',		 	no, none).
 
-% is_control_option(metamap,  '', lexicon, no,
-%                   aspec(lexicon, mandatory, 'c or java', none, no_default,
-%                         'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
+is_control_option(metamap,  '', lexicon, no,
+                   aspec(lexicon, mandatory, none, none, no_default,
+                         'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
+
+is_control_option(metamap,  '', javalex, no,
+                   aspec(javalex, mandatory, integer, none, no_default,
+                         'Year of lexAccess to use (2010 or 2011)')).
+
+
 % is_control_option(metamap,  '', clfi, no,
 %                   aspec(clfi, mandatory, 'c or java', none, no_default,
 %                         'Whether to use original C code or lexAccess version of lex_form_input')).
@@ -572,6 +585,10 @@ is_control_option(mm_variants, 'V', mm_data_version, no,
 is_control_option(mm_variants, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
                         'Year of MetaMap data to use')).
+is_control_option(mm_variants,  '', lexicon, no,
+                   aspec(lexicon, mandatory, none, none, no_default,
+                         'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
+
 
 is_control_option(phrasex,t,tag_text,yes,none).
 is_control_option(phrasex,h,help,no,none).
@@ -870,7 +887,7 @@ display_one_control_option(Option) :-
 	).
 
 display_mandatory_metamap_options :-
-	format('Mandatory arguments:~n', []),
+	format('Options with mandatory arguments:~n', []),
 	findall(LongOptionName-LongOptionNameLength:Description,
 		( is_control_option(metamap,_ShortOptionName,LongOptionName,_IsDefault,
 				    aspec(LongOptionName,mandatory,
@@ -1028,7 +1045,7 @@ possibly_environ(EnvironVar, Value) :-
 update_command_line([], Args, _Program, [], Args).
 update_command_line([FirstOption|RestOptions], ArgsIn, Program, OptionsOut, ArgsOut) :-
 	% If the first option is repeated,
-	( repeated_control_option(Program, FirstOption, RestOptions) ->
+	( repeated_control_option(Program, FirstOption, ArgsIn, RestOptions) ->
 	% discard it by simply recursing on the final output variable OptionsOut
 	  OptionsOut = OptionsOutRest,
 	% and possibly remove the first arg
@@ -1043,19 +1060,42 @@ update_command_line([FirstOption|RestOptions], ArgsIn, Program, OptionsOut, Args
 set_rest_args([], [], [], _).
 set_rest_args([FirstArg|RestArgs], RestArgs, [FirstArg|ArgsOutRest], ArgsOutRest).
 	
-repeated_control_option(Program, FirstOption, RestOptions) :-
+repeated_control_option(Program, FirstOption, ArgsIn, RestOptions) :-
 	member(OtherOption, RestOptions),
 	equivalent_control_options(Program, FirstOption, OtherOption),
 	!,
-	format(user_output, 'WARNING: Option ~w overridden by option ~w.~n', [FirstOption, OtherOption]).
+	short_or_long_hyphens(Program, FirstOption, FirstOptionHyphens),
+	short_or_long_hyphens(Program, OtherOption, OtherOptionHyphens),
+	( option_requires_arg(Program, FirstOption) ->
+	  ArgsIn = [Value1,Value2|_],
+	  format(user_output, 'WARNING: Option "~w~w ~w" overridden by option "~w~w ~w".~n',
+		 [FirstOptionHyphens,FirstOption,Value1,OtherOptionHyphens,OtherOption,Value2])
+	; format(user_output, 'WARNING: Option "~w~w" overridden by option "~w~w".~n',
+		 [FirstOptionHyphens,FirstOption,OtherOptionHyphens,OtherOption])
+	).	
 
 equivalent_control_options(Program, Option1, Option2) :-
 	( Option1 == Option2 ->
 	  true
+	  %                          Short    Long
 	; is_control_option(Program, Option1, Option2, _, _) ->
 	  true
-	; is_control_option(Program, Option1, Option2, _, _) ->
+	; is_control_option(Program, Option2, Option1, _, _) ->
 	  true
+	).
+
+short_or_long_hyphens(Program, Option, OptionHyphens) :-
+	( is_control_option(Program, Option, _, _, _) ->
+	  OptionHyphens = '-'
+	; is_control_option(Program, _, Option, _, _) ->
+	  OptionHyphens = '--'
+	).
+
+option_requires_arg(Program, Option) :-
+	( is_control_option(Program, Option, _, _, ArgSpec) ->
+	  compound(ArgSpec)
+	; is_control_option(Program, _, Option, _, ArgSpec) ->
+	  compound(ArgSpec)
 	).
 
 % possibly_remove_first_arg(ArgsIn, FirstOption, Program, RestArgs, ArgsOut, ArgsOutRest)

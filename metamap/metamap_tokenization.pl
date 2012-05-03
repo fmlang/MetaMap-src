@@ -97,10 +97,6 @@
 	is_all_graphic_text/1
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
-	ttyflush/0
-    ]).
-
 :- use_module(skr(skr_utilities),[
 	token_template/6
     ]).
@@ -475,47 +471,60 @@ filter_tokens_2([_First|Rest], FilteredRest) :-
    linearize_component(+Component, -LComponent)
    linearize_component(+Begin, +End, -LComponent)
 
-linearize_phrase/4 chops up Phrase (and PhraseMap) into LPhrase (and
-LPhraseMap) so that each element of the map is a singleton.  Chopping is
-performed on both the map itself and the tokens/1 terms of the phrase.
+linearize_phrase/4 chops up Phrase (and PhraseMap) into LPhrase (and LPhraseMap)
+so that each element of the map is a singleton.  Chopping is performed on both
+the map itself as well as on the inputmatch/1 and tokens/1 terms of the phrase
+(but not the lexmatch/1 terms).
+
 For example, given text "Fifty-six vena caval stent filters.",
-     Phrase: [shapes([inputmatch([Fifty,-,six]),
-                      features([word_numeral]),
-                      tokens([fifty,six])]),
-              mod([lexmatch([vena caval]),
-                   inputmatch([vena,caval]),
-                   tokens([vena,caval])]),
-              mod([lexmatch([stent]),
-                   inputmatch([stent]),
-                   tokens([stent])]),
-              head([lexmatch([filters]),
-                    inputmatch([filters]),
-                    tokens([filters])]),
-              punc([inputmatch([.]),
-                    tokens([.])])]
-  PhraseMap: [[1,2],[3,4],[5,5],[6,6],[0,-1]]
-is linearized to
-    LPhrase: [shapes([inputmatch([Fifty,-,six]),
-                      features([word_numeral]),
-                      tokens([fifty])]),
-              shapes([inputmatch([Fifty,-,six]),
-                      features([word_numeral]),
-                      tokens([six])]),
-              mod([lexmatch([vena caval]),
-                   inputmatch([vena,caval]),
-                   tokens([vena])]),
-              mod([lexmatch([vena caval]),
-                   inputmatch([vena,caval]),
-                   tokens([caval])]),
-              mod([lexmatch([stent]),
-                   inputmatch([stent]),
-                   tokens([stent])]),
-              head([lexmatch([filters]),
-                    inputmatch([filters]),
-                    tokens([filters])]),
-              punc([inputmatch([.]),
-                    tokens([.])])]
- LPhraseMap: [[1],[2],[3],[4],[5],[6],[0]]
+
+     Phrase: [shapes([inputmatch(['Fifty',-,six]),
+		      features([word_numeral]),
+		      tokens([fifty,six])]),
+	      mod([lexmatch(['vena caval']),
+		   inputmatch([vena,caval]),
+		   tag(adj),
+		   tokens([vena,caval])]),
+	      mod([lexmatch([stent]),
+		   inputmatch([stent]),
+		   tag(noun),
+		   tokens([stent])]),
+	      head([lexmatch([filters]),
+		    inputmatch([filters]),
+		    tag(noun),
+		    tokens([filters])]),
+	      punc([inputmatch(['.']),
+		    tokens([])])]
+
+     PhraseMap: [[1,2],[3,4],[5,5],[6,6],[0,-1]]
+     is linearized to
+
+     LPhrase: [shapes([inputmatch(['Fifty',-]),
+		      features([word_numeral]),
+		      tokens([fifty])]),
+	      shapes([inputmatch([six]),
+		      features([word_numeral]),
+		      tokens([six])]),
+	      mod([lexmatch(['vena caval']),
+		   inputmatch([vena]),
+		   tag(adj),
+		   tokens([vena])]),
+	      mod([lexmatch(['vena caval']),
+		   inputmatch([caval]),
+		   tag(adj),
+		   tokens([caval])]),
+	      mod([lexmatch([stent]),
+		   inputmatch([stent]),
+		   tag(noun),
+		   tokens([stent])]),
+	      head([lexmatch([filters]),
+		    inputmatch([filters]),
+		    tag(noun),
+		    tokens([filters])]),
+	      punc([inputmatch(['.']),
+		    tokens([])])]
+
+     LPhraseMap: [[1],[2],[3],[4],[5],[6],[0]]
 
 linearize_phrase_item/4
 linearize_phrase_item/5
@@ -576,9 +585,9 @@ linearize_phrase_item_7([], _PhraseItem, [], [], [], [], []) :- !.
 linearize_phrase_item_7([FirstMap|RestMap], PhraseItem, [FirstToken|RestTokens],
 			[FirstIM|RestIM], [FirstBase|RestBases],
 			[FirstLItem|RestLItems], [[FirstMap]|RestLMap]) :-
-	set_phrase_item_feature(PhraseItem, tokens, [FirstToken], FirstLItem0),
-	set_phrase_item_feature(FirstLItem0, inputmatch, FirstIM,  FirstLItem1),
-	set_phrase_item_feature(FirstLItem1, bases, FirstBase, FirstLItem2),
+	set_phrase_item_feature(PhraseItem,  tokens,     [FirstToken], FirstLItem0),
+	set_phrase_item_feature(FirstLItem0, inputmatch, FirstIM,      FirstLItem1),
+	set_phrase_item_feature(FirstLItem1, bases,      FirstBase,    FirstLItem2),
 	( RestMap == [] ->
 	  FirstLItem = FirstLItem2
 	; demote_phrase_item(FirstLItem2,FirstLItem)
@@ -606,7 +615,7 @@ linearize_components([First|Rest], [LFirst|LRest]) :-
 	linearize_component(First, LFirst),
 	linearize_components(Rest, LRest).
 
-linearize_component([Begin,Begin], [Begin]) :-    !.
+linearize_component([Begin,Begin], [Begin]) :- !.
 linearize_component([Begin,End], [0]) :-
 	Begin > End,
 	!.
@@ -823,22 +832,16 @@ tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 % will instantiate TokField0 to ["finkelstein", "'", "s", " ", "test", " ", "positive"].
 % MetaMap's (new!) default behavior is to reattach the "'s"  to the previous token.
 
-re_attach_apostrophe_s_tokens(FieldsIn, FieldsOut) :-
-	( control_option(apostrophe_s_contraction) ->
-	  FieldsOut = FieldsIn
-	; re_attach_apostrophe_s_tokens_aux(FieldsIn, FieldsOut)
-	).
-
-re_attach_apostrophe_s_tokens_aux([], []).
-re_attach_apostrophe_s_tokens_aux(TokField0, TokField) :-
-	TokField0 = [OrigString, "'", "s", " " | Rest],
+re_attach_apostrophe_s_tokens([], []).
+re_attach_apostrophe_s_tokens(TokField0, TokField) :-
+	TokField0 = [OrigString, "'", "s" | Rest],
 	\+ no_reattach_string(OrigString),
 	!,
 	append([OrigString, "'", "s"], StringWithApostropheS),
-	TokField = [StringWithApostropheS, " " | RestTokField],
-	re_attach_apostrophe_s_tokens_aux(Rest, RestTokField).
-re_attach_apostrophe_s_tokens_aux([H|Rest], [H|NewRest]) :-
-	re_attach_apostrophe_s_tokens_aux(Rest, NewRest).
+	TokField = [StringWithApostropheS | RestTokField],
+	re_attach_apostrophe_s_tokens(Rest, RestTokField).
+re_attach_apostrophe_s_tokens([H|Rest], [H|NewRest]) :-
+	re_attach_apostrophe_s_tokens(Rest, NewRest).
 
 % succeeds if OrigString (the string representation of the previous token)
 % is a string to which the following "'s" (apostrophe-s) should not be re-attached.
@@ -1106,50 +1109,50 @@ set_subitems_feature/4
 xxx
 */
 
-get_phrase_item_feature(PhraseItem,Feature,FeatureValue) :-
-    get_phrase_item_subitems(PhraseItem,Subitems),
-    get_subitems_feature(Subitems,Feature,FeatureValue).
+get_phrase_item_feature(PhraseItem, Feature, FeatureValue) :-
+	get_phrase_item_subitems(PhraseItem, Subitems),
+	get_subitems_feature(Subitems, Feature, FeatureValue).
 
-get_phrase_item_name(PhraseItem,ItemName) :-
-    functor(PhraseItem,ItemName,1).
+get_phrase_item_name(PhraseItem, ItemName) :-
+	functor(PhraseItem, ItemName, 1).
 
-get_phrase_item_subitems(PhraseItem,Subitems) :-
-    arg(1,PhraseItem,Subitems).
+get_phrase_item_subitems(PhraseItem, Subitems) :-
+	arg(1, PhraseItem, Subitems).
 
 new_phrase_item(ItemName,Subitems,PhraseItem) :-
-    functor(PhraseItem,ItemName,1),
-    arg(1,PhraseItem,Subitems).
+	functor(PhraseItem, ItemName, 1),
+	arg(1, PhraseItem, Subitems).
 
-get_subitems_feature([],_,[]).  % return [] for non-existing feature
-get_subitems_feature([First|_Rest],Feature,FeatureValue) :-
-    get_subitem_name(First,Feature),
-    !,
-    get_subitem_value(First,FeatureValue).
-get_subitems_feature([_First|Rest],Feature,FeatureValue) :-
-    get_subitems_feature(Rest,Feature,FeatureValue).
+get_subitems_feature([], _, []).  % return [] for non-existing feature
+get_subitems_feature([First|_Rest], Feature, FeatureValue) :-
+	get_subitem_name(First, Feature),
+	!,
+	get_subitem_value(First, FeatureValue).
+get_subitems_feature([_First|Rest], Feature, FeatureValue) :-
+	get_subitems_feature(Rest, Feature, FeatureValue).
 
-get_subitem_name(Subitem,Name) :-
-    functor(Subitem,Name,1).
+get_subitem_name(Subitem, Name) :-
+	functor(Subitem, Name, 1).
 
-get_subitem_value(Subitem,Value) :-
-    arg(1,Subitem,Value).
+get_subitem_value(Subitem, Value) :-
+	arg(1, Subitem, Value).
 
-set_phrase_item_feature(PhraseItem,Feature,FeatureValue,ModifiedPhraseItem) :-
-    get_phrase_item_name(PhraseItem,ItemName),
-    get_phrase_item_subitems(PhraseItem,Subitems),
-    set_subitems_feature(Subitems,Feature,FeatureValue,ModifiedSubitems),
-    new_phrase_item(ItemName,ModifiedSubitems,ModifiedPhraseItem).
+set_phrase_item_feature(PhraseItem, Feature, FeatureValue, ModifiedPhraseItem) :-
+	get_phrase_item_name(PhraseItem, ItemName),
+	get_phrase_item_subitems(PhraseItem, Subitems),
+	set_subitems_feature(Subitems, Feature, FeatureValue, ModifiedSubitems),
+	new_phrase_item(ItemName, ModifiedSubitems, ModifiedPhraseItem).
 
-set_subitems_feature([],Feature,FeatureValue,[NewSubitem]) :-
-    functor(NewSubitem,Feature,1),
-    arg(1,NewSubitem,FeatureValue).
-set_subitems_feature([First|Rest],Feature,FeatureValue,[NewSubitem|Rest]) :-
-    functor(First,Feature,1),
-    !,
-    functor(NewSubitem,Feature,1),
-    arg(1,NewSubitem,FeatureValue).
-set_subitems_feature([First|Rest],Feature,FeatureValue,[First|ModifiedRest]) :-
-    set_subitems_feature(Rest,Feature,FeatureValue,ModifiedRest).
+set_subitems_feature([], Feature, FeatureValue, [NewSubitem]) :-
+	functor(NewSubitem, Feature, 1),
+	arg(1, NewSubitem, FeatureValue).
+set_subitems_feature([First|Rest], Feature, FeatureValue, [NewSubitem|Rest]) :-
+	functor(First, Feature, 1),
+	!,
+	functor(NewSubitem, Feature, 1),
+	arg(1, NewSubitem, FeatureValue).
+set_subitems_feature([First|Rest], Feature, FeatureValue, [First|ModifiedRest]) :-
+	set_subitems_feature(Rest, Feature, FeatureValue, ModifiedRest).
 
 /* SHOULD REALLY BE SOMEWHERE ELSE, not in NEGEX either
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
