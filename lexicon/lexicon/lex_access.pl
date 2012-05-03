@@ -46,7 +46,8 @@
     get_derivational_variants_for_form/3,
     get_categories_for_form/2,
     get_spellings_and_inflections_for_form/4,
-    get_citation_forms_for_form/3,
+    get_citation_forms_for_form/2,
+    get_citation_forms_for_form_with_cats/3,
     get_base_forms_for_form/3
     ]).
 
@@ -329,18 +330,38 @@ get_citation_forms_for_form/2 calls lex_form_ci_recs/2 followed by calls to
 lex_get_base_from_record/2 (where here, base really means citation).
 get_citation_forms_for_form/3 respects Categories. */
 
-% get_citation_forms_for_form(Form, CategoryList, CitationForms) :-
-% 	lexAccess_get_citation_forms_for_form_init(Form, CategoryList, CitationForms).
+get_citation_forms_for_form(Form, CitationForms) :-
+	get_citation_forms_for_form_LEXACCESS_TOGGLE(Form, CitationForms).
 
-get_citation_forms_for_form(Form,Categories,Cits) :-
-    lex_form_ci_recs(Form,LexRecords),
-    (findall(Cit,
-             (member(LexRecord,LexRecords),
-	      lex_get_base_from_record_3(LexRecord,Categories,Cit)),
-	     Cits) ->
-        true
-    ;   Cits=[]
-    ).
+get_citation_forms_for_form_LEXACCESS_TOGGLE(Form, CitationForms) :-
+%	( control_value(lexicon, c) ->
+	  lex_form_ci_recs(Form,LexRecords),
+	   (findall(Cit,
+		    (member(LexRecord,LexRecords),
+			lex_get_base_from_record_3(LexRecord,_CategoryList,Cit)),
+		    CitationForms) ->
+	             true
+	   ;   CitationForms=[]
+	   ).
+%	; lexAccess_get_citation_forms_for_form_init(Form, CitationForms)
+%	).
+
+
+get_citation_forms_for_form_with_cats(Form, CategoryList, CitationForms) :-
+	get_citation_forms_for_form_with_cats_LEXACCESS_TOGGLE(Form, CategoryList, CitationForms).
+
+get_citation_forms_for_form_with_cats_LEXACCESS_TOGGLE(Form, CategoryList, CitationForms) :-
+%	( control_value(lexicon, c) ->
+	  lex_form_ci_recs(Form,LexRecords),
+	   (findall(Cit,
+		    (member(LexRecord,LexRecords),
+			lex_get_base_from_record_3(LexRecord,CategoryList,Cit)),
+		    CitationForms) ->
+	             true
+	   ;   CitationForms=[]
+	   ).
+%	; lexAccess_get_citation_forms_for_form_init(Form, CategoryList, CitationForms)
+%	).
 
 /* 
    get_base_forms_for_form(+Form, +Categories, -Bases)

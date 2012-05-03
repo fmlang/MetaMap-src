@@ -48,9 +48,9 @@
 % 	lexAccess_get_varlist_for_all_forms_init/2
 %   ]).
 
-:- use_module( lexicon(lex_access), [
-	get_citation_forms_for_form/3
-  ]).
+% :- use_module( lexicon(lex_access), [
+% 	get_citation_forms_for_form/2
+%   ]).
 
 :- use_module( lexicon(qp_lexicon), [
 	lex_form_ci_vars/2
@@ -87,6 +87,7 @@ generate_variant_info_1(lexicon, [lexmatch:[LexMatch], InputMatch|_], RestDefini
 	% get_citation_forms_for_form(LexMatch, _Cats, CitationForms),
 	% lexAccess_get_varlist_for_all_forms_init(CitationForms, VarInfo),
 	get_this_variant(VarInfo, LexMatch, ThisVarInfo, VariantTail),
+	% format(user_output, 'ThisVarInfo: ~q~n', [ThisVarInfo]),	
 	% append(ThisVarInfo, [InputMatch], ThisVarInfoAndInputMatch),   % Lan needs InputMatch
 	VariantTail = [InputMatch], 
 	generate_variant_info(RestDefinitions, NewGap).
@@ -98,8 +99,9 @@ get_varlist_LEXACCESS_TOGGLE(LexMatch, VarInfo) :-
 %	( control_value(lexicon, c) ->
 	  lex_form_ci_vars(LexMatch, VarInfo).
 % 	; control_value(lexicon, java) ->
-% 	  get_citation_forms_for_form(LexMatch, _Cats, CitationForms),
-% 	  lexAccess_get_varlist_for_all_forms_init(CitationForms, VarInfo)
+% 	  get_citation_forms_for_form(LexMatch, CitationForms),
+%	  sort(CitationForms, SortedCitationForms),
+% 	  lexAccess_get_varlist_for_all_forms_init(SortedCitationForms, VarInfo)
 %	; format(user_error, '### ERROR: lexicon setting must be either c or java!~n', []),
 %	  abort
 %	).
@@ -125,6 +127,7 @@ get_this_variant([LexKey:[ThisList]|MoreVariants], ThisWord, [ThisList|Rest], Ta
 	lower(ActualLexKey, LowerLexKey),
 	lower(ThisWord, LowerLexKey),
 	!,
+	% format(user_output, 'ThisList: ~q~n', [ThisList]),
 	get_this_variant(MoreVariants, ThisWord, Rest, Tail).
 get_this_variant([_Other|MoreVariants], ThisWord, ThisVarInfo, Rest) :-
 	get_this_variant(MoreVariants, ThisWord, ThisVarInfo, Rest).
