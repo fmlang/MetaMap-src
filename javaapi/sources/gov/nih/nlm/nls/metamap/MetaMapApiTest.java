@@ -171,7 +171,6 @@ public class MetaMapApiTest {
     System.out.println("    -o : allow overmatches ");
     System.out.println("    -g : allow concept gaps");
     System.out.println("    -8 : dynamic variant generation");
-    System.out.println("    -% --XML <formattype> : System.output XML - formattype: format/format1/noformat/noformat1");
     System.out.println("    -@ --WSD <hostname> : Which WSD server to use.");
     System.out.println("    -J --restrict_to_sts <semtypelist> : restrict to semantic types");
     System.out.println("    -R --restrict_to_sources <sourcelist> : restrict to sources");
