@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -46,16 +45,19 @@
 	ensure_atom/2,
  	ensure_number/2,
  	expand_split_word_list/2,
+	fatal_error/2,
 	force_to_atoms/2,
 	generate_aa_term/2,
 	generate_bracketed_output/2,
-	generate_candidates_output/3,
+	generate_candidates_output/7,
 	generate_header_output/6,
 	generate_mappings_output/5,
 	generate_phrase_output/7,
 	generate_utterance_output/6,
 	generate_variants_output/2,
 	generate_EOT_output/1,
+	get_candidate_feature/3,
+	get_all_candidate_features/3,
 	get_program_name/1,
 	% called by MetaMap API -- do not change signature!
 	output_should_be_bracketed/1,
@@ -93,8 +95,8 @@
 
 :- use_module(metamap(metamap_utilities), [
 	dump_aphrase_mappings/2,
-	dump_evaluations_indented/2,
-	num_dump_evaluations_indented/2,
+	dump_evaluations_indented/6,
+	num_dump_evaluations_indented/6,
 	write_list_indented/1
     ]).
 
@@ -124,12 +126,15 @@
     ]).
 
 :- use_module(skr(skr), [
+	% aev_print_version/2 is not explicitly called here,
+	% but it must still be imported because they're called via debug_call.
+	aev_print_version/2,
 	print_all_aevs/1,
-	% print_duplicate_info/4 is not explicitly called here,
-	% but it must still be imported because it's called via debug_call.
+	% print_candidate_grid/6 and print_duplicate_info/4 are not explicitly called here,
+	% but they must still be imported because they're called via debug_call.
+	print_candidate_grid/6,
 	print_duplicate_info/4
     ]).
-
 
 :- use_module(skr(skr_xml), [
 	xml_output_format/1
@@ -172,6 +177,10 @@
 	append/2,
 	last/2,
 	selectchk/3
+    ]).
+
+:- use_module(library(sets), [
+	intersection/3
     ]).
 
 :- use_module(library(system), [
@@ -221,10 +230,8 @@ write_sentences(CoordSentences, Sentences) :-
 	  memberchk(sentences, DebugFlags) ->
 	  format(user_output, '#### CoordSentences:~n', []),
 	  write_token_list(CoordSentences, 0, 1),
-	  ttyflush,
 	  format(user_output, '#### Sentences:~n', []),
-	  write_token_list(Sentences, 0, 1),
-	  ttyflush
+	  write_token_list(Sentences, 0, 1)
 	; true
 	).
 
@@ -233,10 +240,8 @@ write_raw_token_lists(ExpRawTokenList, UnExpRawTokenList) :-
 	  memberchk(tokens, DebugFlags) ->
 	  format(user_output, '~n~n#### ExpRawTokenList:~n', []),
 	  write_token_list(ExpRawTokenList, 0, 1),
-	  ttyflush,
 	  format(user_output, '~n~n#### UnExpRawTokenList:~n', []),
-	  write_token_list(UnExpRawTokenList, 0, 1),
-	  ttyflush
+	  write_token_list(UnExpRawTokenList, 0, 1)
 	; true
 	).
 
@@ -244,7 +249,7 @@ write_raw_token_lists(ExpRawTokenList, UnExpRawTokenList) :-
 write_token_nl(0).
 write_token_nl(1) :- format(user_output, '~n', []).
 
-write_token_list([], _Indent, NL) :- write_token_nl(NL).
+write_token_list([], _Indent, NL) :- write_token_nl(NL), ttyflush.
 write_token_list([Token|RestTokens], Indent, NL) :-
 	write_token(Token, Indent, NL),
 	% write(Token), nl,
@@ -340,7 +345,7 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_tagger_output_settings(TaggerOutputSettings),
 	verify_single_output_format(SingleOutputFormat),
         verify_xml_settings(XMLSettings),
-        verify_mmo_settings(MMOSettings),
+        verify_MMO_settings(MMOSettings),
         verify_mmi_settings(MMISettings),
 	verify_sources_options(SourcesOptions),
 	verify_sources_values(SourcesValues),
@@ -351,12 +356,15 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_derivational_variants_settings(DerivationalVariantsSettings),
 	verify_tagger_server_settings(TaggerServerSettings),
 	verify_WSD_server_settings(WSDServerSettings),
+	verify_pruning_settings(PruningSettings),
+	verify_sldi_settings(SLDISettings),
 	verify_all_results([TaggerOutputSettings, SingleOutputFormat,
 			    XMLSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
 			    SemTypeOptions, SemTypeValues, GapSizeValues,
 			    AcrosAbbrsSettings, DerivationalVariantsSettings,
-			    TaggerServerSettings, WSDServerSettings],
+			    TaggerServerSettings, WSDServerSettings,
+			    PruningSettings, SLDISettings],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, DefaultRelease).
 
@@ -398,14 +406,14 @@ verify_xml_settings(Result) :-
 			  XMLFormat, 0, Result).
 verify_xml_settings(0).
 
-verify_mmo_settings(Result) :-
+verify_MMO_settings(Result) :-
 	control_option(machine_output),
 	!,
 	warning_check([syntax, show_cuis, negex, sources, dump_aas], machine_output),
 	fatal_error_check([hide_plain_syntax, hide_candidates, number_the_candidates,
 			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
 			  machine_output, 0, Result).
-verify_mmo_settings(0).
+verify_MMO_settings(0).
 
 verify_mmi_settings(Result) :-
 	control_option(fielded_mmi_output),
@@ -523,6 +531,24 @@ verify_WSD_server_settings(Result) :-
 	; Result is 0
 	).			    
 
+% Error if both --prune and --no_prune are specified.
+verify_pruning_settings(Result) :-
+	( control_value(prune, _),
+	  control_option(no_prune) ->
+	  send_message('FATAL ERROR: Cannot specify --prune and --no_prune.~n', []),
+	  Result is 1
+	; Result is 0
+	).			    
+
+
+% Error if both --sldi and --sldiID are specified.
+verify_sldi_settings(Result) :-
+	( control_option(sldi),
+	  control_option(sldiID) ->
+	  send_message('FATAL ERROR: Cannot specify --sldi and --sldiID.~n', []),
+	  Result is 1
+	; Result is 0
+	).			    
 
 verify_all_results(ValuesList, InputStream, OutputStream) :-
 	compute_sum(ValuesList, 0, Result),
@@ -757,16 +783,23 @@ generate_variants_output(GVCs, BracketedOutput) :-
 	; true
 	).
 
-generate_candidates_output(Evaluations3, BracketedOutput, CandidatesMMO) :-
+generate_candidates_output(Evaluations3, TotalCandidateCount,
+			   ExcludedCandidateCount, PrunedCandidateCount,
+			   RemainingCandidateCount,
+			   BracketedOutput, CandidatesMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
 	( test_generate_candidate_output_control_options ->
 	  % Generate the MMO for the Candidates term
 	  % which is needed for both MMO and XML output!
-	  CandidatesMMO = candidates(Evaluations3)
+	  CandidatesMMO = candidates(TotalCandidateCount,
+				     ExcludedCandidateCount,PrunedCandidateCount,
+				     RemainingCandidateCount,Evaluations3)
 	; \+ control_option(hide_candidates),
 	  Evaluations3 \== [] ->
 	  conditionally_skr_begin_write(BracketedOutput),
-	  conditionally_dump_evals(Evaluations3),
+	  conditionally_dump_evals(Evaluations3, TotalCandidateCount,
+				   ExcludedCandidateCount, PrunedCandidateCount,
+				   RemainingCandidateCount),
 	  conditionally_skr_end_write(BracketedOutput)
 	; true
 	).
@@ -792,10 +825,16 @@ conditionally_skr_end_write(BracketedOutput) :-
 	; true
 	).
 
-conditionally_dump_evals(Evaluations3) :-
+conditionally_dump_evals(Evaluations3, TotalCandidateCount,
+			 ExcludedCandidateCount, PrunedCandidateCount,
+			 RemainingCandidateCount) :-
 	( control_option(number_the_candidates) ->
-	  num_dump_evaluations_indented(Evaluations3, 'Candidates')
-	; dump_evaluations_indented(candidates(Evaluations3), 'Candidates')
+	  num_dump_evaluations_indented(Evaluations3, TotalCandidateCount,
+					ExcludedCandidateCount, PrunedCandidateCount,
+					RemainingCandidateCount, 'Candidates')
+	; dump_evaluations_indented(Evaluations3, TotalCandidateCount,
+					ExcludedCandidateCount, PrunedCandidateCount,
+					RemainingCandidateCount, 'Candidates')
 	).
 
 generate_mappings_output(Mappings, Evaluations, APhrases, BracketedOutput, MappingsMMO) :-
@@ -821,7 +860,6 @@ generate_mappings_output(Mappings, Evaluations, APhrases, BracketedOutput, Mappi
 	  ; true
 	  )
 	).
-
 
 % Generate the MMO for Args, AAs, and NegEx.
 generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
@@ -906,7 +944,9 @@ find_matching_CUIs([FirstMMOTerm|RestMMOTerms], ExpansionAtom, CUIListIn, CUILis
 find_matching_CUIs_in_phrases([], _ExpansionAtom, CUIList, CUIList).
 find_matching_CUIs_in_phrases([FirstPhraseTerm|RestPhraseTerms], ExpansionAtom, CUIListIn, CUIListOut) :-
 	FirstPhraseTerm = phrase(_Phrase, Candidates, _Mappings, _Pwi, _Gvcs, _Ev0, _Aphrases),
-	Candidates = candidates(CandidateList),
+	Candidates = candidates(_TotalCandidateCount,
+				_ExcludedCandidateCount,_PrunedCandidateCount,
+				_RemainingCandidateCount, CandidateList),
 	find_matching_CUIs_in_candidates(CandidateList, ExpansionAtom, CUIListIn, CUIListNext),
 	find_matching_CUIs_in_phrases(RestPhraseTerms, ExpansionAtom, CUIListNext, CUIListOut).
 	
@@ -920,16 +960,17 @@ find_matching_CUIs_in_candidates([FirstCandidate|RestCandidates],
 	find_matching_CUIs_in_candidates(RestCandidates, ExpansionAtom, CUIListNext, CUIListOut).
 
 matching_CUI(Candidate, ExpansionAtomLC, CurrScore-MatchingCUI) :-
-	Candidate = ev(CurrScore, MatchingCUI, _ConceptName, _PreferredName, MatchingWordList,
-		       _SemTypes, _MatchMap, _HeadFlag, _OverMatch, _Sources, _PosInfo),
+	get_all_candidate_features([negvalue,cui,metawords],
+				   Candidate,
+				   [CurrScore,MatchingCUI,MatchingWordList]),
 	concat_atom(MatchingWordList, MatchingWordAtom),
 	ExpansionAtomLC == MatchingWordAtom.
 
 
 get_aa_term(MMOutput, AAs) :-
 	MMOutput = [FirstMMOutput|_],
-	FirstMMOutput = mm_output(_ExpandedUtterance, _Citation, _ModifiedText, _Tagging,
-				  AAs, _Syntax, _MMOPhrases, _ExtractedPhrases).
+	FirstMMOutput = mm_output(_ExpandedUtterance,_Citation,_ModifiedText,
+				  _Tagging,AAs,_Syntax,_MMOPhrases,_ExtractedPhrases).
 
 write_MMO_terms(PrintMMO, MMOTerms) :-
 	( PrintMMO =:= 1,
@@ -1002,17 +1043,63 @@ write_phrase_MMO_component(PhraseTerm) :-
 	format(',~q,~w,~w).~n', [Syntax,PosInfo,ReplPos]).
 
 write_candidates_MMO_component(CandidatesTerm) :-
-	write_term(CandidatesTerm, [quoted(true)]),
-	format('.~n', []).
+	CandidatesTerm = candidates(TotalCandidateCount,
+				    ExcludedCandidateCount,PrunedCandidateCount,
+				    RemainingCandidateCount,
+				    CandidateList),
+	format('candidates(~d,~d,~d,~d,[',
+	       [TotalCandidateCount,ExcludedCandidateCount,
+		PrunedCandidateCount,RemainingCandidateCount]),
+	% If the candidate list is empty, do nothing!
+	( CandidateList = [H|T] ->
+	  write_MMO_candidate_list(T, H)
+	; true
+	),
+	% write_term(CandidatesTerm, [quoted(true)]),
+	format(']).~n', []).
+
+write_MMO_candidate_list([], LastCandidateTerm) :- write_MMO_candidate_term(LastCandidateTerm).
+write_MMO_candidate_list([Next|Rest], ThisCandidateTerm) :-
+	write_MMO_candidate_term(ThisCandidateTerm),
+	write(','),
+	write_MMO_candidate_list(Rest, Next).	
+
+% Simply hide the LSComponents and TargetLSComponent terms
+write_MMO_candidate_term(CandidateTerm) :-
+	CandidateTerm = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
+			   MatchMap,_LSComponents,_TargetLSComponent,
+			   InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status),
+	format('ev(~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q)',
+	       [NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
+		MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status]).
 
 write_mappings_MMO_component(MappingsTerm) :-
-	  % do not use portrayed(true)
-	  write_term(MappingsTerm,[quoted(true)]),
-	  format('.~n', []).
+	MappingsTerm = mappings(MappingsList),
+	format('mappings([', []),
+	% MappingsTerm = mappings([map(-1000,[ev('C0018787')]),map(-1000,[ev('C1281570')])]))
+	% do not use portrayed(true)
+	( MappingsList = [H|T] ->
+	  write_MMO_mappings_list(T, H)
+	; true
+	),
+	% write_term(MappingsTerm, [quoted(true)]),
+	format(']).~n', []).
+
+write_MMO_mappings_list([], LastMappingTerm) :- write_MMO_mapping_term(LastMappingTerm).
+write_MMO_mappings_list([Next|Rest], ThisMappingTerm) :-
+	write_MMO_mapping_term(ThisMappingTerm),
+	write(','),
+	write_MMO_mappings_list(Rest, Next).	
+
+write_MMO_mapping_term(map(NegValue,CandidateList)) :-
+	format('map(~d,[', [NegValue]),
+	CandidateList = [H|T],
+	write_MMO_candidate_list(T, H),
+	format('])', []).
 
 write_EOU_term :-
-        write_term('EOU',[quoted(true)]),
-        format('.~n', []).
+	write_term('EOU',[quoted(true)]),
+	format('.~n', []).
 
 
 output_tagging(BracketedOutput, HRTagStrings, FullTagList) :-
@@ -1070,7 +1157,8 @@ compare_fields(OrigID, ExpID,
 	; format(user_output, 'In ~w/~w: ~w ~w =\\= ~w ~w~n',
 		 [OrigID, ExpID,
 		  OrigFieldName, OrigFieldValue,
-		  ExpFieldName,  ExpFieldValue])
+		  ExpFieldName,  ExpFieldValue]),
+	  ttyflush
 	).
 
 % replace_crs_with_blanks(String, CurrPos, NewString, ReplacementIndexes)
@@ -1121,7 +1209,8 @@ debug_call(Flag, Goal) :-
 	).
 
 debug_call_1(Flag, DebugFlags, Goal) :-
-	( memberchk(Flag, DebugFlags) ->
+	ensure_list(Flag, FlagList),
+	( intersection(FlagList, DebugFlags, [_|_]) ->
 	  call(Goal)
 	; memberchk('ALL', DebugFlags) ->
 	  call(Goal)
@@ -1132,14 +1221,24 @@ debug_message(Flag, String, Arguments) :-
 	( control_value(debug, DebugFlags) ->
 	  debug_message_1(Flag, String, DebugFlags, Arguments)
 	; true
-	).
+	),
+	ttyflush.
 
 debug_message_1(Flag, String, DebugFlags, Arguments) :-
-	( memberchk(Flag, DebugFlags) ->
+	ensure_list(Flag, FlagList),
+	( intersection(FlagList, DebugFlags, [_|_]) ->
 	  format(user_output, String, Arguments)
 	; memberchk('ALL', DebugFlags) ->
 	  format(user_output, String, Arguments)
 	; true
+	).
+
+ensure_list(X, List) :-
+	( X == [] ->
+	  List = X
+	; X = [_|_] ->
+	  List = X
+	; List = [X]
 	).
 
 ensure_atom(Input, InputAtom) :-
@@ -1227,4 +1326,136 @@ check_valid_file_type(File, Type) :-
 		       [80,0'#,Type,File,80,0'#]),
 	  abort
 	; true
+	).
+
+get_all_candidate_features(FeatureList, Candidate, FeatureValueList) :-
+	(  foreach(ThisFeature, FeatureList),
+	   foreach(ThisFeatureValue, FeatureValueList),
+	   param(Candidate)
+	do get_candidate_feature(ThisFeature, Candidate, ThisFeatureValue)
+	).
+
+get_candidate_feature(negvalue, Candidate, NegValue) :-
+	( Candidate = ev(NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	  % This is simply for mm_print, which sees the printed representation of candidates,
+	  % which does NOT include the LSComponents and TargetLSComponents fields.
+	; Candidate = ev(NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(cui, Candidate, CUI) :-
+	( Candidate = ev(_NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(metaterm, Candidate, MetaTerm) :-
+	( Candidate = ev(_NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(metaconcept, Candidate, MetaConcept) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(metawords, Candidate, MetaWords) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(semtypes, Candidate, SemTypes) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(matchmap, Candidate, MatchMap) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 MatchMap, _InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(lscomponents, Candidate, LSComponents) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(targetlscomponent, Candidate, TargetLSComponent) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(involveshead, Candidate, InvolvesHead) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(isovermatch, Candidate, IsOvermatch) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       IsOvermatch,_Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,IsOvermatch,_Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(sources, Candidate, Sources) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,Sources,_PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,Sources,_PosInfo,_Status)
+	).
+get_candidate_feature(posinfo, Candidate, PosInfo) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,PosInfo,_Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,PosInfo,_Status)
+	).
+get_candidate_feature(status, Candidate, Status) :-
+	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,Status) ->
+	  true
+	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,Status)
+	).
+
+fatal_error(Message, Args) :-
+	format(user_output, Message, Args),
+	ttyflush,
+	current_output(OutputStream),
+	% don't duplicate message if the default output stream is user_output!
+	( stream_property(OutputStream, alias(user_output)) ->
+	  true
+	; format(Message, Args)
 	).

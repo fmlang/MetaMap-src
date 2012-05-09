@@ -64,7 +64,7 @@ Also have to worry about making complement information available for verbs
 */
 
 consult_tagged_text(Definitions, VarInfoList, TaggedText, CatLabText, Index) :-
-    consult_tagged_text(Definitions, VarInfoList, TaggedText, CatLabText, Index, none).
+	consult_tagged_text(Definitions, VarInfoList, TaggedText, CatLabText, Index, none).
 
 consult_tagged_text( [], [], _, [], _, _).
 
@@ -160,7 +160,7 @@ consult_tagged_text( [ lexicon:[ lexmatch:LexMatch, inputmatch:InputMatch | _ ] 
     RealIndexIn is IndexIn + Len - 1,
 
     % get the tag of the *last* word in the InputMatch list
-    nth1( RealIndexIn, TaggedTextIn, [ _TagToken, Tag ] ), !,
+    nth1( RealIndexIn, TaggedTextIn, [_TagToken, Tag ] ), !,
 
     VarInfoList = [Label:_ | _ ],
 
@@ -222,7 +222,7 @@ consult_tagged_text( [ unknown:[ inputmatch:[Token]| _ ] | MoreDefinitions ],
     nth1( IndexIn, TaggedTextIn, [ Token, Tag ] ), !,  
 
     (  memberchk( Tag, [ bl, ba, dq, ap, bq, at, nm, dl, pc,
-                         up, am ,ax ,pl, eq, tl, un, lb, rb, ls, gr ] )
+                         up, am, ax ,pl, eq, tl, un, lb, rb, ls, gr ] )
 
        -> Label = punc
        ;  Label = not_in_lex

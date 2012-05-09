@@ -276,7 +276,9 @@ call_tagger_server(Options,
 	tagger_server_message(TaggerForced, TaggerServerMessage),
 	atom_codes(NewLine, [10]), % is there a more elegant way to do this?
 	concat_atom([Options,NewLine,QueryAtom,NewLine,NewLine], Request),
-	between(1, 10, _),
+	% The call to between/3 is silly:
+	% If a tagger server doesn't respond, just try another one.
+	% between(1, 10, _),
 	   ServerName = 'Tagger',
 	   establish_tcp_connection(ServerName, TaggerServerHost, TaggerServerPort, SocketStream),
 	   conditionally_announce_tagger_connection(TaggerServerMessage, TaggerServerHost),
@@ -373,12 +375,6 @@ choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost) :-
 % breaks XYX's into [XYZ, ', s]; this predicate gloms the "'s"
 % onto the previous token.
 
-postprocess_apostrophe_s(TagListIn, TagListOut) :-
-	( control_option(apostrophe_s_contraction) ->
-	  TagListOut = TagListIn
-	; postprocess_apostrophe_s_aux(TagListIn, TagListOut)
-	).
-
 % Transform, e.g.,
 % [finkelstein,noun], ['\'',ap], [s,'noun/3'], [test,'verb/3'], [positive,'adj/2']
 % into
@@ -391,8 +387,8 @@ postprocess_apostrophe_s(TagListIn, TagListOut) :-
 % In other words, by deMorgan's laws, do the glomming IF the preceeding token
 % (1) is not a pronoun AND
 % (2) does not end in a punctuation char
-postprocess_apostrophe_s_aux([], []).
-postprocess_apostrophe_s_aux(TaggedTextList0, TaggedTextList) :-
+postprocess_apostrophe_s([], []).
+postprocess_apostrophe_s(TaggedTextList0, TaggedTextList) :-
 	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap], [s,'noun/3']|RestTaggedTextList0],
 	LexCat \== pron,
 	atom_codes(OrigWord, OrigWordCodes),
@@ -401,6 +397,6 @@ postprocess_apostrophe_s_aux(TaggedTextList0, TaggedTextList) :-
 	!,
 	concat_atom([OrigWord, '''', s], Noun),
 	TaggedTextList = [[Noun,LexCat]|RestTaggedTextList],
-	postprocess_apostrophe_s_aux(RestTaggedTextList0, RestTaggedTextList).
-postprocess_apostrophe_s_aux([H|RestIn], [H|RestOut]) :-
-	postprocess_apostrophe_s_aux(RestIn, RestOut).
+	postprocess_apostrophe_s(RestTaggedTextList0, RestTaggedTextList).
+postprocess_apostrophe_s([H|RestIn], [H|RestOut]) :-
+	postprocess_apostrophe_s(RestIn, RestOut).

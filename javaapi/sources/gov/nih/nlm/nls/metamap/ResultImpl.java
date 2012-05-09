@@ -233,6 +233,22 @@ public class ResultImpl implements Result {
     return pcmList;
   }
 
+  /**
+   * Implementation of toString method for Result.
+   */
+  public String toString() 
+  {
+    StringBuffer sb = new StringBuffer();
+    try {
+      sb.append(this.getAcronymsAbbrevsList());
+      sb.append(this.getNegationList());
+      sb.append(this.getUtteranceList());
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    return sb.toString();
+  }
+
   /**	  
    * <pre>
    * aas(["ABC"*"American Broadcasting System" *[1,3,5,28]*[],
@@ -276,6 +292,15 @@ public class ResultImpl implements Result {
       }
       return cuiList;
     };
+    public String toString()
+    {
+      StringBuffer sb = new StringBuffer();
+      sb.append("Acronym: ").append(this.getAcronym());
+      sb.append(", Expansion: ").append(this.getExpansion());
+      sb.append(", Count list: ").append(this.getCountList());
+      sb.append(", CUI list: ").append(this.getCUIList());
+      return sb.toString();
+    }
   }
 
   class NegationImpl implements Negation {

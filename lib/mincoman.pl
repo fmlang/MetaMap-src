@@ -37,7 +37,8 @@
 % ----- Module declaration and exported predicates
 
 :- module( mincoman,   [
-	minimal_commitment_analysis/5
+	minimal_commitment_analysis/5,
+	punc_mark1/1
    ]).
 
 % ----- Imported predicates
@@ -353,9 +354,13 @@ mark_boundaries( [AnythingElse|MoreWords],
 punc_mark1(':').
 punc_mark1('(').
 punc_mark1(')').
+% 01/03/2012: Per e-mail from Tom, we have changed the semantics of "[" and "]"
+% to be phrase-breaking characters.
+punc_mark1('[').
+punc_mark1(']').
 punc_mark1(';').
-% 12/15/2011: Per e-mail from Tom, we have changed the semantics of "/"
-% to *not* be a phrase-breaking character.
+% 12/15/2011: Per e-mail discussion with Tom and Halil,
+% we have changed the semantics of "/" to *not* be a phrase-breaking character.
 % punc_mark1('/').
 punc_mark1('<').
 punc_mark1('>').
