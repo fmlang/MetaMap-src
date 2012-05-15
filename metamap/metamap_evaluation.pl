@@ -48,6 +48,7 @@
 
 
 :- use_module(metamap(metamap_utilities), [
+	candidate_term/15,
 	extract_unique_sources/3,
 	positions_overlap/2
     ]).
@@ -206,9 +207,10 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			PhraseTokens, RawTokensOut, AAs,
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
-	\+ control_option(allow_duplicate_concept_names),
+	% \+ control_option(allow_duplicate_concept_names),
 	% format(user_output, '~n### USC ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
 	!,
+	% format(user_output, '~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
 	( compute_one_evaluation(MetaCanonical, DebugFlags, Label, UtteranceText,
 				 MetaString, MetaConcept,
 				 Variants, TokenPhraseWords, PhraseTokenLength,
@@ -216,7 +218,6 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				 InputmatchPhraseWords,
 				 TokenHeadWords, PhraseTokens, Evaluation) ->
 	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]) ->
-
 	  debug_evaluate_candidate_list_3(DebugFlags, Evaluation),
 	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
 	  % format(user_output, '     ~q~n', [Evaluation]),	    
@@ -233,31 +234,32 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				InputmatchPhraseWords,
 				CCsNext, CCsOut, RestEvaluations).
 
-evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
-			DebugFlags, Label, UtteranceText,
-			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
-			PhraseTokens, RawTokensOut, AAs,
-			InputmatchPhraseWords,
-			CCsIn, CCsOut, Evaluations) :-
-	% control_option(allow_duplicate_concept_names),
-	( compute_all_evaluations(MetaCanonical, DebugFlags, Label, UtteranceText,
-				  MetaString, MetaConcept,
-				  Variants, TokenPhraseWords, PhraseTokenLength,
-				  RawTokensOut, AAs,
-				  InputmatchPhraseWords,
-				  TokenHeadWords, PhraseTokens, NewEvaluations) ->
-	  debug_evaluate_candidate_list_5(DebugFlags, NewEvaluations),
-	  append(NewEvaluations, RestEvaluations, Evaluations)
-	; Evaluations = RestEvaluations,
-	  debug_evaluate_candidate_list_6(DebugFlags)
-	),
-	% format('~N### Eval 3: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
-	add_to_avl(MetaCanonical, MetaConcept, CCsIn, CCsNext),
-	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
-				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
-				PhraseTokens, RawTokensOut, AAs,
-				InputmatchPhraseWords,
-				CCsNext, CCsOut, RestEvaluations).
+% evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
+% 			DebugFlags, Label, UtteranceText,
+% 			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
+% 			PhraseTokens, RawTokensOut, AAs,
+% 			InputmatchPhraseWords,
+% 			CCsIn, CCsOut, Evaluations) :-
+% 	% control_option(allow_duplicate_concept_names),
+% 	( compute_all_evaluations(MetaCanonical, DebugFlags, Label, UtteranceText,
+% 				  MetaString, MetaConcept,
+% 				  Variants, TokenPhraseWords, PhraseTokenLength,
+% 				  RawTokensOut, AAs,
+% 				  InputmatchPhraseWords,
+% 				  TokenHeadWords, PhraseTokens, NewEvaluations) ->
+% 	  debug_evaluate_candidate_list_5(DebugFlags, NewEvaluations),
+% 	  append(NewEvaluations, RestEvaluations, Evaluations)
+% 	; Evaluations = RestEvaluations,
+% 	  debug_evaluate_candidate_list_6(DebugFlags)
+% 	),
+% 	% format('~N### Eval 3: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
+% 	add_to_avl(MetaCanonical, MetaConcept, CCsIn, CCsNext),
+% 	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
+% 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
+% 				PhraseTokens, RawTokensOut, AAs,
+% 				InputmatchPhraseWords,
+% 				CCsNext, CCsOut, RestEvaluations).
+
 /* 
    compute_one_evaluation(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaTerm, +MetaConcept,
    			  +Variants, +TokenPhraseWords, +PhraseTokenLength,
@@ -297,6 +299,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	length(TokenPhraseWords, NTokenPhraseWords),
 	length(MetaWords, NMetaWords),
 	compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords),
+	% format(user_output, '~w: ~w~n', [MetaWords,MatchMap]),
 	debug_compute_one_evaluation_1(DebugFlags, TokenPhraseWords, MetaWords,
 				       MatchMap, MatchCCs, ExtraMetaWords),
 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
@@ -306,14 +309,25 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	db_get_concept_cui(MetaConcept, CUI),
 	db_get_cui_sourceinfo(CUI, SourceInfo),
 	extract_unique_sources(SourceInfo, [], UniqueSources),
-	Evaluation = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,_SemTypes,
-			MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo),
-	% format(user_output, '~n EV:~q:~n', [Evaluation]),
+        compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
+	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, _SemTypes,
+		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+		       IsOvermatch, UniqueSources, PosInfo, _Status, Evaluation),
+	% format(user_output, 'EV:~q:~n', [Evaluation]),
 	% format(user_output, '~N~q:~q:~q~n', [MetaTerm,MetaWords,TokenPhraseWords]),
 	% This is just so the debugger will let me examine Evaluation
 	Evaluation \== [],
 	% get the positional info corresponding to this MatchMap
 	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo).
+
+compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent) :-
+	extract_components(MatchMap, PhraseComponents, _MetaComponents),
+	linearize_components(PhraseComponents, LSComponents0),
+	% LSComponents is a list of integers representing
+	% all phrase positions covered by the string in the ev/11 term.
+	append(LSComponents0, LSComponents),
+	% TargetLSComponent is the last phrase position covered.
+	last(LSComponents, TargetLSComponent).
 
 test_minimum_length(PhraseWords, MatchMap) :-
 	( control_value(min_length, MinLength) ->
@@ -523,55 +537,57 @@ matching_token(lc, MatchingPhraseWordAtom,
 	).	  
 
 
-compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, MetaConcept,
-			Variants, TokenPhraseWords, PhraseTokenLength,
-			RawTokensOut, AAs, InputmatchPhraseWords,
-			TokenHeadWords, PhraseTokens, Evaluations) :-
-	% filter_out_multiple_meaning_designators(MetaWords0,MetaWords),
-	debug_message(trace, '~N### computing ALL evaluations: ~q~n', [MetaWords]),
-	compute_phrase_match(TokenHeadWords, Label, UtteranceText,
-			     TokenPhraseWords, MetaWords, Variants, PhraseTokenLength,
-			     MatchMap, InvolvesHead, IsOvermatch),
-	% TempMatchMap = [MatchMapHead|MatchMapTail],
-	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
-	test_minimum_length(TokenPhraseWords, MatchMap),
-        % format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
-	MatchMap \== [],
-	compute_connected_components(MatchMap, MatchCCs),
-	length( TokenPhraseWords, NTokenPhraseWords),
-	length(MetaWords, NMetaWords),
-	compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords),
-	( memberchk(5, DebugFlags) ->
-	  format('~n~p~n~p~n~p~n~p~n~p~n',
-		 [TokenPhraseWords,MetaWords,MatchMap,MatchCCs,ExtraMetaWords])
-	; true
-	),
-	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
-			    ExtraMetaWords, Variants, InvolvesHead, Value),
-	( memberchk(5, DebugFlags) ->
-	  format(' <-- ~p~n',[MetaTerm])
-	; true
-	),
-	NegValue is -Value,
-	db_get_concept_cuis(MetaConcept, CUIs),
-	form_evaluations(CUIs, NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
-			 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-			 InputmatchPhraseWords, InvolvesHead, IsOvermatch, Evaluations).
-
-form_evaluations([], _, _, _, _, _, _, _, _, _, _, _, _, []) :- !.
-form_evaluations([CUI|Rest], NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
-		 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-		 InputmatchPhraseWords,
-                 InvolvesHead, IsOvermatch, [FirstEvaluation|RestEvaluations]) :-
-	db_get_cui_sourceinfo(CUI, SourceInfo),
-	extract_unique_sources(SourceInfo, [], UniqueSources),
-	FirstEvaluation = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,_SemTypes,
-			     MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo),
-	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo),
-	form_evaluations(Rest, NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
-			 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-			 InputmatchPhraseWords,
-			 InvolvesHead, IsOvermatch, RestEvaluations).
+% compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, MetaConcept,
+% 			Variants, TokenPhraseWords, PhraseTokenLength,
+% 			RawTokensOut, AAs, InputmatchPhraseWords,
+% 			TokenHeadWords, PhraseTokens, Evaluations) :-
+% 	% filter_out_multiple_meaning_designators(MetaWords0,MetaWords),
+% 	debug_message(trace, '~N### computing ALL evaluations: ~q~n', [MetaWords]),
+% 	compute_phrase_match(TokenHeadWords, Label, UtteranceText,
+% 			     TokenPhraseWords, MetaWords, Variants, PhraseTokenLength,
+% 			     MatchMap, InvolvesHead, IsOvermatch),
+% 	% TempMatchMap = [MatchMapHead|MatchMapTail],
+% 	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
+% 	test_minimum_length(TokenPhraseWords, MatchMap),
+%         % format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
+% 	MatchMap \== [],
+% 	compute_connected_components(MatchMap, MatchCCs),
+% 	length( TokenPhraseWords, NTokenPhraseWords),
+% 	length(MetaWords, NMetaWords),
+% 	compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords),
+% 	( memberchk(5, DebugFlags) ->
+% 	  format('~n~p~n~p~n~p~n~p~n~p~n',
+% 		 [TokenPhraseWords,MetaWords,MatchMap,MatchCCs,ExtraMetaWords])
+% 	; true
+% 	),
+% 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
+% 			    ExtraMetaWords, Variants, InvolvesHead, Value),
+% 	( memberchk(5, DebugFlags) ->
+% 	  format(' <-- ~p~n',[MetaTerm])
+% 	; true
+% 	),
+% 	NegValue is -Value,
+% 	db_get_concept_cuis(MetaConcept, CUIs),
+% 	form_evaluations(CUIs, NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
+% 			 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
+% 			 InputmatchPhraseWords, InvolvesHead, IsOvermatch, Evaluations).
+% 
+% form_evaluations([], _, _, _, _, _, _, _, _, _, _, _, _, []) :- !.
+% form_evaluations([CUI|Rest], NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
+% 		 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
+% 		 InputmatchPhraseWords,
+%                  InvolvesHead, IsOvermatch, [FirstEvaluation|RestEvaluations]) :-
+% 	db_get_cui_sourceinfo(CUI, SourceInfo),
+% 	extract_unique_sources(SourceInfo, [], UniqueSources),
+%         compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
+% 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, _SemTypes,
+% 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+% 		       IsOvermatch, UniqueSources, PosInfo, _Status, FirstEvaluation),
+% 	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo),
+% 	form_evaluations(Rest, NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
+% 			 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
+% 			 InputmatchPhraseWords,
+% 			 InvolvesHead, IsOvermatch, RestEvaluations).
 
 compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords) :-
 	extract_components(MatchMap, _PhraseComponents, MetaComponents),
@@ -610,11 +626,12 @@ compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 	; last(MetaWords, Last),
 	  word_is_last_word_of_some_variant(Last, Variants) ->
 	  true
-	; MetaWords = [Word1,Word2],
-	  concat_atom(MetaWords, SingleAtom),
-	  split_word(SingleAtom, Word1, Word2),
-	  word_is_last_word_of_some_variant(SingleAtom, Variants) ->
-	  true
+	% This is for the "breastfeeding" cases
+	% ; MetaWords = [Word1,Word2],
+	%   concat_atom(MetaWords, SingleAtom),
+	%   split_word(SingleAtom, Word1, Word2),
+	%   word_is_last_word_of_some_variant(SingleAtom, Variants) ->
+	%   true
 	),
 	!,
 	% Note: Whether InvolvesHead is yes if TokenHeadWords==[] has varied over time

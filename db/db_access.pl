@@ -54,7 +54,6 @@
 	db_get_variants/3,
 	db_get_versioned_source_name/2,
 	default_release/1,
-	fatal_error/2,
 	get_data_model/1,
 	get_data_version/1,
 	get_data_release/2,
@@ -94,6 +93,7 @@
 	debug_call/2,
 	debug_message/3,
 	ensure_atom/2,
+	fatal_error/2,
 	send_message/2
     ]).
 
@@ -1005,12 +1005,3 @@ ensure_string(AtomOrString, String) :-
         ; atom_codes(AtomOrString, String)
         ).
 
-fatal_error(Message, Args) :-
-	format(user_output, Message, Args),
-	ttyflush,
-	current_output(OutputStream),
-	% don't duplicate message if the default output stream is user_output!
-	( stream_property(OutputStream, alias(user_output)) ->
-	  true
-	; format(Message, Args)
-	).

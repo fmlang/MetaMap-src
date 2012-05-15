@@ -123,13 +123,11 @@ at_ws_tok([tok(ws,_,_,_)|_]).
 
 at_whitespace_or_exlb_tok([]).
 at_whitespace_or_exlb_tok([tok(ws,_,_,_)|_]) :- !.
-at_whitespace_or_exlb_tok([tok(pn,LB,LB,_)|_]) :-
-    ex_lbracket(LB),
+at_whitespace_or_exlb_tok([tok(pn,LB,LB,_)|_]) :- ex_lbracket(LB),
     !.
 
 at_an_tok([]).
-at_an_tok([Token|_]) :-
-    an_tok(Token).
+at_an_tok([Token|_]) :- an_tok(Token).
 
 gather_whitespace([],[],[]) :- !.
 gather_whitespace([First|Rest],[First|RestWS],NewRest) :-
@@ -170,11 +168,9 @@ uc_tok(tok(uc,_,_,_)).
 % an_tok/1 tests for a token that is broadly alphanumeric
 % (i.e., any one of lc, uc, ic, mc, an, and nu),
 
-an_tok(tok(Type,_,_,_)) :-
-    an_type(Type).
+an_tok(tok(Type,_,_,_)) :- an_type(Type).
 % The arity-5 tok is needed here for merge_sentences_aux/5 in text_objects.pl
-an_tok(tok(Type,_,_,_,_)) :-
-    an_type(Type).
+an_tok(tok(Type,_,_,_,_)) :- an_type(Type).
 
 
 an_pn_tok(tok(Type,_,_,_)) :-
@@ -194,20 +190,15 @@ an_pn_tok(tok(Type,_,_,_,_)) :-
 %     !,
 %     fail.
 contains_alpha_tok([tok(Type,_,_,_)|_]) :-
-    alpha_type(Type),
-    !.
-contains_alpha_tok([_|Rest]) :-
-    contains_alpha_tok(Rest).
+	alpha_type(Type),
+	!.
+contains_alpha_tok([_|Rest]) :- contains_alpha_tok(Rest).
 
-annotation_tok(tok(Type,_,_,_)) :-
-    annotation_type(Type).
-annotation_tok(tok(Type,_,_,_,_)) :-
-    annotation_type(Type).
+annotation_tok(tok(Type,_,_,_)) :- annotation_type(Type).
+annotation_tok(tok(Type,_,_,_,_)) :- annotation_type(Type).
 
-higher_order_tok(tok(Type,_,_,_)) :-
-    higher_order_type(Type).
-higher_order_tok(tok(Type,_,_,_,_)) :-
-    higher_order_type(Type).
+higher_order_tok(tok(Type,_,_,_)) :- higher_order_type(Type).
+higher_order_tok(tok(Type,_,_,_,_)) :- higher_order_type(Type).
 
 higher_order_or_annotation_tok(Tok) :-
 	( higher_order_tok(Tok) ->
@@ -222,33 +213,37 @@ hyphen_punc(String) :-
 	hyphen_punc_char(Char).
 
 % '-'
-hyphen_punc_char(45).
+% hyphen_punc_char(45).
+hyphen_punc_char(0'-).
 
-sentence_punc_tok(tok(pn,SP,SP,_)) :-
-	sentence_punc(SP).
+sentence_punc_tok(tok(pn,SP,SP,_)) :- sentence_punc(SP).
 
 sentence_punc(String) :-
 	String = [Char],
 	sentence_punc_char(Char).
 
 % '!'
-sentence_punc_char(33).
+% sentence_punc_char(33).
+sentence_punc_char(0'!).
 % '.'
-sentence_punc_char(46).
+% sentence_punc_char(46).
+sentence_punc_char(0'.).
 % ';'
-sentence_punc_char(59).
+% sentence_punc_char(59).
+sentence_punc_char(0';).
 % '?'
-sentence_punc_char(63).
+% sentence_punc_char(63).
+sentence_punc_char(0'?).
 
-utterance_punc_tok(tok(pn,SP,SP,_)) :-
-	utterance_punc(SP).
+utterance_punc_tok(tok(pn,SP,SP,_)) :- utterance_punc(SP).
 
 utterance_punc(String) :-
 	String = [Char],
 	utterance_punc_char(Char).
 
 % ';'
-utterance_punc_char(59).
+% utterance_punc_char(59).
+utterance_punc_char(0';).
 
 % utterance_punc(";").
 
@@ -264,40 +259,34 @@ break_punc(String) :-
 	break_punc_char(Char).
 
 % ','
-break_punc_char(44).
+% break_punc_char(44).
+break_punc_char(0',).
 % ':'
-break_punc_char(58).
+% break_punc_char(58).
+break_punc_char(0':).
 
 % break_punc(",").
 % break_punc(":").
 
 % any
-lbracket_tok(tok(pn,LB,LB,_Pos)) :-
-    lbracket(LB).
+lbracket_tok(tok(pn,LB,LB,_Pos)) :- lbracket(LB).
 
 % exclusive
-ex_lbracket_tok(tok(pn,LB,LB,_Pos)) :-
-    ex_lbracket(LB).
-ex_lbracket_tok(tok(pn,LB,LB,_Pos1,_Pos2)) :-
-    ex_lbracket(LB).
+ex_lbracket_tok(tok(pn,LB,LB,_Pos)) :- ex_lbracket(LB).
+ex_lbracket_tok(tok(pn,LB,LB,_Pos1,_Pos2)) :- ex_lbracket(LB).
 
 % non-exclusive
-ne_lbracket_tok(tok(pn,LB,LB,_)) :-
-    ne_lbracket(LB).
+ne_lbracket_tok(tok(pn,LB,LB,_)) :- ne_lbracket(LB).
 
 % any
-rbracket_tok(tok(pn,RB,RB,_)) :-
-    rbracket(RB).
+rbracket_tok(tok(pn,RB,RB,_)) :- rbracket(RB).
 
 % exclusive
-ex_rbracket_tok(tok(pn,RB,RB,_Pos)) :-
-    ex_rbracket(RB).
-ex_rbracket_tok(tok(pn,RB,RB,_Pos1,_Pos2)) :-
-    ex_rbracket(RB).
+ex_rbracket_tok(tok(pn,RB,RB,_Pos)) :- ex_rbracket(RB).
+ex_rbracket_tok(tok(pn,RB,RB,_Pos1,_Pos2)) :- ex_rbracket(RB).
 
 % non-exclusive
-ne_rbracket_tok(tok(pn,RB,RB,_)) :-
-    ne_rbracket(RB).
+ne_rbracket_tok(tok(pn,RB,RB,_)) :- ne_rbracket(RB).
 
 ws_or_pn_tok(Tok) :-
         ( ws_tok(Tok) ->
@@ -311,15 +300,20 @@ brackets(LB, RB) :-
 	brackets_chars(LChar, RChar).
 
 % '(', ')'
-brackets_chars(40, 41).
+% brackets_chars(40, 41).
+brackets_chars(0'(, 0')).
 % '[', ']'
-brackets_chars(91, 93).
+% brackets_chars(91, 93).
+brackets_chars(0'[, 0']).
 % '''', ''''
-brackets_chars(39, 39).
+% brackets_chars(39, 39).
+brackets_chars(0''', 0''').
 % '"', '"'
-brackets_chars(34, 34).
+% brackets_chars(34, 34).
+brackets_chars(0'", 0'").
 % '"', ':'; for Elhill abominations
-brackets_chars(34, 58).
+% brackets_chars(34, 58).
+brackets_chars(0'", 0':). %"
 
 % brackets("(",")").
 % brackets("[","]").
@@ -333,17 +327,18 @@ multi_brackets(LB, RB) :-
 	multi_brackets_chars(LChar, RChar).
 
 % '(', ']'
-multi_brackets_chars(40, 93).
+% multi_brackets_chars(40, 93).
+multi_brackets_chars(0'(, 0']).
 
 % multi_brackets("(","]").
 
 lbracket(LB) :-
-    brackets(LB,_),
-    !.
+	brackets(LB, _),
+	!.
 
 rbracket(RB) :-
-    brackets(_,RB),
-    !.
+	brackets(_, RB),
+	!.
 
 % exclusive bracket (i.e., it's used only for bracketing)
 
@@ -352,9 +347,11 @@ ex_lbracket(LB) :-
 	ex_lbracket_char(LChar).
 
 % '('
-ex_lbracket_char(40).
+% ex_lbracket_char(40).
+ex_lbracket_char(0'().
 % '['
-ex_lbracket_char(91).
+% ex_lbracket_char(91).
+ex_lbracket_char(0'[).
 
 % ex_lbracket("(").
 % ex_lbracket("[").
@@ -364,9 +361,11 @@ ex_rbracket(RB) :-
 	ex_rbracket_char(RChar).
 
 % ')'
-ex_rbracket_char(41).
+% ex_rbracket_char(41).
+ex_rbracket_char(0')).
 % ']'
-ex_rbracket_char(93).
+% ex_rbracket_char(93).
+ex_rbracket_char(0']).
 
 % ex_rbracket(")").
 % ex_rbracket("]").
@@ -378,9 +377,11 @@ ne_lbracket(NELB) :-
 	ne_lbracket_char(NELBChar).
 
 % ''''
-ne_lbracket_char(39).
+% ne_lbracket_char(39).
+ne_lbracket_char(0''').
 % '"'
-ne_lbracket_char(34).
+% ne_lbracket_char(34).
+ne_lbracket_char(0'"). %"
 
 % ne_lbracket("'").
 % ne_lbracket("""").
@@ -390,11 +391,14 @@ ne_rbracket(NERB) :-
 	ne_rbracket_char(NERBChar).
 
 % ''''
-ne_rbracket_char(39).
+% ne_rbracket_char(39).
+ne_rbracket_char(0''').
 % '"'
-ne_rbracket_char(34).
+% ne_rbracket_char(34).
+ne_rbracket_char(0'"). %"
 % ':'
-ne_rbracket_char(58).
+% ne_rbracket_char(58).
+ne_rbracket_char(0':).
 
 % ne_rbracket("'").
 % ne_rbracket("""").
@@ -403,11 +407,11 @@ ne_rbracket_char(58).
 % rb_closes_one_of([],_RB,_Left,_LB,_Right) :-
 %     !,
 %     fail.
-rb_closes_one_of([LB|Rest],RB,[],LB,Rest) :-
-    brackets(LB,RB),
-    !.
-rb_closes_one_of([First|Rest],RB,[First|Left],LB,Right) :-
-    rb_closes_one_of(Rest,RB,Left,LB,Right).
+rb_closes_one_of([LB|Rest], RB, [], LB, Rest) :-
+	brackets(LB, RB),
+	!.
+rb_closes_one_of([First|Rest], RB, [First|Left], LB, Right) :-
+	rb_closes_one_of(Rest, RB, Left, LB, Right).
 
 token_sequence_length([], LastToken, StartPos, TokensLength) :-
 	arg(4, LastToken, pos(_, EndPos)),

@@ -39,6 +39,10 @@
         get_utterance_token_list/4
    ]).
 
+:- use_module(skr(skr_utilities), [
+         get_candidate_feature/3
+    ]).
+
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
@@ -745,13 +749,14 @@ map_contains_sense_to_strip(ThisMap, RestMaps, MapsToKeep,
         ),
 	OtherMap = map(_OtherMapNegScore, OtherMapEVs),
 	evs_contain_sense(OtherMapEVs, 1, MatchingPosition, SensesToKeep),
-	!.	
+	!.
 
 % :- nondet evs_contain_sense/4.
 
 % At least one of Evs contains at least one of SensesToStrip
-evs_contain_sense([ev(_,_,_,Concept,_,_,_,_,_,_Srcs,_PosInfo)|_RestEVs],
-		  Position, Position, SensesToStrip) :-
+evs_contain_sense([Candidate|_RestEVs], Position, Position, SensesToStrip) :-
+	get_candidate_feature(metaconcept, Candidate, Concept),
+	% ev(_,_,_,Concept,_,_,_,_,_,_Srcs,_PosInfo)|_RestEVs
 	memberchk(Concept, SensesToStrip).
 	% Must NOT have a cut here because ev_contains_sense has to be backtrackable
 evs_contain_sense([_First|Rest], CurrentPosition, MatchingPosition, SensesToStrip) :-

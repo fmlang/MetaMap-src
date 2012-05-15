@@ -46,7 +46,7 @@
 	% called by MetaMap API -- do not change signature!
 	postprocess_sentences/10,
 	% called by MetaMap API -- do not change signature!
-	process_text/11
+	process_text/12
    ]).
 
 % :- extern(skr_fe_go).
@@ -84,8 +84,9 @@
    ]).
 
 :- use_module(skr(skr_text_processing), [
-	extract_sentences/9,
-	get_skr_text/1
+	extract_sentences/10,
+	get_skr_text/2,
+	medline_PMID_indicator_char/1
 	% is_sgml_text/1
 	% warn_remove_non_ascii_from_input_lines/2
    ]).
@@ -97,7 +98,7 @@
 	do_formal_tagger_output/0,
 	do_sanity_checking_and_housekeeping/4,
 	generate_bracketed_output/2,
-	generate_candidates_output/3,
+	generate_candidates_output/7,
 	generate_EOT_output/1,
 	generate_header_output/6,
 	generate_mappings_output/5,
@@ -164,8 +165,7 @@
    ]).
 
 :- use_module(skr_lib(sicstus_utils), [
-	subchars/4,
-	ttyflush/0
+	subchars/4
    ]).
 
 :- use_module(tagger(tagger_access), [
@@ -361,11 +361,11 @@ process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
 process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	      WSDServerHosts, WSDForced, WSDServerPort,
 	      InterpretedArgs, IOptions) :-
-	get_skr_text(Strings0),
+	get_skr_text(Strings0, TextID),
 	Strings0 = [FirstString|RestStrings],
 	trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
 	( TrimmedStrings \== [] ->
-	  process_text(TrimmedStrings,
+	  process_text(TrimmedStrings, TextID,
 		       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		       WSDServerHosts, WSDForced, WSDServerPort,
 		       ExpRawTokenList, AAs, MMResults),
@@ -446,11 +446,11 @@ in Sentences in case the original text is preferred. */
 % 	 aphrases(APhrases))
 
 %%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
-process_text(Text,
+process_text(Text, TextID,
 	     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	     WSDServerHosts, WSDForced, WSDServerPort,
 	     RawTokenList, AAs, MMResults) :-
-	( process_text_1(Text,
+	( process_text_1(Text, TextID,
 			 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 			 WSDServerHosts, WSDForced, WSDServerPort,
 			 RawTokenList, AAs, _UDAs, MMResults) ->
@@ -459,7 +459,7 @@ process_text(Text,
 	  abort
 	).
 
-process_text_1(Lines0,
+process_text_1(Lines0, TextID,
 	       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	       WSDServerHosts, WSDForced, WSDServerPort,
 	       ExpRawTokenList, AAs, UDAs, MMResults) :-
@@ -469,7 +469,7 @@ process_text_1(Lines0,
 	% Sentences and CoordSentences are the token lists
 	% CoordSentences includes the positional information for the original text
 	% format(user_output, 'Processing PMID ~w~n', [PMID]),
-	extract_sentences(Lines0, InputType, TextFields, NonTextFields,
+	extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
 			  Sentences, CoordSentences, AAs, UDAs, Lines),
 	% need to update Lines
 	% fail,
@@ -528,7 +528,6 @@ process_text_1(Lines0,
 	% write_utterances(ExpandedUtterances),
 	% format(user_output, '~n~n', []),
 	compare_utterance_lengths(OrigUtterances, ExpandedUtterances),
-	ttyflush,
 	MMOutput \== '',
 	ExpRawTokenList \== '',
 	empty_avl(WordDataCacheIn),
@@ -655,7 +654,11 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 		    [_ExtractedPhrase|RestExtractedPhrases],
 		    Sentences, BracketedOutput, N, M, AAs, Label, MMOIn, MMOOut) :-
 	MMOPhrase = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
-			   candidates(Evaluations),
+			   candidates(TotalCandidateCount,
+				      ExcludedCandidateCount,
+				      PrunedCandidateCount,
+				      RemainingCandidateCount,
+				      Evaluations),
 			   mappings(Mappings),
 			   pwi(PhraseWordInfo),
 			   gvcs(GVCs),
@@ -667,7 +670,11 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 			       BracketedOutput, PhraseMMO),
 	generate_bracketed_output(BracketedOutput, PhraseWordInfo),
 	generate_variants_output(GVCs, BracketedOutput),
-	generate_candidates_output(Evaluations3, BracketedOutput, CandidatesMMO),
+	generate_candidates_output(Evaluations3,
+				   TotalCandidateCount,
+				   ExcludedCandidateCount, PrunedCandidateCount,
+				   RemainingCandidateCount,
+				   BracketedOutput, CandidatesMMO),
 	generate_mappings_output(Mappings, Evaluations, APhrases,
 				 BracketedOutput, MappingsMMO),
 	% format('PhraseTextAtom:~n~p~n',[PhraseTextAtom]),
@@ -1013,7 +1020,8 @@ trim_field_name_prefix(Field, CharsIn, FieldLength, NumBlanksTrimmed, CharsNext3
 	% trim off any whitespace immediately after the text field
 	trim_whitespace_left(CharsNext0, CharsNext1, NumBlanksTrimmed1),
 	% trim off the hyphen after the blanks
-	CharsNext1 = [45|CharsNext2],
+	CharsNext1 = [FirstChar|CharsNext2],
+	medline_PMID_indicator_char(FirstChar),
 	% trim off any whitespace immediately after the hyphen
 	trim_whitespace_left(CharsNext2, CharsNext3, NumBlanksTrimmed2),
 	% The "+1" is for the hyphen
