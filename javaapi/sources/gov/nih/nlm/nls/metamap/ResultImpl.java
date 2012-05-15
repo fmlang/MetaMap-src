@@ -13,7 +13,7 @@ package gov.nih.nlm.nls.metamap;
 import java.util.List;
 import java.util.ArrayList;
 import java.io.PrintStream;
-import se.sics.prologbeans.*;
+import se.sics.prologbeans.PBTerm;
 import gov.nih.nlm.nls.metamap.TermUtils;
 
 /**
