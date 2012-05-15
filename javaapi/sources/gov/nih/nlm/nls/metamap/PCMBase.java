@@ -42,13 +42,14 @@ public class PCMBase implements PCM {
   }
 
   /**
-   * Describe <code>getCandidates</code> method here.
+   * get candidates list
    *
    * @return a <code>List</code> value
    */
   public final List<Ev> getCandidates() throws Exception  {
     List<Ev> evList = new ArrayList<Ev>();
-    PBTerm prologList = this.candidatesTerm.getArgument(1);
+
+    PBTerm prologList = this.candidatesTerm.getArgument(5);
     PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
       evList.add(new EvImpl(term.head()));
@@ -58,13 +59,26 @@ public class PCMBase implements PCM {
   }
 
   /**
-   * Describe <code>getCandidateList</code> method here.
+   * get candidates list
    *
    * @return a <code>List</code> value
    */
   public final List<Ev> getCandidateList() throws Exception  {
     List<Ev> evList = new ArrayList<Ev>();
-    PBTerm prologList = this.candidatesTerm.getArgument(1);
+    /* In order to maintain consistency with MetaMap's human-readable
+     * output, the
+     * <pre>
+     * candidates(<ListOfCandidates>)
+     * </pre>
+     * term now includes the counts of total, excluded, pruned, and
+     * remaining candidates: i.e.,
+     * <pre>
+     * candidates(TotalCandidatesCount, ExcludedCandidateCount,
+     *            PrunedCandidateCount, RemainingCandidates,
+     *            <ListOfCandidates>)
+     * </pre>
+     */
+    PBTerm prologList = this.candidatesTerm.getArgument(5);
     PBTerm term = prologList;
     for (int i = 1; i <= prologList.length(); i++) {
       evList.add(new EvImpl(term.head()));
@@ -89,6 +103,8 @@ public class PCMBase implements PCM {
     }
     return mapList;
   }
+
+  
 
   /**
    * Describe <code>getMappingList</code> method here.
@@ -245,16 +261,19 @@ public class PCMBase implements PCM {
     }
 
     public boolean isHead() throws Exception  { 
-      return TermUtils.getAtomArgument(this.evTerm, 8).equals("yes");
+      return TermUtils.getAtomArgument(this.evTerm, 10).equals("yes");
     }
     public boolean isOvermatch() throws Exception  {       
-      return TermUtils.getAtomArgument(this.evTerm, 9).equals("yes");
+      return TermUtils.getAtomArgument(this.evTerm, 11).equals("yes");
     }
     public List<String> getSources() throws Exception  {
-      return TermUtils.getAtomStringListArgument(this.evTerm, 10);
+      return TermUtils.getAtomStringListArgument(this.evTerm, 12);
     }
     public List<Position> getPositionalInfo() throws Exception  { 
-      return TermUtils.getPositionListArgument(this.evTerm, 11);
+      return TermUtils.getPositionListArgument(this.evTerm, 13);
+    }
+    public int getStatus() throws Exception  { 
+      return -1;		// to be implemented
     }
     /** get underlying Prolog Term */
     public PBTerm getTerm() {
