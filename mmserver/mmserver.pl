@@ -19,7 +19,7 @@
 :- use_module(skr(skr_fe), [
 	postprocess_sentences/10,
 	initialize_skr/4,
-	process_text/11
+	process_text/12
    ]).
 
 :- use_module(skr(skr),[
@@ -161,7 +161,7 @@ process_string(Input,Output) :-
 	split_string_completely(TrimmedInput,"\n",Strings),
 	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
 	get_WSD_server_hosts_and_port(WSDServerHosts, WSDForced, WSDServerPort),
-	process_text(Strings,
+	process_text(Strings, "0000000",
 		     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		     WSDServerHosts, WSDForced, WSDServerPort,
 		     ExpRawTokenList, AAs, MMResults),
