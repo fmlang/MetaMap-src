@@ -97,9 +97,9 @@ $(SAVED_STATE) :
 $(BINEXEC) : $(SAVED_STATE)
 	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
 
-RT_DIR=$(SKR_SRC_HOME)/sp-4.2.0
-RT_BIN=$(RT_DIR)/sicstus-4.2.0/bin
-RT_LIB=$(RT_DIR)/sicstus-4.2.0/library
+RT_DIR=$(SKR_SRC_HOME)/sp-$(SICSTUS_VERSION)
+RT_BIN=$(RT_DIR)/sicstus-$(SICSTUS_VERSION)/bin
+RT_LIB=$(RT_DIR)/sicstus-$(SICSTUS_VERSION)/library
 RT_NATIVE_LIB=$(RT_LIB)/$(ARCHDIR)
 
 RT_PO_FILES = $(RT_LIB)/bdb.po        \
@@ -131,7 +131,7 @@ RT_DLLS = $(RT_NATIVE_LIB)/fastrw.$(SOEXT) $(RT_NATIVE_LIB)/jasper.$(SOEXT) \
 
 build_runtime: make_rtdirs copy_dlls
 	$(CP) $(SICSTUS_LIB)/libspnative.$(JSOEXT)           $(RT_DIR)
-	$(CP) $(SICSTUS_LIB)/libsprt4-2-0*.$(LSOEXT)         $(RT_DIR)
+	$(CP) $(SICSTUS_LIB)/libsprt$(SICSTUS_DASHED_VERSION)*.$(LSOEXT)         $(RT_DIR)
 	$(CP) $(SICSTUS_OBJECTS)/sprt.sav             $(RT_BIN)
 	$(CP) $(SICSTUS_LIBRARY)/avl.po               $(RT_LIB)
 	$(CP) $(SICSTUS_LIBRARY)/bdb.po               $(RT_LIB)

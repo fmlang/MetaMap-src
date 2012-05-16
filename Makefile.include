@@ -21,6 +21,8 @@ export MKDIR = mkdir
 export AR = ar
 export ARFLAGS = cruv
 export C__DEBUG = -D__DEBUG
+export SICSTUS_VERSION = 4.2.1
+export SICSTUS_DASHED_VERSION = 4-2-1
 
 export PREFIX='$$SP_APP_DIR'
 
@@ -62,11 +64,11 @@ ifeq '$(O_SYSTEM)' "Linux"
   export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb-4.8.a
   export BERKELEY_LIB_DYNAMIC = $(BERKELEY_LIB)/libdb-4.8.so
   export DEFAULT_LIBXML_DIR = /usr
-  export SICSTUS = /nfsvol/crfiler-ind/II_Research/SICStus/sp-4.2.0-x86-linux-glibc2.5
+  export SICSTUS = /nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86-linux-glibc2.5
   export SICSTUS_BIN = $(SICSTUS)/bin
   export SICSTUS_LIB = $(SICSTUS)/lib
-  export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-4.2.0/bin
-  export SICSTUS_LIBRARY = $(SICSTUS)/lib/sicstus-4.2.0/library
+  export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-$(SICSTUS_VERSION)/bin
+  export SICSTUS_LIBRARY = $(SICSTUS)/lib/sicstus-$(SICSTUS_VERSION)/library
   export LIBS = -lpthread
   export SOEXT=so
   export LSOEXT=so
@@ -88,11 +90,11 @@ else
     export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb.dylib
     export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb.a
     export BERKELEY_LIB_DYNAMIC = $(BERKELEY_LIB)/libdb.dylib
-    export SICSTUS = /usr/local/sicstus4.2.0
+    export SICSTUS = /usr/local/sicstus$(SICSTUS_VERSION)
     export SICSTUS_BIN = $(SICSTUS)/bin
     export SICSTUS_LIB = $(SICSTUS)/lib
-    export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-4.2.0/bin
-    export SICSTUS_LIBRARY = $(SICSTUS)/lib/sicstus-4.2.0/library
+    export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-$(SICSTUS_VERSION)/bin
+    export SICSTUS_LIBRARY = $(SICSTUS)/lib/sicstus-$(SICSTUS_VERSION)/library
     export SOEXT=bundle
     export LSOEXT=dylib
     export JSOEXT=jnilib
