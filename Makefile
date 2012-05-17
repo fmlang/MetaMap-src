@@ -47,10 +47,17 @@ APPNAME=metamap11
 SAVED_STATE=$(APPNAME).sav
 BINEXEC=$(APPNAME).BINARY.$(ARCH)
 
+MSAPPNAME=mmserver11
+MSSAVED_STATE=$(MSAPPNAME).sav
+MSBINEXEC=$(MSAPPNAME).BINARY.$(ARCH)
+
 all : build_debug build_lib build_db build_functions \
       build_miscutil build_morph build_query build_lexicon \
-      build_runtime $(BINEXEC) build_mmserver build_liblm \
+      build_runtime build_metamap build_mmserver build_liblm \
       build_lcat build_lvar
+
+build_metamap : $(BINEXEC)
+build_mmserver : $(MSBINEXEC)
 
 build_debug :
 	cd debug && $(MAKE)
@@ -76,9 +83,6 @@ build_query :
 build_lexicon :
 	cd lexicon/lexicon && $(MAKE)
 
-build_mmserver :
-	cd mmserver && $(MAKE)
-
 build_lcat : lexicon/morph/liblm.a
 	cd lexicon/lcat && $(MAKE)
 
@@ -92,10 +96,21 @@ lexicon/morph/liblm.a :
 
 # MetaMap targets
 $(SAVED_STATE) :
-	sicstus $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
+	$(RM) loader.pl
+	$(GIT) checkout -- loader.pl
+	$(PROLOG) $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
 
 $(BINEXEC) : $(SAVED_STATE)
-	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+
+# MetaMap Server targets
+$(MSSAVED_STATE) :
+	$(CP) mmserver/loader.pl .
+	$(CP) mmserver/mmserver.pl .
+	$(PROLOG) $(SICSTUSARGS) --goal "save_program('$(MSSAVED_STATE)'), halt."
+
+$(MSBINEXEC) : $(MSSAVED_STATE)
+	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(MSSAVED_STATE) --output=$(MSBINEXEC) $(LINK_FILES) $(LDFLAGS)
 
 RT_DIR=$(SKR_SRC_HOME)/sp-$(SICSTUS_VERSION)
 RT_BIN=$(RT_DIR)/sicstus-$(SICSTUS_VERSION)/bin
@@ -131,7 +146,7 @@ RT_DLLS = $(RT_NATIVE_LIB)/fastrw.$(SOEXT) $(RT_NATIVE_LIB)/jasper.$(SOEXT) \
 
 build_runtime: make_rtdirs copy_dlls
 	$(CP) $(SICSTUS_LIB)/libspnative.$(JSOEXT)           $(RT_DIR)
-	$(CP) $(SICSTUS_LIB)/libsprt$(SICSTUS_DASHED_VERSION)*.$(LSOEXT)         $(RT_DIR)
+	$(CP) $(SICSTUS_LIB)/libsprt$(SICSTUS_VERSION_DASHED)*.$(LSOEXT)         $(RT_DIR)
 	$(CP) $(SICSTUS_OBJECTS)/sprt.sav             $(RT_BIN)
 	$(CP) $(SICSTUS_LIBRARY)/avl.po               $(RT_LIB)
 	$(CP) $(SICSTUS_LIBRARY)/bdb.po               $(RT_LIB)

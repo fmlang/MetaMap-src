@@ -21,9 +21,10 @@ export MKDIR = mkdir
 export AR = ar
 export ARFLAGS = cruv
 export C__DEBUG = -D__DEBUG
+export PROLOG = sicstus
+export SPLD = spld
 export SICSTUS_VERSION = 4.2.1
-export SICSTUS_DASHED_VERSION = 4-2-1
-
+export SICSTUS_VERSION_DASHED = 4-2-1
 export PREFIX='$$SP_APP_DIR'
 
 export WARNINGS = -pedantic -Wall -Wbad-function-cast -Wcast-qual -Wcast-align -Wconversion \
