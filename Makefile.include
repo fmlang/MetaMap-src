@@ -20,6 +20,7 @@ export GCC = gcc
 export MKDIR = mkdir
 export AR = ar
 export ARFLAGS = cruv
+export GIT = git
 export C__DEBUG = -D__DEBUG
 export PROLOG = sicstus
 export SPLD = spld
