@@ -2609,7 +2609,7 @@ compute_min_mapping_score([FirstMappingWithScore|RestMappingsWithScore], MinScor
 keep_mappings_with_min_score([], _MinScore, []).
 keep_mappings_with_min_score([FirstMappingWithScore|RestMappingsWithScore], MinScore, KeptMappings) :-
 	FirstMappingWithScore = FirstScore-_FirstMapping,
-	( FirstScore < 0.95 * MinScore ->
+	( FirstScore < 0.70 * MinScore ->
 	  KeptMappings = [FirstMappingWithScore|RestKeptMappings]
 	; KeptMappings = RestKeptMappings
 	),
