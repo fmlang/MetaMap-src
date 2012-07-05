@@ -241,6 +241,10 @@ is_control_option(metamap,  '', javalex, no,
                    aspec(javalex, mandatory, integer, none, no_default,
                          'Year of lexAccess to use (2010 or 2011)')).
 
+is_control_option(metamap,  '', map_thresh, no,
+                   aspec(map_thresh, mandatory, none, none, no_default,
+                         'Year of lexAccess to use (2010 or 2011)')).
+
 
 % is_control_option(metamap,  '', clfi, no,
 %                   aspec(clfi, mandatory, 'c or java', none, no_default,
@@ -367,12 +371,12 @@ is_control_option(filter_mrconso,x,dump_syntax_only,no,none).
 is_control_option(filter_mrconso,h,help,no,none).
 is_control_option(filter_mrconso,i,info,no,none).
 is_control_option(filter_mrconso,t,total_lines,no,
-                  aspec(total_lines,mandatory,integer,none,no_default,
+                  aspec(total_lines, mandatory, integer, none, no_default,
                         'Total number of lines to process')).
-is_control_option(filter_mrconso,'R',mrrank_file,no,
+is_control_option(filter_mrconso, 'R', mrrank_file, no,
                   aspec(mrrank_file,mandatory,file,read,no_default,
-                        'Total number of lines to process')).
-is_control_option(filter_mrconso,p,progress_bar_interval,no,
+                        'MRRANK file')).
+is_control_option(filter_mrconso, p, progress_bar_interval, no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
                         'Interval of progress bar')).
 
@@ -395,6 +399,16 @@ is_control_option(flip_variants,w,warnings,no,none).
 
 is_control_option(glean_ambig,h,help,no,none).
 is_control_option(glean_ambig,w,warnings,no,none).
+is_control_option(glean_ambig,'R',mrrank_file,no,
+                  aspec(mrrank_file,mandatory,file,read,no_default,
+                        'MRRANK file')).
+is_control_option(glean_ambig, t, total_lines, no,
+                  aspec(total_lines,mandatory,integer,none,no_default,
+                        'Total number of lines to process')).
+is_control_option(glean_ambig, p, progress_bar_interval, no,
+                  aspec(progress_bar_interval,mandatory,integer,none,no_default,
+                        'Interval of progress bar')).
+		  
 is_control_option(glean_co_st,n,normalize,yes,none).
 is_control_option(glean_co_st,h,help,no,none).
 is_control_option(glean_from_mm,t,three_column_output,yes,none).
@@ -1342,7 +1356,7 @@ interpret_arg(ArgSpec,Arg,
     Att=name(Arg),
     (   (SubType==read; SubType==write) ->
 	prolog_flag(fileerrors,_,off),
-	(open(Arg,SubType,Stream) ->
+	(open(Arg, SubType, Stream, [encoding('UTF-8')]) ->
 	    prolog_flag(fileerrors,_,on),
 	    RestAtts=[stream(Stream)],
 	    StatusOut=StatusIn

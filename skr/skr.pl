@@ -173,6 +173,7 @@
 :- use_module(skr_lib(sicstus_utils), [
 	interleave_string/3,
 	lower/2,
+	midstring/6,
 	subchars/4,
 	ttyflush/0
     ]).
@@ -183,6 +184,7 @@
 
 :- use_module(text(text_object_util), [
 	an_tok/1,
+	brackets/2,
 	higher_order_or_annotation_tok/1,
 	pn_tok/1,
 	ws_or_pn_tok/1,
@@ -339,11 +341,14 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	sort(AllAddedOptions0, AllAddedOptions),
 	% AllUtteranceText is never used in skr_phrase; it's there only for gap analysis,
 	% which is no longer used!!
+	% format(user_output, 'Phrase ~w:~n', [MergedPhrase]),
 	skr_phrase(InputLabel, AllUtteranceText,
 		   MergedPhrase, AAs, CitationTextAtom, RawTokensIn, GVCs,
 		   WordDataCacheIn, USCCacheIn,
 		   WordDataCacheNext, USCCacheNext,
 		   RawTokensNext, APhrases, FirstMMOPhrase),
+	% format(user_output, 'Tokens Next:~n', []),
+	% skr_utilities:write_token_list(RawTokensNext, 0, 1),
 	set_var_GVCs_to_null(GVCs),
 	extract_phrases_from_aps(APhrases, Phrases),
 	subtract_from_control_options(AllAddedOptions),
@@ -656,7 +661,7 @@ get_phrase_info(Phrase, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAto
 	get_phrase_startpos_and_length(PhraseTokens, PhraseStartPos, PhraseLength0),
 	subchars(CitationTextAtom, PhraseTextStringWithCRs0, PhraseStartPos, PhraseLength0),
 	add_AA_suffix(PhraseTextStringWithCRs0, AAs, PhraseTokens, PhraseLength0,
-		      PhraseTextStringWithCRs, PhraseLength),
+		      CitationTextAtom, PhraseTextStringWithCRs, PhraseLength),
 	replace_crs_with_blanks(PhraseTextStringWithCRs, PhraseStartPos,
 				OrigPhraseTextString, ReplacementPositions),
 	atom_codes(OrigPhraseTextAtom, OrigPhraseTextString).
@@ -668,7 +673,7 @@ get_phrase_info(Phrase, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAto
 % then add " (" + AA + ")" to the phrase string, and modify the length accordingly.
 
 add_AA_suffix(PhraseTextStringWithCRs0, AAs, PhraseTokens, PhraseLength0,
-	      PhraseTextStringWithCRs, PhraseLength) :-
+	      CitationTextAtom, PhraseTextStringWithCRs, PhraseLength) :-
 	% reversed order of args from QP library version!
 	( last(PhraseTokens, LastPhraseToken),
 	  avl_member(AATokens, AAs, [ExpansionTokens]),
@@ -682,14 +687,34 @@ add_AA_suffix(PhraseTextStringWithCRs0, AAs, PhraseTokens, PhraseLength0,
 	  matching_tokens_4(LastExpansionToken, LastPhraseToken) ->
 	  get_AA_text(AATokens, AATextString0),
 	  append(AATextString0, AATextString),
-	  append([PhraseTextStringWithCRs0, " (", AATextString, ")"], PhraseTextStringWithCRs),
+	  determine_brackets_enclosing_AA(PhraseTokens, CitationTextAtom,
+					  LeftBracket, RightBracket),
+	  append([PhraseTextStringWithCRs0,LeftBracket,AATextString,RightBracket], PhraseTextStringWithCRs),
+	  % append([PhraseTextStringWithCRs0," (",AATextString,")"], PhraseTextStringWithCRs),
 	  length(AATextString, AATextStringLength),
 	  PhraseLength is PhraseLength0 + 2 + AATextStringLength + 1
 	; PhraseTextStringWithCRs = PhraseTextStringWithCRs0,
 	  PhraseLength is PhraseLength0
 	).
 	
+% Determine the Left and Right brackets surrounding the AA:
+% We can't automatically assume they are "(" and ")"!
+
+determine_brackets_enclosing_AA(PhraseTokens, CitationTextAtom, MidStringPrefix, [RightBracket]) :-
+	last(PhraseTokens, LastPhraseToken),
+	token_template(LastPhraseToken, _TokenType, _TokenString, _LCTokenString, _Pos1, RealPos),
+	RealPos = pos(LastPhraseTokenStartPos,LastPhraseTokenLength),
+	PrefixLength is LastPhraseTokenStartPos + LastPhraseTokenLength,
+	MidStringLength is 20,
+	midstring(CitationTextAtom, MidString, _Fringes, PrefixLength, MidStringLength, _After),
+	atom_codes(MidString, MidStringCodes),
+	append(MidStringPrefix, _MidStringRest, MidStringCodes),
+	last(MidStringPrefix, MidStringPrefixLastChar),
+	brackets([MidStringPrefixLastChar], [RightBracket]),
+	!.
+
 	
+	  
 % First 4 fields must be identical	
 matching_tokens_4(tok(TokenType, TokenString, TokenLCString, Pos1),
 		  tok(TokenType, TokenString, TokenLCString, Pos1, _Pos2)).
@@ -2503,7 +2528,6 @@ construct_all_mappings(Evaluations, PhraseTextString, NPhraseWords, Variants,
 	MappingsCountIn is 0,
 	debug_call(candidates, length(AEvaluationsNoDups, NoDupsCount)),
 	debug_message(candidates, '### Expanding ~d Candidates~n', [NoDupsCount]),
-	% format(user_output, 'Phrase: "~s"~n', [PhraseTextString]),
 	expand_aevs(AEvaluationsNoDups, Depth, MappingsCountIn, MappingsTree, RawMappingsCount),
 	debug_message(candidates, '~N### Assembling mappings from ~d Candidates~n', [NoDupsCount]),
 	% This is the NEW way of flattening--order is preserved,
@@ -2609,12 +2633,19 @@ compute_min_mapping_score([FirstMappingWithScore|RestMappingsWithScore], MinScor
 keep_mappings_with_min_score([], _MinScore, []).
 keep_mappings_with_min_score([FirstMappingWithScore|RestMappingsWithScore], MinScore, KeptMappings) :-
 	FirstMappingWithScore = FirstScore-_FirstMapping,
-	( FirstScore < 0.95 * MinScore ->
+	get_map_thresh(MapThreshInt),
+	MapThresh is MapThreshInt / 100,
+	( FirstScore =< MapThresh * MinScore ->
 	  KeptMappings = [FirstMappingWithScore|RestKeptMappings]
 	; KeptMappings = RestKeptMappings
 	),
 	keep_mappings_with_min_score(RestMappingsWithScore, MinScore, RestKeptMappings).
 
+get_map_thresh(MapThresh) :-
+	( control_value(map_thresh, MapThresh) ->
+	  true
+	; MapThresh is 70
+	).
 
 % In the description below, "AEv" represents an aev/14 term.
 
@@ -3875,4 +3906,3 @@ portray_ev(EvTerm) :-
 	get_candidate_feature(cui, EvTerm, CUI),
 	writeq(ev(CUI)).
 :- add_portray(portray_ev).
- 

@@ -130,11 +130,11 @@ re_attach_apostrophe_s_syntax(WordListsIn, TagList, WordListsOut) :-
 % We do not have to worry about glomming the apostrophe onto a previous token
 % ending in a punctuation mark here...I think...
 re_attach_apostrophe_s_to_prev_word([], _TagList, []).
-re_attach_apostrophe_s_to_prev_word(WordListIn, TagList, WordListOut) :-
-	WordListIn = [OrigWord, '''', s | RestWordsIn],
+re_attach_apostrophe_s_to_prev_word([OrigWord, '''', s | RestWordsIn], TagList, WordListOut) :-	
 	concat_atom([OrigWord, '''', s], WordWithApostropheS),
-	member(TagElement, TagList),
-	TagElement = [WordWithApostropheS,_LexCat],
+	% verify that the synthetically created Word+apostrophe+s
+	% is indded in the TagList!
+	memberchk([WordWithApostropheS,_LexCat], TagList),
 	!,
 	WordListOut = [WordWithApostropheS|RestWordsOut],
 	re_attach_apostrophe_s_to_prev_word(RestWordsIn, TagList, RestWordsOut).

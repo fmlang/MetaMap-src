@@ -51,6 +51,7 @@
     ]).
 
 :- use_module(skr(skr_text_processing), [
+	convert_all_utf8_to_ascii/4,
 	get_skr_text_2/2
    ]).
 
@@ -516,7 +517,6 @@ find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
 		LBList, Label, LBToClearOut, RevBExpr, RestOut) :-
 	% look for nested bracketing expression (AFTER looking for closing bracket)
 	lbracket_tok(Token),
-	!,
 	% if it's non-exclusive, we must be at whitespace or an exclusive lb
 	( ne_lbracket_tok(Token) ->
 	  at_whitespace_or_exlb_tok(RevPre)
@@ -527,6 +527,22 @@ find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
 	NewLevel is Level + 1,
 	find_bracketing(RestIn, 0, [Token], NewLevel, [LB|LBList], Label,
 			LBToClear, RevSubBExpr, RestInOut),
+	RevSubBExpr = [ClosingSubExprBracket|_RestSubExpr],
+	% Determine the Left (open) Bracket's char
+	token_template(Token, pn, [LBracketTokenChar],
+		       _LCLBracketTokenkStr, _LBracketTokenPosInfo),
+	% Determine the Right (close) Bracket's char
+	token_template(ClosingSubExprBracket, pn, [ClosingSubExprBracketChar],
+		       _LCClosingSubExprBracketStr, _ClosingSubExprBracketPosInfo),
+	% Require that the left/open and right/close bracket chars match,
+	% i.e., "(" and ")" or "[" and "]", but not, e.g., "(" aned "]".
+	% This refinementy is designed to handle ill-formed input in which parens/brackets
+	% do not match, e.g., the following monstrosity from PMID 3097297:
+	% polyriboinosinic acid-polyribocytidylic acid [poly(I.C] was compared as a ...".
+	% In that text, we do NOT want "poly(I.C" recognized as a parenthetical expression.
+
+	brackets(LBracketTokenChar, ClosingSubExprBracketChar),
+	!,
 	construct_parenthetical_token(RevSubBExpr, NewLevel, BETok, _SubBExpr),
 	% do not allow this subbracketing to be "undone", i.e. fail rather than
 	% allow LB to be considered to be non-bracketing
@@ -3198,8 +3214,10 @@ get_UDAs(UDAs) :-
 
 create_UDAs(InputStream, UDAs) :-
 	% read in the contents of the UDA file
-	get_skr_text_2(InputStream, UDALines),
-	(  foreach(Line, UDALines),
+	get_skr_text_2(InputStream, UDALinesUTF8),
+	convert_all_utf8_to_ascii(UDALinesUTF8, _, _, UDALinesASCII),
+	UDALinesASCII = UDALinesUTF8,
+	(  foreach(Line, UDALinesASCII),
 	   fromto(Strings, S0, S, [])
 	   % remove all leading and trailing blanks from the entire line
 	do trim_whitespace(Line, TrimmedLine),
