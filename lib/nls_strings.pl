@@ -234,36 +234,58 @@ eliminate_nos_string(String, NormString) :-
 	eliminate_nos_acros(String, NormString0),
 	eliminate_nos_expansion(NormString0, NormString).
 
-eliminate_nos_acros(String,NormString) :-
-    split_string_backtrack(String,"NOS",Left,Right),
-    \+begins_with_alnum(Right),
-    \+ends_with_alpha(Left),
-    split_a_string(String,[", NOS",
-			 % "; NOS",
-			   " - NOS",
-			   " NOS",
-			   ".NOS",
-			   " - (NOS)",
-			   " (NOS)",
-			   "/NOS",
-			   "_NOS",
-			   ",NOS",
-			   "-NOS",
-			   ")NOS"],Left2,Substring,Right2),
-    (   Substring==")NOS" ->
-	append([Left2,")",Right2],NormString0)
-    ;   Substring==".NOS" ->
-	append([Left2,".",Right2],NormString0)
-    ;   Substring==" NOS" ->
-	\+abgn_form(Right2),
-        append(Left2,Right2,NormString0)
-    ;   Substring=="-NOS" ->
-	\+short_last(Left2),
-        append(Left2,Right2,NormString0)
-    ;   append(Left2,Right2,NormString0)
-    ),
-    !,
-    eliminate_nos_acros(NormString0,NormString).
+eliminate_nos_acros(String,  NormString) :-
+	split_string_backtrack(String, "NOS", Left, Right),
+	\+ begins_with_alnum(Right),
+	\+ ends_with_alpha(Left),
+	% These "NOSDD" designations refer to the tests and filenames
+	% in the 0doit2 script in the NEC_NOS directory
+	split_a_string([
+		   ".NOS",       % NOS04
+		   "(NOS",       % NOS05
+		   ":NOS",       % NOS06
+		   "/NOS",       % NOS07
+		   "_NOS",       % NOS08
+		   ",NOS",       % NOS09
+		   "-NOS",       % NOS10
+		   ")NOS",       % NOS11
+		   ", NOS",      % NOS13
+		   "; NOS",      % NOS14
+		   " NOS",       % NOS15
+		   " NOS ",      % NOS16
+		   " NOS, ",     % NOS17
+		   " NOS)",      % NOS18
+		   " NOS]",      % NOS19
+		   " NOS-",      % NOS20
+		   " NOS; ",     % NOS21
+		   " NOS/",      % NOS22
+    		   "[NOS] or",   % NOS23
+    		   "or [NOS]",   % NOS24
+    		   "(& [NOS])",  % NOS25
+    		   "NOS+",       % NOS26
+    		   " NOS:",      % NOS27
+    		   " NOS,",      % NOS28
+    		   "[NOS]"       % NOS29
+		      ], String, Left2, Substring, Right2),
+	% Continuation of NOS15, testing for end of string
+	( Substring == " NOS" ->
+	  Right2 == []
+	; true
+	),
+	(   Substring == ")NOS" ->
+	    append([Left2,")",Right2], NormString0)
+	;   Substring == ".NOS" ->
+	    append([Left2,".",Right2], NormString0)
+	;   Substring == " NOS" ->
+	    \+ abgn_form(Right2),
+	    append(Left2, Right2, NormString0)
+	;   Substring == "-NOS" ->
+	    \+ short_last(Left2),
+	    append(Left2, Right2, NormString0)
+	;   append(Left2, Right2, NormString0)
+	),
+	!,
+	eliminate_nos_acros(NormString0,NormString).
 eliminate_nos_acros(String,String).
 
 eliminate_nos_expansion(String,NormString) :-
@@ -281,30 +303,49 @@ eliminate_nos_expansion(LCAtom,Atom,NormAtom) :-
     !,
     midstring(Atom,_,NormAtom,LenA,LenB,LenC).
 
+% These designations refer to the tests and filenames
+% in the 0doit5 script in the NEC_NOS directory
+% sp01
 nos_expansion(', not otherwise specified').
+% sp02
 nos_expansion('; not otherwise specified').
+% sp03
 nos_expansion(', but not otherwise specified').
+% sp04
 nos_expansion(' but not otherwise specified').
+% sp05
+nos_expansion('(not otherwise specified)').
+% sp06
 nos_expansion(' not otherwise specified').
+% sp07
+nos_expansion(' to be specified elsewhere').
+% sp08
 nos_expansion(', not elsewhere specified').
+% sp09
 nos_expansion('; not elsewhere specified').
+% sp10
 nos_expansion(' not elsewhere specified').
-
+% sp11
+nos_expansion(': not further specified').
+% sp12
+nos_expansion(', not further specified').
+% sp13
+nos_expansion(' not further specified').
 
 /* 
-   split_a_string(+String, +Substrings, -Left, -Substring, -Right)
+   split_a_string(+Substrings, +String, -Left, -Substring, -Right)
 
 split_a_string/5 does the same thing except that it returns the Left
 and Right strings in addition to the matching Substring.*/
 
-split_a_string(_String,[],_,_,_) :-
-    !,
-    fail.
-split_a_string(String,[First|_Rest],Left,First,Right) :-
-    split_string(String,First,Left,Right),
-    !.
-split_a_string(String,[_First|Rest],Left,Substring,Right) :-
-    split_a_string(String,Rest,Left,Substring,Right).
+% split_a_string([], _String, _, _, _) :-
+%     !,
+%     fail.
+split_a_string([First|_Rest], String, Left, First, Right) :-
+	split_string(String, First, Left, Right),
+	!.
+split_a_string([_First|Rest],String, Left, Substring, Right) :-
+	split_a_string(Rest, String, Left, Substring, Right).
 
 %%% test_nos :-
 %%% 	test_atom(Atom),
@@ -846,11 +887,11 @@ split_string/4 embodies the property that String is the concatenation of
 Left, Substring and Right in that order.  Substring (and hence String) must be
 non-null.  Backtracking is not allowed. */
 
-split_string(String,SubString,Left,Right) :-
-    \+SubString=[],
-    append(SubString,Right,S1),
-    append(Left,S1,String),
-    !.
+split_string(String, SubString, Left, Right) :-
+	SubString = [_|_],
+	append(SubString, Right, S1),
+	append(Left, S1, String),
+	!.
 
 split_atom_completely(Atom, SplitAtom, AtomList) :-
 	( Atom == [] ->

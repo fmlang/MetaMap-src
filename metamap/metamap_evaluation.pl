@@ -221,13 +221,15 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	  debug_evaluate_candidate_list_3(DebugFlags, Evaluation),
 	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
 	  % format(user_output, '     ~q~n', [Evaluation]),	    
-	  Evaluations = [Evaluation|RestEvaluations]
+	  Evaluations = [Evaluation|RestEvaluations],
+	  add_to_avl(MetaCanonical, MetaConcept, CCsIn, CCsNext)
 	; Evaluations = RestEvaluations,
 	  % format(user_output, ' NO: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
-	  debug_evaluate_candidate_list_4(DebugFlags)
+	  debug_evaluate_candidate_list_4(DebugFlags),
+	  CCsNext = CCsIn
 	),
 	% format('~N### Eval 2: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
-	add_to_avl(MetaCanonical, MetaConcept, CCsIn, CCsNext),
+	% 
 	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 				PhraseTokens, RawTokensOut, AAs,

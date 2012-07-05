@@ -208,7 +208,7 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 	
-default_release('2011AB').
+default_release('2012AA').
 
 initialize_db_access :-
 	get_data_release(Release, 1),

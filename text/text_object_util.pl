@@ -329,6 +329,7 @@ multi_brackets(LB, RB) :-
 % '(', ']'
 % multi_brackets_chars(40, 93).
 multi_brackets_chars(0'(, 0']).
+multi_brackets_chars(0'[, 0')).
 
 % multi_brackets("(","]").
 

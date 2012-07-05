@@ -1337,8 +1337,8 @@ get_all_candidate_features(FeatureList, Candidate, FeatureValueList) :-
 
 get_candidate_feature(negvalue, Candidate, NegValue) :-
 	( Candidate = ev(NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
+			 _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
+			 _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	  % This is simply for mm_print, which sees the printed representation of candidates,
 	  % which does NOT include the LSComponents and TargetLSComponents fields.
@@ -1347,7 +1347,7 @@ get_candidate_feature(negvalue, Candidate, NegValue) :-
 	).
 get_candidate_feature(cui, Candidate, CUI) :-
 	( Candidate = ev(_NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1355,7 +1355,7 @@ get_candidate_feature(cui, Candidate, CUI) :-
 	).
 get_candidate_feature(metaterm, Candidate, MetaTerm) :-
 	( Candidate = ev(_NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1363,7 +1363,7 @@ get_candidate_feature(metaterm, Candidate, MetaTerm) :-
 	).
 get_candidate_feature(metaconcept, Candidate, MetaConcept) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
@@ -1371,7 +1371,7 @@ get_candidate_feature(metaconcept, Candidate, MetaConcept) :-
 	).
 get_candidate_feature(metawords, Candidate, MetaWords) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
@@ -1379,7 +1379,7 @@ get_candidate_feature(metawords, Candidate, MetaWords) :-
 	).
 get_candidate_feature(semtypes, Candidate, SemTypes) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
@@ -1387,7 +1387,7 @@ get_candidate_feature(semtypes, Candidate, SemTypes) :-
 	).
 get_candidate_feature(matchmap, Candidate, MatchMap) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1395,7 +1395,7 @@ get_candidate_feature(matchmap, Candidate, MatchMap) :-
 	).
 get_candidate_feature(lscomponents, Candidate, LSComponents) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1403,7 +1403,7 @@ get_candidate_feature(lscomponents, Candidate, LSComponents) :-
 	).
 get_candidate_feature(targetlscomponent, Candidate, TargetLSComponent) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1411,7 +1411,7 @@ get_candidate_feature(targetlscomponent, Candidate, TargetLSComponent) :-
 	).
 get_candidate_feature(involveshead, Candidate, InvolvesHead) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1419,7 +1419,7 @@ get_candidate_feature(involveshead, Candidate, InvolvesHead) :-
 	).
 get_candidate_feature(isovermatch, Candidate, IsOvermatch) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       IsOvermatch,_Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1427,7 +1427,7 @@ get_candidate_feature(isovermatch, Candidate, IsOvermatch) :-
 	).
 get_candidate_feature(sources, Candidate, Sources) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,Sources,_PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1435,7 +1435,7 @@ get_candidate_feature(sources, Candidate, Sources) :-
 	).
 get_candidate_feature(posinfo, Candidate, PosInfo) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,PosInfo,_Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
@@ -1443,7 +1443,7 @@ get_candidate_feature(posinfo, Candidate, PosInfo) :-
 	).
 get_candidate_feature(status, Candidate, Status) :-
 	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap, _LSComponents, _TargetLSComponent,_InvolvesHead,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,Status) ->
 	  true
 	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,

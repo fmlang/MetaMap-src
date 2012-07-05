@@ -33,7 +33,7 @@ public class PCMBase implements PCM {
   // Implementation of gov.nih.nlm.nls.metamap.PCM
 
   /**
-   * Describe <code>getPhrase</code> method here.
+   * Get {@link Phrase} associated with {@link Utterance}.
    *
    * @return a <code>Phrase</code> value
    */
@@ -42,9 +42,19 @@ public class PCMBase implements PCM {
   }
 
   /**
+   * Return the {@link Candidates} instance associated with the {@link Phrase}.
+   *
+   * @return a Candidates instances containing a List of candidate Ev instances.
+   */
+  public Candidates getCandidatesInstance()  throws Exception {
+    return new CandidatesImpl(this.candidatesTerm);
+  }
+
+  /**
    * get candidates list
    *
    * @return a <code>List</code> value
+   * @deprecated
    */
   public final List<Ev> getCandidates() throws Exception  {
     List<Ev> evList = new ArrayList<Ev>();
@@ -88,10 +98,11 @@ public class PCMBase implements PCM {
   }
 
   /**
-   * Describe <code>getMappings</code> method here.
+   * Get list of {@link Mapping} instances associated with {@link Phrase}
    *
    * @return a <code>List</code> value
    * @exception Exception if an error occurs
+   * @deprecated
    */
   public final List<Map> getMappings() throws Exception {
     List<Map> mapList = new ArrayList<Map>();
@@ -107,7 +118,7 @@ public class PCMBase implements PCM {
   
 
   /**
-   * Describe <code>getMappingList</code> method here.
+   * Return the Mapping list associated with the Phrase. 
    *
    * @return a <code>List</code> value
    * @exception Exception if an error occurs
@@ -272,8 +283,8 @@ public class PCMBase implements PCM {
     public List<Position> getPositionalInfo() throws Exception  { 
       return TermUtils.getPositionListArgument(this.evTerm, 13);
     }
-    public int getStatus() throws Exception  { 
-      return -1;		// to be implemented
+    public int getPruningStatus() throws Exception  { 
+      return (int)TermUtils.getIntegerArgument(this.evTerm, 14);
     }
     /** get underlying Prolog Term */
     public PBTerm getTerm() {
@@ -291,10 +302,35 @@ public class PCMBase implements PCM {
 	+ ", isHead: " + this.isHead()
 	+ ", isOverMatch: " + this.isOvermatch()
 	+ "," + this.getSources()
-	+ "," + this.getPositionalInfo() + ".";
+	+ "," + this.getPositionalInfo() 
+	+ ", pruning status: " + this.getPruningStatus() + ".";
       } catch (Exception e) {
 	throw new RuntimeException(e);
       }
+    }
+  }
+
+  class CandidatesImpl implements Candidates {
+    PBTerm candidatesTerm;
+    public CandidatesImpl(PBTerm newCandidatesTerm) throws Exception {
+      if (newCandidatesTerm.isCompound())
+	this.candidatesTerm = newCandidatesTerm;
+      else
+	throw new Exception("supplied term is not a compound term.");
+    }
+    public int getTotalCandidatesCount() { return (int)this.candidatesTerm.getArgument(1).intValue(); }
+    public int getExcludedCandidateCount() { return (int)this.candidatesTerm.getArgument(2).intValue(); }
+    public int getPrunedCandidateCount() { return (int)this.candidatesTerm.getArgument(3).intValue(); }
+    public int getRemainingCandidates() { return (int)this.candidatesTerm.getArgument(4).intValue(); }
+    public List<Ev> getEvList() throws Exception {
+      List<Ev> evList = new ArrayList<Ev>();
+      PBTerm prologList = this.candidatesTerm.getArgument(5);
+      PBTerm term = prologList;
+      for (int i = 1; i <= prologList.length(); i++) {
+	evList.add(new EvImpl(term.head()));
+	term = term.tail();
+      }
+      return evList;
     }
   }
 

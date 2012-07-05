@@ -107,7 +107,8 @@ public class MetaMapApiTest {
 	    out.println(" text: " + pcm.getPhrase().getPhraseText());
 	    out.println(" Minimal Commitment Parse: " + pcm.getPhrase().getMincoManAsString());
 	    out.println("Candidates:");
-	    for (Ev ev: pcm.getCandidateList()) {
+	    
+	    for (Ev ev: pcm.getCandidatesInstance().getEvList()) {
 	      out.println(" Candidate:");
 	      out.println("  Score: " + ev.getScore());
 	      out.println("  Concept Id: " + ev.getConceptId());
@@ -121,6 +122,7 @@ public class MetaMapApiTest {
 	      out.println("  is Overmatch?: " + ev.isOvermatch());
 	      out.println("  Sources: " + ev.getSources());
 	      out.println("  Positional Info: " + ev.getPositionalInfo());
+	      out.println("  Pruning Status: " + ev.getPruningStatus());
 	    }
 
 	    out.println("Mappings:");
@@ -139,6 +141,7 @@ public class MetaMapApiTest {
 		out.println("   is Overmatch?: " + mapEv.isOvermatch());
 		out.println("   Sources: " + mapEv.getSources());
 		out.println("   Positional Info: " + mapEv.getPositionalInfo());
+		out.println("   Pruning Status: " + mapEv.getPruningStatus());
 	      }
 	    }
 	  }

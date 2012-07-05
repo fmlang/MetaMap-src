@@ -84,6 +84,7 @@
    ]).
 
 :- use_module(skr(skr_text_processing), [
+	convert_all_utf8_to_ascii/4,
 	extract_sentences/10,
 	get_skr_text/2,
 	medline_PMID_indicator_char/1
@@ -361,7 +362,9 @@ process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
 process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 	      WSDServerHosts, WSDForced, WSDServerPort,
 	      InterpretedArgs, IOptions) :-
-	get_skr_text(Strings0, TextID),
+	get_skr_text(StringsUTF8, TextID),
+	convert_all_utf8_to_ascii(StringsUTF8, 0, _TempConvPos, Strings0),
+	% append(TempConvPos, ConvPos),
 	Strings0 = [FirstString|RestStrings],
 	trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
 	( TrimmedStrings \== [] ->
@@ -478,8 +481,6 @@ process_text_1(Lines0, TextID,
 	form_one_string(Lines, [10], InputStringWithCRs),
 	form_one_string(Lines, " ",  InputStringWithBlanks),
 
-	write_sentences(CoordSentences, Sentences),
-
 	% '' is just the previous token type, which, for the initial call, is null
 	TokenState is 0,
 	atom_codes(CitationTextAtomWithCRs, InputStringWithCRs),
@@ -489,7 +490,7 @@ process_text_1(Lines0, TextID,
 					  TrimmedTextFieldsOnlyString, NumBlanksTrimmed),
 	CurrentPos is NumBlanksTrimmed,
  	% format(user_output, '~n~s~n~n~s~n', [InputStringWithBlanks,TextFieldsOnlyString]),
-	
+        write_sentences(CoordSentences, Sentences),
 	create_EXP_raw_token_list(Sentences, '',
 				  CurrentPos, TokenState,
 				  TrimmedTextFieldsOnlyString, TempExpRawTokenList),
