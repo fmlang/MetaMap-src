@@ -1,8 +1,8 @@
 application.args=No cold.
 do.depend=false
 do.jar=true
-file.reference.javaapi-sources=/rhome/wjrogers/specialist/SKR/src.SICStus/javaapi/sources
-file.reference.javaapi-tests=/rhome/wjrogers/specialist/SKR/src.SICStus/javaapi/tests
+file.reference.javaapi-sources=/rhome/wjrogers/specialist/SKR/src/javaapi/sources
+file.reference.javaapi-tests=/rhome/wjrogers/specialist/SKR/src/javaapi/tests
 file.reference.prologbeans.jar=/nfsvol/crfiler-ind/II_Research/SICStus/sp-4.2.0-x86-linux-glibc2.5/lib/sicstus-4.2.0/bin/prologbeans.jar
 javac.debug=true
 javadoc.preview=true
