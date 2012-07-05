@@ -33,14 +33,18 @@
 % Author:   Lan
 % Purpose:  Provide access to the NLS Tagger Server
 
-:- module(tagger_access,[
+:- module(tagger_access, [
 	get_tagger_server_hosts_and_port/3,
 	% must be exported for filter_mrconso
 	tag_text/2,
  	tag_text/7
    ]).
 
-:- use_module(skr_lib(nls_strings),[
+:- use_module(metamap(metamap_tokenization), [
+	no_combine_pronoun/1
+   ]).
+
+:- use_module(skr_lib(nls_strings), [
 	atom_codes_list/2,
 	atom_codes_list_list/2,
 	split_string/4,
@@ -48,25 +52,25 @@
 	trim_and_compress_whitespace/2
    ]).
 
-:- use_module(skr_lib(nls_system),[
+:- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
    ]).
 
-:- use_module(skr_lib(skr_tcp),[
+:- use_module(skr_lib(skr_tcp), [
 	establish_tcp_connection/4
    ]).
 
-:- use_module(skr(skr_utilities),[
+:- use_module(skr(skr_utilities), [
 	ensure_atom/2,
 	ensure_number/2
    ]).
 
-:- use_module(skr_lib(ctypes),[
+:- use_module(skr_lib(ctypes), [
 	is_punct/1
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
+:- use_module(skr_lib(sicstus_utils), [
 	concat_atom/2,
 	number_to_atom/2,
 	replist/3,
@@ -74,25 +78,25 @@
 	with_input_from_chars/3
    ]).
 
-:- use_module(library(between),[
+:- use_module(library(between), [
 	between/3
    ]).
 
-:- use_module(library(codesio),[
+:- use_module(library(codesio), [
 	read_from_codes/2
    ]).
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	append/2,
 	last/2,
 	rev/2
    ]).
 
-:- use_module(library(random),[
+:- use_module(library(random), [
 	random_member/2
    ]).
 
-:- use_module(library(system),[
+:- use_module(library(system), [
 	environ/2
     ]).
 
@@ -385,12 +389,12 @@ choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost) :-
 % or if that token ends in a punctuation char.
 
 % In other words, by deMorgan's laws, do the glomming IF the preceeding token
-% (1) is not a pronoun AND
+% (1) is not a he/she/it pronoun AND
 % (2) does not end in a punctuation char
 postprocess_apostrophe_s([], []).
 postprocess_apostrophe_s(TaggedTextList0, TaggedTextList) :-
 	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap], [s,'noun/3']|RestTaggedTextList0],
-	LexCat \== pron,
+	\+ no_combine_pronoun(OrigWord),
 	atom_codes(OrigWord, OrigWordCodes),
 	last(OrigWordCodes, LastCode),
 	\+ is_punct(LastCode),

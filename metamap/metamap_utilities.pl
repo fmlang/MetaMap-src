@@ -66,7 +66,7 @@
 	get_all_candidate_features/3
     ]).
 
-:- use_module(skr_lib(semtype_translation_2011AB), [
+:- use_module(skr_lib(semtype_translation_2012AA), [
 	expand_semtypes/2
     ]).
 
@@ -292,17 +292,18 @@ dump_evaluations_indented([H|T], TotalCandidateCount,
 construct_related_evaluations([], []).
 construct_related_evaluations([FirstCandidate|RestCandidates],
 			      [FirstCandidate:FirstRelated|RestRelated]) :-
+	% Look for other ev() terms with the same preferred name
 	get_candidate_feature(metaconcept, FirstCandidate, Concept),
-	construct_related_evaluations_6(RestCandidates, Concept, [],
-					RevFirstRelated, [], RevNewRest),
+	construct_related_evaluations_6(RestCandidates, Concept,
+					[], RevFirstRelated, [], RevNewRest),
 	rev(RevFirstRelated, FirstRelated),
 	rev(RevNewRest, NewRest),
 	construct_related_evaluations(NewRest, RestRelated).
 
-construct_related_evaluations_6([], _Concept, RelatedIn,RelatedIn, UnrelatedIn, UnrelatedIn).
-construct_related_evaluations_6([FirstCandidate|RestCandidates], Concept, RelatedIn, RelatedOut,
+construct_related_evaluations_6([], _Concept, RelatedIn, RelatedIn, UnrelatedIn, UnrelatedIn).
+construct_related_evaluations_6([FirstCandidate|RestCandidates], Concept,
+				RelatedIn, RelatedOut,
 				UnrelatedIn, UnrelatedOut) :-
-
 	get_candidate_feature(metaconcept, FirstCandidate, Concept),
 	!,
 	construct_related_evaluations_6(RestCandidates, Concept,
@@ -311,22 +312,6 @@ construct_related_evaluations_6([FirstCandidate|RestCandidates], Concept, Relate
 construct_related_evaluations_6([FirstCandidate|RestCandidates], Concept,
 				RelatedIn, RelatedOut, UnrelatedIn, UnrelatedOut) :-
 	construct_related_evaluations_6(RestCandidates, Concept,
-					RelatedIn,RelatedOut, [FirstCandidate|UnrelatedIn],
-					UnrelatedOut).
-
-construct_related_evaluations_7([], _CUI, _Concept,
-				RelatedIn, RelatedIn, UnrelatedIn, UnrelatedIn).
-construct_related_evaluations_7([FirstCandidate|RestCandidates], CUI, Concept,
-			       RelatedIn, RelatedOut, UnrelatedIn, UnrelatedOut) :-
-
-	get_candidate_feature(metaconcept, FirstCandidate, Concept),
-	!,
-	construct_related_evaluations_7(RestCandidates, CUI, Concept,
-					[FirstCandidate|RelatedIn], RelatedOut,
-					UnrelatedIn, UnrelatedOut).
-construct_related_evaluations_7([FirstCandidate|RestCandidates], CUI, Concept,
-				RelatedIn, RelatedOut, UnrelatedIn, UnrelatedOut) :-
-	construct_related_evaluations_7(RestCandidates, CUI, Concept,
 					RelatedIn, RelatedOut,
 					[FirstCandidate|UnrelatedIn], UnrelatedOut).
 

@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -22,7 +21,7 @@
 *  The National Library of Medicine and the U.S. Government disclaim all
 *  warranties, expressed or implied, including warranties of performance,
 *  merchantability or fitness for any particular purpose.
-*                                                                         
+                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
 *  http://metamap.nlm.nih.gov/MMTnCs.shtml.
 *

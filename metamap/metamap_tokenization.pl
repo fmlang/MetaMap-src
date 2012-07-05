@@ -48,6 +48,7 @@
 	is_ws_word/1,
 	linearize_phrase/4,
 	linearize_components/2,
+	no_combine_pronoun/1,
 	parse_phrase_word_info/3,
 	% whitespace tokenization (break at whitespace and hyphens; ignore colons)
 	tokenize_text/2,
@@ -832,14 +833,46 @@ tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 % will instantiate TokField0 to ["finkelstein", "'", "s", " ", "test", " ", "positive"].
 % MetaMap's (new!) default behavior is to reattach the "'s"  to the previous token.
 
+% There are numerous cases of ill-formed text involving apostrophe-s
+% that need to be handled via special cases.
+
+% The basic (and correct) case, e.g., "Crohn's"
+tokenized_field_in_out_OLD(["'", "s"           | RestTokenizedFieldIn], StringWithApostropheS,
+		       [StringWithApostropheS  | RestTokenizedFieldOut],
+		       RestTokenizedFieldIn,    RestTokenizedFieldOut).
+% Ill-formed case 1:  e.g., "Crohn' s"
+tokenized_field_in_out_OLD(["'", " ", "s"      | RestTokenizedFieldIn], StringWithApostropheS,
+		       [StringWithApostropheS  | RestTokenizedFieldOut],
+		       RestTokenizedFieldIn,    RestTokenizedFieldOut).		       
+% Ill-formed case 2:  e.g., "Crohn 's"
+tokenized_field_in_out_OLD([" ", "'", "s"      | RestTokenizedFieldIn], StringWithApostropheS,
+		       [StringWithApostropheS  | RestTokenizedFieldOut],
+		       RestTokenizedFieldIn,    RestTokenizedFieldOut).
+% Ill-formed case 3:  e.g., "Crohn ' s"
+tokenized_field_in_out_OLD([" ", "'", " ", "s" | RestTokenizedFieldIn], StringWithApostropheS,
+		       [StringWithApostropheS  | RestTokenizedFieldOut],
+		       RestTokenizedFieldIn,    RestTokenizedFieldOut).
+
+
+tokenized_field_in_out(["'", "s"           | RestTokenizedFieldIn], RestTokenizedFieldIn).
+% Ill-formed case 1:  e.g., "Crohn' s"
+tokenized_field_in_out(["'", " ", "s"      | RestTokenizedFieldIn], RestTokenizedFieldIn).
+% Ill-formed case 2:  e.g., "Crohn 's"
+tokenized_field_in_out([" ", "'", "s"      | RestTokenizedFieldIn], RestTokenizedFieldIn).
+% Ill-formed case 3:  e.g., "Crohn ' s"
+tokenized_field_in_out([" ", "'", " ", "s" | RestTokenizedFieldIn], RestTokenizedFieldIn).
+
+
 re_attach_apostrophe_s_tokens([], []).
-re_attach_apostrophe_s_tokens(TokField0, TokField) :-
-	TokField0 = [OrigString, "'", "s" | Rest],
+re_attach_apostrophe_s_tokens(TokenizedFieldIn, TokenizedFieldOut) :-
+	TokenizedFieldIn = [OrigString | TailTokenizedFieldIn],
 	\+ no_reattach_string(OrigString),
+	tokenized_field_in_out(TailTokenizedFieldIn, RestTokenizedFieldIn),
 	!,
+	TokenizedFieldOut = [StringWithApostropheS|RestTokenizedFieldOut],
 	append([OrigString, "'", "s"], StringWithApostropheS),
-	TokField = [StringWithApostropheS | RestTokField],
-	re_attach_apostrophe_s_tokens(Rest, RestTokField).
+	% TokenizedFieldOut = [StringWithApostropheS | RestTokenizedField],
+	re_attach_apostrophe_s_tokens(RestTokenizedFieldIn, RestTokenizedFieldOut).
 re_attach_apostrophe_s_tokens([H|Rest], [H|NewRest]) :-
 	re_attach_apostrophe_s_tokens(Rest, NewRest).
 
@@ -931,7 +964,8 @@ ttu_token(T, S0, S) :-
 
 ttu_token2([], [], []).
 ttu_token2([Char|S0], T, S) :-
-	ctypes_bits(Char, Bits), 
+	ctypes_bits(Char, Bits),
+	% succeeds if Char is alnum
 	Mask is Bits /\ 3840,
 	(   Mask =\= 0 ->
 	    T = [Char|R],
@@ -1010,72 +1044,6 @@ local_alnum(119). % w
 local_alnum(120). % x
 local_alnum(121). % y
 local_alnum(122). % z
-
-% local_alnum(192). % À
-% local_alnum(193). % Á
-% local_alnum(194). % Â
-% local_alnum(195). % Ã
-% local_alnum(196). % Ä
-% local_alnum(197). % Å
-% local_alnum(198). % Æ
-% local_alnum(199). % Ç
-% local_alnum(200). % È
-% local_alnum(201). % É
-% local_alnum(202). % Ê
-% local_alnum(203). % Ë
-% local_alnum(204). % Ì
-% local_alnum(205). % Í
-% local_alnum(206). % Î
-% local_alnum(207). % Ï
-% local_alnum(208). % Ð
-% local_alnum(209). % Ñ
-% local_alnum(210). % Ò
-% local_alnum(211). % Ó
-% local_alnum(212). % Ô
-% local_alnum(213). % Õ
-% local_alnum(214). % Ö
-% local_alnum(215). % ×
-% local_alnum(216). % Ø
-% local_alnum(217). % Ù
-% local_alnum(218). % Ú
-% local_alnum(219). % Û
-% local_alnum(220). % Ü
-% local_alnum(221). % Ý
-% local_alnum(222). % Þ
-% local_alnum(223). % ß
-% local_alnum(224). % à
-% local_alnum(225). % á
-% local_alnum(226). % â
-% local_alnum(227). % ã
-% local_alnum(228). % ä
-% local_alnum(229). % å
-% local_alnum(230). % æ
-% local_alnum(231). % ç
-% local_alnum(232). % è
-% local_alnum(233). % é
-% local_alnum(234). % ê
-% local_alnum(235). % ë
-% local_alnum(236). % ì
-% local_alnum(237). % í
-% local_alnum(238). % î
-% local_alnum(239). % ï
-% local_alnum(240). % ð
-% local_alnum(241). % ñ
-% local_alnum(242). % ò
-% local_alnum(243). % ó
-% local_alnum(244). % ô
-% local_alnum(245). % õ
-% local_alnum(246). % ö
-% local_alnum(247). % ÷
-% local_alnum(248). % ø
-% local_alnum(249). % ù
-% local_alnum(250). % ú
-% local_alnum(251). % û
-% local_alnum(252). % ü
-% local_alnum(253). % ý
-% local_alnum(254). % þ
-% local_alnum(255). % ÿ
-
 
 /* ************************************************************************
    ************************************************************************

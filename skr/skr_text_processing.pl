@@ -34,6 +34,7 @@
 
 
 :- module(skr_text_processing, [
+	convert_all_utf8_to_ascii/4,
 	extract_sentences/10,
 	get_skr_text/2,
 	get_skr_text_2/2,
@@ -80,8 +81,8 @@
 	control_option/1
     ]).
 
-
 :- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2,
 	lower/2,
 	lower_chars/2,
 	ttyflush/0
@@ -90,6 +91,10 @@
 :- use_module(text(text_objects), [
 	find_and_coordinate_sentences/7
     ]).
+
+:- use_module(text(utf8_to_ascii), [
+	utf8_to_ascii/2
+   ]).
 
 :- use_module(library(lists), [
 	append/2,
@@ -140,8 +145,8 @@ get_skr_text_3(InputStream, [FirstText|Rest], TextID) :-
 	    halt
 	  )
 	 ; TextID = '',
-	  FirstText = First,
-	  fget_lines_until_skr_break(InputStream, Rest)
+	   FirstText = First,
+	   fget_lines_until_skr_break(InputStream, Rest)
 	).
 get_skr_text_3(_, [], '').
 
@@ -963,3 +968,43 @@ unpad_lines([First|Rest], Padding, [UnPaddedFirst|UnPaddedRest]) :-
 	),
 	unpad_lines(Rest, Padding, UnPaddedRest).
 
+convert_all_utf8_to_ascii(UTF8Strings, _, _, ASCIIStrings) :-
+	!,
+	ASCIIStrings = UTF8Strings.
+
+convert_all_utf8_to_ascii([], _CurrPos, [], []).
+convert_all_utf8_to_ascii([OneUTF8|RestUTF8], CurrPos,
+			  [OneExtraChars|RestExtraChars], [OneASCIIString|RestASCIIStrings]) :-
+	convert_one_utf8_to_ascii(OneUTF8, CurrPos, OneExtraChars, OneASCIICodes),
+	append(OneASCIICodes, OneASCIIString),
+	length(OneUTF8, OneUTF8Length),
+	NextPos is CurrPos + OneUTF8Length,
+	convert_all_utf8_to_ascii(RestUTF8, NextPos, RestExtraChars, RestASCIIStrings).
+
+convert_one_utf8_to_ascii([], _Pos, [], []).
+convert_one_utf8_to_ascii([OneUTF8Code|RestUTF8Codes], CurrPos,
+			  ExtraChars, [OneASCIICodes|RestASCIIChars]) :-
+	utf8_to_ascii(OneUTF8Code, ASCIIChar),
+	atom_codes(ASCIIChar, OneASCIICodes),
+	length(OneASCIICodes, Length),
+	( Length > 1 ->
+	  ExtraLength is Length - 1,
+	  ExtraChars = [CurrPos-ExtraLength|RestExtraChars]
+	; ExtraChars = RestExtraChars
+	),
+	NextPos is CurrPos + 1,
+	convert_one_utf8_to_ascii(RestUTF8Codes, NextPos, RestExtraChars, RestASCIIChars).
+
+
+% convert_utf8_to_ascii_old(AllStringsUTF8, AllStringsASCII) :-
+% 	(  foreach(OneStringUTF8,  AllStringsUTF8),
+% 	   foreach(OneStringASCII, AllStringsASCII)
+% 	do ( foreach(UTF8Code,  OneStringUTF8),
+% 	     foreach(ASCIIChar, TempCharsASCII)
+% 	   do utf8_to_ascii(UTF8Code, ASCIIChar)
+% 	      % atom_codes(ASCIIChar, ASCIICode)
+% 	   ),
+% 	   concat_atom(TempCharsASCII, OneAtomASCII),
+% 	   atom_codes(OneAtomASCII, OneStringASCII)
+% 	).
+% 

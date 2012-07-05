@@ -33,7 +33,6 @@
 % Author:   Lan
 % Purpose:  MetaMap candidate search capabilities
 
-
 :- module(metamap_candidates, [
 	add_candidates/9
     ]).
@@ -373,7 +372,7 @@ frequent_first_word_pair(mouse,       protein).
 frequent_first_word_pair(rat,         protein).
 frequent_first_word_pair(s,           protein).
 frequent_first_word_pair(skin,        hand).
-frequent_first_word_pair(solution,    injection).
+% frequent_first_word_pair(solution,    injection).
 
 %dump_uscs(_,_,[]) :-
 %    !.

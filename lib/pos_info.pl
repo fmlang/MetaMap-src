@@ -79,6 +79,7 @@
    ]).
 
 :- use_module(library(lists),[
+	append/2,
 	append_length/3,
 	last/2,
 	sublist/4,
@@ -96,10 +97,13 @@ create_EXP_raw_token_list([CurrentToken|RestTokensIn], PreviousToken, CurrentPos
 	% format(user_output, 'TOK: ~p~n', [CurrentToken]),
 	token_template(CurrentToken, CurrentTokenType,
 		       _CurrentString, _CurrentLCString, _CurrentPos),
+	% format(user_output, '~w|~s|~nIN |~s|~nOUT|',
+	%        [CurrentTokenType,CurrentString,InputStringIn]),
 	handle_token_type(CurrentTokenType, PreviousToken, TokenState,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 			  RestNewTokens),
+	% format(user_output, '~s|~n', [InputStringNext]),
 	get_next_token_state(TokenState, CurrentTokenType, NextTokenState),
 	create_EXP_raw_token_list(RestTokensNext, CurrentToken, NextPos, NextTokenState,
 				  InputStringNext, RestNewTokens).
@@ -200,6 +204,7 @@ handle_token_type(TokenType, PrevToken, TokenState,
 	  handle_hoa_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 			  RestNewTokens)
+
 	; handle_an_pn_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn, TokenState,
 			    InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 			    RestNewTokens)
@@ -210,7 +215,7 @@ handle_token_type(TokenType, PrevToken, TokenState,
 %   * the previous token was an aa whose final token is a ws, and
 %   * the current input string does not begin with a ws,
 % that means that the AA was something like "(TGF )" (e.g., from PMID 14704634),
-% so let allow that anyway.
+% so allow that anyway.
 handle_ws_token_type(_TokenState, PrevToken,
 		     InputStringIn,   CurrentToken, CurrentPos, RestTokens,
 		     InputStringNext, NewTokens,    NextPos,    RestTokensNext,
@@ -552,9 +557,8 @@ handle_hoa_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 	NewTokens = [NewCurrentToken|RestNewTokens].
 
 % Token types an, ic, lc, mc, nu, pn, uc are handled identically via handle_an_pn_type.
-handle_an_pn_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn, TokenState,
-		  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-		  RestNewTokens) :-
+handle_an_pn_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,   TokenState,
+		  InputStringNext, NewTokens,    NextPos,    RestTokensNext, RestNewTokens) :-
 	  add_raw_pos_info_2(CurrentToken, an, _PrevTokenType,  CurrentPos, InputStringIn, 
 			     NewCurrentToken, NextPos,    InputStringNext),
 	  test_for_adjacency(TokenState, NewCurrentToken, CurrentPos),
@@ -1134,7 +1138,7 @@ create_new_tokens([FirstToken|RestTokens], StartPos, EndPos,
 % If not, I don't care how many characters have been skipped.
 % Otherwise, ensure that we haven't skipped > 10 spaces.
 % This test deals with the off chance that words like "PMID" or "MEDLINE"
-% (typically found in the metadata before the title/abstract)
+% (typically found in the MEDLINE fields before the title/abstract)
 % would appear in the actual text and mess up the character positions.
 test_for_adjacency(TokenState, NewToken, CurrentPos) :-
 	( TokenState =:= 0 ->
@@ -1168,12 +1172,12 @@ get_next_token_state(1, TokenType, NextTokenState) :-
 add_raw_pos_info_2(CurrentToken, CurrentTokenType, PrevTokenType,
 		   CurrentPos, InputString, 
 		   NewToken,  NextPos,    RestInputString) :-
-	% CurrentToken = tok(TokenType, Text, LCText, CurrentPosTerm),
-	token_template(CurrentToken, TokenType, Text, LCText, CurrentPosTerm),
-	% Text is a substring of InputString
-	% There are PrefixLength chars in InputString before Text
-	% TextLength is the length of Text
-	sublist(InputString, Text, PrefixLength, TextLength),
+	token_template(CurrentToken, TokenType, CurrentTokenText,
+		       LCCurrentTokenText, CurrentPosTerm),
+	% CurrentTokenText is a substring of InputString.
+	% There are PrefixLength chars in InputString before CurrentTokenText.
+	% CurrentTokenTextLength is the length of CurrentTokenText.
+	sublist_ws(TokenType, InputString, CurrentTokenText, PrefixLength, CurrentTokenTextLength),
 	( CurrentTokenType == aadef,
 	  PrevTokenType \== sn ->
 	  PrefixLength < 20
@@ -1185,16 +1189,50 @@ add_raw_pos_info_2(CurrentToken, CurrentTokenType, PrevTokenType,
 	% !,
 	% proper_prefix_length(InputString, _Prefix, PrefixLength),
 	% format(user_output, 'SKIPPED:>~q<~n', [Prefix]),
-	% StartPos is the starting position of Text in InputString
+	% StartPos is the starting position of CurrentTokenText in InputString
 	StartPos is PrefixLength + CurrentPos,	
-	create_new_pos_term(CurrentPosTerm, StartPos, NewPosTerm),
-	% NewToken  = tok(TokenType, Text, LCText, CurrentPosTerm, NewPosTerm),
-	token_template(NewToken, TokenType, Text, LCText, CurrentPosTerm, NewPosTerm),
+	create_new_pos_term_2(StartPos, CurrentTokenTextLength, NewPosTerm),
+	token_template(NewToken, TokenType, CurrentTokenText,
+		       LCCurrentTokenText, CurrentPosTerm, NewPosTerm),
 	% NumCharsConsumed is the number of chars to lop off
 	% the beginning of InputString to get RestInputString
-	NumCharsConsumed is PrefixLength + TextLength,
-	NextPos is CurrentPos + PrefixLength + TextLength,
+	NumCharsConsumed is PrefixLength + CurrentTokenTextLength,
+	NextPos is CurrentPos + PrefixLength + CurrentTokenTextLength,
 	append_length(RestInputString, InputString, NumCharsConsumed).
+
+% sublist_ws/4 succeeds if sublist/4 succeeds, or
+% if the TokenType is xx and ends in "'s",
+% allowing for an extra space before and/or after the "'" in InputString.
+
+sublist_ws(CurrentTokenType, InputString, CurrentTokenText, PrefixLength, CurrentTokenTextLength) :-
+	( CurrentTokenType == xx,
+	  % Set CurrentTokenPrefix to "Crohn" if CurrentTokenText is "Crohn's".
+	  append(CurrentTokenPrefix, [0''', 0's], CurrentTokenText),
+	  % length(CurrentTokenPrefix, CurrentTokenPrefixLength),
+	  % If InputString is any of
+	  %  * "Crohn' s disease",
+	  %  * "Crohn 's disease", or even
+	  %  * "Crohn ' s disease",
+	  % we have to handle all those cases.
+
+	  append([InputStringPrefix,CurrentTokenPrefix,RestInputString], InputString),
+	  length(InputStringPrefix, PrefixLength),
+	  sublist(InputString, CurrentTokenPrefix, InputStringPrefixLength,
+		  CurrentTokenPrefixLength, _RestInputStringLength),
+	  append([C1,C2,C3,C4], _TailInputString, RestInputString),
+	  extra_apostrophe_ws_chars(C1, C2, C3, C4, ExtraCount) ->
+	  CurrentTokenTextLength is InputStringPrefixLength + CurrentTokenPrefixLength + ExtraCount
+	; sublist(InputString, CurrentTokenText, PrefixLength, CurrentTokenTextLength)
+	).
+	  
+% Standard case:     "Crohn's"
+extra_apostrophe_ws_chars(0''', 0's,  0' , _C4, 2).
+% Ill-formed case 1: "Crohn' "s
+extra_apostrophe_ws_chars(0''', 0' ,  0's, _C4, 3).
+% Ill-formed case 2: "Crohn 's"
+extra_apostrophe_ws_chars(0' ,  0''', 0's, _C4, 3).
+% Ill-formed case 3: "Crohn ' s"
+extra_apostrophe_ws_chars(0' ,  0''', 0' , 0's, 4).
 
 
 % I want to handle tokens from both 
@@ -1215,12 +1253,14 @@ add_raw_pos_info_2(CurrentToken, CurrentTokenType, PrevTokenType,
 add_raw_pos_info_1(OrigToken, CurrentPos, NewToken) :-
 	% OrigToken = tok(TokenType, Text, LCText, OrigPosTerm),
 	token_template(OrigToken, TokenType, Text, LCText, OrigPosTerm),
-	create_new_pos_term(OrigPosTerm, CurrentPos, NewPosTerm2),
+	create_new_pos_term_1(OrigPosTerm, CurrentPos, NewPosTerm2),
 	% NewToken  = tok(TokenType, Text, LCText, OrigPosTerm, NewPosTerm2).
 	token_template(NewToken, TokenType, Text, LCText, OrigPosTerm, NewPosTerm2).
 
-create_new_pos_term(pos(X1,Y1), CurrentPos, pos(CurrentPos, TextLength)) :-
+create_new_pos_term_1(pos(X1,Y1), CurrentPos, pos(CurrentPos, TextLength)) :-
 	TextLength is Y1 - X1.
+
+create_new_pos_term_2(StartPos, CurrentTokenTextLength, pos(StartPos,CurrentTokenTextLength)).
 
 % Collapse consecutive PosInfo tokens if they denote adjacent positions.
 % E.g., 91:3,95:5 are adjacent, because 91:3 ends just before 95:5 begins.
