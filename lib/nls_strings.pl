@@ -242,7 +242,7 @@ eliminate_nos_acros(String,  NormString) :-
 	% in the 0doit2 script in the NEC_NOS directory
 	split_a_string([
 		   ".NOS",       % NOS04
-		   "(NOS",       % NOS05
+		   "(NOS)",      % NOS05
 		   ":NOS",       % NOS06
 		   "/NOS",       % NOS07
 		   "_NOS",       % NOS08
