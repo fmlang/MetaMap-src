@@ -243,7 +243,7 @@ is_control_option(metamap,  '', javalex, no,
 
 is_control_option(metamap,  '', map_thresh, no,
                    aspec(map_thresh, mandatory, none, none, no_default,
-                         'Year of lexAccess to use (2010 or 2011)')).
+                         'Integer specifying what percentage of mappings to keep (for internal use only!)')).
 
 
 % is_control_option(metamap,  '', clfi, no,
@@ -346,6 +346,13 @@ is_control_option(extract_mrconso_sources,f,first_of_each_source_only,yes,none).
 is_control_option(extract_mrconso_sources,h,help,no,none).
 is_control_option(extract_mrconso_sources,i,info,no,none).
 is_control_option(extract_mrconso_sources,w,warnings,no,none).
+is_control_option(extract_mrconso_sources, p, progress_bar_interval, no,
+                  aspec(progress_bar_interval,mandatory,integer,none,no_default,
+                        'Interval of progress bar')).
+is_control_option(extract_mrconso_sources, t, total_lines, no,
+                  aspec(total_lines,mandatory,integer,none,no_default,
+                        'Total number of lines to process')).
+
 is_control_option(extractm,x,halt_on_error,yes,none).
 is_control_option(extractm,i,indented,yes,none).
 is_control_option(extractm,c,compact_format,no,none).
@@ -370,15 +377,15 @@ is_control_option(filter_mrconso,'E',end_of_processing,no,none).
 is_control_option(filter_mrconso,x,dump_syntax_only,no,none).
 is_control_option(filter_mrconso,h,help,no,none).
 is_control_option(filter_mrconso,i,info,no,none).
-is_control_option(filter_mrconso,t,total_lines,no,
-                  aspec(total_lines, mandatory, integer, none, no_default,
-                        'Total number of lines to process')).
 is_control_option(filter_mrconso, 'R', mrrank_file, no,
                   aspec(mrrank_file,mandatory,file,read,no_default,
                         'MRRANK file')).
 is_control_option(filter_mrconso, p, progress_bar_interval, no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
                         'Interval of progress bar')).
+is_control_option(filter_mrconso,t,total_lines,no,
+                  aspec(total_lines, mandatory, integer, none, no_default,
+                        'Total number of lines to process')).
 
 is_control_option(filter_mrconso,  '', lexicon, no,
                   aspec(lexicon, mandatory, none, none, no_default,
@@ -402,12 +409,12 @@ is_control_option(glean_ambig,w,warnings,no,none).
 is_control_option(glean_ambig,'R',mrrank_file,no,
                   aspec(mrrank_file,mandatory,file,read,no_default,
                         'MRRANK file')).
-is_control_option(glean_ambig, t, total_lines, no,
-                  aspec(total_lines,mandatory,integer,none,no_default,
-                        'Total number of lines to process')).
 is_control_option(glean_ambig, p, progress_bar_interval, no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
                         'Interval of progress bar')).
+is_control_option(glean_ambig, t, total_lines, no,
+                  aspec(total_lines,mandatory,integer,none,no_default,
+                        'Total number of lines to process')).
 		  
 is_control_option(glean_co_st,n,normalize,yes,none).
 is_control_option(glean_co_st,h,help,no,none).

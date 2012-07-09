@@ -123,6 +123,7 @@
 :- use_module(skr(skr_utilities), [
 	debug_call/2,
 	debug_message/3,
+	ensure_number/2,
 	expand_split_word_list/2,
 	fatal_error/2,
 	get_candidate_feature/3,
@@ -2633,18 +2634,18 @@ compute_min_mapping_score([FirstMappingWithScore|RestMappingsWithScore], MinScor
 keep_mappings_with_min_score([], _MinScore, []).
 keep_mappings_with_min_score([FirstMappingWithScore|RestMappingsWithScore], MinScore, KeptMappings) :-
 	FirstMappingWithScore = FirstScore-_FirstMapping,
-	get_map_thresh(MapThreshInt),
-	MapThresh is MapThreshInt / 100,
+	get_map_thresh(MapThreshInteger),
+	MapThresh is MapThreshInteger / 100,
 	( FirstScore =< MapThresh * MinScore ->
 	  KeptMappings = [FirstMappingWithScore|RestKeptMappings]
 	; KeptMappings = RestKeptMappings
 	),
 	keep_mappings_with_min_score(RestMappingsWithScore, MinScore, RestKeptMappings).
 
-get_map_thresh(MapThresh) :-
-	( control_value(map_thresh, MapThresh) ->
-	  true
-	; MapThresh is 70
+get_map_thresh(MapThreshInteger) :-
+	( control_value(map_thresh, MapThreshAtom) ->
+	  ensure_number(MapThreshAtom, MapThreshInteger)
+	; MapThreshInteger is 70
 	).
 
 % In the description below, "AEv" represents an aev/14 term.
