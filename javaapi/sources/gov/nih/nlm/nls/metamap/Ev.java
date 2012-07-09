@@ -4,7 +4,7 @@ import java.util.List;
 import se.sics.prologbeans.PBTerm;
 
 /**
- * Representation of MetaMap Evaluation (Ev) element.
+ * Representation of MetaMap Evaluation (Ev) instance.
  *<p>
  *<pre>
  * for (Utterance utterance: result.getUtteranceList()) {
@@ -22,6 +22,7 @@ import se.sics.prologbeans.PBTerm;
  * 	   System.out.println("   is Overmatch?: " + mapEv.isOvermatch());
  * 	   System.out.println("   Sources: " + mapEv.getSources());
  * 	   System.out.println("   Positional Info: " + mapEv.getPositionalInfo());
+ * 	   System.out.println("   Pruning Status: " + mapEv.getPruningStatus());
  *       }
  *     }
  *   }
@@ -56,4 +57,15 @@ public interface Ev extends MetaMapElement {
   List<String> getSources() throws Exception;
   List<Position> getPositionalInfo() throws Exception;
   PBTerm getTerm() throws Exception;
+
+  /**
+   * Get pruning status of ev term.
+   * <p>
+   * <ul>
+   *   <li> 1: if the candidate was excluded,
+   *   <li> 2: if the candidate was pruned, and
+   *   <li> 0: otherwise, i.e., if the candidate was retained.
+   * </ul>
+   */
+  int getPruningStatus() throws Exception;
 }
