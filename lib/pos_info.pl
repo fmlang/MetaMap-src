@@ -1205,7 +1205,12 @@ add_raw_pos_info_2(CurrentToken, CurrentTokenType, PrevTokenType,
 % allowing for an extra space before and/or after the "'" in InputString.
 
 sublist_ws(CurrentTokenType, InputString, CurrentTokenText, PrefixLength, CurrentTokenTextLength) :-
-	( CurrentTokenType == xx,
+	( sublist(InputString, CurrentTokenText, PrefixLength, CurrentTokenTextLength),
+	  ( CurrentTokenType == xx ->
+	    PrefixLength < 20
+	  ; true
+	  )
+	; CurrentTokenType == xx,
 	  % Set CurrentTokenPrefix to "Crohn" if CurrentTokenText is "Crohn's".
 	  append(CurrentTokenPrefix, [0''', 0's], CurrentTokenText),
 	  % length(CurrentTokenPrefix, CurrentTokenPrefixLength),
@@ -1217,16 +1222,16 @@ sublist_ws(CurrentTokenType, InputString, CurrentTokenText, PrefixLength, Curren
 
 	  append([InputStringPrefix,CurrentTokenPrefix,RestInputString], InputString),
 	  length(InputStringPrefix, PrefixLength),
-	  sublist(InputString, CurrentTokenPrefix, InputStringPrefixLength,
+	  sublist(InputString, CurrentTokenPrefix, _InputStringPrefixLength,
 		  CurrentTokenPrefixLength, _RestInputStringLength),
 	  append([C1,C2,C3,C4], _TailInputString, RestInputString),
 	  extra_apostrophe_ws_chars(C1, C2, C3, C4, ExtraCount) ->
-	  CurrentTokenTextLength is InputStringPrefixLength + CurrentTokenPrefixLength + ExtraCount
-	; sublist(InputString, CurrentTokenText, PrefixLength, CurrentTokenTextLength)
+	  % CurrentTokenTextLength is InputStringPrefixLength + CurrentTokenPrefixLength + ExtraCount
+	  CurrentTokenTextLength is CurrentTokenPrefixLength + ExtraCount
 	).
 	  
 % Standard case:     "Crohn's"
-extra_apostrophe_ws_chars(0''', 0's,  0' , _C4, 2).
+extra_apostrophe_ws_chars(0''', 0's,  _C3, _C4, 2).
 % Ill-formed case 1: "Crohn' "s
 extra_apostrophe_ws_chars(0''', 0' ,  0's, _C4, 3).
 % Ill-formed case 2: "Crohn 's"

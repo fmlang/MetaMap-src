@@ -685,12 +685,12 @@ add_AA_suffix(PhraseTextStringWithCRs0, AAs, PhraseTokens, PhraseLength0,
 	  % Tokens in the Phrase Token List are of the form
 	  % tok(Type, String, LCString, PosInfo1, PosInfo2).
 	  % We require that the first 4 fields match.
-	  matching_tokens_4(LastExpansionToken, LastPhraseToken) ->
+	  matching_tokens_4(LastExpansionToken, LastPhraseToken),
 	  get_AA_text(AATokens, AATextString0),
 	  append(AATextString0, AATextString),
 	  determine_brackets_enclosing_AA(PhraseTokens, CitationTextAtom,
 					  LeftBracket, RightBracket),
-	  append([PhraseTextStringWithCRs0,LeftBracket,AATextString,RightBracket], PhraseTextStringWithCRs),
+	  append([PhraseTextStringWithCRs0,LeftBracket,AATextString,RightBracket], PhraseTextStringWithCRs) ->
 	  % append([PhraseTextStringWithCRs0," (",AATextString,")"], PhraseTextStringWithCRs),
 	  length(AATextString, AATextStringLength),
 	  PhraseLength is PhraseLength0 + 2 + AATextStringLength + 1
@@ -706,7 +706,7 @@ determine_brackets_enclosing_AA(PhraseTokens, CitationTextAtom, MidStringPrefix,
 	token_template(LastPhraseToken, _TokenType, _TokenString, _LCTokenString, _Pos1, RealPos),
 	RealPos = pos(LastPhraseTokenStartPos,LastPhraseTokenLength),
 	PrefixLength is LastPhraseTokenStartPos + LastPhraseTokenLength,
-	MidStringLength is 20,
+	MidStringLength is 10,
 	midstring(CitationTextAtom, MidString, _Fringes, PrefixLength, MidStringLength, _After),
 	atom_codes(MidString, MidStringCodes),
 	append(MidStringPrefix, _MidStringRest, MidStringCodes),
