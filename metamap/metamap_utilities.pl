@@ -39,6 +39,8 @@
 	candidate_term/15,
 	dump_aphrase_mappings/2,
 	dump_evaluations_indented/6,
+	% must be exported for mm_print
+	dump_evaluations_indented/7,
 	dump_variants_labelled/2,
 	extract_nonexcluded_sources/3,
 	extract_relevant_sources/3,
@@ -268,6 +270,21 @@ build_list([], ListIn, ListOut) :-
 	rev(ListIn, ListOut).
 build_list([First|Rest], ListIn, ListOut) :-
 	build_list(Rest,[First,', '|ListIn], ListOut).
+
+
+dump_evaluations_indented(Candidates, TotalCandidateCount,
+			  ExcludedCandidateCount, PrunedCandidateCount,
+			  RemainingCandidateCount, Label, OutputStream) :-
+	current_output(CurrentOutput),
+	set_output(OutputStream),
+	dump_evaluations_indented(Candidates, TotalCandidateCount,
+			  ExcludedCandidateCount, PrunedCandidateCount,
+			  RemainingCandidateCount, Label),
+	!,
+	set_output(CurrentOutput).
+
+
+
 
 % This should never be called,
 % because generate_candidates_output/6 tests for Evaluations3 \== []
