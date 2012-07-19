@@ -356,11 +356,12 @@ get_cuis_from_results([CUI|RestCUIs], [CUI|RestCUIs]).
 
 db_get_cui_sources/2 gets the sources, Sources, for the preferred name of Input, a CUI.  */
 
-db_get_cui_sources(CUI, Sources) :-
+db_get_cui_sources(CUI, UniqueSources) :-
 	( CUI == [] ->
 	  Sources = []
 	; ensure_atom(CUI, CUIAtom),
-	  db_get_cui_sources_aux(CUIAtom, Sources)
+	  db_get_cui_sources_aux(CUIAtom, Sources),
+	  sort(Sources, UniqueSources)
 	),
 	!.
 db_get_cui_sources(CUI, []) :-
