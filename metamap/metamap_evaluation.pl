@@ -49,6 +49,7 @@
 
 :- use_module(metamap(metamap_utilities), [
 	candidate_term/15,
+	extract_unique_sources/2,
 	positions_overlap/2
     ]).
 
@@ -65,7 +66,7 @@
 :- use_module(skr_db(db_access), [
 	db_get_concept_cui/2,
 	db_get_concept_cuis/2,
-	db_get_cui_sources/2
+	db_get_cui_sourceinfo/2
     ]).
 
 :- use_module(skr_lib(nls_avl), [
@@ -308,7 +309,8 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	debug_compute_one_evaluation_2(DebugFlags, MetaTerm),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
-	db_get_cui_sources(CUI, UniqueSources),
+	db_get_cui_sourceinfo(CUI, Sources),
+	extract_unique_sources(Sources, UniqueSources),
         compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, _SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
