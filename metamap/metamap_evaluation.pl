@@ -49,7 +49,7 @@
 
 :- use_module(metamap(metamap_utilities), [
 	candidate_term/15,
-	extract_unique_sources/3,
+	extract_unique_sources/2,
 	positions_overlap/2
     ]).
 
@@ -309,8 +309,8 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	debug_compute_one_evaluation_2(DebugFlags, MetaTerm),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
-	db_get_cui_sourceinfo(CUI, SourceInfo),
-	extract_unique_sources(SourceInfo, [], UniqueSources),
+	db_get_cui_sourceinfo(CUI, Sources),
+	extract_unique_sources(Sources, UniqueSources),
         compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, _SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,

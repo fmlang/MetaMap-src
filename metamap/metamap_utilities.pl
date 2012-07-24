@@ -45,7 +45,7 @@
 	extract_nonexcluded_sources/3,
 	extract_relevant_sources/3,
 	extract_source_name/2,
-	extract_unique_sources/3,
+	extract_unique_sources/2,
 	num_dump_evaluations_indented/6,
 	positions_overlap/2,
 	wgvcs/1,
@@ -255,6 +255,13 @@ build_concept_name_1_aux(SourceInfo, MetaConcept, ConceptName) :-
 	build_list(RestSources, [], RestSourceList),
 	append([[MetaConcept,' {',FirstSource],RestSourceList,['}']], ItemList),
 	concatenate_items_to_atom(ItemList, ConceptName).
+
+extract_unique_sources(SourceInfo, UniqueSources) :-
+	(  foreach([_I, _Str, SRC, _TTY], SourceInfo),
+	   foreach(SRC, Sources)
+	do true
+	),
+	sort(Sources, UniqueSources).
 
 extract_unique_sources([], SourcesIn, SourcesOut) :-
 	!,
