@@ -77,8 +77,7 @@ SPLFR = splfr --conf CC=${CC} ${addprefix --cflag=, ${CFLAGS}}
 # nls_signal.o:	nls_signal.c 
 # 		${CC} ${CFLAGS} -c $< -I${SPINCDIR}
 
-# all:		splfr_DYNAMIC splfr_STATIC
-all:		splfr_DYNAMIC
+all:		splfr_DYNAMIC splfr_STATIC
 
 splfr_DYNAMIC:
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} nls_signal.pl nls_signal.c
