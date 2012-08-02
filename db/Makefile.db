@@ -52,12 +52,12 @@ ifeq '$(O_SYSTEM)' "SunOS"
   C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
 else
   ifeq '$(O_SYSTEM)' "Linux"
-    LDFLAGS=-m32 -shared
+    LDFLAGS=$(LINKFLAGS)
     LIBS = -lpthread
     C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32 -shared
+        LDFLAGS=$(LINKFLAGS)
 	LIBS=db_access_glue.o
         C_NLS_DB_DYNAMIC_LIB=c_nls_db.dylib
     endif
@@ -73,6 +73,7 @@ BTREE_QLIB_O = ${SKR_BERKELEY_DB}/btreeQlib.o
 
 # BERKELEY_LIB_A is set in SKRenv.09
 DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_A} 
+DBSOLIBS = ${BTREE_QLIB_O} ${BERKELEY_LIB_SO} 
 
 LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
 
@@ -102,7 +103,7 @@ c_nls_db.a:	c_nls_db.o ${BTREE_QLIB_O} ${BTREE_QLIB_A}
 
 ${C_NLS_DB_DYNAMIC_LIB} :	c_nls_db.o
 		-${RM} $@
-		${LD} ${LDFLAGS} -o ${C_NLS_DB_DYNAMIC_LIB} c_nls_db.o -I${SPINCDIR} ${DBLIBS} -lm ${LIBS}
+		${LD} ${LDFLAGS} -o ${C_NLS_DB_DYNAMIC_LIB} c_nls_db.o -I${SPINCDIR} ${DBSOLIBS} -lm ${LIBS}
 
 c_nls_db.o:	c_nls_db.c ${BTREE_QLIB} ${SKR_BERKELEY_DB}/embed.h
 		${CC} ${WARNINGS} ${CFLAGS} c_nls_db.c -I${SKR_BERKELEY_DB} -I${SPINCDIR}
