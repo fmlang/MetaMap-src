@@ -54,13 +54,8 @@ ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
   LIBS = #-lsocket -lnsl -lrt
 else
-  ifeq '$(O_SYSTEM)' "Linux"
-    LDFLAGS=-m32 -shared
-    LIBS = -lpthread
-  else 
-    ifeq '$(O_SYSTEM)' "Darwin"
-      LIBS=db_access_glue.o
-    endif
+  ifeq '$(O_SYSTEM)' "Darwin"
+    LIBS=db_access_glue.o
   endif
 endif
 
@@ -71,8 +66,8 @@ SKR_BERKELEY_DB=./berkeley_db
 BTREE_QLIB_A = ${SKR_BERKELEY_DB}/btreeQlib.a
 BTREE_QLIB_O = ${SKR_BERKELEY_DB}/btreeQlib.o
 
-# BERKELEY_LIB_A is set in SKRenv.09
-DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_A} 
+# BERKELEY_LIB_XXX is set in SKRenv.XX or ../Makefile.include
+DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_DYNAMIC} 
 
 LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
 

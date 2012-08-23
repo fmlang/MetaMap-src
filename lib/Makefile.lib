@@ -53,8 +53,6 @@ ifeq '$(O_SYSTEM)' "SunOS"
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LD = gcc
-    LDFLAGS=-m32 -shared
-    LIBS = -lpthread
   endif
 endif
 
@@ -84,7 +82,6 @@ all:		splfr_DYNAMIC
 splfr_DYNAMIC:
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} nls_signal.pl nls_signal.c
 
-	
 splfr_STATIC:
 		${SPLFR} ${SPLFR_STATIC_FLAGS} nls_signal.pl nls_signal.c
 

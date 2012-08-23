@@ -51,13 +51,6 @@ ifeq '$(O_SYSTEM)' "SunOS"
   SOLDFLAGS=-G
   LDFLAGS=
   LIBS = -lnsl
-else
-  ifeq '$(O_SYSTEM)' "Linux"
-    LD = gcc
-    SOLDFLAGS=-m32 -shared
-    LDFLAGS=-m32
-    LIBS =
-  endif
 endif
 
 LM_RULE_TRANSLATOR_OBJ = lm_rule_tran.o loc.o util.o

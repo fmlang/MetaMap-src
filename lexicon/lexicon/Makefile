@@ -47,14 +47,7 @@ ifeq '$(O_SYSTEM)' "SunOS"
   LIBS = # -lnsl  -lsocket -lrt -llm  -lm
 else
   ifeq '$(O_SYSTEM)' "Linux"
-    LD = gcc
-    LDFLAGS=-m32 -shared
     LIBS = -lpthread -llm  -lm
-  else 
-    ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32
-        LIBS = 
-    endif
   endif
 endif
 

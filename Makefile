@@ -39,6 +39,17 @@
 # In this case the main Makefile and the sub-directory Makefiles
 # include the file "Makefile.include" (Makefile is used implicitly).
 #
+# Building the 64-bit version
+#   $ make SKR=${ROOT}/specialist/SKR \
+#      APPNAME=metamap12 MSAPPNAME=mmserver12 MACHINE_TYPE=-m64 \
+#      ARCHDIR=x86_64-linux-glibc2.5
+#      BERKELEY=${BERELEY_DB_64bit}/db-4.8.24 \
+#      SICSTUS=/nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86_64-linux-glibc2.5 \
+#
+# Possible environment variable values:
+#  ROOT=${HOME}
+#  BERKELEY_DB_64bit=/nfsvol/nls/tools/berkeley_db/Linux-x86_64
+#
 include Makefile.include
 
 SICSTUSARGS=
@@ -276,4 +287,4 @@ clean_rtdir :
 	$(RM) -rf $(RT_DIR) 
 
 clean_mmserver :
-	cd mmserver && $(MAKE) clean
+	cd mmserver && $(MAKE) clean 
