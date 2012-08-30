@@ -53,15 +53,15 @@ ifeq '$(O_SYSTEM)' "SunOS"
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LD = gcc
-    LDFLAGS=-m32 -shared
+    LDFLAGS=$(LINKFLAGS)
     LIBS = -lpthread
   endif
 endif
 
-CFLAGS=${DEFAULT_CFLAGS}
+CFLAGS=$(BASIC_CFLAGS)
 
 SPLFR_BASIC_FLAGS = --verbose --keep
-SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
+SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable --conf SPLFR_SHLDFLAGS=${LDFLAGS} 
 SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 
 SPLFR = splfr --conf CC=${CC} ${addprefix --cflag=, ${CFLAGS}}
@@ -84,7 +84,6 @@ all:		splfr_DYNAMIC
 splfr_DYNAMIC:
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} nls_signal.pl nls_signal.c
 
-	
 splfr_STATIC:
 		${SPLFR} ${SPLFR_STATIC_FLAGS} nls_signal.pl nls_signal.c
 
