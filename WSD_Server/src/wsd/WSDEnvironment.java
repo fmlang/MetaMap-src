@@ -88,10 +88,10 @@ public class WSDEnvironment
   public static Map fMethodDescriptions = new HashMap(10);
   /** The log4j configuration file */
   public static String fLog4jConfigFile;
-  /** pool of socket resources for the JDI server. */
-  public static SocketResourcePool fSocketResourcePool;
-  /** size of the socket resource pool*/
-  public static int fSocketResourcePoolSize;
+  // /** pool of socket resources for the JDI server. */
+  // public static SocketResourcePool fSocketResourcePool;
+  // /** size of the socket resource pool*/
+  // public static int fSocketResourcePoolSize;
 
   /** Berkeley DB pointer to reviewed answer table used by Simple Frequency Method */
   public static Db fDbAnswers = null;
@@ -100,12 +100,12 @@ public class WSDEnvironment
   /** Berkeley DB pointer to concept variants table used by MeSH Frequency Method */
   public static Db fDbVariants = null;
 
-  /** the host where JD Indexing Method runs */
-  public static String fJdServerHostName;
-  /** the port number to access to JD Indexing Method */
-  public static int fJdServerPort;
-  /** the result type for JD Indexing */
-  public static String fJdServerResultType;
+  // /** the host where JD Indexing Method runs */
+  // public static String fJdServerHostName;
+  // /** the port number to access to JD Indexing Method */
+  // public static int fJdServerPort;
+  // /** the result type for JD Indexing */
+  // public static String fJdServerResultType;
 
 
   /** the reviewed answers table used by Simple Frequency Method */
@@ -128,6 +128,7 @@ public class WSDEnvironment
 	// properties are now loaded into a global properties object. WSDEnvironment.properties
           //read the server configuration file
 	  System.out.println("loading properties file " + SERVER_CONFIG_FILE);
+	  logger.info("loading properties file " + SERVER_CONFIG_FILE);
           InputStream in = new FileInputStream(SERVER_CONFIG_FILE);
           properties = new Properties();
           properties.load(in);
@@ -136,10 +137,10 @@ public class WSDEnvironment
           fReviewedAnswerDBFile = properties.getProperty("DISAMB_SERVER_FREQ_DB_FILE");// frequency method
           fMeSHVariantCountDBFile = properties.getProperty("DISAMB_SERVER_VARIANT_COUNT_DB_FILE"); // MeSH Freq Method
           fMeSHVariantsDBFile = properties.getProperty("DISAMB_SERVER_VARIANTS_DB_FILE"); // MeSH Freq Method
-          fJdServerHostName = properties.getProperty("JD_SERVER_HOSTNAME"); // JDI Method
-          fJdServerPort = Integer.parseInt(properties.getProperty("JD_SERVER_PORT")); // JDI Method
-          fJdServerResultType = properties.getProperty("JD_SERVER_RESULTTYPE");// JDI Method
-          fSocketResourcePoolSize = Integer.parseInt(properties.getProperty("JDI_SOCKET_POOL_SIZE"));
+          // fJdServerHostName = properties.getProperty("JD_SERVER_HOSTNAME"); // JDI Method
+          // fJdServerPort = Integer.parseInt(properties.getProperty("JD_SERVER_PORT")); // JDI Method
+          // fJdServerResultType = properties.getProperty("JD_SERVER_RESULTTYPE");// JDI Method
+          // fSocketResourcePoolSize = Integer.parseInt(properties.getProperty("JDI_SOCKET_POOL_SIZE"));
           fMethodsConfigFile = properties.getProperty("METHODS_CONFIG_FILE", "methods.cfg");
           fMethodDescriptionFile = properties.getProperty("METHODS_DESCRIPTION_FILE", "methodsdesc.properties");
           fLog4jConfigFile = properties.getProperty("LOG4J_CONFIG_FILE","log4j.properties");
@@ -149,18 +150,24 @@ public class WSDEnvironment
           PropertyConfigurator.configure(fLog4jConfigFile);
           logger= Logger.getLogger(WSDEnvironment.class);
 
-          //initialize socket pool
-          fSocketResourcePool = SocketResourcePool.getInstance();
+          // //initialize socket pool
+          // fSocketResourcePool = SocketResourcePool.getInstance();
 
           // load disambiguation method properties
           loadMethodProperties();
           loadDescriptionProperties();
           logger.info("WSD Server settings are loaded.");
 
-	  // loadReviewedAnswersDB();
+          // loadReviewedAnswersDB();
           // loadVariantCountsDB();
           // loadVariantsDB();
+	  System.out.println("WSD Server initializing disambiguation methods.");
+	  System.out.flush();
+	  logger.info("WSD Server initializing disambiguation methods.");
           initializeDisambiguationMethods();
+          logger.info("WSD Server databases and disambiguation methods have been initialized.");
+	  System.out.println("WSD Server databases and disambiguation methods have been initialized.");
+	  System.out.flush();
         }
       catch (java.net.ConnectException exception)
 	{
@@ -323,24 +330,24 @@ public class WSDEnvironment
      */
     public static void shutdown()
     {
-        shutdownSocketPool();
+        // shutdownSocketPool();
         shutdownDB();
     }
 
-    /**
-     * Closes the socket pool.
-     */
-    private static void shutdownSocketPool()
-    {
-      try {
-            fSocketResourcePool.shutdown();
-      }
-      catch (IOException ioe)
-      {
-          logger.error("Problem closing the socket pool.");
-      }
+    // /**
+    //  * Closes the socket pool.
+    //  */
+    // private static void shutdownSocketPool()
+    // {
+    //   try {
+    //         fSocketResourcePool.shutdown();
+    //   }
+    //   catch (IOException ioe)
+    //   {
+    //       logger.error("Problem closing the socket pool.");
+    //   }
 
-    }
+    // }
 
     /**
      * Shut down all Berkeley DB tables.
