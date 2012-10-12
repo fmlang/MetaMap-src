@@ -46,11 +46,11 @@ ifeq '$(O_SYSTEM)' "SunOS"
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LD = gcc
-    LDFLAGS=-m32 -shared
+    LDFLAGS=$(LINKFLAGS)
     LIBS = -lpthread -llm  -lm
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32
+        LDFLAGS=$(LINKFLAGS)
         LIBS = 
     endif
   endif
@@ -82,26 +82,26 @@ SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC="${CC}" --cflag="${INCLUDES}" $(addprefix --cflag=, $(CFLAGS))
 
 STATIC_LINK_FLAGS = -- ${SKR_LEXICON}/functions/linfl.o		\
- 		       ${SKR_LEXICON}/functions/tokenize.o	\
- 		       ${SKR_LEXICON}/morph/lm.o		\
- 		       ${SKR_LEXICON}/morph/util.o		\
- 		       ${SKR_LEXICON}/query/btree_query.o	\
- 		       ${SKR_LEXICON}/query/tokenize.o		\
- 		       ${SKR_LEXICON}/query/lex_btree.a		\
- 		       ${SKR_LEXICON}/query/wl.o		\
- 		       ${SKR_LEXICON}/miscutil/miscutil.o	\
- 		       ${SKR_DEBUG}/get_val.o
+		       ${SKR_LEXICON}/functions/tokenize.o	\
+		       ${SKR_LEXICON}/morph/lm.o		\
+		       ${SKR_LEXICON}/morph/util.o		\
+		       ${SKR_LEXICON}/query/btree_query.o	\
+		       ${SKR_LEXICON}/query/tokenize.o		\
+		       ${SKR_LEXICON}/query/lex_btree.a		\
+		       ${SKR_LEXICON}/query/wl.o		\
+		       ${SKR_LEXICON}/miscutil/miscutil.o	\
+		       ${SKR_DEBUG}/get_val.o
 
 DYNAMIC_LINK_FLAGS = -- ${LDFLAGS}			        \
 			${BERKELEY_LIB_SO}			\
- 			${SKR_LEXICON}/functions/linfl.o	\
- 		        ${SKR_LEXICON}/morph/lm.o		\
- 		        ${SKR_LEXICON}/morph/util.o		\
- 			${SKR_LEXICON}/functions/lexicon.a	\
- 			${SKR_LEXICON}/query/lex_btree.a	\
- 			${SKR_LEXICON}/miscutil/miscutil.a	\
- 			${SKR_DEBUG}/debug.o			\
- 			${SKR_DEBUG}/get_val.o
+			${SKR_LEXICON}/functions/linfl.o	\
+		        ${SKR_LEXICON}/morph/lm.o		\
+		        ${SKR_LEXICON}/morph/util.o		\
+			${SKR_LEXICON}/functions/lexicon.a	\
+			${SKR_LEXICON}/query/lex_btree.a	\
+			${SKR_LEXICON}/miscutil/miscutil.a	\
+			${SKR_DEBUG}/debug.o			\
+			${SKR_DEBUG}/get_val.o
 
 
 # all:		splfr_STATIC splfr_DYNAMIC

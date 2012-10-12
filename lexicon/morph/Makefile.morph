@@ -54,7 +54,7 @@ ifeq '$(O_SYSTEM)' "SunOS"
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LD = gcc
-    SOLDFLAGS=$(SOLDFLAGS)
+    SOLDFLAGS=$(LINKFLAGS)
     LDFLAGS=-m32
     LIBS =
   endif
