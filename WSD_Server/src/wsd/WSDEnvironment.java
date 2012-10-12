@@ -128,7 +128,6 @@ public class WSDEnvironment
 	// properties are now loaded into a global properties object. WSDEnvironment.properties
           //read the server configuration file
 	  System.out.println("loading properties file " + SERVER_CONFIG_FILE);
-	  logger.info("loading properties file " + SERVER_CONFIG_FILE);
           InputStream in = new FileInputStream(SERVER_CONFIG_FILE);
           properties = new Properties();
           properties.load(in);
