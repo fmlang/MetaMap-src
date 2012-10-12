@@ -64,14 +64,21 @@ import wsd.WSDEnvironment;
  */
 
 public class JdDisambiguator implements DisambiguationMethod {
+
+  /** pool of socket resources for the JDI server. */
+  public static SocketResourcePool fSocketResourcePool;
+  /** size of the socket resource pool*/
+  public static int SocketResourcePoolSize =
+    Integer.parseInt(WSDEnvironment.properties.getProperty("JDI_SOCKET_POOL_SIZE"));
+
   /** JD disambiguator hostname */
-  String serverHostname =
+  public static String serverHostname =
     WSDEnvironment.properties.getProperty("JD_SERVER_HOSTNAME");
   /** JD disambiguator port number */
-  int serverPort =
+  public static int serverPort =
     Integer.parseInt(WSDEnvironment.properties.getProperty("JD_SERVER_PORT"));
   /** result type -> "word": word count, "cite": citation count */
-  String resultType =
+  public static String resultType =
     WSDEnvironment.properties.getProperty("JD_SERVER_RESULTTYPE");
   /** lisp server socket */
   private Socket socket = null;
@@ -83,6 +90,13 @@ public class JdDisambiguator implements DisambiguationMethod {
   protected static boolean connected = false;
 
   private SocketResource sockRes;
+
+  static {
+    //initialize socket pool
+    fSocketResourcePool =
+      SocketResourcePool.getInstance
+      (serverHostname, serverPort, SocketResourcePoolSize);
+  }
 
   /** Logger */
   private static Logger logger = Logger.getLogger(JdDisambiguator.class);
@@ -142,7 +156,8 @@ public class JdDisambiguator implements DisambiguationMethod {
   private void establish() throws IOException, UnknownHostException
   {
       logger.debug("entering establish()");
-      sockRes = SocketResourcePool.getInstance().getSocketResource();
+      sockRes = SocketResourcePool.getInstance
+	(serverHostname, serverPort, SocketResourcePoolSize).getSocketResource();
       this.socket = sockRes.getSocket();
       this.out = sockRes.getWriter();
       this.in = sockRes.getReader();
@@ -154,14 +169,16 @@ public class JdDisambiguator implements DisambiguationMethod {
   private void release() throws IOException
   {
     logger.debug("entering release()");
-    SocketResourcePool.getInstance().releaseSocketResource(sockRes);
+    SocketResourcePool.getInstance
+      (serverHostname, serverPort, SocketResourcePoolSize).releaseSocketResource(sockRes);
     logger.debug("leaving release()");
   }
 
   /** release any resources */
   protected void finalize() throws IOException
   {
-      SocketResourcePool.getInstance().releaseSocketResource(sockRes);
+      SocketResourcePool.getInstance
+	(serverHostname, serverPort, SocketResourcePoolSize).releaseSocketResource(sockRes);
   }
 
   /**
@@ -318,6 +335,15 @@ public class JdDisambiguator implements DisambiguationMethod {
           }
       }
       logger.info("Completed disambiguation using JDI Method.");
+      if (logger.isDebugEnabled())
+	{
+	  logger.debug("Free socket resources: " + SocketResourcePool.getInstance
+		       (serverHostname, serverPort, SocketResourcePoolSize).getFreeSocketResourceCount());
+	  logger.debug("Used socket resources: " + SocketResourcePool.getInstance
+		       (serverHostname, serverPort, SocketResourcePoolSize).getUsedSocketResourceCount());
+	  logger.debug("Broken socket resources: " + SocketResourcePool.getInstance
+		       (serverHostname, serverPort, SocketResourcePoolSize).getBrokenSocketResourceCount());
+	}
       return jdResults;
   }
 
@@ -615,4 +641,22 @@ public class JdDisambiguator implements DisambiguationMethod {
       logger.debug("The context is:" + context.toString());
       return context;
   }
+
+
+    /**
+     * Closes the socket pool.
+     */
+    private static void shutdownSocketPool()
+    {
+      try {
+            fSocketResourcePool.shutdown();
+      }
+      catch (IOException ioe)
+      {
+          logger.error("Problem closing the socket pool.");
+      }
+
+    }
+
+
 }// JdDisambiguator
