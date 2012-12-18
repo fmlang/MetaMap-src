@@ -758,16 +758,6 @@ enumber_codes(E_ATOM, E_STRING) :-
 
 		    atom_codes(E_ATOM,E_STRING),!,
                     
-                 /* --------------------------
-                    Verify the E part
-                    string_char(1,E_STRING,"E") ->
-                    string_char(1,E_STRING,'E') ->
-                    nth0(0,E_STRING,"E") ->
-                    nth0(0,E_STRING,'E') ->
-                    nth0(0,E_STRING,E) ->
-                    substring(E_ATOM,'E',1,_,_),
-                    substring(E_ATOM,"E",1,_,_),
-                    -------------------------- */
                     substring(E_ATOM,'E',0,_),!,
                        ( 
                     /* ---------------------------------------------

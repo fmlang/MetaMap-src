@@ -7,13 +7,8 @@
 :- use_module(library(codesio),     [ read_from_codes/2 ]).
 :- use_module(library(system),      [ environ/2 ]).
 
-:- use_module(tagger(tagger_access),[
-        get_tagger_server_hosts_and_port/3
-
-   ]).
-
-:- use_module(wsd(wsdmod),[
-        get_WSD_server_hosts_and_port/3 
+:- use_module(skr_lib(server_choice), [
+	get_server_hosts_and_port/4
    ]).
 
 :- use_module(skr(skr_fe), [
@@ -159,8 +154,8 @@ process_string(Input,Output) :-
 	remove_final_CRLF(TrimmedInput1, TrimmedInput),
 	TagOption = tag,
 	split_string_completely(TrimmedInput,"\n",Strings),
-	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
-	get_WSD_server_hosts_and_port(WSDServerHosts, WSDForced, WSDServerPort),
+	get_server_hosts_and_port('TAGGER', TaggerServerHosts, TaggerForced, TaggerServerPort),
+	get_server_hosts_and_port('WSD', WSDServerHosts, WSDForced, WSDServerPort),
 	process_text(Strings, "0000000",
 		     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
 		     WSDServerHosts, WSDForced, WSDServerPort,

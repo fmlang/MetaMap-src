@@ -32,6 +32,10 @@
 	establish_tcp_connection/4
     ]).
 
+:- use_module(skr(skr_utilities), [
+	fatal_error/2
+    ]).
+
 :- use_module(library(sockets), [
 	socket_client_open/3
 	% tcp_connect/2,
@@ -52,7 +56,5 @@ test_tcp_connect(ServerName, ServerHost, Port, Stream) :-
 				      ServerName, ServerHost, Port, ExceptionCode)).
 
 signal_tcp_error(Predicate, ServerName, Host, Port, ExceptionCode) :-
-	format(user_output,
-	       '~NERROR in calling ~w for ~w Server on host ~w and port ~w:~n~w~n',
-	       [Predicate, ServerName, Host, Port, ExceptionCode]),
-	fail.
+	fatal_error('Calling ~w for ~w Server on host ~w and port ~w:~n~w~n',
+		    [Predicate, ServerName, Host, Port, ExceptionCode]).

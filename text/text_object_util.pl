@@ -71,7 +71,6 @@
 	pe_tok/1,
 	pn_tok/1,
 	punc_tok/1,
-	rb_closes_one_of/5,
 	rbracket/1,
 	rbracket_tok/1,
 	sentence_punc/1,
@@ -404,15 +403,6 @@ ne_rbracket_char(0':).
 % ne_rbracket("'").
 % ne_rbracket("""").
 % ne_rbracket(":").
-
-% rb_closes_one_of([],_RB,_Left,_LB,_Right) :-
-%     !,
-%     fail.
-rb_closes_one_of([LB|Rest], RB, [], LB, Rest) :-
-	brackets(LB, RB),
-	!.
-rb_closes_one_of([First|Rest], RB, [First|Left], LB, Right) :-
-	rb_closes_one_of(Rest, RB, Left, LB, Right).
 
 token_sequence_length([], LastToken, StartPos, TokensLength) :-
 	arg(4, LastToken, pos(_, EndPos)),

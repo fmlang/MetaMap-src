@@ -40,7 +40,6 @@
 	atom_codes_list_list/2,
 	concatenate_items_to_atom/2,
 	concatenate_items_to_string/2,
-	convert_item_list_to_string/2,
 	eliminate_multiple_meaning_designator_string/2,
 	% must be exported for mwi_utilities
 	eliminate_nos_string/2,
@@ -52,7 +51,6 @@
 	portray_strings_double_quoted/1,
 	prep_conj_det/1,
 	prep_conj_det_atom/1,
-	remove_all_whitespace/2,
 	% must be exported for mm_print and mwi_utilities 
 	replace_all_substrings/4,
 	replace_nonprints_in_strings/2,
@@ -78,6 +76,10 @@
 :- use_module(metamap(metamap_tokenization),[
 	tokenize_text_more_lc/2
     ]).
+
+:- use_module(skr(skr_utilities), [
+        fatal_error/2
+   ]).
 
 :- use_module(skr_lib(ctypes),[
 	is_alpha/1,
@@ -147,20 +149,16 @@ atom_codes_list_list(AtomListList,StringListList) :-
     atom_codes_list_list_aux(AtomListList,StringListList),
     !.
 atom_codes_list_list(AtomListList,StringListList) :-
-    (var(AtomListList) ->
-	(var(StringListList) ->
-	    format('~NERROR: atom_codes_list_list/2 failed (arguments uninstantiated).~n',[])
-	;   format('~NERROR: atom_codes_list_list/2 failed for ~p~n.',
-		   [StringListList])
+    ( var(AtomListList) ->
+	( var(StringListList) ->
+	  fatal_error('atom_codes_list_list/2 failed (arguments uninstantiated).~n', [])
+	; fatal_error('atom_codes_list_list/2 failed for ~p~n.', [StringListList])
 	)
-    ;   (var(StringListList) ->
-	    format('~NERROR: atom_codes_list_list/2 failed for ~p~n.',[AtomListList])
-	;   format('~NERROR: atom_codes_list_list/2 failed for ~p and ~p.~n',
-		   [AtomListList,StringListList])
+    ;   ( var(StringListList) ->
+	  fatal_error('atom_codes_list_list/2 failed for ~p~n.', [AtomListList])
+	; fatal_error('atom_codes_list_list/2 failed for ~p and ~p.~n', [AtomListList,StringListList])
 	)
-    ),
-    !,
-    fail.
+     ).
 
 atom_codes_list_list_aux([], []).
 atom_codes_list_list_aux([FirstAtomList|RestAtomListList],
@@ -202,20 +200,6 @@ convert_item_to_string(Item, String) :-
 	; String = Item
 	).
 
-/* convert_item_list_to_string
-Convert a list of items to a string.  The items must be a string, an atom
-or a number. */
-
-convert_item_list_to_string(ItemList, String) :-
-	convert_each_item_to_string(ItemList, StringList),
-	concatenate_strings(StringList, ",", String0),
-	append(["[",String0,"]"], String).
-
-convert_each_item_to_string([], []).
-convert_each_item_to_string([Item|Rest], [String|ConvertedRest]) :-
-	convert_item_to_string(Item, String),
-	convert_each_item_to_string(Rest, ConvertedRest).
-
 /* eliminate_multiple_meaning_designator_string(+String, -ModifiedString)
 
 eliminate_multiple_meaning_designator_string/2 removes an expression of the
@@ -235,7 +219,10 @@ eliminate_nos_string(String, NormString) :-
 	eliminate_nos_expansion(NormString0, NormString).
 
 eliminate_nos_acros(String,  NormString) :-
-	split_string_backtrack(String, "NOS", Left, Right),
+	( split_string_backtrack(String, "NOS", Left, Right) ->
+	  true
+	; split_string_backtrack(String, "nos", Left, Right)
+	),
 	\+ begins_with_alnum(Right),
 	\+ ends_with_alpha(Left),
 	% These "NOSDD" designations refer to the tests and filenames
@@ -265,10 +252,16 @@ eliminate_nos_acros(String,  NormString) :-
     		   "NOS+",       % NOS26
     		   " NOS:",      % NOS27
     		   " NOS,",      % NOS28
-    		   "[NOS]"       % NOS29
+    		   "[NOS]",      % NOS29
+    		   ", nos",      % 2012AA.RRF contains five of these (see below)
+    		   " nos"        % 2012AA.RRF contains > 100 of these (see below)
 		      ], String, Left2, Substring, Right2),
 	% Continuation of NOS15, testing for end of string
 	( Substring == " NOS" ->
+	  Right2 == []
+	; Substring == ", nos" ->
+	  Right2 == []
+	; Substring == " nos" ->
 	  Right2 == []
 	; true
 	),
@@ -287,6 +280,36 @@ eliminate_nos_acros(String,  NormString) :-
 	!,
 	eliminate_nos_acros(NormString0,NormString).
 eliminate_nos_acros(String,String).
+
+% Cases of ", nos":
+% Mental health service, nos
+% DME supply or accessory, nos
+% Waiver service, nos
+% Supply, nos
+% Topical Ox Deliver sys, nos
+% 
+% Some cases of " nos":
+% Abdominal mass nos
+% Abnormal result investigation nos
+% Abnormal urine test nos
+% Alcohol/drug abuse svc nos
+% Allergy/allergic reaction nos
+% Anesth cranial surg nos
+% Assay ph body fluid nos
+% Bleeding/haemorrhage nos
+% Bursitis/tendinitis/synovitis nos
+% Cardiac arrhythmia nos
+% Cardiovascular pain nos
+% Cervical disease nos
+% Chest pain nos
+% DME supply or accessory, nos
+% Extracorp shock wv tx ms nos
+% Fear of cancer nos
+% Fear of other disease nos
+% Health education - general nos
+% Health education - subject nos
+% Heart valve disease nos
+% Heart/arterial murmur nos
 
 eliminate_nos_expansion(String,NormString) :-
     maplist(to_lower,String,LCString),
@@ -1003,22 +1026,9 @@ trim_and_compress_whitespace_1([Next|Rest], First, Trimmed) :-
 	),
 	trim_and_compress_whitespace_1(Rest, Next, RestTrimmed).
 
-remove_all_whitespace([], []).
-remove_all_whitespace([H|T], NoWhiteSpaceChars) :-
-	( is_white(H) ->
-	  RestNoWhiteSpaceChars = NoWhiteSpaceChars
-	; NoWhiteSpaceChars = [H|RestNoWhiteSpaceChars]
-	),
-	remove_all_whitespace(T, RestNoWhiteSpaceChars).
-
 % safe_number_codes(?Number, +Codes)
 % The SICStus version of number_codes/2 and number_chars/2 raises an error
 % if the first arg is uninstantiated and the second arg is not a valid list of number codes.
 safe_number_codes(Number, Codes) :-
-	is_number_code_list(Codes),
-	number_codes(Number, Codes).
+	on_exception(_, number_codes(Number,Codes), fail).
 
-is_number_code_list([]).
-is_number_code_list([H|T]) :-
-	is_digit(H),
-	is_number_code_list(T).

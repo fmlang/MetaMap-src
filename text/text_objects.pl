@@ -37,11 +37,8 @@
 	dump_all_avl/4,
 	extract_token_strings/2,
 	extract_an_lc_strings/2,
-	find_and_coordinate_sentences/7
-    ]).
-
-:- use_module(lexicon(lexical), [
-	lowercase_list/2
+	find_and_coordinate_sentences/8,
+        get_UDAs/1
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -57,6 +54,7 @@
 
 :- use_module(skr(skr_utilities), [
 	check_valid_file_type/2,
+	fatal_error/2,
 	token_template/5,
 	write_token_list/3
     ]).
@@ -67,9 +65,8 @@
 
 :- use_module(skr_lib(nls_strings), [
 	concatenate_items_to_atom/2,
-	convert_item_list_to_string/2,
 	prep_conj_det/1,
-	split_string/4,
+	split_string_completely/3,
 	trim_and_compress_whitespace/2,
 	trim_whitespace/2
     ]).
@@ -98,8 +95,7 @@
 	compute_token_position/2,
 	extract_text/2,
 	filter_out_field_comments/2,
-	filter_out_ws_tokens/2,
-	form_field_tokens/2,
+	form_field_tokens/3,
 	form_simple_tokens/4,
 	get_token_position/2,
 	position_contains/2,
@@ -135,7 +131,6 @@
 	nu_tok/1,
 	pe_tok/1,
 	punc_tok/1,
-	rb_closes_one_of/5,
 	rbracket_tok/1,
 	sentence_punc/1,
 	sentence_punc_tok/1,
@@ -463,18 +458,6 @@ test_bracketing_distance(Rest, NewRest) :-
 	  CharPosDiff < 2000
 	).
 
-%%% find_bracketing([], _NumTokensConsumed, RevPre, Level, LBList, Label, "", RevPre, []) :-
-%%% 	% out of input
-%%% 	( control_option(warnings) ->
-%%% 	  rev(RevPre, Pre),
-%%% 	  extract_text(Pre,PreText),
-%%% 	  convert_item_list_to_string(LBList,LBListString),
-%%% 	  concatenate_items_to_atom(['Unbalanced bracketing [level ',Level,', lbs ',LBListString,']'],
-%%% 				    Message),
-%%% 	  write_warning(PreText, wub, Label, Message)
-%%% 	; true
-%%% 	),
-%%% 	fail.
 find_bracketing([Token|Rest], _NumTokensConsumed, RevPre, _Level,
 		[LB|_RestLB], _Label, LBToClear, [Token|RevPre], Rest) :-
 	% look for closing bracket (BEFORE looking for another opening bracket)
@@ -491,20 +474,6 @@ find_bracketing([Token|Rest], _NumTokensConsumed, RevPre, _Level,
 	   LBToClear = ""
 	; multi_brackets(LBToClear, RB) ->
 	  true
-%%% 	; rb_closes_one_of([LB|RestLB], RB, Left, _MatchingLB, _Right) ->
-%%% 	  % extra bracketing
-%%% 	  ( control_option(warnings) ->
-%%% 	    rev([Token|RevPre], PreT),
-%%%             extract_text(PreT, PreTText),
-%%%             convert_item_list_to_string(Left, LeftString),
-%%%             concatenate_items_to_atom(['Extra bracketing [level ',Level,', skipped ',LeftString,'] at'],
-%%% 				      Message),
-%%%             write_warning(PreTText, wxb, Label, Message)
-%%% 	  ; true
-%%% 	  ),
-%%% 	  !,
-%%% 	  fail
-%%% 	; fail
 	),
 	% bracketed text must be non-null
 	( RevPre = [_] ->
@@ -654,17 +623,6 @@ xml_output_on :-
 	; control_option('XMLn1')
 	).
 
-
-add_final_ws_token(Sentences, Sentences1) :-
-	last(Sentences, LastToken),
-	token_template(LastToken, _Type, _TokenString, _LCTokenString, LastPos),
-	LastPos = pos(_StartPos,EndPos),
-	EndPosPlus1 is EndPos + 1,
-	ExtraPos = pos(EndPos,EndPosPlus1),
-	token_template(ExtraWSToken, ws, " " , " ", ExtraPos),
-	append(Sentences, [ExtraWSToken], Sentences1).
-
-
 % The FirstField argument should be either "aa" or "pmid",
 % and determines whether the first two fields should be
 % AA|PMID  -- for --dump_aas output, e.g.,
@@ -809,15 +767,18 @@ test_valid_aa_01(_).
 
 % Proposed AA must not
 % (1) contain > 3 tokens,
-% (2) contain > 3 times as many chars as tokens, and
-% (3) not contain a hyphen
+% (2) contain > 3 times as many chars as tokens or contain > 19 chars, and
+% (3) contain a hyphen
 test_valid_aa_02(AATokens) :-
 	AATokens = [AA1|AARest],
 	arg(4, AA1, pos(AAStartPos,_)),
 	token_sequence_length(AARest, AA1, AAStartPos, AATokensLength),
 	length(AATokens, NumAATokens),
 	NumAATokens > 3,
-	AATokensLength > 3 * NumAATokens,
+	( AATokensLength > 3 * NumAATokens ->
+	  true
+	; AATokensLength > 19
+	),
 	\+ memberchk(tok(pe,"-","-",_), AATokens),
 	announce_failure('AA-02', AATokens),
 	!,
@@ -841,11 +802,12 @@ test_valid_aa_04(AATokens) :-
 test_valid_aa_04(_).
 
 % Proposed AA contains only 1 token,
-% that token is at least 12 chars,
+% that token is at least 12 chars
+% UPDATED: Proposed AA contains a token of > 10 chars
 test_valid_aa_05(AATokens) :-
-	AATokens = [SingleToken],
-	arg(4, SingleToken, pos(Start,End)),
-	End - Start >= 12,
+	member(Token, AATokens),
+	arg(4, Token, pos(Start,End)),
+	End - Start > 10,
 	% \+ uc_tok(SingleToken),
 	% \+ strict_an_tok(SingleToken),
 	announce_failure('AA-05', AATokens),
@@ -2137,6 +2099,8 @@ AllMatches     are all the matches
 */
 
 perform_aa_matching(AATokensIn, ScopeTokensIn, AATokensOut, ScopeTokensOut, AllMatches) :-
+	explode_aa_tokens(AATokensIn,    ExplodedAATokens),
+	explode_aa_tokens(ScopeTokensIn, ExplodedScopeTokens),	
 	%    dump_aa_match(before_matching,[],AA0,Scope0,OutputStream),
 	%% match full tokens (alpha tokens only)
 	%% AATokens1/ScopeTokens1 are the remaining tokens after full matching
@@ -2149,10 +2113,12 @@ perform_aa_matching(AATokensIn, ScopeTokensIn, AATokensOut, ScopeTokensOut, AllM
 	%    ;   dump_aa_match(full,FullMatches,AA1,Scope1,OutputStream)
 	%    ),
 	%%  initial letters (alphanumeric tokens only)
-	explode_aa_tokens(AATokens1,    ExplodedAATokens),
-	explode_aa_tokens(ScopeTokens1, ExplodedScopeTokens),
+	get_relevant_exploded_aa_tokens(ExplodedAATokens,    AATokens1,    ExplodedAATokens1),
+	get_relevant_exploded_aa_tokens(ExplodedScopeTokens, ScopeTokens1, ExplodedScopeTokens1),
+	% explode_aa_tokens(AATokens1,    ExplodedAATokens1),
+	% explode_aa_tokens(ScopeTokens1, ExplodedScopeTokens1),
 
-	aa_match_initials(ExplodedAATokens, ExplodedScopeTokens,
+	aa_match_initials(ExplodedAATokens1, ExplodedScopeTokens1,
 			  AATokens2,        ScopeTokens2,
 			  InitialMatchesIn, InitialMatchesOut),
 	InitialMatchesOut = [],
@@ -2207,8 +2173,10 @@ perform_aa_matching(AATokensIn, ScopeTokensIn, AATokensOut, ScopeTokensOut, AllM
 %%% aatok(word, ws, " ",      " ",      pos(12,13), 4, 0, none)
 
 %%% and explodes them by transforming each alphanumeric aatok(word, ...) token
-%%% into a list of aatok(char, ...) tokens as described below (non-alphanumeric
-%%% tokens are mapped to a 1-element list containing the original aatok(word, ...) token.
+%%% into a list of aatok(char, ...) tokens as described below.
+%%% Nnon-alphanumeric tokens are mapped to a 1-element list containing
+%%% the original aatok(word, ...) token.
+
 %%% E.g., the AAToken
 
 %%% aatok(word,lc,"heart","heart",pos(18,5),1,0,none)
@@ -2266,6 +2234,18 @@ explode_one_aa_token_aux([C1|RestChars], [LC1|RestLCChars],
 	NextTokenCharPos is TokenCharPos + 1,
 	explode_one_aa_token_aux(RestChars, RestLCChars, Type, NewUtteranceCharPos, TokenPos,
 				 NextTokenCharPos, Parent, AATokenListNext, AATokenListOut).
+
+get_relevant_exploded_aa_tokens([FirstExplodedToken|RestExplodedTokens],
+				[FirstParentToken|RestParentTokens],
+				RelevantExplodedTokens) :-
+	( FirstExplodedToken = aatok(_Char,_Type,_C1,_LC1,_UtteranceCharPos,
+				     _TokenPos,_TokenCharPos,FirstParentToken) ->
+	  RelevantExplodedTokens = [FirstExplodedToken|RestExplodedTokens]
+	; get_relevant_exploded_aa_tokens(RestExplodedTokens,
+					  [FirstParentToken|RestParentTokens],
+					  RelevantExplodedTokens)
+	).
+	
 
 /* aa_match_full_tokens(+AAIn, +ScopeIn, -AAOut, -ScopeOut, -MatchOut)
 
@@ -2554,32 +2534,12 @@ store_aa(AATokens, ExpansionTokens0, AAsIn, AAsOut) :-
 	% This example (w/o the spaces) was flagged by Sugato Bagchi on 12/20/2011.
 	% trim_ws_tokens(AATokens0, AATokens),
 	% Trim only the definition; internal whitespace is needed later (I think).
-	% filter_out_ws_tokens(ExpansionTokens0, ExpansionTokens),
 	trim_ws_tokens(ExpansionTokens0, ExpansionTokens1),
-	add_hyphen_to_expansion(AATokens, ExpansionTokens1, ExpansionTokens),
+	ExpansionTokens1 = ExpansionTokens,
 	% modify_scope_for_punctuation(Tokens, ExpansionTokens1, ExpansionTokens),
 	% temp
 	% format('~nAdding to AVL:~p~n~p~n',[Tokens,ExpansionTokens]),
 	add_to_avl_once(AATokens, ExpansionTokens, AAsIn, AAsOut).
-
-add_hyphen_to_expansion(AATokens, ExpansionTokensIn, ExpansionTokensOut) :-
-	% Do the AA tokens end with a hyphen?
-	( append(_AATokensPrefix, [LastAAToken], AATokens),
-	  token_template(LastAAToken, pn, HyphenString, HyphenString, _PosInfo),
-	  hyphen_punc(HyphenString) ->
-	  append(_ExpansionTokensInPrefix, [LastExpansionToken], ExpansionTokensIn),
-	  % deconstruct the last AA token
-	  token_template(LastExpansionToken, _TokenType,
-			 _LastExpansionTokenString, _LastExpansionTokenLCString,
-			 pos(_StartPos,EndPos)),
-	  EndPosPlusOne is EndPos + 1,
-	  % create a new hyphen token
-	  token_template(NewHyphenToken, pn,
-			 HyphenString, HyphenString,
-			 pos(EndPos, EndPosPlusOne)),
-	  append(ExpansionTokensIn, [NewHyphenToken], ExpansionTokensOut)		
-	; ExpansionTokensOut = ExpansionTokensIn
-	).
 
 % I have no idea why this is in here.
 % modify_scope_for_punctuation(Tokens, ScopeIn, ScopeOut) :-
@@ -2775,10 +2735,11 @@ representing the expanded sentences in which the fifth argument is the position
 of the corresponding token(s) in the original Sentences (generally, a
 many-to-many relationship). */
 
-find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL) :-
+find_and_coordinate_sentences(UI, ExtraChars, Fields,
+			      Sentences, CoordinatedSentences, AAs, UDAList0, UDA_AVL) :-
 	tokenize_fields_utterly(Fields, TokenizedFields),
 	% format(user_output, 'TokenizedFields: ~p~n', [TokenizedFields]),
-	form_field_tokens(TokenizedFields, FieldTokens0),
+	form_field_tokens(TokenizedFields, ExtraChars, FieldTokens0),
 	% format(user_output, '~nFieldTokens0: ~p~n', [FieldTokens0]),
 	filter_out_field_comments(FieldTokens0, FieldTokens),
 	% format(user_output, '~nFieldTokens: ~p~n', [FieldTokens]),
@@ -2788,7 +2749,6 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences, AAs, 
 	% format(user_output, '~nSentences0:~n', []),
 	current_output(OutputStream),
 	find_all_aas(Sentences0, UI, OutputStream, AAs),
-	get_UDAs(UDAList0),
 	avl_to_list(AAs, AAList0),
 	remove_aa_redundancy(AAList0, AAList1),
 	order_aas(AAList1, AAList),
@@ -3230,19 +3190,22 @@ create_UDAs(InputStream, UDAs) :-
 	),
 	(  foreach(String, Strings),
 	   foreach(UDA,    UDAs)
-	do split_string(String, "|", Before, After),
-	   trim_and_compress_whitespace(Before, TrimmedBefore),
-	   trim_and_compress_whitespace(After, TrimmedAfter),
-	   % The UDA and the expansion can appear in either order,
-	   % i.e., UDA|Expansion or Expansion|UDA;
-	   % take the shorter one to be the UDA, and the longer to be the expansion
-	   determine_AA_and_expansion(TrimmedBefore, TrimmedAfter, AACodes, ExpansionCodes),
-	   % tokenize_text(AACodes, TokenizedAACodes),
-	   % tokenize_text(ExpansionCodes, TokenizedExpansionCodes),
-	   % form_simple_tokens(TokenizedExpansionCodes, LCTokenizedExpansionCodes, 0/0, ExpansionTokens),
+	do get_UDA_short_and_long_forms(String, AACodes, ExpansionCodes),	   
 	   UDA = AACodes:ExpansionCodes
-	   % format(user_output, 'UDA: ~s:~s~n', [AACodes,ExpansionCodes])
 	).
+
+get_UDA_short_and_long_forms(String, AACodes, ExpansionCodes) :-
+	% The UDA and the expansion can appear in either order,
+	% i.e., UDA|Expansion or Expansion|UDA;
+	% take the shorter one to be the UDA, and the longer to be the expansion
+	( split_string_completely(String, "|", [Before,After]) ->
+	  true
+	; fatal_error('Each data line in UDA file must contain exactly one "|" char!~n', []),
+	  halt
+	),
+	trim_and_compress_whitespace(Before, TrimmedBefore),
+	trim_and_compress_whitespace(After, TrimmedAfter),
+	determine_AA_and_expansion(TrimmedBefore, TrimmedAfter, AACodes, ExpansionCodes).
 
 % The shorter string is deemed to be the AA, and the longer, the expansion.
 determine_AA_and_expansion(String1, String2, Shorter, Longer) :-

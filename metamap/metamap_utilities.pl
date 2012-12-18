@@ -36,7 +36,7 @@
 :- module(metamap_utilities, [
 	% must be exported for mm_print
 	build_concept_name_1/4,
-	candidate_term/15,
+	candidate_term/16,
 	dump_aphrase_mappings/2,
 	dump_evaluations_indented/6,
 	% must be exported for mm_print
@@ -44,7 +44,7 @@
 	dump_variants_labelled/2,
 	extract_nonexcluded_sources/3,
 	extract_relevant_sources/3,
-	extract_source_name/2,
+	extract_name_in_source/2,
 	extract_unique_sources/2,
 	num_dump_evaluations_indented/6,
 	positions_overlap/2,
@@ -54,21 +54,18 @@
 	write_list_indented/1
     ]).
 
-:- use_module(skr_db(db_access), [
-	db_get_cui_sources/2
-    ]).
-
 :- use_module(skr(skr_umls_info), [
 	convert_to_root_sources/2
     ]).
 
 :- use_module(skr(skr_utilities), [
 	ensure_atom/2,
+	fatal_error/2,
 	get_candidate_feature/3,
 	get_all_candidate_features/3
     ]).
 
-:- use_module(skr_lib(semtype_translation_2012AA), [
+:- use_module(skr_lib(semtype_translation_2012AB), [
 	expand_semtypes/2
     ]).
 
@@ -168,52 +165,50 @@ dump_mapping([H|T], Label, Score, DisplayCounter) :-
 
 dump_evaluations([]).
 dump_evaluations([FirstEV|RestEVs]) :-
-	dump_one_evaluation(FirstEV),
+	RelatedEvaluations = [],
+	dump_one_evaluation(FirstEV:RelatedEvaluations),
 	dump_evaluations(RestEVs).
 
 % MetaMap now has status symbols :-)
 
-choose_status_symbol(_Status, Symbol) :-
+choose_status_symbol(_Status, _Negated, Symbol) :-
 	control_option(silent),
 	!,
 	Symbol = ''.
-%  0 means the candidate was kept
-choose_status_symbol(0, ' ').
+%  0 means the candidate was kept, but possibly negated
+choose_status_symbol(0, Negated, Symbol) :-
+	( Negated == 1 ->
+	  Symbol = 'N'
+	; Symbol = ' '
+	).
 %  1 means the candidate was Excluded
-choose_status_symbol(1, 'E').
+choose_status_symbol(1, _Negated, 'E').
 %  2 means the candidate was Pruned
-choose_status_symbol(2, 'P').
+choose_status_symbol(2, _Negated, 'P').
 
-dump_one_evaluation(Candidate) :-
-	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,semtypes,sources,status],
+dump_one_evaluation(Candidate:RelatedCandidates) :-
+	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,
+				    semtypes,sources,status,negated],
 				   Candidate,
-				   [NegValue,CUI,MetaTerm,MetaConcept,SemTypes0,SourceInfo,Status]),
+				   [NegValue,CUI,MetaTerm,MetaConcept,
+				    SemTypes0,SourceInfo,Status,Negated]),
 	Value is -NegValue,
-	% build_concept_name(CUI, MetaConcept, ConceptName),
+	% build_concept_name(CUI,MetaConcept,ConceptName),
 	build_concept_name_1(MetaConcept, CUI, SourceInfo, ConceptName),
-	choose_status_symbol(Status, StatusSymbol),
-	display_concept_info(MetaTerm, MetaConcept, Value, CUI, ConceptName, StatusSymbol),
+	choose_status_symbol(Status, Negated, StatusSymbol),
+	display_concept_info(MetaTerm, Value, CUI, ConceptName, StatusSymbol),
 	conditionally_expand_semtypes(SemTypes0),
-	format('~n', []).
+	format('~n', []),
+	dump_related_evaluations(RelatedCandidates).
 
-display_concept_info(MetaTerm, MetaConcept, Value, CUI, ConceptName, StatusSymbol) :-
-	control_option(show_cuis),
-	!,
-	( preferred_name_only(MetaTerm, MetaConcept) ->
-	  format('~t~d ~w~8| ~p:~p',      [Value,StatusSymbol,CUI,ConceptName])
-	; format('~t~d ~w~8| ~p:~p (~p)', [Value,StatusSymbol,CUI,MetaTerm,ConceptName])
-	).
-display_concept_info(MetaTerm, MetaConcept, Value, _CUI, ConceptName, StatusSymbol) :-
-	( preferred_name_only(MetaTerm, MetaConcept) ->
-	  format('~t~d ~w~8| ~p',      [Value,StatusSymbol,ConceptName])
-	; format('~t~d ~w~8| ~p (~p)', [Value,StatusSymbol,MetaTerm,ConceptName])
-	).
-
-preferred_name_only(MetaTerm, MetaConcept) :-
-	( MetaTerm == MetaConcept ->
-	  true
-	; control_option(show_preferred_names_only)
-	).
+display_concept_info(MetaTerm, Value, CUI, ConceptName, StatusSymbol) :-
+	( control_option(show_cuis) ->
+	  DisplayCUI = CUI,
+	  Colon = ':'
+	; DisplayCUI = '',
+	  Colon = ''
+	),
+	format('~t~d ~w~8| ~p~w~p (~p)', [Value,StatusSymbol,DisplayCUI,Colon,MetaTerm,ConceptName]).
 
 conditionally_expand_semtypes(SemTypes0) :-
     	( \+ control_option(hide_semantic_types) ->
@@ -222,36 +217,35 @@ conditionally_expand_semtypes(SemTypes0) :-
 	; true
 	).
 
-/* build_concept_name_1(+MetaConcept, +CUI, +SourceInfo, -ConceptName) :-
+/* build_concept_name_1(+MetaConcept, +CUI, +Sources, -ConceptName) :-
 
 build_concept_name/4 constructs ConceptName from MetaConcept by optionally
 appending slist, the list of sources for ConceptName. slist is appended when
 -G (--sources) is active, and it is affected by options
 -R (--restrict_to_sources) and -e (--exlude_sources). */
 
-build_concept_name_1(MetaConcept, _CUI, _SourceInfo, MetaConcept) :-
+build_concept_name_1(MetaConcept, _CUI, _Sources, MetaConcept) :-
 	\+control_option(sources),
 	!.
-build_concept_name_1(MetaConcept, _CUI, SourceInfo0, ConceptName) :-
+build_concept_name_1(MetaConcept, _CUI, Sources, ConceptName) :-
 	( control_option(restrict_to_sources) ->
 	  control_value(restrict_to_sources, Sources),
 	  convert_to_root_sources(Sources, RootSources),
-	  extract_relevant_sources_1(SourceInfo0, RootSources, SourceInfo)
+	  extract_relevant_sources_1(Sources0, RootSources, Sources)
 	; control_option(exclude_sources) ->
 	  control_value(exclude_sources, Sources),
 	  convert_to_root_sources(Sources, RootSources),
-	  extract_nonexcluded_sources_1(SourceInfo0, RootSources, SourceInfo)
-	; SourceInfo = SourceInfo0
+	  extract_nonexcluded_sources_1(Sources0, RootSources, Sources)
+	; Sources = Sources0
 	),
-	build_concept_name_1_aux(SourceInfo, MetaConcept, ConceptName),
+	build_concept_name_1_aux(Sources, MetaConcept, ConceptName),
 	!.
 % should never occur
-build_concept_name_1(MetaConcept, CUI, _SourceInfo, ConceptName) :-
-	format('~nERROR: Unable to build concept name for ~q/~q~n', [CUI,MetaConcept]),
-	concatenate_items_to_atom(['<',CUI,'>'], ConceptName).
+build_concept_name_1(MetaConcept, CUI, _Sources, _ConceptName) :-
+	fatal_error('Unable to build concept name for ~q/~q~n', [CUI,MetaConcept]).
 
-build_concept_name_1_aux(SourceInfo, MetaConcept, ConceptName) :-
-	SourceInfo = [FirstSource|RestSources],
+build_concept_name_1_aux(Sources, MetaConcept, ConceptName) :-
+	Sources = [FirstSource|RestSources],
 	build_list(RestSources, [], RestSourceList),
 	append([[MetaConcept,' {',FirstSource],RestSourceList,['}']], ItemList),
 	concatenate_items_to_atom(ItemList, ConceptName).
@@ -262,16 +256,6 @@ extract_unique_sources(SourceInfo, UniqueSources) :-
 	do true
 	),
 	sort(Sources, UniqueSources).
-
-extract_unique_sources([], SourcesIn, SourcesOut) :-
-	!,
-	rev(SourcesIn, SourcesOut).
-extract_unique_sources([[_I,_SourceName,Source,_TTY]|Rest],
-		       SourcesIn, SourcesOut) :-
-	( memberchk(Source, SourcesIn) ->
-	  extract_unique_sources(Rest, SourcesIn, SourcesOut)
-	; extract_unique_sources(Rest, [Source|SourcesIn], SourcesOut)
-	).
 
 build_list([], ListIn, ListOut) :-
 	rev(ListIn, ListOut).
@@ -341,26 +325,15 @@ construct_related_evaluations_6([FirstCandidate|RestCandidates], Concept,
 
 dump_evaluations_indented_aux([]).
 dump_evaluations_indented_aux([FirstEV|RestEVs]) :-
-	dump_one_evaluation_indented(FirstEV),
+	dump_one_evaluation(FirstEV),
 	dump_evaluations_indented_aux(RestEVs).
-
-dump_one_evaluation_indented(Candidate:RelatedCandidates) :-
-	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,semtypes,sources,status],
-				   Candidate,
-				   [NegValue,CUI,MetaTerm,MetaConcept,SemTypes0,SourceInfo,Status]),
-	Value is -NegValue,
-	% build_concept_name(CUI,MetaConcept,ConceptName),
-	build_concept_name_1(MetaConcept, CUI, SourceInfo, ConceptName),
-	choose_status_symbol(Status, StatusSymbol),
-	display_concept_info(MetaTerm, MetaConcept, Value, CUI, ConceptName, StatusSymbol),
-	conditionally_expand_semtypes(SemTypes0),
-	format('~n', []),
-	dump_related_evaluations(RelatedCandidates).
 
 dump_related_evaluations([]).
 dump_related_evaluations([FirstCandidate|RestCandidates]) :-
-	get_all_candidate_features([metaterm,status], FirstCandidate, [MetaTerm,Status]),
-	choose_status_symbol(Status, StatusSymbol),
+	get_all_candidate_features([metaterm,status,negated],
+				   FirstCandidate,
+				   [MetaTerm,Status,Negated]),
+	choose_status_symbol(Status, Negated, StatusSymbol),
 	format('       ~w   ~p~n', [StatusSymbol,MetaTerm]),
 	dump_related_evaluations(RestCandidates).
 
@@ -390,31 +363,30 @@ num_dump_evaluations_indented_aux([Candidate:RelatedCandidates|Rest], N) :-
 	num_dump_evaluations_indented_aux(Rest, NextN).
 
 num_dump_one_evaluation_indented(Candidate:RelatedCandidates, N, NextN) :-
-	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,semtypes,sources,status],
+	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,
+				    semtypes,sources,status,negated],
 				   Candidate,
-				   [NegValue,CUI,MetaTerm,MetaConcept,SemTypes0,SourceInfo,Status]),
+				   [NegValue,CUI,MetaTerm,MetaConcept,
+				    SemTypes0,SourceInfo,Status,Negated]),
 	Value is -NegValue,
 	build_concept_name_1(MetaConcept, CUI, SourceInfo, ConceptName),
-	choose_status_symbol(Status, StatusSymbol),
-	num_display_concept_info(MetaTerm, MetaConcept, N, Value, CUI, ConceptName, StatusSymbol),
+	choose_status_symbol(Status, Negated, StatusSymbol),
+	num_display_concept_info(MetaTerm, N, Value, CUI, ConceptName, StatusSymbol),
 	conditionally_expand_semtypes(SemTypes0),
 	format('~n',[]),
 	N1 is N + 1,
 	num_dump_related_evaluations(RelatedCandidates, N1, NextN).
 
-num_display_concept_info(MetaTerm, MetaConcept, N, Value, CUI, ConceptName, StatusSymbol) :-
-	control_option(show_cuis),
-	!,
-	( preferred_name_only(MetaTerm, MetaConcept) ->
-	  format('~t~d~4|. ~t~d~10| ~t~w~12| ~p:~p',      [N,Value,StatusSymbol,CUI,ConceptName])
-	; format('~t~d~4|. ~t~d~10| ~t~w~12| ~p:~p (~p)', [N,Value,StatusSymbol,CUI,MetaTerm,ConceptName])
-	).
-num_display_concept_info(MetaTerm, MetaConcept, N, Value, _CUI, ConceptName, StatusSymbol) :-
-	( preferred_name_only(MetaTerm, MetaConcept) ->
-	  format('~t~d~4|. ~t~d~10| ~t~w~12| ~p',      [N,Value,StatusSymbol,ConceptName])
-	; format('~t~d~4|. ~t~d~10| ~t~w~12| ~p (~p)', [N,Value,StatusSymbol,MetaTerm,ConceptName])
-	).
-	
+num_display_concept_info(MetaTerm, N, Value, CUI, ConceptName, StatusSymbol) :-
+	( control_option(show_cuis) ->
+	  DisplayCUI = CUI,
+	  Colon = ':'
+	; DisplayCUI = '',
+	  Colon = ''
+	),
+	format('~t~d~4|. ~t~d~10| ~t~w~12| ~p~w~p (~p)',
+	       [N,Value,StatusSymbol,DisplayCUI,Colon,MetaTerm,ConceptName]).
+
 num_dump_related_evaluations([], NIn, NIn).
 num_dump_related_evaluations([FirstCandidate|RestCandidates], NIn, NOut) :-
 	get_candidate_feature(metaterm, FirstCandidate, MetaTerm),
@@ -456,9 +428,9 @@ extract_nonexcluded_sources/3 does the same thing except that it excludes
 entries in SourceInfo containing one of Sources. */
 
 extract_relevant_sources([], _, []).
-extract_relevant_sources([[I,SourceName,Source,TTY]|Rest],
+extract_relevant_sources([[I,ConceptNameInSource,Source,TTY]|Rest],
 			 Sources,
-			 [[I,SourceName,Source,TTY]|ExtractedRest]) :-
+			 [[I,ConceptNameInSource,Source,TTY]|ExtractedRest]) :-
 	memberchk(Source, Sources),
 	!,
 	extract_relevant_sources(Rest, Sources, ExtractedRest).
@@ -476,36 +448,38 @@ extract_relevant_sources_1([Source|RestSources],
 extract_relevant_sources_1([_|Rest], Sources, ExtractedRest) :-
 	extract_relevant_sources_1(Rest, Sources, ExtractedRest).
 
-extract_nonexcluded_sources([],_,[]).
-extract_nonexcluded_sources([[I,SourceName,Source,TTY]|Rest],
+extract_nonexcluded_sources([], _, []).
+extract_nonexcluded_sources([[I,ConceptNameInSource,Source,TTY]|Rest],
 			    Sources,
-			    [[I,SourceName,Source,TTY]|ExtractedRest]) :-
-	\+memberchk(Source, Sources),
+			    [[I,ConceptNameInSource,Source,TTY]|ExtractedRest]) :-
+	\+ memberchk(Source, Sources),
 	!,
 	extract_nonexcluded_sources(Rest, Sources, ExtractedRest).
 extract_nonexcluded_sources([_|Rest], Sources, ExtractedRest) :-
 	extract_nonexcluded_sources(Rest, Sources, ExtractedRest).
 
-extract_nonexcluded_sources_1([],_,[]).
+extract_nonexcluded_sources_1([] ,_, []).
 extract_nonexcluded_sources_1([Source|RestSources],
-			    Sources,
-			    [Source|ExtractedRest]) :-
-	\+memberchk(Source, Sources),
+			      Sources,
+			      [Source|ExtractedRest]) :-
+	\+ memberchk(Source, Sources),
 	!,
 	extract_nonexcluded_sources_1(RestSources, Sources, ExtractedRest).
 extract_nonexcluded_sources_1([_|Rest], Sources, ExtractedRest) :-
 	extract_nonexcluded_sources_1(Rest, Sources, ExtractedRest).
 
 
-/* extract_source_name(+SourceInfo, -SourceName)
+/* extract_name_in_source(+SourceInfo, -ConceptNameInSource)
 
-extract_source_name/2 extracts SourceName from the first entry in SourceInfo.
-SourceInfo should never be empty; but if it is, SourceName is set to
+extract_name_in_source/2 extracts ConceptNameInSource from the first entry in SourceInfo.
+SourceInfo should never be empty; but if it is, ConceptNameInSource is set to
 '<none>'. */
 
- % should never happen
-extract_source_name([], '<none>').
-extract_source_name([[_I,SourceName,_Source,_TTY]|_Rest], SourceName).
+% 
+
+% should never happen
+extract_name_in_source([], '<none>').
+extract_name_in_source([[_I,ConceptNameInSource,_Source,_TTY]|_Rest], ConceptNameInSource).
 
 wgvcs([]).
 wgvcs([First|Rest]) :-
@@ -558,13 +532,13 @@ write_list_indented([First|Rest]) :-
 % Create candidate term or extract features
 candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
 	       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-	       IsOvermatch, UniqueSources, PosInfo, Status, Evaluation) :-
+	       IsOvermatch, UniqueSources, PosInfo, Status, Negated, Evaluation) :-
 	( Evaluation = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
 			  MatchMap,LSComponents,TargetLSComponent,
-			  InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status) ->
+			  InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status,Negated) ->
 	  true
 	  % This is simply for mm_print, which sees the printed representation of candidates,
 	  % which does NOT include the LSComponents and TargetLSComponents fields.
 	; Evaluation = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-			  MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status)
+			  MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status,Negated)
 	).
