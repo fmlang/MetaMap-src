@@ -42,11 +42,24 @@
     	get_line/2
     ]).
 
-
 :- use_module(skr_lib(ctypes),[
 	is_ascii/1,
 	is_space/1
     ]).
+
+:- use_module(skr_lib(nls_system),[
+	control_value/2
+    ]).
+
+:- use_module(skr(skr_utilities),[
+	fatal_error/2
+    ]).
+
+:- use_module(skr_lib(sicstus_utils),[
+	concat_atom/2
+    ]).
+
+
 
 /* fget_non_ws_only_line(+Stream, -Line)
 
@@ -58,7 +71,6 @@ fget_non_ws_only_line(Stream, Line) :-
 	% At end of stream, peek_code returns -1
 	peek_code(Stream, Code),
 	Code =\= -1,
-	% \+ at_end_of_stream(Stream),
 	!,
 	fget_line(Stream, Line0),
 	( is_ws_only(Line0) ->
@@ -77,38 +89,40 @@ is_ws_only([Code|Rest]) :-
 %%% fget_all_non_null_lines/2 reads lines from Stream through EOF ignoring null
 %%% lines. */
 %%% 
-%%% fget_all_non_null_lines(Stream,Lines) :-
-%%%     (at_end_of_stream(Stream) ->
-%%% 	Lines=[]
-%%%     ;   fget_line(Stream,Line),
-%%% 	(Line=="" ->
-%%% 	    Lines=RestLines
-%%% 	;   Lines=[Line|RestLines]
-%%% 	),
-%%% 	fget_all_non_null_lines(Stream,RestLines)
-%%%     ),
-%%%     !.
-
 
 /* fget_lines_until_skr_break(+Stream, -Lines)
 
 fget_lines_until_skr_break/2 reads Lines from Stream until it encounters
-one of the following "natural" breaking points:
-  a "blank" line consisting of whitespace characters only (if any) */
+a "blank" line consisting of whitespace characters only (if any) */
 
-fget_lines_until_skr_break(Stream, []) :-
-	% At end of stream, peek_code returns -1
+fget_lines_until_skr_break(Stream, Lines) :-
+	get_num_blank_lines(NumBlankLines),
+	fget_lines_until_skr_break_1(Stream, NumBlankLines, NumBlankLines, Lines).
+
+fget_lines_until_skr_break_1(Stream, _NumBlankLines, _NumBlankLines, []) :-
+	% At end of stream, peek_code returns -1(
 	peek_code(Stream, Code),
 	Code is -1,
 	!.
-fget_lines_until_skr_break(Stream, Lines) :-
+fget_lines_until_skr_break_1(Stream, NumBlankLinesOrig, NumBlankLinesIn, Lines) :-
 	fget_line(Stream, Line, Terminator),
 	( Terminator =:= -1,
 	  Lines = [Line]
 	; is_ws_only(Line) ->
-	  Lines = []
-	; Lines = [Line|Rest],
-          fget_lines_until_skr_break(Stream, Rest)
+	  ( NumBlankLinesIn is 1 ->
+	    Lines = []
+	  ; NumBlankLinesNext is NumBlankLinesIn - 1,
+	    Lines = RestLines,
+	    fget_lines_until_skr_break_1(Stream, NumBlankLinesOrig, NumBlankLinesNext, RestLines)
+	  )
+	; Lines = [Line|RestLines],
+          fget_lines_until_skr_break_1(Stream, NumBlankLinesOrig, NumBlankLinesOrig, RestLines)
+	).
+
+get_num_blank_lines(NumBlankLines) :-
+	( control_value(blanklines, NumBlankLines) ->
+	  true
+	; NumBlankLines is 1
 	).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -135,6 +149,7 @@ fget_line(Stream, Codes) :-
 	Terminator >= 0,		% not end-of-file
 	Codes = Line,
 	% format(user_output, 'Read in line "~s"~n', [Codes]),
+	% true.
 	halt_if_non_ASCII(Codes).
 
 % fget_line(+Stream, ?Codes, ?Terminator)
@@ -170,12 +185,13 @@ halt_if_non_ASCII(Codes) :-
 	  get_non_ASCII_codes(Codes, NonASCIICodes),
 	  length(NonASCIICodes, NonASCIILength),
 	  get_plural_marker(NonASCIILength, Plural),
-	  format(user_error, 'ERROR: MetaMap supports ASCII-only input; the input line~n', []),
-	  format(user_error, '       ~s~n', [Codes]),
-	  format(user_error, 'contains ~d non-ASCII char~w: "~s".~n',
-		 [NonASCIILength,Plural,NonASCIICodes]),
-	  format(user_error, 'Remove all non-ASCII chars from input before trying again!~n', []),
-	  abort
+	  Msg1 = 'MetaMap supports ASCII-only input; the input line~n',
+	  Msg2 = '       ~s~n',
+	  Msg3 = 'contains ~d non-ASCII char~w: "~s".~n',
+	  Msg4 = 'Remove all non-ASCII chars from input before trying again!~n',
+	  concat_atom([Msg1,Msg2,Msg3,Msg4], Message),
+	  Args = [Codes,NonASCIILength,Plural,NonASCIICodes],
+          fatal_error(Message, Args)
 	; true
 	).
 

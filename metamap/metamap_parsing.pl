@@ -35,15 +35,17 @@
 
 :- module(metamap_parsing,[
 	demote_heads/2,
-	generate_syntactic_analysis_plus/3,
-	generate_syntactic_analysis_plus/4,
-	collapse_syntactic_analysis/2
+	generate_syntactic_analysis_plus/5,
+	collapse_syntactic_analysis/2,
+	re_attach_apostrophe_s_to_prev_word/3
     ]).
 
-
 :- use_module(lexicon(lex_access),[
-	assemble_definitions/2,
 	tokenize_string_for_lexical_lookup/2
+    ]).
+
+:- use_module(lexicon(qp_lookup), [
+	assemble_definitions/4
     ]).
 
 :- use_module(skr_lib(consulttt),[
@@ -51,11 +53,11 @@
    ]).
 
 :- use_module(skr_lib(generate_varinfo),[
-	generate_variant_info/2
+	generate_variant_info/3
     ]).
 
 :- use_module(skr_lib(mincoman),[
-	minimal_commitment_analysis/5
+	minimal_commitment_analysis/4
     ]).
 
 :- use_module(skr_lib(nls_system),[
@@ -84,30 +86,26 @@
    ************************************************************************
    ************************************************************************ */
 
-generate_syntactic_analysis_plus(ListOfAscii, SyntAnalysis, Definitions) :-
-	once(tokenize_string_for_lexical_lookup(ListOfAscii, Words0)),
-	retokenize(Words0, Words),
-	assemble_definitions(Words, Definitions0),
-	remove_null_atom_defns(Definitions0, Definitions),
-	once(generate_variant_info(Definitions, VarInfoList)),
-	minimal_commitment_analysis(notag, Definitions, VarInfoList,
-				    _LabeledText, SyntAnalysis).
-
-generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions) :-
-	once(tokenize_string_for_lexical_lookup(ListOfAscii, Words0)),
+generate_syntactic_analysis_plus(ListOfAscii, LexiconServerInfo,
+				 TagList, SyntAnalysis, Definitions) :-
+	tokenize_string_for_lexical_lookup(ListOfAscii, Words0),
 	re_attach_apostrophe_s_syntax(Words0, TagList, Words1),
 	retokenize(Words1, Words),
-	assemble_definitions(Words, Definitions0),
+	assemble_definitions(Words, TagList, LexiconServerInfo, Definitions0),
 	remove_null_atom_defns(Definitions0, Definitions),
-	generate_variant_info(Definitions, VarInfoList),
+	generate_variant_info(Definitions, LexiconServerInfo, VarInfoList),
 	% ChromosomeFound is 0,
 	% LeftOverWords = [],
 	% PrevTagWord = '',
 	% update_taglist(TagList, Definitions, PrevTagWord,
 	% 	       ChromosomeFound, LeftOverWords, TagList),
-	TagList = TagList,
-	consult_tagged_text(Definitions, VarInfoList, TagList, LabeledText, 1),
-	minimal_commitment_analysis(tag, Definitions, VarInfoList, LabeledText, SyntAnalysis).
+	maybe_consult_tagged_text(TagList, Definitions, VarInfoList, LabeledText, 1),
+	minimal_commitment_analysis(TagList, VarInfoList, LabeledText, SyntAnalysis).
+
+% First arg is TagList: Call consult_tagged_text iff TagList is not []
+maybe_consult_tagged_text([], _Definitions, _VarInfoList, [], _1).
+maybe_consult_tagged_text([H|T], Definitions, VarInfoList, LabeledText, 1) :-
+	consult_tagged_text(Definitions, VarInfoList, [H|T], LabeledText, 1).
 
 % The call to tokenize_string_for_lexical_lookup(ListOfAscii, Words0)
 % will parse words ending in "'s" (apostrophe + s) into three tokens, e.g.,
@@ -133,7 +131,7 @@ re_attach_apostrophe_s_to_prev_word([], _TagList, []).
 re_attach_apostrophe_s_to_prev_word([OrigWord, '''', s | RestWordsIn], TagList, WordListOut) :-	
 	concat_atom([OrigWord, '''', s], WordWithApostropheS),
 	% verify that the synthetically created Word+apostrophe+s
-	% is indded in the TagList!
+	% is indeed in the TagList!
 	memberchk([WordWithApostropheS,_LexCat], TagList),
 	!,
 	WordListOut = [WordWithApostropheS|RestWordsOut],

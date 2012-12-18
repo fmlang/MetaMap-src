@@ -119,8 +119,8 @@ which options are defaults (IsDefault) and which options take an argument
 
 is_control_option(metamap, '+', bracketed_output,		no, none).
 is_control_option(metamap, '8', dynamic_variant_generation, 	no, none).
-is_control_option(metamap, '@', 'WSD', no,
-                  aspec('WSD', mandatory, none, none, no_default,
+is_control_option(metamap, '@', 'WSD_SERVER', no,
+                  aspec('WSD_SERVER', mandatory, none, none, no_default,
                         'Which WSD server to use')).
 is_control_option(metamap, 'A', strict_model, 			no, none).
 % is_control_option(metamap, 'B', moderate_model, 		no, none).
@@ -148,9 +148,9 @@ is_control_option(metamap, 'R', restrict_to_sources, no,
                   aspec(restrict_to_sources, mandatory, list, none, no_default,
                         'List of sources to use for output')).
 
-is_control_option(metamap, 'S', tagger, no,
-                  aspec(tagger, mandatory, none, none, no_default,
-                        'Which tagger to use')).
+is_control_option(metamap, 'S', 'TAGGER_SERVER', no,
+                  aspec('TAGGER_SERVER', mandatory, none, none, no_default,
+                        'Which tagger server to use')).
 is_control_option(metamap, 'T', tagger_output, 			no, none).
 % is_control_option(metamap, 'U', allow_duplicate_concept_names,  no, none).
 is_control_option(metamap, 'V', mm_data_version, no,
@@ -200,6 +200,21 @@ is_control_option(metamap,  '', debug, 			 	no,
 is_control_option(metamap,  '', help, 		 	 	no, none).
 % is_control_option(metamap,  '', longest_lexicon_match, 	 	no, none).
 is_control_option(metamap,  '', negex,		 	 	no, none).
+is_control_option(metamap,  '', negex_st_add, 		 	no,
+                  aspec(negex_st_add, mandatory, list, none, no_default, 'SemTypes to add to NegEx')).
+is_control_option(metamap,  '', negex_st_del, 		 	no,
+                  aspec(negex_st_del, mandatory, list, none, no_default, 'SemTypes to delete from to NegEx')).
+is_control_option(metamap,  '', negex_st_set, 		 	no,
+                  aspec(negex_st_set, mandatory, list, none, no_default, 'SemTypes to set for NegEx')).
+
+is_control_option(metamap,  '', blanklines, 		 	no,
+                  aspec(blanklines, mandatory, integer, none, no_default,
+			'Number of newlines to read to signal end of citation')).
+is_control_option(metamap, '', 'LEXICON_SERVER', no,
+                  aspec('LEXICON_SERVER', mandatory, none, none, no_default,
+                        'Which lexicon server to use')).
+		  
+is_control_option(metamap,  '', list,		 	 	no, none).
 is_control_option(metamap,  '', silent,		 	 	no, none).
 is_control_option(metamap,  '', aas_only,                	no, none).
 % is_control_option(metamap,  '', max_ambiguity,	 	 no,
@@ -228,6 +243,7 @@ is_control_option(metamap,  '', sldiID,	 	 		no, none).
 % is_control_option(metamap,  '', restore, 	 	 	no, none).
 is_control_option(metamap,  '', 'UDA',   			no,
 		  aspec('UDA', mandatory, file, read, no_default, 'File containing UDAs')).
+is_control_option(metamap,  '', 'UTF8',		 		no, none).
 is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
@@ -235,7 +251,7 @@ is_control_option(metamap,  '', 'XMLn1',		 	no, none).
 
 is_control_option(metamap,  '', lexicon, no,
                    aspec(lexicon, mandatory, none, none, no_default,
-                         'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
+                         'Use C code or Java version of lexicon')).
 
 is_control_option(metamap,  '', javalex, no,
                    aspec(javalex, mandatory, integer, none, no_default,
@@ -244,6 +260,10 @@ is_control_option(metamap,  '', javalex, no,
 is_control_option(metamap,  '', map_thresh, no,
                    aspec(map_thresh, mandatory, none, none, no_default,
                          'Integer specifying what percentage of mappings to keep (for internal use only!)')).
+
+% Bypass lexical lookup
+is_control_option(metamap,  '', 'no_lex',		 	no, none).
+		   
 
 
 % is_control_option(metamap,  '', clfi, no,
@@ -916,7 +936,8 @@ display_mandatory_metamap_options :-
 		  atom_length(LongOptionName, LongOptionNameLength)),
 		  OptionDescriptionList),
 	longest_option_name_length(OptionDescriptionList, 0, LongestLength),
-	print_mandatory_options(OptionDescriptionList, LongestLength).
+	sort(OptionDescriptionList, SortedOptionDescriptionList), 
+	print_mandatory_options(SortedOptionDescriptionList, LongestLength).
 
 print_mandatory_options([], _LongestLength) :- nl.
 print_mandatory_options([OptionName-Length:Description|Rest], LongestLength) :-
@@ -1197,7 +1218,7 @@ resolve_items([Item|RestItems], [ItemCompletion|RestCompletions],Type,
     length(ItemCompletion,NCompletions),
     (   NCompletions =:= 0 ->
         (Type==options ->
-            format('~nERROR: Unknown option ~p~n', [Item]),
+            fatal_error('Unknown option ~p~n', [Item]),
             IOptionsInOut=IOptionsIn,
             StatusInOut=error
         ;   IOptionsInOut=IOptionsIn,
@@ -1213,7 +1234,7 @@ resolve_items([Item|RestItems], [ItemCompletion|RestCompletions],Type,
         ),
         IArgsInOut=IArgsIn,
         StatusInOut=StatusIn
-    ;   format('~nERROR: Ambiguous option ~p (~p).~n', [Item,ItemCompletion]),
+    ;   fatal_error('Ambiguous option ~p (~p).~n', [Item,ItemCompletion]),
         IOptionsInOut=IOptionsIn,
         IArgsInOut=IArgsIn,
         StatusInOut=error
@@ -1314,10 +1335,8 @@ interpret_arg(ArgSpec,'<null>',IArgsIn,IArgsOut,StatusIn,StatusOut) :-
     (Default==no_default ->
         IArgsOut=IArgsIn,
         (Option==mandatory ->
-            format('~nERROR: Mandatory argument~n            ~p (~p)~n',
-                   [SpecName,Description]),
-            format('       has no value.~n', []),
-            StatusOut=error
+            fatal_error('Mandatory argument~n            ~p (~p)~nhas no value.~n',
+			[SpecName,Description])
         ;   StatusOut=StatusIn
         )
     ;   findall(DefaultVal,compute_default_value(Default,IArgsIn,DefaultVal),
@@ -1329,15 +1348,9 @@ interpret_arg(ArgSpec,'<null>',IArgsIn,IArgsOut,StatusIn,StatusOut) :-
                             DefaultValue,
                             IArgsIn,IArgsOut,StatusIn,StatusOut)) ->
                 true
-            ;   format('~nERROR: Cannot interpret~n', []),
-                format('       ~p (~p).~n', [SpecName,Description]),
-                IArgsOut=IArgsIn,
-                StatusOut=error
+            ;   fatal_error('Cannot interpret~n       ~p (~p).~n', [SpecName,Description])
             )
-        ;   format('~nERROR: Cannot compute default for~n', []),
-            format('       ~p (~p).~n', [SpecName,Description]),
-            IArgsOut=IArgsIn,
-            StatusOut=error
+        ;   fatal_error('Cannot compute default for~n       ~p (~p).~n', [SpecName,Description])
         )
     ).
 % user_input
@@ -1369,10 +1382,7 @@ interpret_arg(ArgSpec,Arg,
 	    StatusOut=StatusIn
 	;   prolog_flag(fileerrors,_,on),
 	    Option==mandatory,
-	    format('~nERROR: Cannot open ~p for ~p operations.~n',
-		   [Arg,SubType]),
-	    RestAtts=[],
-	    StatusOut=error
+	    fatal_error('Cannot open ~p for ~p operations.~n', [Arg,SubType])
 	)
     ;   ((SubType==readable, Mode=read);
 	 (SubType==writable, Mode=write)) ->
@@ -1380,13 +1390,9 @@ interpret_arg(ArgSpec,Arg,
 	(can_open_file(Arg,Mode) ->
 	    StatusOut=StatusIn
 	;   Option==mandatory,
-	    format('~nERROR: ~p is not ~p.~n', [Arg,SubType]),
-	    StatusOut=error
+	    fatal_error('~p is not ~p.~n', [Arg,SubType])
 	)
-    ;   format('~nERROR: Unknown subtype ~p for type file at argument ~p.~n',
-	       [SubType,Arg]),
-	RestAtts=[],
-	StatusOut=error
+    ;   fatal_error('Unknown subtype ~p for type file at argument ~p.~n', [SubType,Arg])
     ).
 % symbolic argument
 interpret_arg(ArgSpec,Arg,
@@ -1424,7 +1430,7 @@ interpret_arg(ArgSpec,Arg,
     (((Type==integer, integer(ArgValue));
       (Type==number, number(ArgValue))) ->
 	StatusOut=StatusIn
-    ;   format('~nERROR: ~p is not of type ~p.~n', [Arg,Type]),
+    ;   fatal_error('~p is not of type ~p.~n', [Arg,Type]),
 	StatusOut=error
     ).
 

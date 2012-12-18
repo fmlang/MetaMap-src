@@ -38,7 +38,7 @@
     ]).
 
 :- use_module(metamap(metamap_utilities), [
-	candidate_term/15
+	candidate_term/16
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -201,7 +201,8 @@ handle_evaluations([FirstCandidate|RestCandidates], [EvTerm|EvTerms]) :-
 	% WSD doesn't need to know about LSComponents, TargetLSComponent, or Status
 	candidate_term(Score0, Cui0, ConceptName0, PrefName0, MatchedWords0, SemTypes0,
 		       MatchMap0, _LSComponents, _TargetLSComponent,
-		       HeadFlag0, OverMatchFlag0, Sources0, PosInfo0, _Status, FirstCandidate),
+		       HeadFlag0, OverMatchFlag0, Sources0, PosInfo0, _Status, _Negated,
+		       FirstCandidate),
 	% First = ev(Score0,Cui0,ConceptName0,PrefName0,MatchedWords0,SemTypes0,
 	% 	   MatchMap0,HeadFlag0,OverMatchFlag0,Sources0,PosInfo0,_Status0),
 	number_codes(Score0, Score),

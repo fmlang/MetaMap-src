@@ -54,6 +54,7 @@
     ]).
 
 :- use_module(skr(skr_utilities), [
+	fatal_error/2,
 	get_all_candidate_features/3,
 	get_candidate_feature/3
     ]).
@@ -82,7 +83,6 @@
 
 :- use_module(skr_lib(sicstus_utils),[
 	concat_atom/3,
-	index/3,
 	lower/2,
 	upper/2
    ]).
@@ -187,8 +187,7 @@ process_citation(UIAtom, MMOutput, FieldedStream) :-
         dump_aatf_info_fielded(AATFInfo, UIAtom, FieldedStream),
 	!.
 process_citation(UIAtom, _MMOutput, _FieldedStream) :-
-	format('ERROR: process_citation/6 failed for UI ~a.~n',[UIAtom]),
-	abort.
+	fatal_error('process_citation/6 failed for UI ~a.~n',[UIAtom]).
 
 % WARNING: This is actually a misnomer; the real goal here is the treecodes
 %          but the concept can be non-MeSH unless --restrict_to_mesh is on
@@ -315,9 +314,7 @@ get_pre_tf_in_candidate(Candidate, _CitationTextAtom, _Field, _NSent, _TF0) :-
 	get_candidate_feature(metaconcept, Candidate, MetaConcept),
 	% Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
 	% 	       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-	format(user_output, 'ERROR: get_pre_tf_in_mapping/5 failed for ~p~n', [MetaConcept]),
-	format('ERROR: get_pre_tf_in_mapping/5 failed for ~p~n', [MetaConcept]),
-	abort.
+	fatal_error('get_pre_tf_in_mapping/5 failed for ~p~n', [MetaConcept]).
 
 construct_text_atom(PosInfoList, CitationTextAtom, TextString) :-
 	extract_text_atoms(PosInfoList, CitationTextAtom, AtomList),
