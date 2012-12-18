@@ -37,8 +37,6 @@ import java.util.Vector;
 
 import org.apache.log4j.Logger;
 
-import wsd.WSDEnvironment;
-
 /**
  * This class represents a Singleton object that handles initialization, allocation
  * and cleanup of a number of SocketResource objects that handle communication with
@@ -58,7 +56,7 @@ import wsd.WSDEnvironment;
 public class SocketResourcePool
 {
   /** The Singleton instance */
-  private static SocketResourcePool fSocketResourcePool = null;
+  private static SocketResourcePool fSocketResourcePool = null; // TODO: this should probably be a synchronized map to allow multiple pools, one for each resource.
   /** The SocketResourceFactory instance that creates the SocketResource's */
   private static SocketResourceFactory fSocketResourceFactory = null;
   /** The SocketResource objects that are available */
@@ -66,17 +64,25 @@ public class SocketResourcePool
   /** the SocketResource objects that are currently being used */
   private Vector usedSocketResources = null;
   /** # of SocketResource's in the pool */
-  private int POOL_SIZE = WSDEnvironment.fSocketResourcePoolSize;
+  private int POOL_SIZE = 20; //  WSDEnvironment.fSocketResourcePoolSize;
   /** # of broken SocketResources */
   private int brokenSockets = 0;
 
   private static Logger logger = Logger.getLogger(SocketResourcePool.class);
 
+  /** hostname for this resource */
+  private String hostname;
+  /** port number for this resource */
+  private int port;
+
   /**
    * Constructor. Initializes the Pool.
    */
-  private SocketResourcePool()
+  private SocketResourcePool(String hostname, int port, int poolSize)
   {
+      this.POOL_SIZE = poolSize;
+      this.hostname = hostname;
+      this.port = port;
       init();
   }
 
@@ -85,11 +91,11 @@ public class SocketResourcePool
    *
    * @return SocketResourcePool instance.
    */
-  public static synchronized SocketResourcePool getInstance()
+  public static synchronized SocketResourcePool getInstance(String hostname, int port, int poolSize)
   {
       if (fSocketResourcePool == null)
       {
-         fSocketResourcePool = new SocketResourcePool();
+	fSocketResourcePool = new SocketResourcePool(hostname, port, poolSize);
       }
       return fSocketResourcePool;
   }
@@ -105,10 +111,11 @@ public class SocketResourcePool
       usedSocketResources = new Vector(POOL_SIZE);
       for (i=0; i< POOL_SIZE; i++)
       {
-          freeSocketResources.add(createSocketResource());
+	freeSocketResources.add(createSocketResource());
       }
       logger.info("Created " + POOL_SIZE + " JDI Sockets.");
   }
+
 
   /**
    * Creates a SocketResource to JD Server.
@@ -119,9 +126,11 @@ public class SocketResourcePool
   {
       try
       {
+          // SocketResource socketResource =
+          //     fSocketResourceFactory.newSocketResource(WSDEnvironment.fJdServerHostName,
+          //                                              WSDEnvironment.fJdServerPort);
           SocketResource socketResource =
-              fSocketResourceFactory.newSocketResource(WSDEnvironment.fJdServerHostName,
-                                                       WSDEnvironment.fJdServerPort);
+	    fSocketResourceFactory.newSocketResource(this.hostname, this.port);
           return socketResource;
       }
       catch (IOException ioe)
