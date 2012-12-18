@@ -67,12 +67,15 @@
 % This code simply avoids duplicating the same code for each of the various servers.
 
 get_server_stream(ServerType, ServerStream) :-
-	atom_codes(ServerType, ServerTypeCodes),
-	get_control_value(ServerTypeCodes, ControlValueCodes),
-	atom_codes(ControlValue, ControlValueCodes),
-	get_hosts_env_var(ControlValueCodes, HostsEnvVar),
-	get_port_env_var(ControlValueCodes, PortEnvVar),
-	get_server_stream_aux(ServerType, ControlValue, HostsEnvVar, PortEnvVar, ServerStream).
+	( ServerType == 'LEXICON' ->
+	  ServerStream = ''
+	; atom_codes(ServerType, ServerTypeCodes),
+	  get_control_value(ServerTypeCodes, ControlValueCodes),
+	  atom_codes(ControlValue, ControlValueCodes),
+	  get_hosts_env_var(ControlValueCodes, HostsEnvVar),
+	  get_port_env_var(ControlValueCodes, PortEnvVar),
+	  get_server_stream_aux(ServerType, ControlValue, HostsEnvVar, PortEnvVar, ServerStream)
+	).
 
 get_control_value(ServerTypeCodes, ControlValueCodes) :-
 	append(ServerTypeCodes, "_SERVER", ControlValueCodes).
