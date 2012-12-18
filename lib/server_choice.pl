@@ -67,7 +67,7 @@
 % This code simply avoids duplicating the same code for each of the various servers.
 
 get_server_stream(ServerType, ServerStream) :-
-	( ServerType == 'LEXICON' ->
+	( control_value(lexicon, c) ->
 	  ServerStream = ''
 	; atom_codes(ServerType, ServerTypeCodes),
 	  get_control_value(ServerTypeCodes, ControlValueCodes),

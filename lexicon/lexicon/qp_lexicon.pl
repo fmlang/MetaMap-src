@@ -65,7 +65,7 @@
 :- use_module(skr(testlvg),[
 	lexAccess_find_prefix/3,
 	lexAccess_find_subterms/3,
-	lexAccess_get_all_lexical_records/3,
+	get_all_lexical_records/3,
  	lexAccess_get_lex_form_cats/3,
  	lexAccess_get_varlist_for_form/4
    ]).
@@ -259,7 +259,7 @@ lex_form_ci_recs_LEXACCESS_TOGGLE(Form, LexiconServerStream, LexicalRecords) :-
 	  default_index_file(Index),
 	  lex_recs(form, Form, LexicalRecords, 1, 0, Lexicon, Index)
 	; control_value(lexicon, java) ->
-	  lexAccess_get_all_lexical_records([Form], LexiconServerStream, LexicalRecords)
+	  get_all_lexical_records([Form], LexiconServerStream, LexicalRecords)
 	; fatal_error('Lexicon setting must be either c or java!~n', [])
 	).
 
@@ -443,7 +443,7 @@ lex_form_ci_recs_input_7_JAVA(InputTokenList, LexRecs, RemainingTokens, TagList,
 	RemainingTokens = RemainingTokens0,
 	InputMatchList2 = InputMatchList1,
 	re_attach_apostrophe_s_to_prev_word(InputMatchList2, TagList, InputMatchList),
-        lexAccess_get_all_lexical_records(EUIList, LexiconServerStream, AllLexicalEntries),
+        get_all_lexical_records(EUIList, LexiconServerStream, AllLexicalEntries),
 	% There can be multiple base forms, so get them all
 	% LexicalEntries = [lexrec:[base:[LexRecBaseForm]|_]|_],
 	LexRecs  = lexicon:[lexmatch:[LexMatch],

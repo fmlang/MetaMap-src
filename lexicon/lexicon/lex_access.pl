@@ -52,7 +52,7 @@
 	lexAccess_get_citation_forms_for_form/3,
 	lexAccess_get_citation_forms_for_form_with_cats/4,
 	lexAccess_get_lex_form_cats/3,
-	lexAccess_get_varlist_for_all_forms/3,
+	get_varlist_for_all_forms/3,
 	lexAccess_get_varlist_for_citation_form/3,
 	lexAccess_get_varlist_for_form/4,
 	lexAccess_is_form/2,
@@ -99,8 +99,6 @@
         append/2
    ]).
 
-:- dynamic lexAccess_lexicon/1.
-
 /* ************************************************************************
    ************************************************************************
    ************************************************************************
@@ -117,9 +115,6 @@ lex_init_quietly/2, respectively. They also call c_initialize_lexAccess/0
 for the new lexicon access. This initialization will eventually allow
 the caller to specify lexiconVersion but for now it will be fixed. */
 
-initialize_lexicon(_L,_I) :-
-    lexAccess_lexicon(_),
-    !.
 initialize_lexicon(L,I) :-
     % temp
     lex_init(L,I),
@@ -195,10 +190,9 @@ get_varlist_LEXACCESS_TOGGLE(LexMatch, LexiconServerStream, VarInfo) :-
 	( control_value(lexicon, c) ->
 	  lex_form_ci_vars(LexMatch, VarInfo)
  	; control_value(lexicon, java) ->
-	  lexAccess_get_citation_forms_for_form_apostrophe_s(LexMatch,
-							     LexiconServerStream, CitationForms),
+	  get_citation_forms_for_form_apostrophe_s(LexMatch, LexiconServerStream, CitationForms),
 	  sort(CitationForms, SortedCitationForms),
-	  lexAccess_get_varlist_for_all_forms(SortedCitationForms, LexiconServerStream, VarInfo0),
+	  get_varlist_for_all_forms(SortedCitationForms, LexiconServerStream, VarInfo0),
 	  sort(VarInfo0, VarInfo)
 	; fatal_error('Lexicon setting must be either c or java!~n', [])
 	).
@@ -231,7 +225,7 @@ get_spellings_and_inflections_for_form(Term, Categories, LexiconServerStream, Sp
     lex_form_ci_ord_5(Term, Categories, LexiconServerStream, Spelling, Inflections).
 
 
-lexAccess_get_citation_forms_for_form_apostrophe_s(FormAtom, LexiconServerStream, CitationForms) :-
+get_citation_forms_for_form_apostrophe_s(FormAtom, LexiconServerStream, CitationForms) :-
 	( lexAccess_get_citation_forms_for_form(FormAtom, LexiconServerStream, CitationForms),
 	  CitationForms = [_|_] ->
 	  true
@@ -259,13 +253,13 @@ get_citation_forms_for_form_with_cats_LEXACCESS_TOGGLE(Form, CategoryList,
 	   ;   CitationForms=[]
 	   )
 	; control_value(lexicon, java) ->
-	  lexAccess_get_citation_forms_for_form_apostrophe_s(Form, CategoryList,
-							     LexiconServerStream, CitationForms)
+	  get_citation_forms_for_form_apostrophe_s(Form, CategoryList,
+						   LexiconServerStream, CitationForms)
 	; fatal_error('Lexicon setting must be either c or java!~n', [])
 	).
 
-lexAccess_get_citation_forms_for_form_apostrophe_s(FormAtom, CategoryList,
-						   LexiconServerStream, CitationForms) :-
+get_citation_forms_for_form_apostrophe_s(FormAtom, CategoryList,
+					 LexiconServerStream, CitationForms) :-
 	( lexAccess_get_citation_forms_for_form_with_cats(FormAtom, CategoryList,
 							  LexiconServerStream, CitationForms),
 	  CitationForms = [_|_] ->
