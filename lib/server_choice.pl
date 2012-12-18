@@ -66,17 +66,29 @@
 
 % This code simply avoids duplicating the same code for each of the various servers.
 
-get_server_stream(ServerType, ServerStream) :-
-	( ServerType == 'LEXICON',
-	  control_value(lexicon, c) ->
+get_server_stream('LEXICON', ServerStream) :-
+	( \+ control_value(lexicon, java) ->
 	  ServerStream = ''
-	; atom_codes(ServerType, ServerTypeCodes),
-	  get_control_value(ServerTypeCodes, ControlValueCodes),
-	  atom_codes(ControlValue, ControlValueCodes),
-	  get_hosts_env_var(ControlValueCodes, HostsEnvVar),
-	  get_port_env_var(ControlValueCodes, PortEnvVar),
-	  get_server_stream_aux(ServerType, ControlValue, HostsEnvVar, PortEnvVar, ServerStream)
+	; get_server_stream_1('LEXICON', ServerStream)
 	).
+get_server_stream('TAGGER', ServerStream) :-
+	( control_option(no_tagging) ->
+	  ServerStream = ''
+	; get_server_stream_1('TAGGER', ServerStream)
+	).
+get_server_stream('WSD', ServerStream) :-
+	( \+ control_option(word_sense_disambiguation) ->
+	  ServerStream = ''
+	; get_server_stream_1('WSD', ServerStream)
+	).
+
+get_server_stream_1(ServerType, ServerStream) :-
+	atom_codes(ServerType, ServerTypeCodes),
+	get_control_value(ServerTypeCodes, ControlValueCodes),
+	atom_codes(ControlValue, ControlValueCodes),
+	get_hosts_env_var(ControlValueCodes, HostsEnvVar),
+	get_port_env_var(ControlValueCodes, PortEnvVar),
+	get_server_stream_aux(ServerType, ControlValue, HostsEnvVar, PortEnvVar, ServerStream).
 
 get_control_value(ServerTypeCodes, ControlValueCodes) :-
 	append(ServerTypeCodes, "_SERVER", ControlValueCodes).
