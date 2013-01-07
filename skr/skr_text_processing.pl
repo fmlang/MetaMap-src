@@ -63,7 +63,8 @@
     ]).
 
 :- use_module(skr_lib(nls_io), [
-	fget_lines_until_skr_break/2,
+	fget_line/2,
+	fget_lines_until_skr_break/4,
 	fget_non_ws_only_line/2
     ]).
 
@@ -78,7 +79,8 @@
     ]).
 
 :- use_module(skr_lib(nls_system), [
-	control_option/1
+	control_option/1,
+	control_value/2
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -109,38 +111,39 @@
 /* get_skr_text(-Lines)
    get_skr_text(+InputStream, -Lines)
 
-get_skr_text/1 gets Lines from current input by first skipping "blank" lines
-and then reading until a "natural" breaking point. Currently, the following are
-such SKR breaking points:
-  a "blank" line; and
-Here, a "blank" line is one containing only whitespace characters (if any).
-get_skr_text/2 has input parameter InputStream. */
+get_skr_text/2 gets Lines from current input by first skipping "blank" lines
+and then reading until a "natural" breaking point, which is an empty line
+or one containing only whitespace.
+*/
 
 get_skr_text(Lines, TextID) :-
 	maybe_print_prompt,
 	current_input(InputStream),
-	get_skr_text_3(InputStream, Lines, TextID).
+	get_num_blank_lines(NumBlankLines),
+	get_skr_text_3(InputStream, NumBlankLines, Lines, TextID).
 
-
+% get_skr_text_2 is used ONLY for reading in the UDA file.
 get_skr_text_2(InputStream, [First|Rest]) :-
 	% skip all blank lines at the beginning of the input
-        fget_non_ws_only_line(InputStream, First),
+	fget_non_ws_only_line(InputStream, First),
+	% fget_line(InputStream, First),
         !,
-        fget_lines_until_skr_break(InputStream, Rest).
+	NumBlankLines is 1,
+        fget_lines_until_skr_break(InputStream, NumBlankLines, NumBlankLines, Rest).
 get_skr_text_2(_, []).
 
-
-get_skr_text_3(InputStream, [FirstText|Rest], TextID) :-
-	% skip all blank lines at the beginning of the input
+get_skr_text_3(InputStream, NumBlankLines, [FirstText|Rest], TextID) :-
+	% Skip all blank lines at the beginning of the input
 	fget_non_ws_only_line(InputStream, First),
 	!,
-	% sldi option reads exactly one line of input and then stops reading.
+	% "sldi" == "single-line-delimited input"
+	% The sldi option reads exactly one line of input and then stops reading.
 	( control_option(sldi) ->
 	  TextID = '',
 	  FirstText = First,
 	  Rest = []
-	% sldiID option reads exactly one line of input and then stops reading.
-	% The input *must* be of the form ID|Text.
+	  % The sldiID option reads exactly one line of input and then stops reading.
+	  % The input *must* be of the form ID|Text.
 	; control_option(sldiID) ->
 	  ( append([TempTextID, "|", TempFirstText], First) ->
 	    Rest = [],
@@ -151,9 +154,16 @@ get_skr_text_3(InputStream, [FirstText|Rest], TextID) :-
 	  )
 	 ; TextID = '',
 	   FirstText = First,
-	   fget_lines_until_skr_break(InputStream, Rest)
+	   fget_lines_until_skr_break(InputStream, NumBlankLines, NumBlankLines, Rest)
 	).
-get_skr_text_3(_, [], '').
+get_skr_text_3(_InputStream, _NumBlankLines, [], '').
+
+
+get_num_blank_lines(NumBlankLines) :-
+	( control_value(blanklines, NumBlankLines) ->
+	  true
+	; NumBlankLines is 1
+	).
 
 % print the "|:" read prompt iff MetaMap is being used interactively,
 % i.e., the user is interactively typing in input.
@@ -213,9 +223,33 @@ acronym/abbreviation discovery.
 
 */
 
+% Append all whitespace-only fields to the next field.
+% This is necessary because the field grammar doesn't like whitespace fields.
+glom_whitespace_fields([], LastField, Fields) :-
+	( whitespace_only_field(LastField) ->
+	  Fields = []
+	; Fields = [LastField]
+	).
+glom_whitespace_fields([NextField|RestFields], FirstField, GlommedFields) :-
+	( whitespace_only_field(FirstField) ->
+	  % the 32 is for the <CR>
+	  append([32|FirstField], NextField, FirstGlommedField),
+	  glom_whitespace_fields(RestFields, FirstGlommedField, GlommedFields)
+	; GlommedFields = [FirstField|RestGlommedFields],
+	  glom_whitespace_fields(RestFields, NextField, RestGlommedFields)
+	).
+
+whitespace_only_field([]).
+whitespace_only_field([FirstChar|RestChars]) :-
+	is_white(FirstChar),
+	whitespace_only_field(RestChars).
+
 extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFields,
 		  Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL, Lines) :-
-	replace_tabs_in_strings(Lines0, Lines1),
+	Lines0 = [FirstLine|RestLines],
+	% This is for Steven Bedrick's --blanklines idea
+	glom_whitespace_fields(RestLines, FirstLine, Lines00),
+	replace_tabs_in_strings(Lines00, Lines1),
 	replace_nonprints_in_strings(Lines1, Lines2),
 	( is_medline_citation(Lines2) ->
 	  extract_coord_sents_from_citation(Lines2, ExtraChars, TextFields, NonTextFields,
