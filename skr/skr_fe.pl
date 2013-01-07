@@ -205,6 +205,18 @@
 	environ/2
    ]).
 
+
+bp :-
+	current_predicate(Pred, Mod:Skel),
+	sub_atom(Pred, _, _, _, lexAccess),
+	\+ sub_atom(Pred, _, _, _, prefix),
+	functor(Skel, Pred, Arity),
+	add_breakpoint([pred(Mod:Pred/Arity),
+			goal(_:G)]-
+			[call,proceed,true(format(user_output, 'CALL: ~q~n', [G]))], _BID),
+	fail
+      ; true.
+
 /* go
    skr_fe_go
    go(+HaltFlag)
@@ -362,8 +374,10 @@ process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions) :
 	get_skr_text(StringsUTF8, TextID),
 	convert_all_utf8_to_ascii(StringsUTF8, 0, TempExtraChars, Strings0),
 	append(TempExtraChars, ExtraChars),
-	Strings0 = [FirstString|RestStrings],
-	trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
+	% Strings0 = [FirstString|RestStrings],
+	% trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
+	% Removed call for Steven Bedrick
+	TrimmedStrings = Strings0,
 	( TrimmedStrings \== [] ->
 	  process_text(TrimmedStrings, TextID, ExtraChars, TagOption,
 		       AllServerStreams, ExpRawTokenList, AAs, UDAList, MMResults),
@@ -375,10 +389,10 @@ process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions) :
 	),
 	!.
 
-trim_whitespace_from_last_string([], LastString, [TrimmedLastString]) :-
-	trim_whitespace_right(LastString, TrimmedLastString).
-trim_whitespace_from_last_string([NextString|RestStrings], FirstString, [FirstString|TrimmedStrings]) :-
-	trim_whitespace_from_last_string(RestStrings, NextString, TrimmedStrings).
+%%% trim_whitespace_from_last_string([], LastString, [TrimmedLastString]) :-
+%%% 	trim_whitespace_right(LastString, TrimmedLastString).
+%%% trim_whitespace_from_last_string([NextString|RestStrings], FirstString, [FirstString|TrimmedStrings]) :-
+%%% 	trim_whitespace_from_last_string(RestStrings, NextString, TrimmedStrings).
 
 /* process_text(+Lines,
    		+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
@@ -1060,12 +1074,12 @@ walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-
 	walk_off_field_lines(RestFieldLines, CharsNext1, CharsOut).
 
 % convert each string in NonTextFieldLines to a string of blanks of the same length
-convert_strings_to_blanks(NonTextFieldLines, BlanksLines) :-
-	(  foreach(Line, NonTextFieldLines),
-	   foreach(BlanksLine, BlanksLines)
-	do length(Line, LineLength),
-	   length(BlanksLine, LineLength),
-	   (  foreach(Blank, BlanksLine)
-	   do Blank is 32
-	   )
-	).
+%%% convert_strings_to_blanks(NonTextFieldLines, BlanksLines) :-
+%%% 	(  foreach(Line, NonTextFieldLines),
+%%% 	   foreach(BlanksLine, BlanksLines)
+%%% 	do length(Line, LineLength),
+%%% 	   length(BlanksLine, LineLength),
+%%% 	   (  foreach(Blank, BlanksLine)
+%%% 	   do Blank is 32
+%%% 	   )
+%%% 	).

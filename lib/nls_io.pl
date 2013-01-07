@@ -36,7 +36,7 @@
 :- module(nls_io,[
 	fget_line/2,
   	fget_non_ws_only_line/2,
-	fget_lines_until_skr_break/2,
+	fget_lines_until_skr_break/4,
 	% needed by tools/lib/reader.pl
   	get_line/1,
     	get_line/2
@@ -95,34 +95,29 @@ is_ws_only([Code|Rest]) :-
 fget_lines_until_skr_break/2 reads Lines from Stream until it encounters
 a "blank" line consisting of whitespace characters only (if any) */
 
-fget_lines_until_skr_break(Stream, Lines) :-
-	get_num_blank_lines(NumBlankLines),
-	fget_lines_until_skr_break_1(Stream, NumBlankLines, NumBlankLines, Lines).
-
-fget_lines_until_skr_break_1(Stream, _NumBlankLines, _NumBlankLines, []) :-
-	% At end of stream, peek_code returns -1(
+fget_lines_until_skr_break(Stream, _NumBlankLines, _NumBlankLines, Lines) :-
+	% At end of stream, peek_code returns -1
 	peek_code(Stream, Code),
 	Code is -1,
-	!.
-fget_lines_until_skr_break_1(Stream, NumBlankLinesOrig, NumBlankLinesIn, Lines) :-
+	!,
+	Lines = [].
+fget_lines_until_skr_break(Stream, NumBlankLinesOrig, NumBlankLinesIn, Lines) :-
 	fget_line(Stream, Line, Terminator),
 	( Terminator =:= -1,
 	  Lines = [Line]
+	  % If the input line consists only of whitespace...
 	; is_ws_only(Line) ->
+	  % Steven Bedrick special handling
 	  ( NumBlankLinesIn is 1 ->
 	    Lines = []
 	  ; NumBlankLinesNext is NumBlankLinesIn - 1,
-	    Lines = RestLines,
-	    fget_lines_until_skr_break_1(Stream, NumBlankLinesOrig, NumBlankLinesNext, RestLines)
+	    Lines = [Line|RestLines],
+	    fget_lines_until_skr_break(Stream, NumBlankLinesOrig, NumBlankLinesNext, RestLines)
 	  )
+	  % The line just read in is not all whitespace,
 	; Lines = [Line|RestLines],
-          fget_lines_until_skr_break_1(Stream, NumBlankLinesOrig, NumBlankLinesOrig, RestLines)
-	).
-
-get_num_blank_lines(NumBlankLines) :-
-	( control_value(blanklines, NumBlankLines) ->
-	  true
-	; NumBlankLines is 1
+	  % so reset the NumBlankLines counters to their original value.
+          fget_lines_until_skr_break(Stream, NumBlankLinesOrig, NumBlankLinesOrig, RestLines)
 	).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
