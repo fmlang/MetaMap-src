@@ -46,7 +46,7 @@
 	% called by MetaMap API -- do not change signature!
 	postprocess_sentences/10,
 	% called by MetaMap API -- do not change signature!
-	process_text/12
+	process_text/9
    ]).
 
 % :- extern(skr_fe_go).
@@ -167,7 +167,7 @@
    ]).
 
 :- use_module(skr_lib(server_choice), [
-	get_server_stream/2
+	get_all_server_streams/3
    ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -309,12 +309,6 @@ skr_fe(InterpretedArgs, ProgramName, UDAList, DefaultRelease, IOptions) :-
 	conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream),
 	generate_EOT_output(OutputStream),
 	close_all_streams.
-
-get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream) :-
-	get_server_stream('LEXICON', LexiconServerStream),
-	get_server_stream('TAGGER',  TaggerServerStream),
-	get_server_stream('WSD',     WSDServerStream).
-	
 
 get_output_stream(OutputStream) :-
 	( current_stream(_File, write, OutputStream) ->
