@@ -7,14 +7,10 @@
 :- use_module(library(codesio),     [ read_from_codes/2 ]).
 :- use_module(library(system),      [ environ/2 ]).
 
-:- use_module(skr_lib(server_choice), [
-	get_server_hosts_and_port/4
-   ]).
-
 :- use_module(skr(skr_fe), [
 	postprocess_sentences/10,
 	initialize_skr/4,
-	process_text/12
+	process_text/9
    ]).
 
 :- use_module(skr(skr),[
@@ -48,6 +44,14 @@
 :- use_module(skr_lib(nls_strings), [
 	split_string_completely/3
     ]).
+
+:- use_module(skr_lib(server_choice), [
+	get_all_server_streams/3
+   ]).
+
+:- use_module(text(text_objects), [
+	get_UDAs/1
+   ]).
 
 :- use_module(skr_lib(negex), [ compute_negex/4, generate_negex_output/1 ]).
 
@@ -154,12 +158,13 @@ process_string(Input,Output) :-
 	remove_final_CRLF(TrimmedInput1, TrimmedInput),
 	TagOption = tag,
 	split_string_completely(TrimmedInput,"\n",Strings),
-	get_server_hosts_and_port('TAGGER', TaggerServerHosts, TaggerForced, TaggerServerPort),
-	get_server_hosts_and_port('WSD', WSDServerHosts, WSDForced, WSDServerPort),
-	process_text(Strings, "0000000",
-		     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-		     WSDServerHosts, WSDForced, WSDServerPort,
-		     ExpRawTokenList, AAs, MMResults),
+	get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream),
+	AllServerStreams = (LexiconServerStream,TaggerServerStream,WSDServerStream),
+	ExtraChars = [],
+	get_UDAs(UDAList),
+	process_text(Strings, "0000000", ExtraChars,
+		     TagOption, AllServerStreams,
+		     ExpRawTokenList, AAs, UDAList, MMResults),
 	parse_command_line(CLTerm),
 	CLTerm=command_line(Options,Args),
 	initialize_skr(Options, Args, InterpretedArgs, IOptions),
