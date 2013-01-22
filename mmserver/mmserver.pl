@@ -83,7 +83,7 @@ main :-
     % 	      ],
     parse_command_line(CLTerm),
     CLTerm=command_line(Options,Args),
-    ( \+ member(q,Options) -> append([q], Options, OptionsFinal) ; Options=OptionsFinal),
+    ( \+ member(q,Options) -> append(Options, [q], OptionsFinal) ; Options=OptionsFinal),
     initialize_skr(OptionsFinal, Args, _IArgs, IOptions),
     add_to_control_options(IOptions),
     start(ServerOptions).
