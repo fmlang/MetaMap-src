@@ -68,4 +68,15 @@ public interface Ev extends MetaMapElement {
    * </ul>
    */
   int getPruningStatus() throws Exception;
+
+  
+  /**
+   * Get negation status of ev term.
+   * <p>
+   * <ul>
+   *   <li> 1: if the candidate is negated
+   *   <li> 0: if the candidate is not-negated.
+   * </ul>
+   */
+  int getNegationStatus() throws Exception;
 }
