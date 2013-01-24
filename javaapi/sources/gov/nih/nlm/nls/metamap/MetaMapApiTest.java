@@ -123,6 +123,7 @@ public class MetaMapApiTest {
 	      out.println("  Sources: " + ev.getSources());
 	      out.println("  Positional Info: " + ev.getPositionalInfo());
 	      out.println("  Pruning Status: " + ev.getPruningStatus());
+	      out.println("  Negation Status: " + ev.getNegationStatus());
 	    }
 
 	    out.println("Mappings:");
@@ -142,6 +143,7 @@ public class MetaMapApiTest {
 		out.println("   Sources: " + mapEv.getSources());
 		out.println("   Positional Info: " + mapEv.getPositionalInfo());
 		out.println("   Pruning Status: " + mapEv.getPruningStatus());
+		out.println("   Negation Status: " + mapEv.getNegationStatus());
 	      }
 	    }
 	  }
@@ -296,6 +298,8 @@ public class MetaMapApiTest {
       if (inFile.exists()) {
 	System.out.println("input file: " + inFilename);
 	frontEnd.process(readInputFile(inFile), output, options);
+      } else {
+	System.out.println("input file: " + inFilename + " does not exist!");
       }
     } else if (termBuf.length() > 0) {
       File inFile = new File(termBuf.toString().trim()); 

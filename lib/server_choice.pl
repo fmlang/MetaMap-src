@@ -29,6 +29,7 @@
 ***************************************************************************/
 
 :- module(server_choice, [
+	get_all_server_streams/3,
 	get_server_stream/2
     ]).
 
@@ -59,6 +60,11 @@
 	environ/2
    ]).
 
+get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream) :-
+	get_server_stream('LEXICON', LexiconServerStream),
+	get_server_stream('TAGGER',  TaggerServerStream),
+	get_server_stream('WSD',     WSDServerStream).
+	
 % ServerType is    'WSD',              'TAGGER',              or 'LEXICON'.
 % ControlValue is  'WSD_SERVER',       'TAGGER_SERVER',       or 'LEXICON_SERVER'.
 % HostsEnvVar is   'WSD_SERVER_HOSTS', 'TAGGER_SERVER_HOSTS', or 'LEXICON_SERVER_HOSTS'.
@@ -67,9 +73,11 @@
 % This code simply avoids duplicating the same code for each of the various servers.
 
 get_server_stream('LEXICON', ServerStream) :-
-	( \+ control_value(lexicon, java) ->
-	  ServerStream = ''
-	; get_server_stream_1('LEXICON', ServerStream)
+	( control_value(lexicon, java) ->
+	  get_server_stream_1('LEXICON', ServerStream)
+	; control_value(lexicon, db) ->
+	  get_server_stream_1('LEXICON', ServerStream)
+	; ServerStream = ''
 	).
 get_server_stream('TAGGER', ServerStream) :-
 	( control_option(no_tagging) ->

@@ -7,14 +7,10 @@
 :- use_module(library(codesio),     [ read_from_codes/2 ]).
 :- use_module(library(system),      [ environ/2 ]).
 
-:- use_module(skr_lib(server_choice), [
-	get_server_hosts_and_port/4
-   ]).
-
 :- use_module(skr(skr_fe), [
 	postprocess_sentences/10,
 	initialize_skr/4,
-	process_text/12
+	process_text/9
    ]).
 
 :- use_module(skr(skr),[
@@ -39,6 +35,7 @@
 	set_control_options/1,        				    
 	set_control_values/2,
 	control_option/1,
+	control_value/2,
 	parse_command_line/1,
 	parse_command_line/3,
 	interpret_options/4,
@@ -48,6 +45,14 @@
 :- use_module(skr_lib(nls_strings), [
 	split_string_completely/3
     ]).
+
+:- use_module(skr_lib(server_choice), [
+	get_all_server_streams/3
+   ]).
+
+:- use_module(text(text_objects), [
+	get_UDAs/1
+   ]).
 
 :- use_module(skr_lib(negex), [ compute_negex/4, generate_negex_output/1 ]).
 
@@ -79,7 +84,7 @@ main :-
     % 	      ],
     parse_command_line(CLTerm),
     CLTerm=command_line(Options,Args),
-    ( \+ member(q,Options) -> append([q], Options, OptionsFinal) ; Options=OptionsFinal),
+    ( \+ member(q,Options) -> append(Options, [q], OptionsFinal) ; Options=OptionsFinal),
     initialize_skr(OptionsFinal, Args, _IArgs, IOptions),
     add_to_control_options(IOptions),
     start(ServerOptions).
@@ -113,9 +118,19 @@ set_options(OptionString) :-
 	      ],
     interpret_args(IOptions, ArgSpecs, Args, IArgs),
     ( \+ member(iopt(machine_output,none),IOptions) -> 
-	append([iopt(machine_output,none)], IOptions, IOptionsFinal) ;
+	append([iopt(machine_output,none)], IOptions, IOptionsFinal0) ;
+	IOptions=IOptionsFinal0 ),
+    %% Temporary code for use until a final lex access method is
+    %% determined.
+    ( \+ member(iopt(lexicon,c),IOptionsFinal0) -> 
+	append([iopt(lexicon,c)], IOptionsFinal0, IOptionsFinal) ;
 	IOptions=IOptionsFinal ),
+    %% end Temporary code 
     add_to_control_options(IOptionsFinal),
+    %% Temporary code for use until a final lex access method is
+    %% determined.
+    assert(control_value(lexicon,c)),
+    % end Temporary code 
     set_control_values(IOptionsFinal,IArgs).
 
 unset_options(OptionString) :-
@@ -132,7 +147,11 @@ unset_options(OptionString) :-
 		    'Output file')
 	      ],
     interpret_args(IOptions, ArgSpecs, Args, _IArgs),
-    subtract_from_control_options(IOptions).
+    subtract_from_control_options(IOptions),
+    %% Temporary code for use until a final lex access method is
+    %% determined.
+    assert(control_value(lexicon,c)).
+    %% end Temporary code 
 
 control_option_as_iopt(iopt(X,Value)) :-
 	nls_system:control_value(X,Value).
@@ -145,28 +164,44 @@ get_options(AllOptions) :-
 
 reset_options :-
  	reset_control_options([metamap]),
- 	IOptions=[iopt(machine_output,none)],
- 	add_to_control_options(IOptions).
+	%% Temporary code for use until a final lex access method is
+	%% determined.  This will need re-factoring to remove
+	%% references to lexicon.
+ 	IOptions=[iopt(lexicon,c),iopt(machine_output,none)],
+ 	add_to_control_options(IOptions),
+	assert(control_value(lexicon,c)).
+        %% end Temporary code 
 
 process_string(Input,Output) :-
+	%% Temporary code for use until a final lex access method is
+	%% determined.
+	assert(control_value(lexicon,c)),
+	%% end Temporary code 
 	trim_whitespace_right(Input, TrimmedInput0),
 	remove_final_CRLF(TrimmedInput0, TrimmedInput1),
 	remove_final_CRLF(TrimmedInput1, TrimmedInput),
 	TagOption = tag,
 	split_string_completely(TrimmedInput,"\n",Strings),
-	get_server_hosts_and_port('TAGGER', TaggerServerHosts, TaggerForced, TaggerServerPort),
-	get_server_hosts_and_port('WSD', WSDServerHosts, WSDForced, WSDServerPort),
-	process_text(Strings, "0000000",
-		     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-		     WSDServerHosts, WSDForced, WSDServerPort,
-		     ExpRawTokenList, AAs, MMResults),
+	get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream),
+	AllServerStreams = (LexiconServerStream,TaggerServerStream,WSDServerStream),
+	ExtraChars = [],
+	get_UDAs(UDAList),
+	process_text(Strings, "0000000", ExtraChars,
+		     TagOption, AllServerStreams,
+		     ExpRawTokenList, AAs, UDAList, MMResults),
 	parse_command_line(CLTerm),
 	CLTerm=command_line(Options,Args),
 	initialize_skr(Options, Args, InterpretedArgs, IOptions),
 	% get_options(IOptions),
 	( \+ member(iopt(machine_output,none),IOptions) -> 
-	    append([iopt(machine_output,none)], IOptions, IOptionsFinal) ;
+	    append([iopt(machine_output,none)], IOptions, IOptionsFinal0) ;
+	    IOptions=IOptionsFinal0 ),
+	%% Temporary code for use until a final lex access method is
+	%% determined.
+	( \+ member(iopt(lexicon,c),IOptionsFinal0) -> 
+	    append([iopt(lexicon,c)], IOptionsFinal0, IOptionsFinal) ;
 	    IOptions=IOptionsFinal ),
+	%% end Temporary code 
 	output_should_be_bracketed(BracketedOutput),
 	postprocess_text_mmserver(Strings, BracketedOutput, InterpretedArgs,
 		 IOptionsFinal,  ExpRawTokenList, AAs, MMResults, Output).
