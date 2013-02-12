@@ -77,7 +77,8 @@
 
 :- use_module(metamap(metamap_parsing), [
 	collapse_syntactic_analysis/2,
-	demote_heads/2
+	demote_heads/2,
+	re_attach_apostrophe_s_to_prev_word/3
     ]).
 
 :- use_module(metamap(metamap_stop_phrase), [
@@ -648,7 +649,10 @@ get_pwi_info(Phrase, PhraseWordInfoPair, TokenPhraseWords, TokenPhraseHeadWords)
 get_phrase_info(Phrase, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAtom,
 		PhraseTokens, RawTokensOut, PhraseStartPos, PhraseLength,
 		OrigPhraseTextAtom, ReplacementPositions) :-
-	get_inputmatch_atoms_from_phrase(Phrase, InputMatchPhraseWords),
+	get_inputmatch_atoms_from_phrase(Phrase, InputMatchPhraseWords0),
+	re_attach_apostrophe_s_to_prev_word(InputMatchPhraseWords0,
+					    _TagList,
+					    InputMatchPhraseWords),
 	% For each word in InputMatchPhraseWords, extract the matching tokens from RawTokensIn.
 	% We need to match the words in the raw tokens to get the correct pos info
 	% and to get the phrase with all the blanks.
@@ -1100,7 +1104,7 @@ remove_leading_hoa_ws_toks([FirstToken|RestTokens], FilteredTokens) :-
 	; FilteredTokens = [FirstToken|RestTokens]
 	).
 
-% First, try to find a token that appears no earlier than the previous toke
+% First, try to find a token that appears no earlier than the previous token
 get_word_token(Word, PrevTokenStartPos, RawTokensIn, Token, NewTokenStartPos, RestRawTokens) :-
 	% mc == matching case
         matching_token(mc, Word, Token),
@@ -1261,7 +1265,7 @@ filter_out_dvars_aux([First|Rest], Filtered) :-
 	),
 	filter_out_dvars_aux(Rest, FilteredRest).
 
-% Remove all variants whose history contains either "a" (AA) or "e" AA expansion
+% Remove all variants whose history contains either "a" (AA) or "e" (AA expansion)
 filter_out_aas([], []).
 filter_out_aas([gvc(G,Vs,Cs)|Rest], [gvc(G,FilteredVs,Cs)|FilteredRest]) :-
 	filter_out_aas_aux(Vs, FilteredVs),
