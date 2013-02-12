@@ -68,17 +68,17 @@
 	db_get_lex_varlist/2
     ]).
 
-:- use_module(skr_db(freq_im_vars), [
-	im_vars/2
-    ]).
-
-:- use_module(skr_db(freq_lex_form), [
-	lex_form/2
-    ]).
-
-:- use_module(skr_db(freq_lex_rec), [
-	lex_rec/2
-    ]).
+% :- use_module(skr_db(freq_im_vars), [
+% 	freq_im_vars/2
+%     ]).
+% 
+% :- use_module(skr_db(freq_lex_form), [
+% 	freq_lex_form/2
+%     ]).
+% 
+% :- use_module(skr_db(freq_lex_rec), [
+% 	freq_lex_rec/2
+%     ]).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
@@ -972,55 +972,92 @@ ensure_string(AtomOrString, String) :-
         ; atom_codes(AtomOrString, String)
         ).
 
+% db_get_lex_base_forms(Word, BaseForms) :-
+%  	% first check freq_lex_form
+% 	( freq_lex_form(Word, LexFormData) ->
+% 	  (  foreach(_LexCat-BaseForm, LexFormData),
+% 	     foreach(BaseForm, BaseForms)
+% 	  do true
+% 	  )
+% 	; form_simple_query("baseform", "lex_form", "word", Word, Query),
+% 	  run_query(Query, simple, BaseForms0, 1),
+% 	  append(BaseForms0, BaseForms)
+% 	).
+% 	% ( BaseForms \== [] -> format('### LEX lex_form 1:~w~n', [Word]) ; true).
+% 
+% db_get_lex_base_forms_with_cat(Word, LexCat, BaseForms) :-
+%  	% first check freq_lex_form
+% 	( freq_lex_form(Word, LexFormData) ->
+% 	  (  foreach(_LexCat-BaseForm, LexFormData),
+% 	     foreach(BaseForm, BaseForms)
+% 	  do true
+% 	  )
+% 	; form_complex_query("baseform", "lex_form", "word", Word, "lexcat", LexCat, Query),
+% 	  run_query(Query, simple, BaseForms0, 1),
+% 	   append(BaseForms0, BaseForms)
+% 	).
+% 	% ( BaseForms \== [] -> format('### LEX lex_form 2:~w~n', [Word]) ; true).
+% 
+% db_get_lex_cats(Word, LexCats) :-
+%  	% first check freq_lex_form
+% 	( freq_lex_form(Word, LexFormData) ->
+% 	  (  foreach(LexCat-_BaseForm, LexFormData),
+% 	     foreach(LexCat, LexCats)
+% 	  do true
+% 	  )
+% 	; form_simple_query("lexcat", "lex_form", "word", Word, Query),
+% 	  run_query(Query, simple, LexCats0, 1),
+% 	  append(LexCats0, LexCats1),
+% 	  sort(LexCats1, LexCats)
+% 	).
+% 	% ( LexCats \== [] -> format('### LEX lex_form 3:~w~n', [Word]) ; true).
+
 db_get_lex_base_forms(Word, BaseForms) :-
-	( lex_form(Word, LexFormData) ->
-	  (  foreach(_LexCat-BaseForm, LexFormData),
-	     foreach(BaseForm, BaseForms)
-	  do true
-	  )
-	; form_simple_query("baseform", "lex_form", "word", Word, Query),
-	  run_query(Query, simple, BaseForms0, 1),
-	  append(BaseForms0, BaseForms)
-	).
+	form_simple_query("baseform", "lex_form", "word", Word, Query),
+	run_query(Query, simple, BaseForms0, 1),
+	append(BaseForms0, BaseForms).
 	% ( BaseForms \== [] -> format('### LEX lex_form 1:~w~n', [Word]) ; true).
 
 db_get_lex_base_forms_with_cat(Word, LexCat, BaseForms) :-
-	( lex_form(Word, LexFormData) ->
-	  (  foreach(_LexCat-BaseForm, LexFormData),
-	     foreach(BaseForm, BaseForms)
-	  do true
-	  )
-	; form_complex_query("baseform", "lex_form", "word", Word, "lexcat", LexCat, Query),
-	  run_query(Query, simple, BaseForms0, 1),
-	   append(BaseForms0, BaseForms)
-	).
+	form_complex_query("baseform", "lex_form", "word", Word, "lexcat", LexCat, Query),
+	run_query(Query, simple, BaseForms0, 1),
+	append(BaseForms0, BaseForms).
 	% ( BaseForms \== [] -> format('### LEX lex_form 2:~w~n', [Word]) ; true).
 
 db_get_lex_cats(Word, LexCats) :-
-	( lex_form(Word, LexFormData) ->
-	  (  foreach(LexCat-_BaseForm, LexFormData),
-	     foreach(LexCat, LexCats)
-	  do true
-	  )
-	; form_simple_query("lexcat", "lex_form", "word", Word, Query),
-	  run_query(Query, simple, LexCats0, 1),
-	  append(LexCats0, LexCats1),
-	  sort(LexCats1, LexCats)
-	).
+	form_simple_query("lexcat", "lex_form", "word", Word, Query),
+	run_query(Query, simple, LexCats0, 1),
+	append(LexCats0, LexCats1),
+	sort(LexCats1, LexCats).
 	% ( LexCats \== [] -> format('### LEX lex_form 3:~w~n', [Word]) ; true).
 
+% db_get_lex_record(EUI, LexRec) :-
+%  	% first check freq_lex_rec
+% 	( freq_lex_rec(EUI, LexRec) ->
+% 	  true
+% 	; form_simple_query("lexrec", "lex_rec", "EUI", EUI, Query),
+% 	  run_query(Query, simple, LexRec, 1)
+% 	).
+ 
 db_get_lex_record(EUI, LexRecs) :-
 	form_simple_query("lexrec", "lex_rec", "EUI", EUI, Query),
 	run_query(Query, simple, LexRecs, 1).
 
+
+% db_get_lex_varlist(Word, [VarList]) :-
+% 	% first check freq_im_vars
+% 	( freq_im_vars(Word, VarList) ->
+% 	  true
+% 	; form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
+% 			    Word, Query),
+% 	  run_query(Query, simple, VarList, 1)
+% 	).
+% 	% ( VarList \== [] -> format('### LEX    im_vars:~w~n', [Word]) ; true).
+
 db_get_lex_varlist(Word, [VarList]) :-
-	% first check freq_im_vars
-	( im_vars(Word, VarList) ->
-	  true
-	; form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
-			    Word, Query),
-	  run_query(Query, simple, VarList, 1)
-	).
+	form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
+			  Word, Query),
+	run_query(Query, simple, VarList, 1).
 	% ( VarList \== [] -> format('### LEX    im_vars:~w~n', [Word]) ; true).
 
 db_get_lex_dm_variants(Word, Category, DMVariants) :-
