@@ -33,7 +33,7 @@ public class TermUtils {
     if (term.isAtom()) {
       return term.toString();
     } else {
-      throw new Exception("supplied term is not a string .");
+      throw new Exception("Supplied term \"" + term.toString() + "\" is not a string .");
     } 
   }
 
@@ -44,7 +44,7 @@ public class TermUtils {
     if (term.isString()) {
       return term.getString();
     } else {
-      throw new Exception("supplied term is not a string .");
+      throw new Exception("Supplied term \"" + term.toString() + "\" is not a string .");
     } 
   }
 
