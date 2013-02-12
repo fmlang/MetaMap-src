@@ -32,7 +32,7 @@
 */
 
 :- use_module(lexicon(qp_fm_lexrec), [
-	fm_lexical_record/3
+	fm_lexical_record/4
    ]).
 
 :- use_module(lexicon(qp_recio), [
@@ -53,7 +53,7 @@ go :-
 
     repeat,
 	(   read_lex_record(Stream, Record) ->
-		(   fm_lexical_record(Memory, Record, []) ->
+		(   fm_lexical_record(Memory, _EUI, Record, []) ->
 			writeq(Memory), write('.'), nl,
 			fail
 		    ;   format(user_error, 'ERROR: Cannot convert record.~n', []),

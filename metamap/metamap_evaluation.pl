@@ -139,13 +139,13 @@ evaluate_all_GVCs([First|Rest], DebugFlags, Label, UtteranceText, Variants, Toke
 			 PhraseTokens,  RawTokensOut, AAs,
 			 InputmatchPhraseWords,
 			 CCsIn, CCsInOut,
-			 EvaluationsIn, EvaluationsInOut),
+			 EvaluationsIn, EvaluationsNext),
 	evaluate_all_GVCs(Rest, DebugFlags, Label, UtteranceText, Variants, TokenPhraseWords,
 			  PhraseTokenLength, TokenHeadWords,
 			  PhraseTokens, RawTokensOut, AAs,
 			  InputmatchPhraseWords,
 			  CCsInOut, CCsOut,
-			  EvaluationsInOut, EvaluationsOut).
+			  EvaluationsNext, EvaluationsOut).
 
 evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, Variants,
 		 TokenPhraseWords, PhraseTokenLength,
@@ -265,6 +265,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
 	% get_matching_phrasewords(TokenPhraseWords, MatchMap, MatchingWords),
 	% format(user_output,'MetaWords     = ~q~n', [MetaWords]),	
+	% format(user_output,'MatchMap      = ~q~n', [MatchMap]),	
 	% format(user_output,'MetaTerm      = ~q~n', [MetaTerm]),	
 	% format(user_output,'MetaConcept   = ~q~n', [MetaConcept]),
 	test_minimum_length(TokenPhraseWords, MatchMap),
@@ -280,6 +281,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 				       MatchMap, MatchCCs, ExtraMetaWords),
 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
 			    ExtraMetaWords, Variants, InvolvesHead, Value),
+	% format(user_output,'MatchValue    = ~q~n', [Value]),	
 	debug_compute_one_evaluation_2(DebugFlags, MetaTerm),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
@@ -289,6 +291,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, _SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
 		       IsOvermatch, UniqueSources, PosInfo, _Status, _Negated, Evaluation),
+	
 	% format(user_output, 'EV:~q:~n', [Evaluation]),
 	% format(user_output, '~N~q:~q:~q~n', [MetaTerm,MetaWords,TokenPhraseWords]),
 	% This is just so the debugger will let me examine Evaluation

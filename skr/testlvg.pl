@@ -47,9 +47,9 @@
 	tokenize_string_for_lexical_lookup/2
    ]).
 
-:- use_module(lexicon(qp_fm_lexrec), [
-	fm_lexical_record/4
-   ]).
+% :- use_module(lexicon(qp_fm_lexrec), [
+% 	fm_lexical_record/4
+%    ]).
 
 :- use_module(skr_db(db_access), [
 	db_get_lex_base_forms/2,

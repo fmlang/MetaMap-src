@@ -197,65 +197,47 @@ void open_dbs(int dbptr)
    char database[MAXLINE + 1];
    int i, high, low;
    unsigned BDB_CACHE_SIZE;
+   int errno, ret;
+
+   ret = 0; errno = 0;
 
    /* printf("In open_dbs\n");
     * fflush(stdout);
     * printf("dbptr = %d\n", dbptr);
     * fflush(stdout);
     */
-   
+
    if(dbptr < 0)
    {
       high = NUM_TABLES;
       low = 0;
    } /* fi */
+
    else
    {
      high = dbptr + 1;
      low = dbptr;
    } /* else */
 
-   BDB_CACHE_SIZE = atoi(getenv("BDB_CACHE_SIZE"));
-
    for(i = low; i < high; i++)
    {
-       /* sprintf(database, "%s/%s\0", database_home, config_info[i]->table); */
-       sprintf(database, "%s/%s", database_home, config_info[i]->table);
+        sprintf(database, "%s/%s\0", database_home, config_info[i]->table);
 
-       /* printf("database = >%s<\n", database);
-	  fflush(stdout);
-	  printf("i = >%d<\n", i);
-	  fflush(stdout);
-       */
-
-       if((errno = db_create(&db[i], NULL, 0)) != 0) {
-	/* printf("db_create failed\n");
-	 * fflush(stdout);
+	/* these fprintf statements will be good for debugging only */
+        /* fprintf(stderr, "database = >%s<\n", database);
+         * fflush(stderr);
+         * fprintf(stderr, "i = >%d<\n", i);
+         * fflush(stderr);
 	 */
 
-         fprintf(stderr, "%s: db_create: %s\n", __FILE__, db_strerror(errno));
-       }
-       else
-       {
-       /* printf("db_create succeeded\n");
-	  fflush(stdout);
-	  fprintf(stderr, "i = %d\n", i);
-	  fflush(stderr);
-       */
-	 db[i]->set_errfile(db[i], stderr);
-         db[i]->set_errpfx(db[i], __FILE__);
-         db[i]->set_pagesize(db[i], 64 * 1024);
-	 /*
-	   printf("For %s setting BDB cache size to %d\n", config_info[i]->table, BDB_CACHE_SIZE);
-	   fflush(stdout);
-	 */
-         db[i]->set_cachesize(db[i], 0, BDB_CACHE_SIZE, 0);
-         db[i]->set_flags(db[i], DB_DUP);
-
-	  if((errno = db[i]->open(db[i], NULL, database, NULL, DB_BTREE, 
-                (DB_RDONLY), 0644)) != 0)
-             db[i]->err(db[i], errno, "open:%s", database);
-       } /* else */
+        if((ret = db_create(&db[i], NULL, 0)) == 0)
+            errno = db[i]->open(db[i], NULL, database, NULL, DB_BTREE, 
+                             DB_RDONLY, 0600);
+        if(errno || ret) 
+        {
+           fprintf(stderr, "db_open problem ---> %s\n", database);
+           exit(1);
+        } /* fi */
    } /* for */
 } /* open_dbs */
 

@@ -37,6 +37,8 @@
 	compare_utterance_lengths/2,
 	compute_sum/3,
 	conditionally_print_end_info/0,
+	conditionally_skr_begin_write/2,
+	conditionally_skr_end_write/2,
 	conditionally_print_header_info/4,
 	debug_call/2,
 	debug_message/3,
@@ -86,7 +88,7 @@
     ]).
 
 :- use_module(metamap(metamap_variants), [
-	write_all_variants/1
+	write_all_variants/4
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -794,8 +796,8 @@ do_formal_tagger_output :-
 	; true
 	).
 
-generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length, ReplacementPos,
-		       BracketedOutput, PhraseMMO) :-
+generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length,
+		       ReplacementPos, BracketedOutput, PhraseMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
         ( ( control_option(machine_output)
 	  ; xml_output_format(_XMLFormat)
@@ -839,22 +841,37 @@ generate_bracketed_output(BracketedOutput, PhraseWordInfo) :-
 	; true
 	).
 
-generate_variants_output(GVCs, BracketedOutput) :-
+
+generate_variants_output([], _BracketedOutput).
+generate_variants_output([GVC|RestGVCs], BracketedOutput) :-
+	AllGVCs = [GVC|RestGVCs],
 	( control_option(variants) ->
-	  ( GVCs == [] ->
-	    true
-	  ; ( BracketedOutput == 1 ->
-	      skr_begin_write('Variants')
-	    ; format('~n', [])
-	    ),
-	    write_all_variants(GVCs),
-	    ( BracketedOutput == 1 ->
-	      skr_end_write('Variants')
-	    ; true
-	    )
+	  ( BracketedOutput == 1 ->
+	    skr_begin_write('Variants')
+	  ; format('~n', [])
+	  ),
+	  compute_varnum_length(AllGVCs, MaxNumDigits),
+	  write_all_variants(AllGVCs, MaxNumDigits, 1, _FinalCount),
+	  ( BracketedOutput == 1 ->
+	    skr_end_write('Variants')
+	  ; true
 	  )
 	; true
 	).
+
+% Count how many variants are in all the GVCs, and then
+% compute the number of digits in that number
+% (i.e., the length of the character representation of the integer).
+compute_varnum_length(AllGVCs, NumDigits) :-
+	  (  foreach(gvc(_G,Vs,_Cs), AllGVCs),
+	     fromto(0, SumIn, SumNext, VariantTotal)
+	  do length(Vs, Length),
+	     SumNext is SumIn + Length
+	  ),
+	  number_codes(VariantTotal, VariantTotalCodes),
+	  length(VariantTotalCodes, NumDigits).
+
+
 
 generate_candidates_output(Evaluations3, TotalCandidateCount,
 			   ExcludedCandidateCount, PrunedCandidateCount,
@@ -869,11 +886,11 @@ generate_candidates_output(Evaluations3, TotalCandidateCount,
 				     RemainingCandidateCount,Evaluations3)
 	; \+ control_option(hide_candidates),
 	  Evaluations3 \== [] ->
-	  conditionally_skr_begin_write(BracketedOutput),
+	  conditionally_skr_begin_write(BracketedOutput, 'Candidates'),
 	  conditionally_dump_evals(Evaluations3, TotalCandidateCount,
 				   ExcludedCandidateCount, PrunedCandidateCount,
 				   RemainingCandidateCount),
-	  conditionally_skr_end_write(BracketedOutput)
+	  conditionally_skr_end_write(BracketedOutput, 'Candidates')
 	; true
 	).
 
@@ -886,15 +903,15 @@ test_generate_candidate_output_control_options :-
 	).
 
 
-conditionally_skr_begin_write(BracketedOutput) :-
-	( BracketedOutput == 1 ->
-	  skr_begin_write('Candidates')
+conditionally_skr_begin_write(BracketedOutput, Message) :-
+	( BracketedOutput =:= 1 ->
+	  skr_begin_write(Message)
 	; true
 	).
 
-conditionally_skr_end_write(BracketedOutput) :-
-	( BracketedOutput == 1 ->
-	  skr_end_write('Candidates')
+conditionally_skr_end_write(BracketedOutput, Message) :-
+	( BracketedOutput =:= 1 ->
+	  skr_end_write(Message)
 	; true
 	).
 

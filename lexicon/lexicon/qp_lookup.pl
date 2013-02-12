@@ -40,7 +40,8 @@
     ]).
 
 :- use_module(lexicon(qp_lexicon), [
-	lex_form_ci_recs_input_7_LEXACCESS_TOGGLE/7,
+	% lex_form_ci_recs_input_7_LEXACCESS_TOGGLE/7,
+	lex_form_ci_recs_input_6/6,
 	default_lexicon_file/1,
 	default_index_file/1
    ]).
@@ -100,8 +101,10 @@ assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList,
 	atom_codes(Token, Codes),
 	Codes = [FirstChar|_],
 	\+ is_punct(FirstChar),
-       	lex_form_ci_recs_input_7_LEXACCESS_TOGGLE([Token|MoreTokens], Recs, Remaining, TagList,
-						  LexiconServerInfo, Lexicon, Index),
+	% lex_form_ci_recs_input_7_LEXACCESS_TOGGLE([Token|MoreTokens], Recs, Remaining, TagList,
+ 	% 					  LexiconServerInfo, Lexicon, Index),
+
+       	lex_form_ci_recs_input_6([Token|MoreTokens], Recs, Remaining, TagList, Lexicon, Index),
 	!,
 	assembledefns_aux(Remaining, Token, Rest, TagList,
 			  LexiconServerInfo, Lexicon, Index, MoreRecs).

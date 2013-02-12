@@ -41,7 +41,7 @@
 	dump_evaluations_indented/6,
 	% must be exported for mm_print
 	dump_evaluations_indented/7,
-	dump_variants_labelled/2,
+	dump_variants_labelled/5,
 	extract_nonexcluded_sources/3,
 	extract_relevant_sources/3,
 	extract_name_in_source/2,
@@ -400,23 +400,28 @@ dump_variants_labelled/2
 xxx
 */
 
-dump_variants_labelled(Label,Variants) :-
-    length(Variants,NVariants),
-    (NVariants=:=0 ->
-        format('~a variants (n=0):~n<none>~n',[Label])
-    ;   format('~a variants (n=~d):~n',[Label,NVariants]),
-        dump_variants(Variants),
-        format('~n',[])
-    ).
+dump_variants_labelled(Label, Variants, MaxNumDigits, CountIn, VariantsCount) :-
+	length(Variants, VariantsCount),
+	( VariantsCount =:= 0 ->
+	  format('~a variants (n=0):~n<none>~n', [Label])
+	; format('~a variants (n=~d):~n',[Label,VariantsCount]),
+	  dump_variants(Variants, MaxNumDigits, CountIn)
+	).
 
-dump_variants([]).
-dump_variants([v(Word,Categories,VarLevel,History,_Roots,_NFR)|Rest]) :-
-    rev(History,RevHistory),
-    (Categories==[] ->
-        format('~p{~d=~p}  ',[Word,VarLevel,RevHistory])
-    ;   format('~p{~p, ~d=~p}  ',[Word,Categories,VarLevel,RevHistory])
-    ),
-    dump_variants(Rest).
+dump_variants([], _MaxNumDigits, _Count).
+dump_variants([v(Word,Categories,VarLevel,History,_Roots,_NFR)|Rest], MaxNumDigits, CountIn) :-
+	rev(History, RevHistory),
+	number_codes(CountIn, CountInCodes),
+	length(CountInCodes, CountInNumDigits),
+	Padding is MaxNumDigits - CountInNumDigits,
+	( Categories == [] ->
+	  format('~d:~*c ~p{~d=~p}~n',
+		 [CountIn,Padding,32,Word,VarLevel,RevHistory])
+	; format('~d:~*c ~p{~p, ~d=~p}~n',
+		 [CountIn,Padding,32,Word,Categories,VarLevel,RevHistory])
+	),
+	CountNext is CountIn + 1,
+	dump_variants(Rest, MaxNumDigits, CountNext).
 
 /* extract_relevant_sources(+SourceInfo, +Sources, -ExtractedSourceInfo)
    extract_nonexcluded_sources(+SourceInfo, +Sources, -ExtractedSourceInfo)

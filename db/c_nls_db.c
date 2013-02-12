@@ -174,7 +174,7 @@ struct query_struct parse_query(const char *line);
 int get_config(char *tablename);
 struct res_rows_struct *parse_results(struct query_struct query,
 				      int config_ptr, char *result);
-void get_value_from_field_jgm(int pos, char *to, char *from);
+void get_value_from_field_jgm(int pos, char *to, char *from, int flag);
 int find_fieldpos(char *find, int config_ptr);
 struct results_struct return_results(struct query_struct query, int config_ptr);
 struct results_struct return_result(struct query_struct query, int config_ptr);
@@ -404,7 +404,7 @@ struct results_struct process_special_query(const char *line)
    query_strings.fields[0] = (char *)strdup("nmstr");
    query_strings.fields[1] = (char *)strdup("str");
    query_strings.table = (char *)strdup("suistrings");
-   query_strings.query = (char *)malloc((size_t)MAXLINE);
+   query_strings.query = (char *)malloc((size_t)(MAXLINE + 1));
    query_strings.where2 = NULL;
    query_strings.query2 = NULL;
    strings_ptr = get_config(query_strings.table);
@@ -414,7 +414,7 @@ struct results_struct process_special_query(const char *line)
    query_concepts.num_fields = 1;
    query_concepts.fields[0] = (char *)strdup("concept");
    query_concepts.table = (char *)strdup("cuiconcept");
-   query_concepts.query = (char *)malloc((size_t)MAXLINE);
+   query_concepts.query = (char *)malloc((size_t)(MAXLINE + 1));
    query_concepts.where2 = NULL;
    query_concepts.query2 = NULL;
    concepts_ptr = get_config(query_concepts.table);
@@ -767,7 +767,11 @@ struct res_rows_struct *parse_results(struct query_struct query,
       pos = find_fieldpos(query.where2, config_ptr);
       if(pos > 0)
       {
-         get_value_from_field_jgm(pos, tmp, result);
+         if(pos >= config_info[config_ptr]->num_fields)
+           get_value_from_field_jgm(pos, tmp, result, TRUE);
+         else
+           get_value_from_field_jgm(pos, tmp, result, FALSE);
+
          if(strcmp(tmp, query.query2) == 0)
            cont = TRUE;
       } /* fi */
@@ -784,7 +788,11 @@ struct res_rows_struct *parse_results(struct query_struct query,
          if(pos > 0)
          {
             strcpy(tmp, "");
-            get_value_from_field_jgm(pos, tmp, result);
+            if(pos >= config_info[config_ptr]->num_fields)
+               get_value_from_field_jgm(pos, tmp, result, TRUE);
+            else
+               get_value_from_field_jgm(pos, tmp, result, FALSE);
+
             if(rtn->col_type[i] == INT_TYPE)
             {
                sscanf(tmp, "%d", &rtn->int_result[i]);
@@ -807,7 +815,7 @@ struct res_rows_struct *parse_results(struct query_struct query,
  
 /************************************************************************/
  
-void get_value_from_field_jgm(int pos, char *to, char *from)
+void get_value_from_field_jgm(int pos, char *to, char *from, int flag)
 {
     /* Given a position, result variable, and from string - Assume that
        the bar "|" is used to separate the fields.  Cycle through the from
@@ -820,7 +828,7 @@ void get_value_from_field_jgm(int pos, char *to, char *from)
     int i, j;
     int current_field  = 1;
     int char_len = 0;
-    char tmpvalue[MAXLINE];
+    char tmpvalue[MAXLINE + 1];
 
     char_len = (int)strlen(from);
 
@@ -835,9 +843,18 @@ void get_value_from_field_jgm(int pos, char *to, char *from)
     j = 0;
     strcpy(tmpvalue, "");
 
-    while((from[i] != '|') && ((i + 1) < char_len))
-      tmpvalue[j++] = from[i++];
-    
+    if(flag) /* Pull to end of line */
+    {
+        while((i + 1) < char_len)
+          tmpvalue[j++] = from[i++];
+    } /* fi */
+
+    else /* Just pull to next field */
+    {
+        while((from[i] != '|') && ((i + 1) < char_len))
+          tmpvalue[j++] = from[i++];
+    } /* else */
+
     tmpvalue[j] = '\0';
 
     strcpy(to, tmpvalue);

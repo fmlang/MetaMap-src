@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -54,6 +53,8 @@
     ]).
 
 :- use_module(skr(skr_utilities), [
+	conditionally_skr_begin_write/2,
+   	conditionally_skr_end_write/2,
 	fatal_error/2,
 	get_all_candidate_features/3,
 	get_candidate_feature/3
@@ -125,13 +126,13 @@
 do_MMI_processing(OrigUtterances, BracketedOutput, AAs, DisambMMOutput) :-
 	% Do MMI processing, if requested
 	( control_option(fielded_mmi_output) ->
-	  conditionally_skr_begin_write(BracketedOutput),
+	  conditionally_skr_begin_write(BracketedOutput, 'MMI'),
           current_output(OutputStream),
 	  get_UIAtom(OrigUtterances, UIAtom),
 	  % The "pmid" argument specifies that the PMID should be the first field in he AA output
 	  dump_all_avl(AAs, pmid, UIAtom, OutputStream),
 	  process_citation(UIAtom, DisambMMOutput, OutputStream),
-	  conditionally_skr_end_write(BracketedOutput)
+	  conditionally_skr_end_write(BracketedOutput, 'MMI')
         ; true
 	).
 
@@ -143,17 +144,17 @@ get_UIAtom(OrigUtterances, UIAtom) :-
 	!,
 	atom_codes(UIAtom, PMIDString).
 
-conditionally_skr_begin_write(BracketedOutput) :-
-	  ( BracketedOutput =:= 1 ->
-	    skr_begin_write('MMI')
-	  ; true
-	  ).
+% conditionally_skr_begin_write(BracketedOutput, Message) :-
+% 	  ( BracketedOutput =:= 1 ->
+% 	    skr_begin_write(Message)
+% 	  ; true
+% 	  ).
 
-conditionally_skr_end_write(BracketedOutput) :-
-	  ( BracketedOutput =:= 1 ->
-	    skr_end_write('MMI')
-	  ; true
-	  ).
+% conditionally_skr_end_write(BracketedOutput) :-
+% 	  ( BracketedOutput =:= 1 ->
+% 	    skr_end_write(Message)
+% 	  ; true
+% 	  ).
 
 % 2000 parameters
 % NOTE: These are weighting parameters only, and do not need to be changed when MeSH changes.
@@ -183,7 +184,9 @@ max_freq(13).
 process_citation(UIAtom, MMOutput, FieldedStream) :-
 	max_freq(MaxFreqIn),
 	compute_mesh_in_text(MMOutput, MaxFreqIn, TFInfo, MaxFreqOut),
+	format(user_output, '~p~n', [TFInfo]),
 	process_tf(TFInfo, MaxFreqOut, AATFInfo),
+	format(user_output, '~p~n', [AATFInfo]),
         dump_aatf_info_fielded(AATFInfo, UIAtom, FieldedStream),
 	!.
 process_citation(UIAtom, _MMOutput, _FieldedStream) :-
