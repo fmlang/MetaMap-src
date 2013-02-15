@@ -38,25 +38,8 @@
 	get_from_list/3,
 	% must be exported for SemRep
 	get_from_list_nd/3,
-	first_n_or_less/3,
-	truncate_list/4
+	first_n_or_less/3
     ]).
-
-
-/* truncate_list(+List, -TruncatedList, +MaxN, -NTruncated)
-
-truncate_list/4 truncates List to at most MaxN elements producing
-TruncatedList. NTruncted is the number truncated. */
-
-truncate_list(List,TruncatedList,MaxN,NTruncated) :-
-    length(List,N),
-    (MaxN < N ->
-        NTruncated is N - MaxN,
-	first_n_or_less(List,MaxN,TruncatedList)
-    ;   TruncatedList=List,
-	NTruncated=0
-    ),
-    !.
 
 
 /* first_n_or_less(+List, +N, -PrefixList)

@@ -37,10 +37,8 @@
 :- module(db_access, [
 	db_get_all_acros_abbrs/2,
 	db_get_concept_cui/2,
-	db_get_concept_cuis/2,
 	% db_get_concept_sts/2,
 	db_get_cui_sourceinfo/2,
-	db_get_cui_sources/2,
 	db_get_cui_sts/2,
 	db_get_mesh_mh/2,
 	db_get_mesh_tc_relaxed/2,
@@ -60,9 +58,27 @@
 	initialize_db_access/0,
 	initialize_db_access/3,
 	model_location/5,
-	stop_db_access/0
+	stop_db_access/0,
+	%%%%%%%%%%% lexical access predicates
+	db_get_lex_base_forms/2,
+	db_get_lex_base_forms_with_cat/3,
+	db_get_lex_cats/2,
+	db_get_lex_record/2,
+	db_get_lex_dm_variants/3,
+	db_get_lex_varlist/2
     ]).
 
+% :- use_module(skr_db(freq_im_vars), [
+% 	freq_im_vars/2
+%     ]).
+% 
+% :- use_module(skr_db(freq_lex_form), [
+% 	freq_lex_form/2
+%     ]).
+% 
+% :- use_module(skr_db(freq_lex_rec), [
+% 	freq_lex_rec/2
+%     ]).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
@@ -142,15 +158,12 @@ foreign(exec_destroy_dbs, c, exec_destroy_dbs).
 
 verify_valid_dbs(Location, BasePath, ChosenRelease) :-
 	( \+ directory_exists(Location) ->
-	  fatal_error('~n~nERROR: Database directory ~q does not exist.~n', [Location]),
-	  announce_valid_models(BasePath, ChosenRelease),	  
-	  halt
+	  announce_valid_models(BasePath, ChosenRelease),
+	  fatal_error('Database directory ~q does not exist.~n', [Location])
 	;  \+ directory_exists(Location, [read]) ->
-	  fatal_error('~n~nERROR: Database directory ~q exists but is not readable.~n', [Location]),
-	  halt
+	  fatal_error('Database directory ~q exists but is not readable.~n', [Location])
 	;  \+ directory_exists(Location, [execute]) ->
-	  fatal_error('~n~nERROR: Database directory ~q exists but is not executable.~n', [Location]),
-	  halt
+	  fatal_error('Database directory ~q exists but is not executable.~n', [Location])
 	; exec_init_dbs(Location)
 	).
 
@@ -181,9 +194,9 @@ announce_valid_models(BasePath, ChosenRelease) :-
 	announce_valid_models_1(Versions, ChosenRelease).
 
 announce_valid_models_1([], ChosenRelease) :-
-	fatal_error('       There is no ~w release!~n', [ChosenRelease]).	
+	fatal_error('There is no ~w release!~n', [ChosenRelease]).	
 announce_valid_models_1([H|T], ChosenRelease) :-	
-	fatal_error('       For the ~w release, the valid models are: ~w~n', [ChosenRelease, [H|T]]).
+	fatal_error('For the ~w release, the valid models are: ~w~n', [ChosenRelease, [H|T]]).
 
 
 /* initialize_db_access
@@ -208,7 +221,7 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 	
-default_release('2012AA').
+default_release('2012AB').
 
 initialize_db_access :-
 	get_data_release(Release, 1),
@@ -229,9 +242,8 @@ initialize_db_access(Version, Release, Model) :-
 	conditionally_announce_database_info(Version, Release, Model, Location, VarTable),
 	!.
 initialize_db_access(Version, Release, Model) :-
-	fatal_error('~NERROR: Cannot open Berkeley DB databases (~a ~a ~a model).~n',
-		    [Version,Release,Model]),
-	halt.
+	fatal_error('Cannot open Berkeley DB databases (~a ~a ~a model).~n',
+		    [Version,Release,Model]).
 
 conditionally_announce_database_info(Version, Release, Model, Location, VarTable) :-
 	( \+ control_option(silent) ->
@@ -280,10 +292,9 @@ model_location(Version, Release, ModelName, Path, Location) :-
 model_location_base_dir(Path) :- environ('MODEL_LOCATION_BASE_DIR', Path).
 
 run_query(Query, QueryType, Results, Return) :-
-	debug_message(db, '~N### Running ~w query ~w~n', [QueryType, Query]),
 	c_nls_db_exec_2_list_jgm(Query, Results, Return),
 	debug_call(db, length(Results, Length)),
-	debug_message(db, '~N### Query returned ~d result(s)~n', [Length]).
+	debug_message(db, '~N### ~w query "~w" returned ~d result(s)~n', [QueryType, Query, Length]).
 
 /* db_get_concept_cui(+Concept, -CUI)
 
@@ -299,8 +310,7 @@ db_get_concept_cui(Concept, CUIAtom) :-
 	),
 	!.
 db_get_concept_cui(Concept, []) :-
-	fatal_error('~NERROR: db_access: db_get_concept_cui failed for ~w~n', [Concept]),
-	halt.
+	fatal_error('db_get_concept_cui failed for ~w~n', [Concept]).
 
 db_get_concept_cui_aux(ConceptAtom, CUI) :-
 	form_simple_query("cui", "conceptcui", "concept", ConceptAtom, Query),
@@ -315,8 +325,7 @@ db_get_versioned_source_name(RootSourceName, VersionedSourceName) :-
 	db_get_versioned_source_name_aux(RootSourceNameString, VersionedSourceName),
 	!.
 db_get_versioned_source_name(RootSourceName, []) :-
-	fatal_error('~NERROR: db_access: db_get_versioned_source_name failed for ~w~n', [RootSourceName]),
-	halt.
+	fatal_error('db_get_versioned_source_name failed for ~w~n', [RootSourceName]).
 
 db_get_versioned_source_name_aux(RootSourceName, VersionedSourceNames) :-
 	form_simple_query("versioned, exists", "sab_rv", "root", RootSourceName, Query),
@@ -327,52 +336,12 @@ db_get_root_source_name(VersionedSourceName, RootSourceName) :-
 	db_get_root_source_name_aux(VersionedSourceNameString, RootSourceName),
 	!.
 db_get_root_source_name(VersionedSourceName, []) :-
-	fatal_error('~NERROR: db_access: db_get_root_source_name failed for ~w~n', [VersionedSourceName]),
-	halt.
+	fatal_error('db_get_root_source_name failed for ~w~n', [VersionedSourceName]).
 
 db_get_root_source_name_aux(VersionedSourceName, RootSourceNames) :-
 	form_simple_query("root, exists", "sab_vr", "versioned", VersionedSourceName, Query),
 	run_query(Query, simple, RootSourceNames0, 1),
 	RootSourceNames0 = [RootSourceNames].
-
-/* db_get_concept_cuis(+Concept, -CUIs)
-
-db_get_concept_cuis/2 gets the CUIs for Input which is assumed to be a concept
-name. Note that this predicate is only needed for non-standard data sets
-in which different CUIs can have the same preferred name. */
-
-db_get_concept_cuis(Concept, CUIs) :-
-	( Concept == [] ->
-	  CUIs = []
-	; ensure_string(Concept, ConceptString),
-	  db_get_concept_cui_aux(ConceptString, CUIs0),
-	  get_cuis_from_results(CUIs0, CUIs)
-	).
-
-get_cuis_from_results([],             ['C0000000']).
-get_cuis_from_results([CUI|RestCUIs], [CUI|RestCUIs]).
-
-/* db_get_cui_sources(+CUI, -Sources)
-
-db_get_cui_sources/2 gets the sources, Sources, for the preferred name of Input, a CUI.  */
-
-db_get_cui_sources(CUI, UniqueSources) :-
-	( CUI == [] ->
-	  Sources = []
-	; ensure_atom(CUI, CUIAtom),
-	  db_get_cui_sources_aux(CUIAtom, Sources),
-	  sort(Sources, UniqueSources)
-	),
-	!.
-db_get_cui_sources(CUI, []) :-
-	fatal_error('~NERROR: db_access~w: db_get_cui_sources failed for ~p~n', [CUI]),
-	halt.
-
-db_get_cui_sources_aux(CUIAtom, Sources) :-
-	form_simple_query("src", "cuisrc", "cui", CUIAtom, Query),
-	run_query(Query, simple, Sources0, 1),
-	append(Sources0, Sources).
-
 
 /* db_get_cui_sourceinfo(+CUI, -Sourceinfo)
 
@@ -390,8 +359,7 @@ db_get_cui_sourceinfo(CUI, SourceInfo) :-
 	),
 	!.
 db_get_cui_sourceinfo(CUI, []) :-
-	fatal_error('~NERROR: db_access~w: db_get_cui_sourceinfo failed for ~p~n', [CUI]),
-	halt.
+	fatal_error('db_get_cui_sourceinfo failed for ~p~n', [CUI]).
 
 db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 	form_simple_query("i, str, src, tty", "cuisourceinfo", "cui", CUIAtom, Query),
@@ -410,8 +378,8 @@ db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 %%% 	),
 %%% 	!.
 %%% db_get_concept_sts(Concept, []) :-
-%%% 	fatal_error('~NERROR: db_access~w: db_get_concept_sts failed for ~w~n', [Concept]),
-%%% 	halt.
+%%% 	fatal_error('db_get_concept_sts failed for ~w~n', [Concept]),
+%%% 	abort.
 %%% 
 %%% db_get_concept_sts_aux(ConceptAtom, SemTypes) :-
 %%% 	form_simple_query("st", "conceptst", "concept", ConceptAtom, Query),
@@ -430,8 +398,7 @@ db_get_cui_sts(CUI, SemTypes) :-
 	),
 	!.
 db_get_cui_sts(CUI, []) :-
-	fatal_error('~NERROR: db_access~w: db_get_cui_sts failed for ~w~n', [CUI]),
-	halt.
+	fatal_error('db_get_cui_sts failed for ~w~n', [CUI]).
 
 db_get_cui_sts_aux(CUIAtom, SemTypes) :-
 	form_simple_query("st", "cuist", "concept", CUIAtom, Query),
@@ -454,7 +421,7 @@ db_get_all_acros_abbrs(Word, AAPairs) :-
 	),
 	!.
 db_get_all_acros_abbrs(Word, []) :-
-	fatal_error('~NERROR: db_access: db_get_all_acros_abbrs failed for ~p~n', [Word]).
+	fatal_error('db_get_all_acros_abbrs failed for ~p~n', [Word]).
 
 db_get_all_acros_abbrs_aux(Word, AAPairs) :-
 	form_simple_query("expansion, type", "nlsaa", "word", Word, Query),
@@ -481,7 +448,7 @@ db_get_unique_acros_abbrs(Word, AAPairs) :-
 	),
 	!.
 db_get_unique_acros_abbrs(Word, []) :-
-	fatal_error('~NERROR: db_access: get_unique_acros_abbrs failed for ~p~n', [Word]).
+	fatal_error('get_unique_acros_abbrs failed for ~p~n', [Word]).
 
 % Result must be in a list for subsequent processing
 % db_get_unique_acros_abbrs_aux(Word, [Expansion:Type]) :-
@@ -507,7 +474,7 @@ db_get_synonyms(Word, Synonyms) :-
 	),
 	!.
 db_get_synonyms(Word, []) :-
-	fatal_error('~NERROR: db_access: db_get_synonyms/2 failed for ~p.~n', [Word]).
+	fatal_error('db_get_synonyms/2 failed for ~p.~n', [Word]).
 
 db_get_synonyms_aux(WordAtom, Synonyms) :-
 	form_simple_query("syn, scat", "syns", "word", WordAtom, Query),
@@ -532,7 +499,7 @@ db_get_synonyms(Word, WordCategory, Synonyms) :-
 	),
 	!.
 db_get_synonyms(Word, WordCategory, []) :-
-	fatal_error('~NERROR: db_access: db_get_synonyms/3 failed for ~w/~w.~n', [Word, WordCategory]).
+	fatal_error('db_get_synonyms/3 failed for ~w/~w.~n', [Word, WordCategory]).
 
 db_get_synonyms_aux(WordAtom, WordCategoryAtom, Synonyms) :-
 	form_complex_query("syn, scat", "syns", "word", WordAtom, "wcat", WordCategoryAtom, Query),
@@ -574,7 +541,7 @@ db_get_mesh_tc_relaxed(MeSH, TreeCodes) :-
 	),
 	!.
 db_get_mesh_tc_relaxed(MeSH, []) :-
-	fatal_error('~NERROR: db_access: db_get_mesh_tc_relaxed failed for ~p.~n', [MeSH]).
+	fatal_error('db_get_mesh_tc_relaxed failed for ~p.~n', [MeSH]).
 
 db_get_mesh_tc_relaxed_aux(MeSHAtom, TreeCodes) :-
 	form_simple_query("tc", "meshtcrelaxed", "mesh", MeSHAtom, Query),
@@ -594,7 +561,7 @@ db_get_mesh_mh(MeSH, MH) :-
 	),
 	!.
 % db_get_mesh_mh(MeSH, []) :-
-% 	fatal_error('~NERROR: db_access: db_get_mesh_mh failed for ~p.~n', [MeSH]).
+% 	fatal_error('db_get_mesh_mh failed for ~p.~n', [MeSH]).
 
 db_get_mesh_mh_aux(MeSHAtom, MH) :-
 	form_simple_query("mh", "meshmh", "mesh", MeSHAtom, Query),
@@ -619,7 +586,7 @@ db_get_meta_mesh(MeSH, MHString) :-
 	),
 	!.
 % db_get_meta_mesh(MeSH, []) :-
-% 	fatal_error('~NERROR: db_access: db_get_meta_mesh failed for ~p.~n', [MeSH]).
+% 	fatal_error('db_get_meta_mesh failed for ~p.~n', [MeSH]).
 
 db_get_meta_mesh_aux(MeSHAtom, MH) :-
 	form_simple_query("mesh", "metamesh", "meta", MeSHAtom, Query),
@@ -651,9 +618,7 @@ db_get_mwi_word_data(Table, Word, DebugFlags, Results) :-
 	  ),
 	!.
 db_get_mwi_word_data(Table, Word, _DebugFlags, []) :-
-	fatal_error('~NERROR: db_access: db_get_mwi_word_data failed for word ~p on table ~p.~n',
-		    [Word,Table]),
-	halt.
+	fatal_error('db_get_mwi_word_data failed for word ~p on table ~p.~n', [Word,Table]).
 
 possibly_widen_table(NarrowTable, WideTable, Widen) :-
 	db_access_status(Version, Release, Model),
@@ -687,9 +652,7 @@ db_get_mwi_word_data_WIDE(Table, Word, DebugFlags, RawResults) :-
 	debug_db_get_mwi_data_aux_2(DebugFlags, RawResults),
 	!.
 db_get_mwi_word_data_WIDE(Table, Word, _DebugFlags, _RawResults) :-
-	fatal_error('~NERROR: db_access: db_get_mwi_word_data_aux failed for ~p on table ~p.~n',
-		    [Word,Table]),
-	halt.
+	fatal_error('db_get_mwi_word_data_aux failed for ~p on table ~p.~n', [Word,Table]).
 
 % This is the narrow version
 db_get_mwi_word_data_NARROW(Table, Word, DebugFlags, RawResults) :-
@@ -713,9 +676,7 @@ db_get_mwi_word_data_NARROW(Table, Word, DebugFlags, RawResults) :-
 	!.
 
 db_get_mwi_word_data_NARROW(Table, Word, _DebugFlags, _RawResults) :-
-	fatal_error('~NERROR: db_access: db_get_mwi_word_data_aux failed for ~p on table ~p.~n',
-		    [Word,Table]),
-	halt.
+	fatal_error('db_get_mwi_word_data_aux failed for ~p on table ~p.~n', [Word,Table]).
 
 form_uscs([], _N, []) :- !.
 form_uscs([First|Rest], N, [usc(Nmstr,Str,Concept)|ModifiedRest]) :-
@@ -730,12 +691,9 @@ form_uscs([First|Rest], N, [usc(Nmstr,Str,Concept)|ModifiedRest]) :-
 form_uscs([First|_], N, _) :-
 	!,
 	NewN is N + 1,
-	fatal_error('~NERROR: db_access: form_uscs failed on item ~d = ~p.~n', [NewN,First]),
-	halt.
+	fatal_error('form_uscs failed on item ~d = ~p.~n', [NewN,First]).
 form_uscs(X, N, _) :-
-	fatal_error('~NERROR: db_access: form_uscs failed after item ~d; the non-list is ~p.~n',
-		    [N,X]),
-	halt.
+	fatal_error('form_uscs failed after item ~d; the non-list is ~p.~n', [N,X]).
 
 /* db_get_mwi_word_count(+Table, +Input, -Count)
 
@@ -751,7 +709,7 @@ db_get_mwi_word_count(Table, Word, Count) :-
 	!.
 % This predicate must be allowed to fail gracefully
 % db_get_mwi_word_count(Table, Word, 0) :-
-%        fatal_error('~NERROR: db_access: db_get_mwi_word_count failed for ~p on table ~p.~n',
+%        fatal_error('db_get_mwi_word_count failed for ~p on table ~p.~n',
 %              	      [Word,Table]).
 
 db_get_mwi_word_count_aux(TableAtom, WordAtom, WordCount) :-
@@ -772,12 +730,11 @@ db_get_variants(Concept, Category, Variants) :-
 	),
 	!.
 db_get_variants(Concept, Category, []) :-
-	fatal_error('~NERROR: db_access: db_get_variants/3 failed for ~p (~p).~n',
-		    [Concept,Category]),
-	halt.
+	fatal_error('db_get_variants/3 failed for ~p (~p).~n', [Concept,Category]).
 
 % always treat adjectives as nouns, if possible
-db_get_variants_aux(Concept, Category, Variants) :-
+db_get_variants_aux(Concept, Category0, Variants) :-
+	get_real_category(Category0, Category),
 	( Category == adj,
 	  get_variants_from_db(Concept, noun, Variants),
 	  Variants \== [] ->
@@ -786,12 +743,22 @@ db_get_variants_aux(Concept, Category, Variants) :-
 	),
 	!.
 
+get_real_category([Category], Category).
+get_real_category([],         []).
+
 get_variants_from_db(Concept, Category, Variants) :-
 	db_access_var_table(VarTable),
 	ensure_string(VarTable, VarTableString),
-	ensure_atom(Category, CategoryAtom),
-	form_complex_query("var, vcat, dist, hist, roots",
-			   VarTableString, "word", Concept, "wcat", CategoryAtom, Query),
+	( control_option(allcats) ->
+	  % select var, vcat, dist, hist, roots from varsan where word=\'haemophilic\'
+	  form_simple_query("var, vcat, dist, hist, roots",
+			      VarTableString, "word", Concept, Query)
+	; ensure_atom(Category, CategoryAtom),
+	  % select var, vcat, dist, hist, roots from varsan
+	  %     where word=\'haemophilic\' and wcat=\'noun\'
+	  form_complex_query("var, vcat, dist, hist, roots",
+			     VarTableString, "word", Concept, "wcat", CategoryAtom, Query)
+	),
 	run_query(Query, complex, Variants0, 1),
 	% format('~nget_variants_aux:~nquery = ~p~nresult = ~p~n',[Query,Variants0]),
 	sort(Variants0, Variants1),
@@ -882,7 +849,7 @@ get_data_release(NormalizedRelease, Announce) :-
 	  normalize_db_access_year(SpecifiedRelease, NormalizedSpecifiedRelease),
 	  NormalizedDefaultRelease \== NormalizedSpecifiedRelease ->
 	  ( Announce is 1 ->
-	    send_message('##### WARNING: Overriding default model ~w with ~w.~n',
+	    send_message('### WARNING: Overriding default model ~w with ~w.~n',
 			 [NormalizedDefaultRelease, SpecifiedRelease])
 	  ; true
 	  ),
@@ -939,8 +906,7 @@ normalize_db_access_year(Release, NormalizedRelease) :-
 	),
 	!.
 normalize_db_access_year(Release, _NormalizedRelease) :-
-	format(user_output, 'ERROR: There is no ~w Model Release.~n', [Release]),
-	halt.
+	fatal_error('There is no ~w Model Release.~n', [Release]).
 
 choose_century(Digit, Century) :-
 	( Digit =< 0'5 ->
@@ -1006,3 +972,95 @@ ensure_string(AtomOrString, String) :-
         ; atom_codes(AtomOrString, String)
         ).
 
+% db_get_lex_base_forms(Word, BaseForms) :-
+%  	% first check freq_lex_form
+% 	( freq_lex_form(Word, LexFormData) ->
+% 	  (  foreach(_LexCat-BaseForm, LexFormData),
+% 	     foreach(BaseForm, BaseForms)
+% 	  do true
+% 	  )
+% 	; form_simple_query("baseform", "lex_form", "word", Word, Query),
+% 	  run_query(Query, simple, BaseForms0, 1),
+% 	  append(BaseForms0, BaseForms)
+% 	).
+% 	% ( BaseForms \== [] -> format('### LEX lex_form 1:~w~n', [Word]) ; true).
+% 
+% db_get_lex_base_forms_with_cat(Word, LexCat, BaseForms) :-
+%  	% first check freq_lex_form
+% 	( freq_lex_form(Word, LexFormData) ->
+% 	  (  foreach(_LexCat-BaseForm, LexFormData),
+% 	     foreach(BaseForm, BaseForms)
+% 	  do true
+% 	  )
+% 	; form_complex_query("baseform", "lex_form", "word", Word, "lexcat", LexCat, Query),
+% 	  run_query(Query, simple, BaseForms0, 1),
+% 	   append(BaseForms0, BaseForms)
+% 	).
+% 	% ( BaseForms \== [] -> format('### LEX lex_form 2:~w~n', [Word]) ; true).
+% 
+% db_get_lex_cats(Word, LexCats) :-
+%  	% first check freq_lex_form
+% 	( freq_lex_form(Word, LexFormData) ->
+% 	  (  foreach(LexCat-_BaseForm, LexFormData),
+% 	     foreach(LexCat, LexCats)
+% 	  do true
+% 	  )
+% 	; form_simple_query("lexcat", "lex_form", "word", Word, Query),
+% 	  run_query(Query, simple, LexCats0, 1),
+% 	  append(LexCats0, LexCats1),
+% 	  sort(LexCats1, LexCats)
+% 	).
+% 	% ( LexCats \== [] -> format('### LEX lex_form 3:~w~n', [Word]) ; true).
+
+db_get_lex_base_forms(Word, BaseForms) :-
+	form_simple_query("baseform", "lex_form", "word", Word, Query),
+	run_query(Query, simple, BaseForms0, 1),
+	append(BaseForms0, BaseForms).
+	% ( BaseForms \== [] -> format('### LEX lex_form 1:~w~n', [Word]) ; true).
+
+db_get_lex_base_forms_with_cat(Word, LexCat, BaseForms) :-
+	form_complex_query("baseform", "lex_form", "word", Word, "lexcat", LexCat, Query),
+	run_query(Query, simple, BaseForms0, 1),
+	append(BaseForms0, BaseForms).
+	% ( BaseForms \== [] -> format('### LEX lex_form 2:~w~n', [Word]) ; true).
+
+db_get_lex_cats(Word, LexCats) :-
+	form_simple_query("lexcat", "lex_form", "word", Word, Query),
+	run_query(Query, simple, LexCats0, 1),
+	append(LexCats0, LexCats1),
+	sort(LexCats1, LexCats).
+	% ( LexCats \== [] -> format('### LEX lex_form 3:~w~n', [Word]) ; true).
+
+% db_get_lex_record(EUI, LexRec) :-
+%  	% first check freq_lex_rec
+% 	( freq_lex_rec(EUI, LexRec) ->
+% 	  true
+% 	; form_simple_query("lexrec", "lex_rec", "EUI", EUI, Query),
+% 	  run_query(Query, simple, LexRec, 1)
+% 	).
+ 
+db_get_lex_record(EUI, LexRecs) :-
+	form_simple_query("lexrec", "lex_rec", "EUI", EUI, Query),
+	run_query(Query, simple, LexRecs, 1).
+
+
+% db_get_lex_varlist(Word, [VarList]) :-
+% 	% first check freq_im_vars
+% 	( freq_im_vars(Word, VarList) ->
+% 	  true
+% 	; form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
+% 			    Word, Query),
+% 	  run_query(Query, simple, VarList, 1)
+% 	).
+% 	% ( VarList \== [] -> format('### LEX    im_vars:~w~n', [Word]) ; true).
+
+db_get_lex_varlist(Word, [VarList]) :-
+	form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
+			  Word, Query),
+	run_query(Query, simple, VarList, 1).
+	% ( VarList \== [] -> format('### LEX    im_vars:~w~n', [Word]) ; true).
+
+db_get_lex_dm_variants(Word, Category, DMVariants) :-
+	form_complex_query("dm_variant, dm_variant_lexcat", "dm_vars", "base_form",
+			   Word, "base_lexcat", Category, Query),
+	run_query(Query, simple, DMVariants, 1).

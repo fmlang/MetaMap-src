@@ -115,7 +115,6 @@ add_candidates([gvc(Generator,Variants,Candidates)|RestGVCs],
 	% If IgnoreSingleChars == 1,
 	% then don't generate candidates for single-character tokens
 	Generator = v(Token,_,_,_,_Roots0,_WordCount),
-	% add_wordcount_to_roots(Roots0, WordCount, Roots),
 	( IgnoreSingleChars =:= 1,
 	  atom_codes(Token, [_SingleChar]) ->
 	  Candidates = [],
@@ -137,14 +136,6 @@ add_candidates([gvc(Generator,Variants,Candidates)|RestGVCs],
 	add_candidates(RestGVCs, NextCandidateCount, AllVariants, IgnoreSingleChars, DebugFlags,
 		       WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut).
 	
-add_wordcount_to_roots(Roots0, WordCount, Roots) :-
-	(  foreach(R0, Roots0),
-	   foreach(R, Roots),
-	   param(WordCount)
-	do R = R0-WordCount
-	).    
-
-
 /* extract_simple_variants(+Variants, -SimpleVariants)
    stop_variant(+SimpleVariant, +VarLevel)
 

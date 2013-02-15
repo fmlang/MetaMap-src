@@ -32,7 +32,7 @@
 */
 
 :- module(qp_fm_lexrec, [
-	fm_lexical_record/3
+	fm_lexical_record/4
    ]).
 
 :- use_module(lexicon(qp_fm_utils), [
@@ -62,10 +62,10 @@
 
 %%% The token denoting a lexical entry is called "entries",
 %%% and not "entry" for historical reasons.
-fm_lexical_record(R) -->
+fm_lexical_record(R, EUI) -->
 	"{base=", fm_to_newline(BL), {atom_codes(B,BL) }, fm_newline,
 	fm_spelling_variants(Ss),
-	fm_lexical_entry(E),
+	fm_lexical_entry(E, EUI),
 	fm_annotations(A),
 	fm_signature(S),
 	"}", fm_newline,
@@ -77,18 +77,18 @@ fm_spelling_variants([S|R]) -->
 fm_spelling_variants([]) --> [].
 
 %%% at least one lexical entry
-fm_lexical_entry([E]) -->
-	(	fm_adj_entry(E)    -> { true }
-	;	fm_adv_entry(E)    -> { true }
-	;	fm_aux_entry(E)    -> { true }
-	;	fm_compl_entry(E)  -> { true }
-	;	fm_conj_entry(E)   -> { true }
-	;	fm_det_entry(E)    -> { true }
-	;	fm_modal_entry(E)  -> { true }
-	;	fm_noun_entry(E)   -> { true }
-	;	fm_prep_entry(E)   -> { true }
-	;	fm_pron_entry(E)   -> { true }
-	;	fm_verb_entry(E)   -> { true }
+fm_lexical_entry([E], EUI) -->
+	(	fm_adj_entry(E, EUI)    -> { true }
+	;	fm_adv_entry(E, EUI)    -> { true }
+	;	fm_aux_entry(E, EUI)    -> { true }
+	;	fm_compl_entry(E, EUI)  -> { true }
+	;	fm_conj_entry(E, EUI)   -> { true }
+	;	fm_det_entry(E, EUI)    -> { true }
+	;	fm_modal_entry(E, EUI)  -> { true }
+	;	fm_noun_entry(E, EUI)   -> { true }
+	;	fm_prep_entry(E, EUI)   -> { true }
+	;	fm_pron_entry(E, EUI)   -> { true }
+	;	fm_verb_entry(E, EUI)   -> { true }
 	).
 
 fm_annotations([A|R]) -->
@@ -102,11 +102,11 @@ fm_signature([]) --> [].
 
 %%% adjectives
 
-fm_entry(N) -->
-	fm_spaces, "entry=", fm_to_newline(NL), { !, fm_number_codes(N, NL), ! }, fm_newline.
+fm_entry(EUI) -->
+	fm_spaces, "entry=", fm_to_newline(NL), { !, fm_number_codes(EUI, NL), ! }, fm_newline.
 
-fm_adj_entry(E) -->
-	fm_entry(N),
+fm_adj_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=adj", fm_newline,
 	fm_adj_variants(Vs),
 	fm_adj_positions(Ps),
@@ -114,7 +114,7 @@ fm_adj_entry(E) -->
 	fm_adj_stative(S),
 	fm_adj_nominalizations(Ns),
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[adj], variants:Vs, positions:Ps,
+	{ E = entry:[num:[EUI], cat:[adj], variants:Vs, positions:Ps,
 	  complements:Cs, stative:S, nominalizations:Ns, misc:M] }.
 
 %%% one or more
@@ -175,15 +175,15 @@ fm_adj_nominalizations([]) --> [].
 
 %%% adverbs
 
-fm_adv_entry(E) -->
-	fm_entry(N),
+fm_adv_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=adv", fm_newline,
 	fm_adv_variants(Vs),
 	fm_adv_interrogative(I),
 	fm_adv_modification_types(Ms),
 	fm_adv_negative(Neg),
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[adv], variants:Vs, interrogative:I,
+	{ E = entry:[num:[EUI], cat:[adv], variants:Vs, interrogative:I,
 	  modification_types:Ms, negative:Neg, misc:M] }.
 
 %%% one or more variants
@@ -233,12 +233,12 @@ fm_adv_negative([]) --> [].
 
 %%% auxiliaries
 
-fm_aux_entry(E) -->
-	fm_entry(N),
+fm_aux_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=aux", fm_newline,
 	fm_aux_variant(V),
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[aux], variants:V, misc:M] }.
+	{ E = entry:[num:[EUI], cat:[aux], variants:V, misc:M] }.
 
 fm_aux_variant(V) -->
 	fm_spaces, "variants=", fm_aux_variant_val(V), fm_newline.
@@ -257,30 +257,30 @@ fm_aux_variant_val(irreg:[V1, V2, V3, V4, V5]) -->
 
 %%% complementizers
 
-fm_compl_entry(E) -->
-	fm_entry(N),
+fm_compl_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=compl", fm_newline,
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[compl], misc:M] }.
+	{ E = entry:[num:[EUI], cat:[compl], misc:M] }.
 
 %%% conjunctions
 
-fm_conj_entry(E) -->
-	fm_entry(N),
+fm_conj_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=conj", fm_newline,
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[conj], misc:M] }.
+	{ E = entry:[num:[EUI], cat:[conj], misc:M] }.
 
 %%% determiners
 
-fm_det_entry(E) -->
-	fm_entry(N),
+fm_det_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=det", fm_newline,
 	fm_det_variant(V),
 	fm_det_interrogative(I),
 	fm_det_demonstrative(D),
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[det], variants:V, interrogative:I, demonstrative:D, misc:M]}.
+	{ E = entry:[num:[EUI], cat:[det], variants:V, interrogative:I, demonstrative:D, misc:M]}.
 
 fm_det_variant([V]) -->
     fm_spaces, "variants=", fm_det_variant_val(V), fm_newline.
@@ -302,12 +302,12 @@ fm_det_demonstrative([]) --> [].
 
 %%% modals
 
-fm_modal_entry(E) -->
-	fm_entry(N),
+fm_modal_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=modal", fm_newline,
 	fm_modal_variant(V),
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[modal], variants:V, misc:M] }.
+	{ E = entry:[num:[EUI], cat:[modal], variants:V, misc:M] }.
 
 %%% variant is optional
 fm_modal_variant([[V]]) -->
@@ -316,15 +316,15 @@ fm_modal_variant([[]]) --> [].
 
 %%% nouns
 
-fm_noun_entry(E) -->
-	fm_entry(N),
+fm_noun_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=noun", fm_newline,
 	fm_noun_variants(Vs),
 	fm_noun_complements(Cs),
 	fm_noun_nominalizations(Ns),
 	fm_noun_proper(P),
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[noun], variants:Vs, complements:Cs, nominalizations_of:Ns, proper:P, misc:M] }.
+	{ E = entry:[num:[EUI], cat:[noun], variants:Vs, complements:Cs, nominalizations_of:Ns, proper:P, misc:M] }.
 
 %%% one or more variants
 fm_noun_variants([V|R]) -->
@@ -380,23 +380,23 @@ fm_noun_proper([]) --> [].
 
 %%% prepositions
 
-fm_prep_entry(E) -->
-	fm_entry(N),
+fm_prep_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=prep", fm_newline,
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[prep], misc:M] }.
+	{ E = entry:[num:[EUI], cat:[prep], misc:M] }.
 
 %%% pronouns
 
-fm_pron_entry(E) -->
-	fm_entry(N),
+fm_pron_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=pron", fm_newline,
 	fm_pron_variants(V),
 	fm_pron_gender(G),
 	fm_pron_interrogative(I),
 	fm_pron_types(T),
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[pron], variants:V, gender:G, interrogative:I, type:T, misc:M] }.
+	{ E = entry:[num:[EUI], cat:[pron], variants:V, gender:G, interrogative:I, type:T, misc:M] }.
 
 %%% one or more variants
 fm_pron_variants([V|R]) -->
@@ -451,14 +451,14 @@ fm_pron_type(indef:[neg]) --> "indef(neg)".
 
 %%% verbs
 
-fm_verb_entry(E) -->
-	fm_entry(N),
+fm_verb_entry(E, EUI) -->
+	fm_entry(EUI),
 	fm_spaces, "cat=verb", fm_newline,
 	fm_verb_variants(Vs),
 	fm_verb_complements(Cs),
 	fm_verb_nominalizations(Ns),
 	fm_misc(M),
-	{ E = entry:[num:[N], cat:[verb], variants:Vs, complements:Cs, nominalizations:Ns, misc:M] }.
+	{ E = entry:[num:[EUI], cat:[verb], variants:Vs, complements:Cs, nominalizations:Ns, misc:M] }.
 
 %%% one or more
 fm_verb_variants([V|R]) -->

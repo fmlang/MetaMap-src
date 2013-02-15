@@ -41,6 +41,13 @@
 	extract_tokens_with_tags/2,
 	% must be exported for mm_print
 	filter_tokens/3,
+	% possessive handling
+	% phrase predicates
+	get_phrase_item_feature/3,
+	get_phrase_item_name/2,
+	get_phrase_item_subitems/2,
+	get_subitems_feature/3,
+	get_subitem_value/2,
 	get_utterance_token_list/4,
 	% must be exported for mwi_utilities
 	is_ws/1,
@@ -48,6 +55,7 @@
 	is_ws_word/1,
 	linearize_phrase/4,
 	linearize_components/2,
+	new_phrase_item/3,
 	no_combine_pronoun/1,
 	parse_phrase_word_info/3,
 	% whitespace tokenization (break at whitespace and hyphens; ignore colons)
@@ -62,15 +70,8 @@
 	% "utter" tokenization (wordind + punctuation + whitespace)
 	tokenize_fields_utterly/2,
 	tokenize_text_utterly/2,
-	% possessive handling
-	% phrase predicates
-	get_phrase_item_feature/3,
-	get_phrase_item_name/2,
-	get_phrase_item_subitems/2,
-	new_phrase_item/3,
-	get_subitems_feature/3,
-	get_subitem_value/2,
-	set_subitems_feature/4
+	set_subitems_feature/4,
+	transparent_tag/1
     ]).
 
 :- use_module(lexicon(lexical),[
@@ -98,7 +99,12 @@
 	is_all_graphic_text/1
     ]).
 
+:- use_module(skr_lib(sicstus_utils),[
+	ttyflush/0
+    ]).
+
 :- use_module(skr(skr_utilities),[
+	fatal_error/2,
 	token_template/6
     ]).
 
@@ -387,9 +393,7 @@ extract_tokens(PhraseItem, TokenWords, []) :-
 	!,
 	extract_tokens_aux(SubItemList, TokenWords).
 extract_tokens(PhraseItem, [], []) :-
-	format('~NERROR: extract_tokens/3 failed for ~p.~n', [PhraseItem]),
-	!,
-	fail.
+	fatal_error('extract_tokens/3 failed for ~p.~n', [PhraseItem]).
 
 % for "primitive" tags
 extract_tokens_aux(PhraseItems, TokenWords) :-
@@ -448,13 +452,14 @@ filter_tokens_1(PhraseItem, TokenWords, []) :-
 	; transparent_tag(Tag) ->   % continue
 	  arg(1, PhraseItem, SubItemList),
 	  extract_tokens_aux(SubItemList, TokenWords)
-	; fail                       % fail
+	; arg(1, PhraseItem, SubItemList),
+	  extract_tokens_aux(SubItemList, TokenWords),
+	  format(user_output, '### WARNING: ~q is an unexpected phrase item!~n', [PhraseItem]),
+	  ttyflush
 	),
 	!.
 filter_tokens_1(PhraseItem, [], []) :-
-	format('~NERROR: filter_tokens_1/3 failed for ~p.~n', [PhraseItem]),
-	!,
-	fail.
+	fatal_error('filter_tokens_1/3 failed for ~p.~n', [PhraseItem]).
 
 filter_tokens_2([], []).
 filter_tokens_2([First|Rest], [First|FilteredRest]) :-
@@ -578,9 +583,7 @@ linearize_phrase_item_6([FirstMap|RestMap], PhraseItem, [FirstToken|RestTokens],
 	!,
 	linearize_phrase_item_6(RestMap, PhraseItem, RestTokens, RestIM, RestLItems, RestLMap).
 linearize_phrase_item_6(_, PhraseItem, _, _, _, _) :-
-	format('~NERROR: Cannot linearize ~p (mapping/input match)~n', [PhraseItem]),
-	!,
-	fail.
+	fatal_error('Cannot linearize ~p (mapping/input match)~n', [PhraseItem]).
 
 linearize_phrase_item_7([], _PhraseItem, [], [], [], [], []) :- !.
 linearize_phrase_item_7([FirstMap|RestMap], PhraseItem, [FirstToken|RestTokens],
@@ -596,8 +599,7 @@ linearize_phrase_item_7([FirstMap|RestMap], PhraseItem, [FirstToken|RestTokens],
 	!,
 	linearize_phrase_item_7(RestMap, PhraseItem, RestTokens, RestIM, RestBases, RestLItems, RestLMap).
 linearize_phrase_item_7(_, PhraseItem, _, _, _, _, _) :-
-	format('~NERROR: Cannot linearize ~p (mapping/input match)~n', [PhraseItem]),
-	fail.
+	fatal_error('Cannot linearize ~p (mapping/input match)~n', [PhraseItem]).
 
 coordinate_tokens(Tokens, IM0, [FirstIM|RestIM]) :-
 	length(Tokens, NTok),
@@ -827,6 +829,17 @@ tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 	re_attach_apostrophe_s_tokens(TokField0, TokField),
 	!.
 
+% form_decimal_numbers([], []).
+% form_decimal_numbers([Token1,Token2,Token3|RestTokensIn], [DecimalToken|RestTokensOut]) :-
+% 	Token2 = ".",
+% 	nls_strings:is_integer_string(Token1),
+% 	nls_strings:is_integer_string(Token3),
+% 	!,
+% 	append([Token1, Token2, Token3], DecimalToken),
+% 	form_decimal_numbers(RestTokensIn, RestTokensOut).
+% form_decimal_numbers([H|RestIn], [H|RestOut]) :-
+% 	form_decimal_numbers(RestIn, RestOut).
+
 % The call to tokenize_text_utterly(FieldText, TokField0)
 % will parse words ending in "'s" (apostrophe + s) into multiple tokens, e.g.,
 % tokenize_text_utterly("finkelstein's test positive", TokField0)
@@ -836,45 +849,35 @@ tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 % There are numerous cases of ill-formed text involving apostrophe-s
 % that need to be handled via special cases.
 
-% The basic (and correct) case, e.g., "Crohn's"
-tokenized_field_in_out_OLD(["'", "s"           | RestTokenizedFieldIn], StringWithApostropheS,
-		       [StringWithApostropheS  | RestTokenizedFieldOut],
-		       RestTokenizedFieldIn,    RestTokenizedFieldOut).
+tokenized_field_in_out(["'", "s", TokenAfterS           | RestTokenizedFieldIn],
+		       TokenAfterS, RestTokenizedFieldIn).
 % Ill-formed case 1:  e.g., "Crohn' s"
-tokenized_field_in_out_OLD(["'", " ", "s"      | RestTokenizedFieldIn], StringWithApostropheS,
-		       [StringWithApostropheS  | RestTokenizedFieldOut],
-		       RestTokenizedFieldIn,    RestTokenizedFieldOut).		       
+tokenized_field_in_out(["'", " ", "s", TokenAfterS      | RestTokenizedFieldIn],
+		       TokenAfterS, RestTokenizedFieldIn).
 % Ill-formed case 2:  e.g., "Crohn 's"
-tokenized_field_in_out_OLD([" ", "'", "s"      | RestTokenizedFieldIn], StringWithApostropheS,
-		       [StringWithApostropheS  | RestTokenizedFieldOut],
-		       RestTokenizedFieldIn,    RestTokenizedFieldOut).
+tokenized_field_in_out([" ", "'", "s", TokenAfterS      | RestTokenizedFieldIn],
+		       TokenAfterS, RestTokenizedFieldIn).
 % Ill-formed case 3:  e.g., "Crohn ' s"
-tokenized_field_in_out_OLD([" ", "'", " ", "s" | RestTokenizedFieldIn], StringWithApostropheS,
-		       [StringWithApostropheS  | RestTokenizedFieldOut],
-		       RestTokenizedFieldIn,    RestTokenizedFieldOut).
-
-
-tokenized_field_in_out(["'", "s"           | RestTokenizedFieldIn], RestTokenizedFieldIn).
-% Ill-formed case 1:  e.g., "Crohn' s"
-tokenized_field_in_out(["'", " ", "s"      | RestTokenizedFieldIn], RestTokenizedFieldIn).
-% Ill-formed case 2:  e.g., "Crohn 's"
-tokenized_field_in_out([" ", "'", "s"      | RestTokenizedFieldIn], RestTokenizedFieldIn).
-% Ill-formed case 3:  e.g., "Crohn ' s"
-tokenized_field_in_out([" ", "'", " ", "s" | RestTokenizedFieldIn], RestTokenizedFieldIn).
+tokenized_field_in_out([" ", "'", " ", "s", TokenAfterS | RestTokenizedFieldIn],
+		       TokenAfterS, RestTokenizedFieldIn).
 
 
 re_attach_apostrophe_s_tokens([], []).
 re_attach_apostrophe_s_tokens(TokenizedFieldIn, TokenizedFieldOut) :-
 	TokenizedFieldIn = [OrigString | TailTokenizedFieldIn],
 	\+ no_reattach_string(OrigString),
-	tokenized_field_in_out(TailTokenizedFieldIn, RestTokenizedFieldIn),
+	tokenized_field_in_out(TailTokenizedFieldIn, TokenAfterS, RestTokenizedFieldIn),
+	% if the apostrophe-s appears as "'s'", as in, e.g.,
+	% "more typical 's'-shaped VCs" (PMID 20444214), do not re-attach!
+	TokenAfterS \== [0'''],
 	!,
 	TokenizedFieldOut = [StringWithApostropheS|RestTokenizedFieldOut],
 	append([OrigString, "'", "s"], StringWithApostropheS),
 	% TokenizedFieldOut = [StringWithApostropheS | RestTokenizedField],
-	re_attach_apostrophe_s_tokens(RestTokenizedFieldIn, RestTokenizedFieldOut).
+	re_attach_apostrophe_s_tokens([TokenAfterS|RestTokenizedFieldIn], RestTokenizedFieldOut).
 re_attach_apostrophe_s_tokens([H|Rest], [H|NewRest]) :-
 	re_attach_apostrophe_s_tokens(Rest, NewRest).
+
 
 % succeeds if OrigString (the string representation of the previous token)
 % is a string to which the following "'s" (apostrophe-s) should not be re-attached.
@@ -902,7 +905,12 @@ no_combine_pronoun(it).
 % 	!.
 
 % MATS
-tokenize_text_utterly(Text,TokText) :-
+tokenize_text_utterly(Text, TokenizedText) :-
+	tokenize_text_utterly_1(Text, TokenizedText0),
+	TokenizedText = TokenizedText0.
+	% form_decimal_numbers(TokenizedText0, TokenizedText).
+
+tokenize_text_utterly_1(Text,TokText) :-
 	( atom(Text) ->
 	  atom_codes(Text,String),
 	  ttu_string(TokString,String,[]),

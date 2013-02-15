@@ -46,7 +46,7 @@
 	% called by MetaMap API -- do not change signature!
 	postprocess_sentences/10,
 	% called by MetaMap API -- do not change signature!
-	process_text/12
+	process_text/9
    ]).
 
 % :- extern(skr_fe_go).
@@ -63,14 +63,9 @@
 	default_release/1
    ]).
 
-:- use_module(lexicon(qp_lexicon), [
-	use_multi_word_lexicon/0
-   ]).
-
 :- use_module(metamap(metamap_parsing), [
 	collapse_syntactic_analysis/2,
-	generate_syntactic_analysis_plus/3,
-	generate_syntactic_analysis_plus/4
+	generate_syntactic_analysis_plus/5
    ]).
 
 :- use_module(mmi(mmi), [
@@ -79,13 +74,18 @@
 
 :- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/18,
+	skr_phrases/16,
 	stop_skr/0
+   ]).
+
+:- use_module(skr(skr_utilities), [
+        fatal_error/2,
+	get_all_candidate_features/3
    ]).
 
 :- use_module(skr(skr_text_processing), [
 	convert_all_utf8_to_ascii/4,
-	extract_sentences/10,
+	extract_sentences/12,
 	get_skr_text/2,
 	medline_PMID_indicator_char/1
 	% is_sgml_text/1
@@ -132,6 +132,7 @@
 
 :- use_module(skr_lib(negex), [
 	compute_negex/4,
+	final_negation_template/6,
 	generate_negex_output/1
    ]).
 
@@ -160,26 +161,30 @@
    ]).
 
 :- use_module(skr_lib(pos_info), [
-	create_EXP_raw_token_list/6,
-	create_UNEXP_raw_token_list/5,
+	create_EXP_raw_token_list/8,
+	create_UNEXP_raw_token_list/6,
 	get_next_token_state/3
    ]).
 
+:- use_module(skr_lib(server_choice), [
+	get_all_server_streams/3
+   ]).
+
 :- use_module(skr_lib(sicstus_utils), [
+	lower/2,
 	subchars/4
    ]).
 
 :- use_module(tagger(tagger_access), [
-	get_tagger_server_hosts_and_port/3,
-	tag_text/7
+	tag_text/5
    ]).
 
 :- use_module(text(text_object_util), [
 	higher_order_or_annotation_type/1
    ]).
 
-:- use_module(wsd(wsdmod), [
-	get_WSD_server_hosts_and_port/3
+:- use_module(text(text_objects), [
+	get_UDAs/1
    ]).
 
 :- use_module(library(avl), [
@@ -199,6 +204,18 @@
 :- use_module(library(system), [
 	environ/2
    ]).
+
+
+bp :-
+	current_predicate(Pred, Mod:Skel),
+	sub_atom(Pred, _, _, _, lexAccess),
+	\+ sub_atom(Pred, _, _, _, prefix),
+	functor(Skel, Pred, Arity),
+	add_breakpoint([pred(Mod:Pred/Arity),
+			goal(_:G)]-
+			[call,proceed,true(format(user_output, 'CALL: ~q~n', [G]))], _BID),
+	fail
+      ; true.
 
 /* go
    skr_fe_go
@@ -222,7 +239,8 @@ go(HaltOption, command_line(Options0,Args0)) :-
 	default_release(Release),
 	close_all_streams,
 	( initialize_skr(Options, Args, InterpretedArgs, IOptions) ->
-          ( skr_fe(InterpretedArgs, ProgramName, Release, IOptions) ->
+	    get_UDAs(UDAList),
+          ( skr_fe(InterpretedArgs, ProgramName, UDAList, Release, IOptions) ->
 	    true
 	  ; true
 	  )
@@ -256,7 +274,6 @@ initialize_skr(InitialOptions, InitialArgs, FinalArgs, FinalOptions) :-
 	interpret_args(FinalOptions, ArgSpecs, InitialArgs, FinalArgs),
 	toggle_control_options(FinalOptions),
 	set_control_values(FinalOptions, FinalArgs),
-	use_multi_word_lexicon,
 	initialize_skr([]).
 
 
@@ -265,10 +282,8 @@ initialize_skr(InitialOptions, InitialArgs, FinalArgs, FinalOptions) :-
 skr_fe/1 calls either process_all/1 or batch_skr/1 (which redirects
 I/O streams and then calls process_all/1) depending on InterpretedArgs.  */
 
-skr_fe(InterpretedArgs, ProgramName, DefaultRelease, IOptions) :-
+skr_fe(InterpretedArgs, ProgramName, UDAList, DefaultRelease, IOptions) :-
 	set_tag_option_and_mode(TagOption, TagMode),
-	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
-	get_WSD_server_hosts_and_port(WSDServerHosts, WSDForced, WSDServerPort),
 	% XML header will be printed here (and XML footer several lines below) iff
 	% (1) XML command-line option is on, and
 	% (2) OutputChoice is 1 (which is manually forced)
@@ -277,26 +292,23 @@ skr_fe(InterpretedArgs, ProgramName, DefaultRelease, IOptions) :-
 	xml_header_footer_print_setting(1, XMLMode, PrintSetting),
 	get_output_stream(OutputStream),
 	conditionally_print_xml_header(PrintSetting, OutputStream),
+	get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream),
+	AllServerStreams = (LexiconServerStream,TaggerServerStream,WSDServerStream),
 	( InputStream = user_input,
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
-          process_all(ProgramName, DefaultRelease, InputStream, OutputStream, TagOption,
-		      TaggerServerHosts, TaggerForced, TaggerServerPort,
-		      WSDServerHosts, WSDForced, WSDServerPort,
-		      InterpretedArgs, IOptions)
+          process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
+		      UDAList, AllServerStreams, TagOption, InterpretedArgs, IOptions)
           % batch_skr is for batch processing
-        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
-		    TaggerServerHosts, TaggerForced, TaggerServerPort,
-		    WSDServerHosts, WSDForced, WSDServerPort,
-		    TagOption, TagMode, IOptions, InputStream)
+        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease, UDAList,
+		    AllServerStreams, TagOption, TagMode, IOptions, InputStream)
 	),
 	% conditionally_print_xml_footer/4 will be called here
 	% only if MetaMap is in batch mode, because otherwise (in interactive use)
 	% the user will have control-C-ed the program or exited it altogether.
 	conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream),
 	generate_EOT_output(OutputStream),
-	close(OutputStream),
-	close(InputStream).
+	close_all_streams.
 
 get_output_stream(OutputStream) :-
 	( current_stream(_File, write, OutputStream) ->
@@ -320,9 +332,8 @@ file names from InterpretedArgs and redirects I/O to them.
 Meta concepts are computed for each noun phrase in the input.  */
 
 batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
-	  TaggerServerHosts, TaggerForced, TaggerServerPort,
-	  WSDServerHosts, WSDForced, WSDServerPort,
-	  TagOption, TagMode, IOptions, InputStream) :-
+	  UDAList, AllServerStreams, TagOption,
+	  TagMode, IOptions, InputStream) :-
 	get_from_iargs(infile,  name,   InterpretedArgs, InputFile),
 	get_from_iargs(infile,  stream, InterpretedArgs, InputStream),
 	get_from_iargs(outfile, name,   InterpretedArgs, OutputFile),
@@ -331,9 +342,7 @@ batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 	set_input(InputStream),
 	set_output(OutputStream),
 	( process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-		      TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-		      WSDServerHosts, WSDForced, WSDServerPort,
-		      InterpretedArgs, IOptions) ->
+		      UDAList, AllServerStreams, TagOption, InterpretedArgs, IOptions) ->
 	  true
 	; true
 	),
@@ -349,43 +358,35 @@ processing (MetaMapping, MMI processing, Semantic interpretation).
 user_input and user_output may have been redirected to files.)
 If TagOption is 'tag', then tagging is done. */
 
-process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-	    TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-	    WSDServerHosts, WSDForced, WSDServerPort,
-	    InterpretedArgs, IOptions) :-
+process_all(ProgramName, DefaultRelease, InputStream, OutputStream, UDAList,
+	    AllServerStreams, TagOption, InterpretedArgs, IOptions) :-
 	do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream),
-	process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-		      WSDServerHosts, WSDForced, WSDServerPort,
-		      InterpretedArgs, IOptions).
+	process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions).
 
 
-process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-	      WSDServerHosts, WSDForced, WSDServerPort,
-	      InterpretedArgs, IOptions) :-
+process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions) :-
 	get_skr_text(StringsUTF8, TextID),
-	convert_all_utf8_to_ascii(StringsUTF8, 0, _TempConvPos, Strings0),
-	% append(TempConvPos, ConvPos),
-	Strings0 = [FirstString|RestStrings],
-	trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
+	convert_all_utf8_to_ascii(StringsUTF8, 0, TempExtraChars, Strings0),
+	append(TempExtraChars, ExtraChars),
+	% Strings0 = [FirstString|RestStrings],
+	% trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
+	% Removed call for Steven Bedrick
+	TrimmedStrings = Strings0,
 	( TrimmedStrings \== [] ->
-	  process_text(TrimmedStrings, TextID,
-		       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-		       WSDServerHosts, WSDForced, WSDServerPort,
-		       ExpRawTokenList, AAs, MMResults),
+	  process_text(TrimmedStrings, TextID, ExtraChars, TagOption,
+		       AllServerStreams, ExpRawTokenList, AAs, UDAList, MMResults),
 	  output_should_be_bracketed(BracketedOutput),
  	  postprocess_text(TrimmedStrings, BracketedOutput, InterpretedArgs,
 			   IOptions, ExpRawTokenList, AAs, MMResults),
-	  process_all_1(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-			WSDServerHosts, WSDForced, WSDServerPort,
-			InterpretedArgs, IOptions)
+	  process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions)
 	; true
 	),
 	!.
 
-trim_whitespace_from_last_string([], LastString, [TrimmedLastString]) :-
-	trim_whitespace_right(LastString, TrimmedLastString).
-trim_whitespace_from_last_string([NextString|RestStrings], FirstString, [FirstString|TrimmedStrings]) :-
-	trim_whitespace_from_last_string(RestStrings, NextString, TrimmedStrings).
+%%% trim_whitespace_from_last_string([], LastString, [TrimmedLastString]) :-
+%%% 	trim_whitespace_right(LastString, TrimmedLastString).
+%%% trim_whitespace_from_last_string([NextString|RestStrings], FirstString, [FirstString|TrimmedStrings]) :-
+%%% 	trim_whitespace_from_last_string(RestStrings, NextString, TrimmedStrings).
 
 /* process_text(+Lines,
    		+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
@@ -449,31 +450,24 @@ in Sentences in case the original text is preferred. */
 % 	 aphrases(APhrases))
 
 %%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
-process_text(Text, TextID,
-	     TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-	     WSDServerHosts, WSDForced, WSDServerPort,
-	     RawTokenList, AAs, MMResults) :-
-	( process_text_1(Text, TextID,
-			 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-			 WSDServerHosts, WSDForced, WSDServerPort,
-			 RawTokenList, AAs, _UDAs, MMResults) ->
+process_text(Text, TextID, ExtraChars, TagOption, AllServerStreams,
+	     RawTokenList, AAs, UDAList, MMResults) :-
+	( process_text_1(Text, TextID, ExtraChars, TagOption,
+			 AllServerStreams, RawTokenList, AAs, UDAList, MMResults) ->
 	  true
- 	; send_message('#### ERROR: process_text/4 failed for~n~p~n', [Text]),
-	  abort
+ 	; fatal_error('process_text/4 failed for~n~p~n', [Text])
 	).
 
-process_text_1(Lines0, TextID,
-	       TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-	       WSDServerHosts, WSDForced, WSDServerPort,
-	       ExpRawTokenList, AAs, UDAs, MMResults) :-
+process_text_1(Lines0, TextID, ExtraChars, TagOption, AllServerStreams,
+	       ExpRawTokenList, AAs, UDAList, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
 	% Sentences and CoordSentences are the token lists
 	% CoordSentences includes the positional information for the original text
 	% format(user_output, 'Processing PMID ~w~n', [PMID]),
-	extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
-			  Sentences, CoordSentences, AAs, UDAs, Lines),
+	extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFields,
+			  Sentences, CoordSentences, AAs, UDAList, UDAs, Lines),
 	% need to update Lines
 	% fail,
 	% RawTokenList is the copy of Sentences that includes an extra pos(_,_) term
@@ -491,14 +485,15 @@ process_text_1(Lines0, TextID,
 	CurrentPos is NumBlanksTrimmed,
  	% format(user_output, '~n~s~n~n~s~n', [InputStringWithBlanks,TextFieldsOnlyString]),
         write_sentences(CoordSentences, Sentences),
-	create_EXP_raw_token_list(Sentences, '',
+	PrevToken = '',
+	ExtraCharsConsumed is 0,
+	create_EXP_raw_token_list(Sentences, PrevToken, ExtraChars, ExtraCharsConsumed,
 				  CurrentPos, TokenState,
 				  TrimmedTextFieldsOnlyString, TempExpRawTokenList),
 		
 				  % InputStringWithBlanks, TempExpRawTokenList),
 	ExpRawTokenList = TempExpRawTokenList,
-	create_UNEXP_raw_token_list(Sentences,
-				    CurrentPos, TokenState,
+	create_UNEXP_raw_token_list(Sentences, CurrentPos, ExtraChars, TokenState,
 				    TrimmedTextFieldsOnlyString, UnExpRawTokenList),
 				   % InputStringWithBlanks, UnExpRawTokenList),
 	!,
@@ -533,23 +528,19 @@ process_text_1(Lines0, TextID,
 	ExpRawTokenList \== '',
 	empty_avl(WordDataCacheIn),
 	empty_avl(USCCacheIn),
-	process_text_aux(ExpandedUtterances,
-			 TagOption,  TaggerServerHosts, TaggerForced, TaggerServerPort,
-			 WSDServerHosts, WSDForced, WSDServerPort,
+	process_text_aux(ExpandedUtterances, TagOption, AllServerStreams,
 			 CitationTextAtomWithCRs, AAs, UDAs,
 			 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut, MMOutput),
         !.
 
 process_text_aux([],
-		 _TagOption, _TaggerServerHosts, _TaggerForced, _TaggerServerPort,
-		 _WSDServerHosts, _WSDForced, _WSDServerPort,
+		 _TagOption, _AllServerStreams,
 		 _CitationTextAtom, _AAs, _UDAs,
 		 ExpRawTokenList, WordDataCache, USCCache,
 		 ExpRawTokenList, WordDataCache, USCCache, []).
 process_text_aux([ExpandedUtterance|Rest],
-		 TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-		 WSDServerHosts, WSDForced, WSDServerPort,
+		 TagOption, AllServerStreams,
 		 CitationTextAtom, AAs, UDAs,
 		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
 		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
@@ -559,23 +550,23 @@ process_text_aux([ExpandedUtterance|Rest],
 	ModifiedText = modified_text(UtteranceText),
 	Tagging = tagging(TagOption,FullTagList,TagList,HRTagStrings),
 	Syntax = syntax(SyntAnalysis0, SyntAnalysis, Definitions),
+
 	% DisambiguatedMMOPhrases and ExtractedPhrases are passed back as lists (historical)
 	% Decompose input terms
 	ExpandedUtterance = utterance(InputLabel,Text0,_PosInfo,_ReplacementPos),
 	conditionally_announce_processing(InputLabel, Text0),
 	maybe_atom_gc(_DidGC,_SpaceCollected),
 	set_utterance_text(Text0, UtteranceText),
-	do_syntax_processing(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
+	do_syntax_processing(TagOption, AllServerStreams,
 			     UtteranceText, FullTagList, TagList,
 			     HRTagStrings, Definitions, SyntAnalysis0),
 	conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-		    AAs, UDAs, SyntAnalysis, WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
-		    WSDServerHosts, WSDForced, WSDServerPort,
-		    ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
+		    AAs, UDAs, SyntAnalysis,
+		    WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
+		    AllServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 		    DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases),
-	process_text_aux(Rest, TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-			 WSDServerHosts, WSDForced, WSDServerPort,
+	process_text_aux(Rest, TagOption, AllServerStreams,
 			 CitationTextAtom, AAs, UDAs,
 			 ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 			 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
@@ -591,8 +582,7 @@ postprocess_text(Lines0, BracketedOutput, InterpretedArgs,
 	; postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
 			     IOptions,  ExpRawTokenList, AAs, MMResults) ->
 	  true
-	; send_message('### ERROR: postprocess_text/2 failed for~n~p~n', [Lines0]),
-	  abort
+	; fatal_error('postprocess_text/2 failed for~n~p~n', [Lines0])
 	).
 
 postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
@@ -618,12 +608,12 @@ postprocess_sentences(OrigUtterances, NegExList, IArgs, IOptions, AAs,
 	HeaderMMORest = UtteranceMMO,
 	generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
 			       HeaderMMO, HeaderMMORest),
-	postprocess_sentences_1(OrigUtterances, Sentences,
+	postprocess_sentences_1(OrigUtterances, Sentences, NegExList,
 				BracketedOutput, 1, AAs, DisambMMOutput, UtteranceMMO, []),
 	write_MMO_terms(PrintMMO, AllMMO).
 
-postprocess_sentences_1([], _Sentences, _BracketedOutput, _N, _AAs, [], MMO, MMO) :- !.
-postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences,
+postprocess_sentences_1([], _Sentences, _NegExList, _BracketedOutput, _N, _AAs, [], MMO, MMO).
+postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences, NegExList,
 			BracketedOutput, N, AAs, [MMOutput|RestMMOutput],
 			MMOIn, MMOOut) :-
 	% Decompose input
@@ -635,24 +625,24 @@ postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences,
 	% CHANGE
 	MMOIn = [UtteranceMMO|MMONext1],
 	output_tagging(BracketedOutput, HRTagStrings, FullTagList),
-	postprocess_phrases(MMOPhrases, ExtractedPhrases,
+	postprocess_phrases(MMOPhrases, ExtractedPhrases, NegExList,
 			    Sentences, BracketedOutput, N, 1, AAs, Label, MMONext1, MMONext2),
 	!,
 	NextN is N + 1,
-	postprocess_sentences_1(RestOrigUtterances, Sentences,
+	postprocess_sentences_1(RestOrigUtterances, Sentences, NegExList,
 				BracketedOutput, NextN, AAs, RestMMOutput,
 				MMONext2, MMOOut).
-postprocess_sentences_1([FailedUtterance|_], _Sentences,
+postprocess_sentences_1([FailedUtterance|_], _Sentences, _NegExList,
 			_BracketedOutput, _N, _AAs, _MMOutput, _MMOIn, _MMOOut) :-
 	FailedUtterance = utterance(UtteranceID,UtteranceText,_PosInfo,_ReplPos),
-	send_message('### ERROR: postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
-		     [UtteranceID,UtteranceText]),
-	abort.
+	fatal_error('postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
+		    [UtteranceID,UtteranceText]).
 
 
-postprocess_phrases([], [], _Sentences, _BracketedOutput, _N, _M, _AAs, _Label, MMO, MMO) :- !.
+postprocess_phrases([], [], _NegExList, _Sentences, _BracketedOutput,
+		    _N, _M, _AAs, _Label, MMO, MMO).
 postprocess_phrases([MMOPhrase|RestMMOPhrases],
-		    [_ExtractedPhrase|RestExtractedPhrases],
+		    [_ExtractedPhrase|RestExtractedPhrases], NegExList,
 		    Sentences, BracketedOutput, N, M, AAs, Label, MMOIn, MMOOut) :-
 	MMOPhrase = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
 			   candidates(TotalCandidateCount,
@@ -665,14 +655,15 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 			   gvcs(GVCs),
 			   ev0(Evaluations3),
 			   aphrases(APhrases)),
+	instantiate_candidates_NegEx_values(Evaluations,  NegExList),
+	instantiate_candidates_NegEx_values(Evaluations3, NegExList),
 	PhraseTextAtom = PhraseTextAtom0,
 	% format('PhraseTextAtom:~n~p~n',[PhraseTextAtom]),
 	generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length, ReplacementPos,
 			       BracketedOutput, PhraseMMO),
 	generate_bracketed_output(BracketedOutput, PhraseWordInfo),
 	generate_variants_output(GVCs, BracketedOutput),
-	generate_candidates_output(Evaluations3,
-				   TotalCandidateCount,
+	generate_candidates_output(Evaluations3, TotalCandidateCount,
 				   ExcludedCandidateCount, PrunedCandidateCount,
 				   RemainingCandidateCount,
 				   BracketedOutput, CandidatesMMO),
@@ -682,8 +673,30 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 	% CHANGE
 	MMOIn = [PhraseMMO,CandidatesMMO,MappingsMMO|MMONext],
 	NextM is M + 1,
-	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases,
+	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases, NegExList,
 			    Sentences, BracketedOutput, N, NextM, AAs, Label, MMONext, MMOOut).
+
+instantiate_candidates_NegEx_values(Evaluations, NegExList) :-
+	% format(user_output, '~q~n', [NegExList]),
+	(  foreach(Candidate, Evaluations),
+	   param(NegExList)
+	do % format(user_output, 'BEFORE: ~q~n', [Candidate]),
+	   get_all_candidate_features([cui,metaterm,posinfo,negated],
+				      Candidate,
+				      [CUI,MetaTerm,PosInfo,Negated]),
+	   instantiate_negated(CUI, MetaTerm, PosInfo, Negated, NegExList)
+	   % format(user_output, 'AFTER:  ~q~n', [Candidate])
+	).
+
+instantiate_negated(CUI, MetaTerm, PosInfo, Negated, NegExList) :-
+	final_negation_template(Negation,
+				_Type, _TriggerText, _TriggerPosInfo,
+				ConceptCUIList, PosInfo),
+	( member(Negation, NegExList),
+	  member(CUI:MetaTerm, ConceptCUIList) ->
+	  Negated is 1
+	; Negated is 0
+	).
 /*
    form_original_sentences(+Sentences, +StartPos, +EndPos, +TokenState, +CitationTextAtom,
 			   +RawTokenList, -OrigUtterances)
@@ -920,22 +933,20 @@ set_utterance_text(Text0, UtteranceText) :-
 	; UtteranceText = Text0
 	).
 
-do_syntax_processing(TagOption, TaggerServerHosts, TaggerForced, TaggerServerPort,
-		     UtteranceText, FullTagList, TagList,
+do_syntax_processing(TagOption, AllServerStreams, UtteranceText, FullTagList, TagList,
 		     HRTagStrings, Definitions, SyntAnalysis0) :-
+	AllServerStreams  = (LexiconServerStream,TaggerServerStream,_WSDServerStream),
 	( TagOption == tag ->
-	  tag_text(UtteranceText,
-		   TaggerServerHosts, TaggerForced, TaggerServerPort,
-		   FullTagList, TagList, HRTagStrings),
+	  tag_text(UtteranceText, TaggerServerStream, FullTagList, TagList, HRTagStrings),
 	  % If tag_text succeeded, cut out the choice point
 	  % left behind when the tagger was chosen
-	  !,
-	  generate_syntactic_analysis_plus(UtteranceText, TagList, SyntAnalysis0, Definitions)
+	  !
 	; FullTagList = [],
 	  TagList = [],
-	  HRTagStrings = [],
-	  generate_syntactic_analysis_plus(UtteranceText, SyntAnalysis0, Definitions)
-	).
+	  HRTagStrings = []
+	),
+	generate_syntactic_analysis_plus(UtteranceText, LexiconServerStream,
+					 TagList, SyntAnalysis0, Definitions).
 
 conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis) :-
 	( control_option(term_processing) ->
@@ -1057,12 +1068,12 @@ walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-
 	walk_off_field_lines(RestFieldLines, CharsNext1, CharsOut).
 
 % convert each string in NonTextFieldLines to a string of blanks of the same length
-convert_strings_to_blanks(NonTextFieldLines, BlanksLines) :-
-	(  foreach(Line, NonTextFieldLines),
-	   foreach(BlanksLine, BlanksLines)
-	do length(Line, LineLength),
-	   length(BlanksLine, LineLength),
-	   (  foreach(Blank, BlanksLine)
-	   do Blank is 32
-	   )
-	).
+%%% convert_strings_to_blanks(NonTextFieldLines, BlanksLines) :-
+%%% 	(  foreach(Line, NonTextFieldLines),
+%%% 	   foreach(BlanksLine, BlanksLines)
+%%% 	do length(Line, LineLength),
+%%% 	   length(BlanksLine, LineLength),
+%%% 	   (  foreach(Blank, BlanksLine)
+%%% 	   do Blank is 32
+%%% 	   )
+%%% 	).

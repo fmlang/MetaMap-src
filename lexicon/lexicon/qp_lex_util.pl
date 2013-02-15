@@ -33,8 +33,8 @@
 
 :- module(qp_lex_util, [
 	lex_get_base_from_record_3/3,
-	lex_get_spvar_from_record/2,
-	lex_form_ci_ord_4/4
+	% lex_get_spvar_from_record/2,
+	lex_form_ci_ord_5/5
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -50,7 +50,7 @@
    ]).
 
 :- use_module(lexicon(qp_lexicon), [
-	lex_form_ci_var_lists_4/4,
+	lex_form_ci_var_lists_5/5,
 	default_lexicon_file/1,
 	default_index_file/1
    ]).
@@ -61,11 +61,10 @@
 lex_get_base_from_record_3(Record, Categories, Base) :-
     lex_get_entries_from_record(Record, Entries),
     entries_intersect_categories(Entries, Categories),
-    Record = lexrec:[base:[Base]|_].
+    ( Record = lexrec:[base:[Base]|_]
+    ; Record = lexrec:[spelling_variants:[Base]|_]
+    ).
 
-entries_intersect_categories([], _Categories) :-
-    !,
-    fail.
 entries_intersect_categories([Entry|_Rest], Categories) :-
     entry_intersects_categories(Entry, Categories),
     !.
@@ -84,8 +83,8 @@ get_entry_category([_|Rest], CategorySet) :-
 
 %%% lex_get_spvar_from_record(+Record, -Spvar)
 %%% Extracts the spelling variants list for a lexical record.
-lex_get_spvar_from_record(Record, Spvar) :-
-    Record = lexrec:[base:[_Base], spelling_variants:Spvar|_].
+%%% lex_get_spvar_from_record(Record, Spvar) :-
+%%%     Record = lexrec:[base:[_Base], spelling_variants:Spvar|_].
 
 %%% lex_get_entries_from_record(+Record, -Entries)
 %%% Extracts the lexical entries list for a lexical record.
@@ -100,41 +99,40 @@ lex_get_entries_from_record(Record, Entries) :-
 %%%      distinct lexical entries separate (otherwise, e.g., aid is
 %%%      computed to be a spelling variant of AIDS)
 
-lex_form_ci_ord_4(Term, Categories, Spelling, Inflections) :-
-    default_lexicon_file(Lexicon),
-    default_index_file(Index),
-    lex_form_ci_ord_6(Term, Categories, Spelling, Inflections, Lexicon, Index).
+lex_form_ci_ord_5(Term, Categories, LexiconServerStream, Spelling, Inflections) :-
+	default_lexicon_file(Lexicon),
+	default_index_file(Index),
+	lex_form_ci_ord_7(Term, Categories, LexiconServerStream, Spelling, Inflections, Lexicon, Index).
 
-lex_form_ci_ord_6(Term, Categories, Spelling, Inflections, Lexicon, Index) :-
-    lex_form_ci_var_lists_4(Term, VariantLists0, Lexicon, Index),
-    filter_by_categories(VariantLists0,Categories,VariantLists),
-%    format('     lfco: ~p ~p~n~p~n~p~n~n',
-%	   [Term,Categories,VariantLists0,VariantLists]),
-    compute_all_variant_sps_infls(VariantLists,Term,SpLists,InflLists),
-    append(SpLists,Sps0),
-    append(InflLists,Infls0),
-    sort(Sps0,Spelling),
-    sort(Infls0,Inflections).
+lex_form_ci_ord_7(Term, Categories, LexiconServerStream, Spelling, Inflections, Lexicon, Index) :-
+	lex_form_ci_var_lists_5(Term, Lexicon, Index, LexiconServerStream, VariantLists0),
+	filter_by_categories(VariantLists0, Categories, VariantLists),
+	%    format('     lfco: ~p ~p~n~p~n~p~n~n',
+	%	   [Term,Categories,VariantLists0,VariantLists]),
+	compute_all_variant_sps_infls(VariantLists, Term, SpLists, InflLists),
+	append(SpLists, Sps0),
+	append(InflLists, Infls0),
+	sort(Sps0, Spelling),
+	sort(Infls0, Inflections).
 
-filter_by_categories(X,[],X) :-
-    !.
-filter_by_categories([],_,[]).
-filter_by_categories([First|Rest],Categories,Result) :-
-    filter_one_by_categories(First,Categories,FirstResult),
-    (FirstResult==[] ->
-	filter_by_categories(Rest,Categories,Result)
-    ;   Result=[FirstResult|RestResults],
-	filter_by_categories(Rest,Categories,RestResults)
-    ).
+filter_by_categories(X, [], X) :- !.
+filter_by_categories([], _, []).
+filter_by_categories([First|Rest], Categories, Result) :-
+	filter_one_by_categories(First, Categories, FirstResult),
+	( FirstResult == [] ->
+	  filter_by_categories(Rest, Categories, Result)
+	; Result = [FirstResult|RestResults],
+	  filter_by_categories(Rest, Categories, RestResults)
+	).
 
 filter_one_by_categories([],_,[]).
 filter_one_by_categories([First|Rest],Categories,[First|FilteredRest]) :-
-    First=_W:[Cat:_Type],
-    memberchk(Cat,Categories),
-    !,
-    filter_one_by_categories(Rest,Categories,FilteredRest).
-filter_one_by_categories([_|Rest],Categories,FilteredRest) :-
-    filter_one_by_categories(Rest,Categories,FilteredRest).
+	First = _W:[Cat:_Type],
+	memberchk(Cat, Categories),
+	!,
+	filter_one_by_categories(Rest, Categories, FilteredRest).
+filter_one_by_categories([_|Rest], Categories, FilteredRest) :-
+	filter_one_by_categories(Rest, Categories, FilteredRest).
 
 compute_all_variant_sps_infls([], _, [], []).
 compute_all_variant_sps_infls([Variants|Rest], Term,
@@ -165,20 +163,11 @@ lowermatch(Term, SomeTerm) :-
 
 %%% looks for another +Term with the same principal part
 get_synonym(Cat:[Infl], Variants, Synonym) :-
-    member(Synonym:[Cat:[SomeInfl]], Variants),
-    (	Infl = SomeInfl ->
-	true
-    ;	Infl = base ->
-	SomeInfl = spvar
-    ;	Infl = spvar ->
-	SomeInfl = base
-    ).
-
-test :-
-	user:word(Word),
-	(  qp_lex_util:lex_form_ci_var_lists_4(Word, VarList0, _, _) -> true
-	; VarList0 = []
-	),
-	sort(VarList0, VarList),
-	format(user_output, '~q:~q.~n', [Word,VarList]), fail ; true.
-
+	member(Synonym:[Cat:[SomeInfl]], Variants),
+	( Infl = SomeInfl ->
+	  true
+	; Infl     = base ->
+	  SomeInfl = spvar
+	; Infl     = spvar ->
+	  SomeInfl = base
+	).

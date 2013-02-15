@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -32,8 +31,11 @@
 % ./src/skr/negex.pl, Thu Jul 31 11:00:57 2008, edit by Will Rogers
 % Author: Willie Rogers
 
+% See http://code.google.com/p/negex/wiki/NegExTerms
+
 :- module(negex,[
 	compute_negex/4,
+	default_negex_semtypes/1,
 	final_negation_template/6,
 	generate_all_negex_output/1,
 	generate_negex_output/1
@@ -44,6 +46,7 @@
    ]).
 
 :- use_module(skr(skr_utilities), [
+	fatal_error/2,
 	get_candidate_feature/3,
 	get_all_candidate_features/3
    ]).
@@ -57,12 +60,14 @@
    ]).
 
 :- use_module(skr_lib(nls_system),[
-        control_option/1
+        control_option/1,
+	control_value/2
    ]).
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/3,
-	sublist/2
+	sublist/2,
+	ttyflush/0
    ]).
 
 :- use_module(skr(skr_xml),[
@@ -80,7 +85,9 @@
    ]).
 
 :- use_module(library(sets), [
-	disjoint/2
+	disjoint/2,
+	intersection/3,
+	subtract/3
    ]).
 
 :- use_module(library(system), [
@@ -96,29 +103,39 @@
 % as they're initially created -- before they're merged
 orig_negation_template(negation(Type, TriggerText, TriggerPosInfo,
 				ConceptName, CUI, ConceptPosInfo),
-	Type, TriggerText, TriggerPosInfo,
-	ConceptName, CUI, ConceptPosInfo).
+		       Type, TriggerText, TriggerPosInfo,
+		       ConceptName, CUI, ConceptPosInfo).
 
 % final_negation_template is the final form of negation/5 terms
 % after multiple concepts and CUIs from the same negation are merged
 final_negation_template(negation(Type, TriggerText, TriggerPosInfo,
 				 ConceptCUIList, ConceptPosInfo),
-	Type, TriggerText, TriggerPosInfo,
-	ConceptCUIList, ConceptPosInfo).
+			Type, TriggerText, TriggerPosInfo,
+			ConceptCUIList, ConceptPosInfo).
 		  
 
 % find all negated concepts
 compute_negex(RawTokenList, Lines, DisambMMOutput, NegationTerms) :-
 	( compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) ->
 	  true
-	; format(user_output, 'ERROR: Negex failed on ~p.~n', [Lines]),
+	; fatal_error('Negex failed on "~p".~n', [Lines]),
 	  abort
+	).
+
+do_negex :-
+	( control_option(negex) ->
+	  true
+	; control_value(negex_st_add, _) ->
+	  true
+	; control_value(negex_st_del, _) ->
+	  true
+	; control_value(negex_st_set, _)
 	).
 
 compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) :-
 	( \+ control_option(machine_output),
 	  \+ xml_output_format(_XMLFormat),
-	  \+ control_option(negex) ->
+	  \+ do_negex ->
 	  NegationTerms = []
 	; environ('NEGEX_UTTERANCE_MAX_DIST', UtteranceMaxDistAtom),
 	  atom_codes(UtteranceMaxDistAtom,    UtteranceMaxDistChars),
@@ -145,7 +162,7 @@ negex_aux([RawTokenList|ListOfTokenLists], [MMOutput|MMOutputList],
 % * --negex is on, and
 % neither machine_output nor XML is on.
 generate_negex_output(NegationTerms) :-
-	( control_option(negex),
+	( do_negex,
 	  \+ control_option(machine_output),
 	  \+ xml_output_format(_XMLFormat) ->
 	   format('~nNEGATIONS:~n', []),
@@ -297,15 +314,6 @@ positionlist_contains_range([Position|Positionlist], TokenStart, TokenLength) :-
 	  true
 	; positionlist_contains_range(Positionlist, TokenStart, TokenLength)
 	).
-
-get_pos_info_from_list(PosInfoList, PosInfo) :-
-	PosInfoList = [FirstPosInfo|_T],
-	FirstPosInfo = FirstStartPos/_FirstLength,
-	% reversed order of args from QP library version!
-	last(PosInfoList, LastPosInfo),
-	LastPosInfo = LastStartPos/LastLength,
-	TotalLength is LastStartPos + LastLength - FirstStartPos,
-	PosInfo = FirstStartPos/TotalLength.
 
 % extract_tokens_from_string(PhraseText,Tokens)
 list_concepts_and_tokens([], _, []).
@@ -554,28 +562,48 @@ negationlist_from_evlist([FirstCandidate|RestCandidates], Type, TriggerPhraseTex
 			 TriggerLength, NegationTerms) :-
 	get_all_candidate_features([cui,metaterm,semtypes,posinfo],
 				   FirstCandidate,
-				   [CUI,ConceptName,SemTypes,MappingPosInfo]),
+				   [CUI,ConceptName,SemTypes,CandidatePosInfo]),
 	% format('SemGroup=~q, CUI=~q, ConceptName=~q, SemTypes=~q~n',
 	%        [[fndg,dsyn,sosy,cgab,acab,lbtr,inpo,biof,phsf,menp,mobd,comd,anab,emod,patf],
 	%         CUI,ConceptName,SemTypes]),
 	% true if set of semantic types for the ev term
 	% does not contain any in the negex semantic group set
 	% Note: The neop and patf semtypes are not part of the original specification.
-	( disjoint(SemTypes,
-		  [% I2B2-specific SemTypes
-		   % aapp,antb,bacs,clnd,drdd,horm,imft,inch,lipd,nsba,orch,opco,phsu,strd,vita,
-		   acab,anab,biof,cgab,comd,dsyn,emod,fndg,
-		   inpo,lbtr,menp,mobd,neop,patf,phsf,sosy]) ->
+	negex_semtypes(NegExSemTypes),
+	( disjoint(SemTypes, NegExSemTypes) ->
 	  NegationTerms = RestNegationTerms
-	; get_pos_info_from_list(MappingPosInfo, ConceptPosInfo0),
-	  ConceptPosInfo = [ConceptPosInfo0],
+	; % ConceptPosInfo = [ConceptPosInfo0],
 	  orig_negation_template(NegationTerm,
 				 Type, TriggerPhraseText, [TriggerStartPos/TriggerLength],
-				 ConceptName, CUI, ConceptPosInfo),
+				 ConceptName, CUI, CandidatePosInfo),
 	  NegationTerms = [NegationTerm|RestNegationTerms]
 	),
 	negationlist_from_evlist(RestCandidates, Type, TriggerPhraseText,
 				 TriggerStartPos, TriggerLength, RestNegationTerms).
+
+negex_semtypes(NegExSemTypes) :-
+	default_negex_semtypes(DefaultNegExSemTypes),
+	( control_value(negex_st_add, NegExSemTypesAdd) ->
+	  append(DefaultNegExSemTypes, NegExSemTypesAdd, NegExSemTypes0),
+	  sort(NegExSemTypes0, NegExSemTypes1)
+	; NegExSemTypes1 = DefaultNegExSemTypes
+	),
+	( control_value(negex_st_del, NegExSemTypesDel) ->
+	  subtract(NegExSemTypes1, NegExSemTypesDel, NegExSemTypes2),
+	  sort(NegExSemTypes2, NegExSemTypes3)
+	; NegExSemTypes3 = NegExSemTypes1
+	),
+	( control_value(negex_st_set, NegExSemTypesSet) ->
+	  sort(NegExSemTypesSet, NegExSemTypes4)
+	; NegExSemTypes4 = NegExSemTypes3
+	),
+	( intersection(NegExSemTypes4, [all,'ALL'], [_|_]) ->
+	  NegExSemTypes = _ALL
+	; NegExSemTypes = NegExSemTypes3
+	).
+
+default_negex_semtypes([acab,anab,biof,cgab,comd,dsyn,emod,fndg,
+			inpo,lbtr,menp,mobd,neop,patf,phsf,sosy]).
 
 % remove negation terms after conjunctions if there are any conjunctions.
 remove_negation_terms_after_conjs(NegationTerms,FilteredNegationTerms) :-
@@ -773,8 +801,8 @@ spurious_negterm(TokenList, UtteranceMaxDist, ConceptMaxDist, NegationTerm) :-
 	orig_negation_template(NegationTerm,
 			       _Type, TriggerText, TriggerPosInfo,
 			       _ConceptName, _CUI, ConceptPosInfo),
-	charpos_to_tokenindex(TokenList, TriggerPosInfo, TriggerTokenPos),
-	charpos_to_tokenindex(TokenList, ConceptPosInfo, ConceptTokenPos),
+	charpos_to_tokenindex(TokenList, NegationTerm, TriggerPosInfo, 1, TriggerTokenPos),
+	charpos_to_tokenindex(TokenList, NegationTerm, ConceptPosInfo, 1, ConceptTokenPos),
 	( negterm_outside_window(TokenList, TriggerText,
 				 TriggerTokenPos, ConceptTokenPos,
 				 UtteranceMaxDist, ConceptMaxDist) ->
@@ -839,7 +867,7 @@ extract_negation_tokens([FirstToken|RestTokens],
 	; NegationTokens = []
 	).  
 
-	
+
 remove_blank_atoms([], []).
 remove_blank_atoms([H|T], AtomsWithNoBlanks) :-
 	( H == ' ' ->
@@ -854,11 +882,12 @@ term_wordlength(Term, WordLength) :-
 	split_string_completely(TermString, " ", TermList),
 	length(TermList, WordLength).
 
-charpos_to_tokenindex(TokenList, CharPosInfo, TokenIndex) :-
-	charpos_to_tokenindex_aux(TokenList, CharPosInfo, 1, TokenIndex).
-
-charpos_to_tokenindex_aux([], _, _, _).
-charpos_to_tokenindex_aux([Token|TokenList], CharPosInfo, Start, TokenIndex) :-
+% This error prevents TokenIndex from being returned uninstantiated,
+% which should never happen!
+charpos_to_tokenindex([], NegationTerm, CharPosInfo, _, _) :-
+	fatal_error('NegEx negation "~p" not beyond char pos ~w.~n~n',
+		    [NegationTerm,CharPosInfo]).
+charpos_to_tokenindex([Token|TokenList], NegationTerm, CharPosInfo, Start, TokenIndex) :-
 	Token = tok(_,_,NString,AbsPosInfo,RelPosInfo),
 	AbsPosInfo = pos(AbsTokenStart,_),
 	RelPosInfo = pos(RelTokenStart,_),
@@ -868,7 +897,7 @@ charpos_to_tokenindex_aux([Token|TokenList], CharPosInfo, Start, TokenIndex) :-
 	; RelTokenStart >= CharStart ->
 	  TokenIndex = Start
 	; set_next(NString, Next, Start) ->
-	  charpos_to_tokenindex_aux(TokenList, CharPosInfo, Next, TokenIndex)
+	  charpos_to_tokenindex(TokenList, NegationTerm, CharPosInfo, Next, TokenIndex)
 	).
 
 set_next(NString, Next, Start) :-
@@ -901,7 +930,7 @@ set_next(NString, Next, Start) :-
             ['C0000768':'ABNORMALITY', 'C1704258':'Abnormality'], [81/12])
 
    This is the purpose of consolidate_negation_terms/2.
-   We cannot assume that negations to be consolicated are consecutive
+   We cannot assume that negations to be consolidated are consecutive
    in the incoming list of negation terms, so the second clause
    cycles through all the other negations (using the backtrackable select/3),
    and if one is found that can be combined, they are combined.
@@ -1011,6 +1040,9 @@ ignore_token_type(label).
 %
 % List of negation phrases.
 %
+
+% In http://code.google.com/p/negex/wiki/NegExTerms,
+% these are "Pre-condition negation terms (used to mark an indexed term as negated)".
 
 nega_phrase_tokens(absence, [of]).
 nega_phrase_tokens(cannot, []).
@@ -1141,6 +1173,8 @@ nega_phrase_tokens(sufficient, [to,rule,the,patient,out,against]).
 % The following nega_phrase_token was added by NLM
 nega_phrase_tokens(with, [no,evidence,of]).
 
+% In http://code.google.com/p/negex/wiki/NegExTerms,
+% these are "Post-condition negation terms".
 
 negb_phrase_tokens(unlikely, []).
 negb_phrase_tokens(free, []).
@@ -1149,6 +1183,9 @@ negb_phrase_tokens(is, [ruled,out]).
 negb_phrase_tokens(are, [ruled,out]).
 negb_phrase_tokens(have, [been,ruled,out]).
 negb_phrase_tokens(has, [been,ruled,out]).
+
+% In http://code.google.com/p/negex/wiki/NegExTerms,
+% these are "Pre-condition possibility phrase (used to mark an indexed term as possible)".
 
 pnega_phrase_tokens(rule, [out]).
 pnega_phrase_tokens('r/o', []).
@@ -1172,6 +1209,9 @@ pnega_phrase_tokens(must, [be,ruled,out,for]).
 pnega_phrase_tokens(is, [to,be,ruled,out,for]).
 pnega_phrase_tokens(what, [must,be,ruled,out,is]).
 
+% In http://code.google.com/p/negex/wiki/NegExTerms,
+% these are "Post-condition possibility terms (used to mark an indexed term as possible)".
+
 pnegb_phrase_tokens(did, [not,rule,out]).
 pnegb_phrase_tokens(not, [ruled,out]).
 pnegb_phrase_tokens(not, [been,ruled,out]).
@@ -1186,6 +1226,9 @@ pnegb_phrase_tokens(will, [be,ruled,out]).
 pnegb_phrase_tokens(can, [be,ruled,out]).
 pnegb_phrase_tokens(must, [be,ruled,out]).
 pnegb_phrase_tokens(is, [to,be,ruled,out]).
+
+% In http://code.google.com/p/negex/wiki/NegExTerms,
+% these are "Pseudo negation terms".
 
 pseudoneg_phrase_tokens(no,	 [increase]).
 pseudoneg_phrase_tokens(no,      [suspicious,change]).
@@ -1203,6 +1246,9 @@ pseudoneg_phrase_tokens(gram,    [negative]).
 pseudoneg_phrase_tokens(without, [difficulty]).
 pseudoneg_phrase_tokens(not,     [necessarily]).
 pseudoneg_phrase_tokens(not,     [only]).
+
+% In http://code.google.com/p/negex/wiki/NegExTerms,
+% these are "Termination terms".
 
 conj_phrase_tokens(although, []).
 conj_phrase_tokens(apart, [from]).

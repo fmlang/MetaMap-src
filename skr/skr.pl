@@ -45,7 +45,7 @@
 	% but they must still be exported because they're called via debug_call.
 	print_candidate_grid/6,
 	print_duplicate_info/4,
-	skr_phrases/18,
+	skr_phrases/16,
 	print_all_aevs/1,
 	% called by MetaMap API -- do not change signature!
 	stop_skr/0
@@ -77,7 +77,8 @@
 
 :- use_module(metamap(metamap_parsing), [
 	collapse_syntactic_analysis/2,
-	demote_heads/2
+	demote_heads/2,
+	re_attach_apostrophe_s_to_prev_word/3
     ]).
 
 :- use_module(metamap(metamap_stop_phrase), [
@@ -99,10 +100,10 @@
     ]).
 
 :- use_module(metamap(metamap_utilities), [
-	candidate_term/15,
+	candidate_term/16,
 	extract_relevant_sources/3,
 	extract_nonexcluded_sources/3,
-	extract_source_name/2,
+	extract_name_in_source/2,
 	wgvcs/1,
 	wl/1,
 	write_avl_list/1
@@ -110,8 +111,8 @@
 
 :- use_module(metamap(metamap_variants), [
 	initialize_metamap_variants/1,
-	compute_variant_generators/3,
-	augment_GVCs_with_variants/1,
+	compute_variant_generators/4,
+	augment_GVCs_with_variants/2,
 	gather_variants/4
     ]).
 
@@ -154,10 +155,6 @@
 	maybe_atom_gc/2
     ]).
 
-:- use_module(skr_lib(nls_lists), [
-	truncate_list/4
-    ]).
-
 :- use_module(skr_lib(nls_strings), [
 	split_string_completely/3,
 	trim_and_compress_whitespace/2
@@ -193,7 +190,7 @@
     ]).
 
 :- use_module(wsd(wsdmod), [
-	do_WSD/11
+	do_WSD/9
     ]).
 
 :- use_module(library(avl), [
@@ -226,9 +223,6 @@
 	union/4
     ]).
 
-:- multifile user:user_defined_AA/2.
-:- dynamic user:user_defined_AA/2.
-
 /* 
    initialize_skr(+Options)
    stop_skr
@@ -249,9 +243,7 @@ initialize_skr(Options) :-
 	warn_if_no_sab_files,
 	!.
 initialize_skr(_) :-
-	format('~NERROR: initialize_skr/1 failed.~n', []),
-	stop_skr,
-	fail.
+	fatal_error('initialize_skr/1 failed.~n', []).
 
 stop_skr :-
 	( stop_db_access ->
@@ -278,52 +270,47 @@ warn_if_no_sab_files :-
 	).
 
 skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-	    AAs, UDAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
-	    WSDServerHosts, WSDForced, WSDServerPort,
-	    RawTokensOut, WordDataCacheOut, USCCacheOut,
+	    AAs, UDAs, SyntacticAnalysis,
+	    WordDataCacheIn, USCCacheIn, RawTokensIn,
+	    AllServerStream, RawTokensOut, WordDataCacheOut, USCCacheOut,
 	    MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) :-
 	( skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-			  AAs, UDAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
-			  WSDServerHosts, WSDForced, WSDServerPort,
-			  RawTokensOut, WordDataCacheOut, USCCacheOut,
+			  AAs, UDAs, SyntacticAnalysis,
+			  WordDataCacheIn, USCCacheIn, RawTokensIn,
+			  AllServerStream, RawTokensOut, WordDataCacheOut, USCCacheOut,
 			  MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) ->
 	  true
-        ; format('~NERROR: skr_phrases/14 failed for text ~p: ~p~n',
-		  [InputLabel,UtteranceText]),
-	  format(user_output,
-		 '~NERROR: skr_phrases/14 failed for text ~p: ~p~n',
-		 [InputLabel,UtteranceText]),
-	  current_output(OutputStream),
-	  flush_output(OutputStream),
-	  abort
+        ; fatal_error('skr_phrases/14 failed for text ~p: ~p~n',
+		  [InputLabel,UtteranceText])
         ).
 
 skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-		AAs, UDAs, SyntacticAnalysis, WordDataCacheIn, USCCacheIn, RawTokensIn,
-		WSDServerHosts, WSDForced, WSDServerPort,
-		RawTokensOut, WordDataCacheOut, USCCacheOut,
+		AAs, UDAs, SyntacticAnalysis, 
+		WordDataCacheIn, USCCacheIn, RawTokensIn,
+		AllServerStream, RawTokensOut, WordDataCacheOut, USCCacheOut,
 		DisambiguatedMMOPhrases, ExtractedPhrases,
 		minimal_syntax(SemRepPhrasesWithWSD)) :-
+	AllServerStream  = (LexiconServerStream,_TaggerServerStream,WSDServerStream),
 	maybe_atom_gc(_DidGC, _SpaceCollected),
 	SyntacticAnalysis = minimal_syntax(Phrases0),
 	add_tokens_to_phrases(Phrases0, Phrases),
 	% UtteranceText contains no AAs. E.g.,
 	% "heart attack (HA)" will become simply "heart attack".
 	skr_phrases_1(Phrases, InputLabel, UtteranceText,
-		      AAs, UDAs, CitationTextAtom,
+		      AAs, UDAs, CitationTextAtom, LexiconServerStream,
 		      WordDataCacheIn, USCCacheIn,
 		      WordDataCacheOut, USCCacheOut,
 		      RawTokensIn, RawTokensOut,
 		      MMOPhrases, ExtractedPhrases),
 	do_WSD(UtteranceText, InputLabel, CitationTextAtom, AAs, RawTokensIn,
-	       WSDServerHosts, WSDForced, WSDServerPort,
-	       MMOPhrases, DisambiguatedMMOPhrases, SemRepPhrasesWithWSD).
+	       WSDServerStream, MMOPhrases, DisambiguatedMMOPhrases, SemRepPhrasesWithWSD).
 
-skr_phrases_1([], _InputLabel, _AllUtteranceText, _AAs, _UDAs, _CitationTextAtom,
-	      WordDataCache, USCCache, WordDataCache, USCCache,
+skr_phrases_1([], _InputLabel,
+	      _AllUtteranceText, _AAs, _UDAs, _CitationTextAtom,
+	      _LexiconServerStream, WordDataCache, USCCache, WordDataCache, USCCache,
 	      RawTokens, RawTokens, [], []).
 skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
-	      AAs, UDAs, CitationTextAtom,
+	      AAs, UDAs, CitationTextAtom, LexiconServerStream,
 	      WordDataCacheIn, USCCacheIn,
 	      WordDataCacheOut, USCCacheOut,
 	      RawTokensIn, RawTokensOut,
@@ -344,7 +331,8 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	% which is no longer used!!
 	% format(user_output, 'Phrase ~w:~n', [MergedPhrase]),
 	skr_phrase(InputLabel, AllUtteranceText,
-		   MergedPhrase, AAs, CitationTextAtom, RawTokensIn, GVCs,
+		   MergedPhrase, AAs, CitationTextAtom, LexiconServerStream,
+		   RawTokensIn, GVCs,
 		   WordDataCacheIn, USCCacheIn,
 		   WordDataCacheNext, USCCacheNext,
 		   RawTokensNext, APhrases, FirstMMOPhrase),
@@ -355,7 +343,7 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	subtract_from_control_options(AllAddedOptions),
 	% add_semtypes_to_phrases_if_necessary(Phrases0,FirstEPPhrases),
 	skr_phrases_1(RestMergedPhrases, InputLabel, AllUtteranceText,
-		      AAs, UDAs, CitationTextAtom,
+		      AAs, UDAs, CitationTextAtom, LexiconServerStream,
 		      WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut,
 		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrases).
 
@@ -513,25 +501,26 @@ element of the pair is of the form
      pwi(PhraseWordL,PhraseHeadWordL,PhraseMap).
 */
 
-skr_phrase(Label, UtteranceText,
-	   PhraseSyntax, AAs, CitationTextAtom, RawTokensIn, GVCs,
+skr_phrase(Label, UtteranceText, PhraseSyntax, AAs,
+	   CitationTextAtom, LexiconServerStream,
+	   RawTokensIn, GVCs,
 	   WordDataCacheIn, USCCacheIn,
 	   WordDataCacheOut, USCCacheOut,
 	   RawTokensOut, APhrases, MMOPhraseTerm) :-
 	( skr_phrase_1(Label, UtteranceText,
 		       PhraseSyntax, AAs, RawTokensIn,
-		       CitationTextAtom, GVCs,
+		       CitationTextAtom, LexiconServerStream, GVCs,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut,
 		       RawTokensOut, APhrases, MMOPhraseTerm) ->
 	  true
-        ; fatal_error('~n#### ERROR: skr_phrase failed on ~w ~w~n~n', [Label, PhraseSyntax]),
+        ; fatal_error('skr_phrase failed on ~w ~w~n~n', [Label, PhraseSyntax]),
 	  abort
         ).
 
 skr_phrase_1(Label, UtteranceTextString,
 	     PhraseSyntax, AAs,
-	     RawTokensIn, CitationTextAtom, GVCs,
+	     RawTokensIn, CitationTextAtom, LexiconServerStream, GVCs,
 	     WordDataCacheIn, USCCacheIn,
 	     WordDataCacheOut, USCCacheOut,
 	     RawTokensOut, APhrases, MMOPhraseTerm) :-
@@ -539,39 +528,41 @@ skr_phrase_1(Label, UtteranceTextString,
 	get_phrase_info(PhraseSyntax, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAtom,
 			PhraseTokens, RawTokensOut, PhraseStartPos, PhraseLength,
 			OrigPhraseTextAtom, ReplacementPositions),
+	% format(user_output, '~q~n', [OrigPhraseTextAtom]),
 	atom_codes(OrigPhraseTextAtom, OrigPhraseTextString),
 	debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords),
 	atom_codes(UtteranceTextAtom, UtteranceTextString),
-	generate_initial_evaluations(Label, UtteranceTextAtom,
+	generate_initial_evaluations(Label, UtteranceTextAtom, LexiconServerStream,
 				     OrigPhraseTextString, PhraseSyntax, Variants,
 				     GVCs, WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
 				     InputMatchPhraseWords, PhraseTokens, TokenPhraseWords,
 				     TokenPhraseHeadWords, WordDataCacheOut,
 				     USCCacheOut, Evaluations0),
-	refine_evaluations(Evaluations0, EvaluationsAfterSTs, Evaluations),
-	length(Evaluations0, TotalCandidateCount),
-	length(Evaluations,  RefinedCandidateCount),
+
+	refine_evaluations(Evaluations0, RefinedEvaluations, FinalEvaluations),
+	length(RefinedEvaluations, TotalCandidateCount),
+	length(FinalEvaluations, RefinedCandidateCount),
 	ExcludedCandidateCount is TotalCandidateCount - RefinedCandidateCount,
 	debug_message(candidates,
 		      '### ~d Initial Candidates~n### ~d Refined Candidates~n',
 		      [TotalCandidateCount, RefinedCandidateCount]),
-	debug_evaluations(Evaluations),
+	debug_evaluations(FinalEvaluations),
 
-	generate_best_mappings(Evaluations, OrigPhraseTextString, PhraseSyntax, PhraseWordInfoPair,
+	generate_best_mappings(FinalEvaluations, OrigPhraseTextString, PhraseSyntax, PhraseWordInfoPair,
 			       Variants, APhrases, _BestCandidates, Mappings0, PrunedCandidateCount),
 	RemainingCandidateCount is RefinedCandidateCount - PrunedCandidateCount,
 	sort(Mappings0, Mappings),
 	% length(Mappings, MappingsLength),
 	% format(user_output, 'There are ~d Mappings~n', [MappingsLength]),
 	% I have here the data structures to call disambiguate_mmo/2
-	% format(user_output, 'Candidates: ~q~n', [candidates(Evaluations)]),
+	% format(user_output, 'Candidates: ~q~n', [candidates(FinalEvaluations)]),
 	% format(user_output, 'Mappings:   ~q~n', [mappings(Mappings)]),
 	% format(user_output, 'PWI:        ~q~n', [pwi(
 	% format(user_output, 'GVCs:       ~q~n', [gvcs(GVCs)]),
 	% format(user_output, 'EV0:        ~q~n', [ev0(Evaluations0)]),
 	% format(user_output, 'APhrases:   ~q~n', [aphrases(APhrases)]),
-	mark_excluded_evaluations(EvaluationsAfterSTs),
-	% mark_excluded_evaluations(Evaluations),
+	mark_excluded_evaluations(RefinedEvaluations),
+	% mark_excluded_evaluations(FinalEvaluations),
 	%  format(user_output, 'Total=~d; Excluded=~d; Pruned=~d; Remaining=~d~n',
 	%        [TotalCandidateCount,ExcludedCandidateCount,
 	% 	PrunedCandidateCount,RemainingCandidateCount]),
@@ -581,17 +572,17 @@ skr_phrase_1(Label, UtteranceTextString,
 					  ExcludedCandidateCount,
 					  PrunedCandidateCount,
 					  RemainingCandidateCount,
-					  Evaluations),
+					  FinalEvaluations),
 			       mappings(Mappings),
 			       pwi(PhraseWordInfoPair),
 			       gvcs(GVCs),
 			       % Change the next line to ev0(BestCandidates)
 			       % to include best candidates only in output
-			       ev0(EvaluationsAfterSTs),
+			       ev0(RefinedEvaluations),
 			       aphrases(APhrases)).
 
-mark_excluded_evaluations(EvaluationsAfterSTs) :-
-	(  foreach(Candidate, EvaluationsAfterSTs)
+mark_excluded_evaluations(RefinedEvaluations) :-
+	(  foreach(Candidate, RefinedEvaluations)
 	do get_candidate_feature(status, Candidate, Status),
 	   % If the Status field is still uninstantiated,
 	   % this candidate was refined out of existence,
@@ -627,9 +618,16 @@ phrase_debugging :-
 	; control_option(phrases_only)
 	).
 
-get_label_components(Label, [PMID, TiOrAB, UtteranceNum]) :-
+get_label_components(Label, [PMID,TiOrAB,UtteranceNum]) :-
 	  atom_codes(Label, LabelString),
-	  ( split_string_completely(LabelString, ".", [PMID, TiOrAB, UtteranceNum]) ->
+	  % Label can contain an arbitrary number of ".",
+	  % but the last two chunks will be the TiOrAB and the UtteranceNumber:
+	  % E.g., if Label is "C0000726-L0000726-S0009053-HL7V2.5.ti.0",
+	  % we need to isolate "ti" and "0".
+	  ( split_string_completely(LabelString, ".", ComponentList),
+	    append(PMID0, [TiOrAB,UtteranceNum], ComponentList),
+	    interleave_string(PMID0, ".", PMID1),
+	    append(PMID1, PMID) ->
 	    true
 	  ; PMID = "<>",
 	    TiOrAB = "<>",
@@ -651,14 +649,16 @@ get_pwi_info(Phrase, PhraseWordInfoPair, TokenPhraseWords, TokenPhraseHeadWords)
 get_phrase_info(Phrase, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAtom,
 		PhraseTokens, RawTokensOut, PhraseStartPos, PhraseLength,
 		OrigPhraseTextAtom, ReplacementPositions) :-
-	get_inputmatch_atoms_from_phrase(Phrase, InputMatchPhraseWords),
+	get_inputmatch_atoms_from_phrase(Phrase, InputMatchPhraseWords0),
+	re_attach_apostrophe_s_to_prev_word(InputMatchPhraseWords0,
+					    _TagList,
+					    InputMatchPhraseWords),
 	% For each word in InputMatchPhraseWords, extract the matching tokens from RawTokensIn.
 	% We need to match the words in the raw tokens to get the correct pos info
 	% and to get the phrase with all the blanks.
 
 	% need to modify phrase tokens to discard field, label, and sn tokens
 	get_phrase_tokens(InputMatchPhraseWords, RawTokensIn, PhraseTokens, RawTokensOut),
-	
 	get_phrase_startpos_and_length(PhraseTokens, PhraseStartPos, PhraseLength0),
 	subchars(CitationTextAtom, PhraseTextStringWithCRs0, PhraseStartPos, PhraseLength0),
 	add_AA_suffix(PhraseTextStringWithCRs0, AAs, PhraseTokens, PhraseLength0,
@@ -726,7 +726,7 @@ get_AA_text(AATokens, AATextString) :-
 	% extract_token_strings(AATokens, AATokenStrings),
 	% interleave_string(AATokenStrings, " ", AATextString).
 
-generate_initial_evaluations(Label, UtteranceText,
+generate_initial_evaluations(Label, UtteranceText, LexiconServerStream,
 			     PhraseTextString, Phrase, Variants,
 			     GVCs, WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
 			     InputMatchPhraseWords, PhraseTokens, TokenPhraseWords,
@@ -750,7 +750,7 @@ generate_initial_evaluations(Label, UtteranceText,
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
 	; check_generate_initial_evaluations_1_control_options_2 ->
- 	  compute_evaluations(Label, UtteranceText,
+ 	  compute_evaluations(Label, UtteranceText, LexiconServerStream,
  			      Phrase, Variants, GVCs,
  			      WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
  			      InputMatchPhraseWords,
@@ -810,26 +810,26 @@ refine_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	; EvaluationsAfterSources = Evaluations0
 	).
 
-refine_evaluations_by_semtypes(EvaluationsAfterSources, EvaluationsAfterSTs) :-
+refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations) :-
 	( control_option(restrict_to_sts) ->
 	  control_value(restrict_to_sts, STs),
-	  filter_evaluations_to_sts(EvaluationsAfterSources, STs, EvaluationsAfterSTs)
+	  filter_evaluations_to_sts(EvaluationsAfterSources, STs, RefinedEvaluations)
 	; control_option(exclude_sts) ->
 	  control_value(exclude_sts, STs),
-	  filter_evaluations_excluding_sts(EvaluationsAfterSources, STs, EvaluationsAfterSTs)
-	; EvaluationsAfterSTs = EvaluationsAfterSources
+	  filter_evaluations_excluding_sts(EvaluationsAfterSources, STs, RefinedEvaluations)
+	; RefinedEvaluations = EvaluationsAfterSources
 	).
 
-refine_evaluations_by_subsumption(EvaluationsAfterSTs, FinalEvaluations) :-
+refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations) :-
  	( \+ control_option(compute_all_mappings) ->
- 	  filter_out_subsumed_evaluations(EvaluationsAfterSTs, FinalEvaluations)
- 	; FinalEvaluations = EvaluationsAfterSTs
+ 	  filter_out_subsumed_evaluations(RefinedEvaluations, FinalEvaluations)
+ 	; FinalEvaluations = RefinedEvaluations
  	).
 
-refine_evaluations(InitialEvaluations, EvaluationsAfterSTs, FinalEvaluations) :-
+refine_evaluations(InitialEvaluations, RefinedEvaluations, FinalEvaluations) :-
 	refine_evaluations_by_sources(InitialEvaluations, EvaluationsAfterSources),
-	refine_evaluations_by_semtypes(EvaluationsAfterSources, EvaluationsAfterSTs),
-	refine_evaluations_by_subsumption(EvaluationsAfterSTs, FinalEvaluations).
+	refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
+	refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
 
 debug_evaluations(Evaluations) :-
 	( control_value(debug, DebugFlags),
@@ -871,7 +871,7 @@ get_all_generators_and_candidate_lengths([GVC|RestGVCs], [G-CandidatesLength|Res
 	length(Candidates, CandidatesLength),
 	get_all_generators_and_candidate_lengths(RestGVCs, RestGenerators).
 
-compute_evaluations(Label, UtteranceText,
+compute_evaluations(Label, UtteranceText, LexiconServerStream,
 		    Phrase, Variants, GVCs, WordDataCacheIn, USCCacheIn,
 		    RawTokensOut, AAs, InputMatchPhraseWords,
 		    PhraseTokens, TokenPhraseWords, TokenPhraseHeadWords,
@@ -882,7 +882,7 @@ compute_evaluations(Label, UtteranceText,
 	get_debug_control_value(DebugFlags),
 	debug_message(trace, '~N### Calling generate_variants: ~q~n', [TokenPhraseWords]),
 	generate_variants(TokenPhraseWords, TokenPhraseHeadWords,
-			  Phrase, DebugFlags, GVCs, Variants),
+			  Phrase, DebugFlags, LexiconServerStream, GVCs, Variants),
 	% format(user_output, '~N### generate_variants DONE!~n', []),
 	debug_compute_evaluations_2(DebugFlags, GVCs, Variants),
 
@@ -974,17 +974,18 @@ next_single_alpha_or_hyphen_count(Word, CountIn, CountNext) :-
 % 	; SingleChar =:= 45 % ASCII code for "-"
 % 	).
 
-generate_variants(PhraseWords, PhraseHeadWords, Phrase, DebugFlags, GVCs3, Variants) :-
-	expand_split_word_list(PhraseWords,     DupPhraseWords),
+generate_variants(PhraseWords, PhraseHeadWords, Phrase, 
+		  DebugFlags, LexiconServerStream, GVCs3, Variants) :-
+	expand_split_word_list(PhraseWords, DupPhraseWords),
 	% expand_split_word_list(PhraseHeadWords, DupPhraseHeadWords),	
-	compute_variant_generators(PhraseWords, DupPhraseWords, GVCs0),
+	compute_variant_generators(PhraseWords, DupPhraseWords, LexiconServerStream, GVCs0),
 	% format(user_output, '~n### ~q~n',
 	%        [compute_variant_generators(PhraseWords, GVCs0)]),
 	debug_compute_evaluations_1(DebugFlags, GVCs0),
 	filter_variants_by_tags(GVCs0, Phrase, GVCs1),
 	% format(user_output, '~n### ~q~n',
 	%        [filter_variants_by_tags(GVCs0, Phrase, GVCs1)]),
-	augment_GVCs_with_variants(GVCs1),
+	augment_GVCs_with_variants(GVCs1, LexiconServerStream),
 	% format(user_output, '~n### ~q~n',
 	%        [augment_GVCs_with_variants(GVCs1)]),
 	maybe_filter_out_dvars(GVCs1, GVCs2),
@@ -1103,7 +1104,7 @@ remove_leading_hoa_ws_toks([FirstToken|RestTokens], FilteredTokens) :-
 	; FilteredTokens = [FirstToken|RestTokens]
 	).
 
-% First, try to find a token that appears no earlier than the previous toke
+% First, try to find a token that appears no earlier than the previous token
 get_word_token(Word, PrevTokenStartPos, RawTokensIn, Token, NewTokenStartPos, RestRawTokens) :-
 	% mc == matching case
         matching_token(mc, Word, Token),
@@ -1264,7 +1265,7 @@ filter_out_dvars_aux([First|Rest], Filtered) :-
 	),
 	filter_out_dvars_aux(Rest, FilteredRest).
 
-% Remove all variants whose history contains either "a" (AA) or "e" AA expansion
+% Remove all variants whose history contains either "a" (AA) or "e" (AA expansion)
 filter_out_aas([], []).
 filter_out_aas([gvc(G,Vs,Cs)|Rest], [gvc(G,FilteredVs,Cs)|FilteredRest]) :-
 	filter_out_aas_aux(Vs, FilteredVs),
@@ -1400,17 +1401,17 @@ filter_evaluations_to_sources(EvaluationsIn, Sources, EvaluationsOut) :-
 
 filter_evaluations_to_sources_aux([], _, []).
 filter_evaluations_to_sources_aux([FirstCandidate|RestCandidates], RootSources, Results) :-
-	candidate_term(NegValue, CUI, MetaTerm, _MetaConcept, MetaWords, SemTypes,MatchMap,
-		       LSComponents, TargetLSComponent, InvolvesHead, IsOvermatch,
-		       Sources, PosInfo, Status, FirstCandidate),
+	candidate_term(NegValue, CUI, MetaTerm, _MetaConcept, MetaWords, SemTypes,
+		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+		       IsOvermatch, Sources, PosInfo, Status, Negated, FirstCandidate),
 	db_get_cui_sourceinfo(CUI, SourceInfo0),
 	extract_relevant_sources(SourceInfo0, RootSources, SourceInfo),
 	( SourceInfo == [] ->
 	  Results = ModRest
-	; extract_source_name(SourceInfo, SourceName),
-	  candidate_term(NegValue, CUI, MetaTerm, SourceName, MetaWords, SemTypes, MatchMap,
-			 LSComponents, TargetLSComponent, InvolvesHead, IsOvermatch,
-			 Sources, PosInfo, Status, NewCandidate),
+	; extract_name_in_source(SourceInfo, ConceptNameInSource),
+	  candidate_term(NegValue, CUI, MetaTerm, ConceptNameInSource, MetaWords, SemTypes,
+			 MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+			 IsOvermatch, Sources, PosInfo, Status, Negated, NewCandidate),
 	  Results = [NewCandidate|ModRest]
 	),
 	filter_evaluations_to_sources_aux(RestCandidates, RootSources, ModRest).
@@ -1436,15 +1437,15 @@ filter_evaluations_excluding_sources_aux([], _, []).
 filter_evaluations_excluding_sources_aux([FirstCandidate|RestCandidates], RootSources, Results) :-
 	candidate_term(NegValue, CUI, MetaTerm, _MetaConcept, MetaWords, SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-		       IsOvermatch, Sources, PosInfo, Status, FirstCandidate),
+		       IsOvermatch, Sources, PosInfo, Status, Negated, FirstCandidate),
 	db_get_cui_sourceinfo(CUI, SourceInfo0),
 	extract_nonexcluded_sources(SourceInfo0, RootSources, ExtractedSourceInfo),
 	( ExtractedSourceInfo == [] ->
 	  Results = ModRest
-	; extract_source_name(ExtractedSourceInfo, SourceName),
-	  candidate_term(NegValue, CUI, MetaTerm, SourceName, MetaWords, SemTypes,
+	; extract_name_in_source(ExtractedSourceInfo, ConceptNameInSource),
+	  candidate_term(NegValue, CUI, MetaTerm, ConceptNameInSource, MetaWords, SemTypes,
 			 MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-			 IsOvermatch, Sources, PosInfo, Status, NewCandidate),
+			 IsOvermatch, Sources, PosInfo, Status, Negated, NewCandidate),
 	  Results = [NewCandidate|ModRest]
 	),
 	filter_evaluations_excluding_sources_aux(RestCandidates, RootSources, ModRest).
@@ -1766,7 +1767,7 @@ augment_evaluations([First|Rest], [AugmentedFirst|AugmentedRest]) :-
 augment_one_evaluation(Candidate, AugmentedCandidate) :-
 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-		       IsOvermatch, SourceInfo, PosInfo, Status, Candidate),
+		       IsOvermatch, SourceInfo, PosInfo, Status, Negated, Candidate),
 	extract_components(MatchMap, PhraseComponents0, _MetaComponents),
 	sort(PhraseComponents0, PhraseComponents1),
 	merge_contiguous_components(PhraseComponents1, PhraseComponents),
@@ -1774,7 +1775,8 @@ augment_one_evaluation(Candidate, AugmentedCandidate) :-
 	augmented_candidate_term(PhraseComponents, Low, High,
 				 NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
 				 MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-				 IsOvermatch, SourceInfo, PosInfo, Status, AugmentedCandidate).
+				 IsOvermatch, SourceInfo, PosInfo, Status, Negated,
+				 AugmentedCandidate).
 
 filter_best_aphrases([], _BestValue, []).
 filter_best_aphrases([First|Rest], BestValue, Filtered) :-
@@ -2225,13 +2227,6 @@ update_aev_lists(RestoreNum, KeptAEvs, DiscardedIndex, FirstDiscardedAEv, PPCSIn
 	    NextDiscardedAEvs = [DiscardedIndex-FirstDiscardedAEv|RestDiscardedAEvs],
 	    NextKeptAEvs = RestKeptAEvs
 	  ).
-
-get_ev_info(ThisEv, NegValue, ThisEvPrintVersion, PhrasePositions, MetaPositions) :-
-	get_all_candidate_features([negvalue,matchmap], ThisEv, [NegValue,MatchMap]),
-	ev_print_version(ThisEv, ThisEvPrintVersion),
-	extract_components(MatchMap, PhraseComponents, MetaComponents),
-	positions_covered(MetaComponents, MetaPositions),
-	positions_covered(PhraseComponents, PhrasePositions).
 
 get_aev_info(ThisAEv, NegValue, ThisAEvPrintVersion, PhrasePositions, MetaPositions) :-
 	get_all_aev_features([phrasecomponents,negvalue,matchmap],
@@ -3016,10 +3011,10 @@ deaugment_one_evaluation(AEvTerm, EvTerm) :-
 	augmented_candidate_term(_PhraseComponents, _Low, _High, NegValue, CUI, MetaTerm,
 				 MetaConcept, MetaWords, SemTypes, MatchMap,
 				 LSComponents, TargetLSComponent, InvolvesHead,
-				 IsOvermatch, SourceInfo, PosInfo, Status, AEvTerm),
+				 IsOvermatch, SourceInfo, PosInfo, Status, Negated, AEvTerm),
 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-		       IsOvermatch, SourceInfo,  PosInfo, Status, EvTerm).
+		       IsOvermatch, SourceInfo,  PosInfo, Status, Negated, EvTerm).
 
 /* reorder_mapping(+Mapping, -OrderedMapping)
 
@@ -3247,12 +3242,6 @@ join_phrase_items_aux([FirstLPItem|RestLPItems], [[TargetLSComponent]|RestLPMap]
 	% test_diff(metaconc,   CurrMetaConc,   MetaInfo),
 
 	set_all_subitems_features(SubItemsIn, LexMatch, InputMatch, Tokens, MetaInfo, SubItemsOut),
-	%%% call set_subitems_feature only if InputMatch != CurrInputMatch
-	% maybe_set_subitems_feature(SubItems0, lexmatch,   CurrLexMatch,   LexMatch,   SubItems1),
-	% maybe_set_subitems_feature(SubItems1, inputmatch, CurrInputMatch, InputMatch, SubItems2),
-	% maybe_set_subitems_feature(SubItems2, tokens,     CurrTokens,     Tokens,     SubItems3),
-	% set_subitems_feature(SubItems3, metaconc, [MetaInfo], SubItems),
-	% format(user_output, 'SubItems = ~q~n', [SubItems]),
 	new_phrase_item(ItemName, SubItemsOut, NewFirstLPItem).
 
 % If the current linearized phrase position (FirstLPMapComponent)
@@ -3351,21 +3340,6 @@ memberchk_var(Element, VarList) :-
 	  memberchk_var(Element, Rest)
 	).
 
-maybe_set_subitems_feature(SubItemsIn, FeatureName, CurrFeature, NewFeature, SubItemsOut) :-
-	( CurrFeature = NewFeature ->
-	  SubItemsOut = SubItemsIn
-	; NewFeature == [] ->
-	  SubItemsOut = SubItemsIn	    
-	; set_subitems_feature(SubItemsIn, FeatureName, NewFeature, SubItemsOut)
-	).
-
-% test_diff(Feature, CurrFeature, NewFeature) :-
-% 	( CurrFeature == NewFeature ->
-% 	  Result = '='
-% 	; Result = '#'-CurrFeature-NewFeature
-%	),
-% 	format(user_output, 'FEATURE: ~w ~w~n', [Feature,Result]).
-
 compute_confidence_value([], _NPhraseWords, _Variants, -1000).
 compute_confidence_value([H|T], NPhraseWords, Variants, NegValue) :-
 	Mapping = [H|T],
@@ -3457,21 +3431,6 @@ glean_concepts_from_mapping([FirstCandidate|RestCandidates], [MetaConcept|RestCo
 modify_matchMap_for_concatenation/3
 xxx
 */
-
-
-modify_matchmap_for_concatenation_NEW(MatchMapIn, NMetaWords, MatchMapOut) :-
-	( NMetaWords =:= 0 ->
-	  MatchMapOut = MatchMapIn
-	; MatchMapIn == [] ->
-	  MatchMapIn = []
-	; MatchMapIn = [[PhraseComponent,MetaComponent,VarLevel]|Rest],
-	  MatchMapOut = [[PhraseComponent,ModifiedMetaComponent,VarLevel]|ModifiedRest],
-	  MetaComponent = [Begin,End],
-	  NewBegin is Begin + NMetaWords,
-	  NewEnd is End + NMetaWords,
-	  ModifiedMetaComponent = [NewBegin,NewEnd],
-	  modify_matchmap_for_concatenation(Rest, NMetaWords, ModifiedRest)
-	).	
 
 modify_matchmap_for_concatenation(MatchMapIn, 0, MatchMapIn) :- !.
 modify_matchmap_for_concatenation([], _NMetaWords, []).
@@ -3821,11 +3780,12 @@ check_generate_initial_evaluations_1_control_options_2 :-
 augmented_candidate_term(PhraseComponents, Low, High,
 			 NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
 			 MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-			 IsOvermatch, SourceInfo, PosInfo, Status, AugmentedCandidateTerm) :-
+			 IsOvermatch, SourceInfo, PosInfo, Status, Negated,
+			 AugmentedCandidateTerm) :-
 	AugmentedCandidateTerm = aev(PhraseComponents, Low, High,
 				     NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
 				     MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-				     IsOvermatch, SourceInfo, PosInfo, Status).
+				     IsOvermatch, SourceInfo, PosInfo, Status, Negated).
 
 get_all_aev_features(FeatureList, AEvTerm, FeatureValueList) :-
 	( foreach(ThisFeature, FeatureList),
@@ -3838,47 +3798,47 @@ get_aev_feature(phrasecomponents, AEvTerm, PhraseComponents) :-
 	AEvTerm = aev(PhraseComponents,_Low,_High,
 		      _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 get_aev_feature(low, AEvTerm, Low) :-
 	AEvTerm = aev(_PhraseComponents,Low,_High,
 		      _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 get_aev_feature(high, AEvTerm, High) :-
 	AEvTerm = aev(_PhraseComponents,_Low,High,
 		      _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 get_aev_feature(negvalue, AEvTerm, NegValue) :-
 	AEvTerm = aev(_PhraseComponents,_Low,_High,
 		      NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 get_aev_feature(cui, AEvTerm, CUI) :-
 	AEvTerm = aev(_PhraseComponents,_Low,_High,
 		      _NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 get_aev_feature(metaterm, AEvTerm, MetaTerm) :-
 	AEvTerm = aev(_PhraseComponents,_Low,_High,
 		      _NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 get_aev_feature(metaconcept, AEvTerm, MetaConcept) :-
 	AEvTerm = aev(_PhraseComponents,_Low,_High,
 		      _NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
 		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 get_aev_feature(metawords, AEvTerm, MetaWords) :-
 	AEvTerm = aev(_PhraseComponents,_Low,_High,
 		      _NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
 		      _MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 get_aev_feature(matchmap, AEvTerm, MatchMap) :-
 	AEvTerm = aev(_PhraseComponents,_Low,_High,
 		      _NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		      MatchMap, _LSComponents, _TargetLSComponent, _InvolvesHead,
-      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status).
+      		      _IsOvermatch,_SourceInfo,_PosInfo,_Status,_Negated).
 
 :- use_module(skr_lib(addportray)).
 portray_candidate(Candidate) :-

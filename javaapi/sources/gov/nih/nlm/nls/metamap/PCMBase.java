@@ -286,6 +286,14 @@ public class PCMBase implements PCM {
     public int getPruningStatus() throws Exception  { 
       return (int)TermUtils.getIntegerArgument(this.evTerm, 14);
     }
+    public int getNegationStatus() throws Exception  { 
+      return (int)TermUtils.getIntegerArgument(this.evTerm, 15);
+    }
+    public boolean isNegated() throws Exception  { 
+      return ((int)TermUtils.getIntegerArgument(this.evTerm, 15)) == 1;
+    }
+
+
     /** get underlying Prolog Term */
     public PBTerm getTerm() {
       return this.evTerm;

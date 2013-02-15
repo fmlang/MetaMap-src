@@ -37,18 +37,18 @@
 % ----- Module declaration and exported predicates
 
 :- module( mincoman,   [
-	minimal_commitment_analysis/5,
+	minimal_commitment_analysis/4,
 	punc_mark1/1
    ]).
 
 % ----- Imported predicates
 
-:- use_module( library(lists),      [
+:- use_module( library(lists), [
 	is_list/1,
 	rev/2
    ]).
 
-:- use_module( skr_lib(nls_lists),	    [
+:- use_module( skr_lib(nls_lists), [
 	get_from_list/3
    ]). 
 
@@ -85,14 +85,11 @@ consult_tagged_text. It also "resolves" category label information
 
 */
 
-minimal_commitment_analysis(TaggedTextFlag, _Definitions, VarInfoList, LabeledText, Analysis) :-
-	minimal_commitment_analysis_1(TaggedTextFlag, VarInfoList, LabeledText, Analysis).
-
-minimal_commitment_analysis_1(TaggedTextFlag, VarInfoList, CatLabText,
-			     minimal_syntax(SyntAnalysis)) :-
-	( TaggedTextFlag = tag ->
+% First arg is TagList
+minimal_commitment_analysis(TagList, VarInfoList, CatLabText, minimal_syntax(SyntAnalysis)) :-
+	( TagList = [__|_] ->
 	  LabeledText = CatLabText
-	; convert(VarInfoList,LabeledText,[])
+	; convert(VarInfoList, LabeledText, [])
 	),
 	!,
 	mark_boundaries(LabeledText, BoundedList, []),
@@ -126,8 +123,6 @@ not_in_lex is coverted to noun
 */
 
 convert([],Gap,Gap) :- !.
-
-
 convert([shapes:[inputmatch:ShapesList,features:FeatList|_]
                 |MoreWords],
         [shapes([inputmatch(ShapesList),features(FeatList)])

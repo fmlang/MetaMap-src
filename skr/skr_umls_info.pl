@@ -51,12 +51,18 @@
 	model_location/5
     ]).
 
-:- use_module(skr_lib(semtype_translation_2012AA), [
+:- use_module(skr_lib(semtype_translation_2012AB), [
 	is_abbrev_semtype/1
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/2
+    ]).
+
+:- use_module(skr(skr_utilities), [
+	fatal_error/2,
+	send_message/2,
+	set_message/5
     ]).
 
 :- use_module(library(file_systems), [
@@ -85,30 +91,18 @@ announce_removed_sources(RemovedSources) :-
 	; get_data_version(Version),
 	  get_data_model(Model),
 	  get_data_release(Release, 0),
-	  set_message(RemovedSources, PluralIndicator, Verb),
-	  format('~n### WARNING: The UMLS source~w ~p ', [PluralIndicator,RemovedSources]),
-	  format('~w not represented in the ~w ~w ~w data.', [Verb,Model,Release,Version])
+	  set_message(RemovedSources, PluralIndicator, Verb, _Pronoun, _Determiner),
+	  send_message('~n### WARNING: The UMLS source~w ~p ', [PluralIndicator,RemovedSources]),
+	  send_message('~w not represented in the ~w ~w ~w data.~n', [Verb,Model,Release,Version])
 	).
 
 announce_unknown_sources(UnknownSources) :-
 	( UnknownSources == [] ->
 	  true
-	; set_message(UnknownSources, PluralIndicator, Verb),
-	  format('~n### Fatal error: The UMLS source~w ~p ~w unknown. Aborting.~n',
-		 [PluralIndicator,UnknownSources,Verb]),
-	  !,
-	  abort
+	; set_message(UnknownSources, PluralIndicator, Verb, _Pronoun, _Determiner),
+	  fatal_error('The UMLS source~w ~p ~w unknown. Aborting.~n',
+		      [PluralIndicator,UnknownSources,Verb])
 	).
-
-set_message(SourceList, PluralIndicator, Verb) :-
-	length(SourceList, Length),
-	( Length is 1 ->
-	  PluralIndicator = '',
-	  Verb = 'is'
-	; PluralIndicator = 's',
-	  Verb = 'are'
-	).
-
 
 verify_sources_aux([], [], []).
 verify_sources_aux([FirstSource|RestSources], RemovedSources, UnknownSources) :-
@@ -177,10 +171,6 @@ convert_versioned_source_to_root(VersionedSource, RootSource, ZeroOrOne) :-
 % ICD9CM --> ICD9CM_2005
 % ICD9CM --> ICD9CM_2011
 
-convert_root_source_to_versioned(RootSource, VersionedSource, ZeroOrOne) :-
-	db_get_versioned_source_name(RootSource, Results),
-	member([VersionedSource,ZeroOrOne], Results).
-
 convert_to_root_sources([], []).
 convert_to_root_sources([RootSource|Rest], [RootSource|ConvertedRest]) :-
 	is_umls_root_source(RootSource, _ZeroOrOne),
@@ -205,9 +195,9 @@ verify_sts(STs) :-
 	find_illegal_semtypes(STs, IllegalSTs),
 	( IllegalSTs == [] ->
 	  true
-	; format('~nFatal error: Illegal semantic type(s) ~p~n',[IllegalSTs]),
-	  !,
-	  fail
+	; set_message(IllegalSTs, PluralIndicator, Verb, _Pronoun, _Determiner),
+	  fatal_error('The semantic type~w ~p ~w unknown~n',
+		      [PluralIndicator,IllegalSTs,Verb])
 	).
 
 find_illegal_semtypes([], []).

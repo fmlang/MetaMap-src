@@ -35,7 +35,7 @@
 
 :- module(skr_text_processing, [
 	convert_all_utf8_to_ascii/4,
-	extract_sentences/10,
+	extract_sentences/12,
 	get_skr_text/2,
 	get_skr_text_2/2,
 	medline_PMID_indicator_char/1,
@@ -63,7 +63,8 @@
     ]).
 
 :- use_module(skr_lib(nls_io), [
-	fget_lines_until_skr_break/2,
+	fget_line/2,
+	fget_lines_until_skr_break/4,
 	fget_non_ws_only_line/2
     ]).
 
@@ -78,7 +79,8 @@
     ]).
 
 :- use_module(skr_lib(nls_system), [
-	control_option/1
+	control_option/1,
+	control_value/2
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -89,11 +91,11 @@
     ]).
 
 :- use_module(text(text_objects), [
-	find_and_coordinate_sentences/7
+	find_and_coordinate_sentences/8
     ]).
 
 :- use_module(text(utf8_to_ascii), [
-	utf8_to_ascii/2
+	utf8_to_ascii/3
    ]).
 
 :- use_module(library(lists), [
@@ -109,46 +111,59 @@
 /* get_skr_text(-Lines)
    get_skr_text(+InputStream, -Lines)
 
-get_skr_text/1 gets Lines from current input by first skipping "blank" lines
-and then reading until a "natural" breaking point. Currently, the following are
-such SKR breaking points:
-  a "blank" line; and
-Here, a "blank" line is one containing only whitespace characters (if any).
-get_skr_text/2 has input parameter InputStream. */
+get_skr_text/2 gets Lines from current input by first skipping "blank" lines
+and then reading until a "natural" breaking point, which is an empty line
+or one containing only whitespace.
+*/
 
 get_skr_text(Lines, TextID) :-
 	maybe_print_prompt,
 	current_input(InputStream),
-	get_skr_text_3(InputStream, Lines, TextID).
+	get_num_blank_lines(NumBlankLines),
+	get_skr_text_3(InputStream, NumBlankLines, Lines, TextID).
 
-
+% get_skr_text_2 is used ONLY for reading in the UDA file.
 get_skr_text_2(InputStream, [First|Rest]) :-
-        fget_non_ws_only_line(InputStream, First),
+	% skip all blank lines at the beginning of the input
+	fget_non_ws_only_line(InputStream, First),
+	% fget_line(InputStream, First),
         !,
-        fget_lines_until_skr_break(InputStream,Rest).
+	NumBlankLines is 1,
+        fget_lines_until_skr_break(InputStream, NumBlankLines, NumBlankLines, Rest).
 get_skr_text_2(_, []).
 
-
-get_skr_text_3(InputStream, [FirstText|Rest], TextID) :-
+get_skr_text_3(InputStream, NumBlankLines, [FirstText|Rest], TextID) :-
+	% Skip all blank lines at the beginning of the input
 	fget_non_ws_only_line(InputStream, First),
 	!,
+	% "sldi" == "single-line-delimited input"
+	% The sldi option reads exactly one line of input and then stops reading.
 	( control_option(sldi) ->
 	  TextID = '',
 	  FirstText = First,
 	  Rest = []
+	  % The sldiID option reads exactly one line of input and then stops reading.
+	  % The input *must* be of the form ID|Text.
 	; control_option(sldiID) ->
 	  ( append([TempTextID, "|", TempFirstText], First) ->
 	    Rest = [],
 	    trim_whitespace(TempTextID, TextID),
 	    trim_whitespace(TempFirstText, FirstText)
-	  ; fatal_error('~nERROR: The sldiID requires input lines of the form ID|Text\n', []),
+	  ; fatal_error('The sldiID option requires input lines of the form ID|Text\n', []),
 	    halt
 	  )
 	 ; TextID = '',
 	   FirstText = First,
-	   fget_lines_until_skr_break(InputStream, Rest)
+	   fget_lines_until_skr_break(InputStream, NumBlankLines, NumBlankLines, Rest)
 	).
-get_skr_text_3(_, [], '').
+get_skr_text_3(_InputStream, _NumBlankLines, [], '').
+
+
+get_num_blank_lines(NumBlankLines) :-
+	( control_value(blanklines, NumBlankLines) ->
+	  true
+	; NumBlankLines is 1
+	).
 
 % print the "|:" read prompt iff MetaMap is being used interactively,
 % i.e., the user is interactively typing in input.
@@ -208,23 +223,47 @@ acronym/abbreviation discovery.
 
 */
 
-extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
-		  Sentences, CoordinatedSentences, AAs, UDA_AVL, Lines) :-
-	replace_tabs_in_strings(Lines0, Lines1),
+% Append all whitespace-only fields to the next field.
+% This is necessary because the field grammar doesn't like whitespace fields.
+glom_whitespace_fields([], LastField, Fields) :-
+	( whitespace_only_field(LastField) ->
+	  Fields = []
+	; Fields = [LastField]
+	).
+glom_whitespace_fields([NextField|RestFields], FirstField, GlommedFields) :-
+	( whitespace_only_field(FirstField) ->
+	  % the 32 is for the <CR>
+	  append([32|FirstField], NextField, FirstGlommedField),
+	  glom_whitespace_fields(RestFields, FirstGlommedField, GlommedFields)
+	; GlommedFields = [FirstField|RestGlommedFields],
+	  glom_whitespace_fields(RestFields, NextField, RestGlommedFields)
+	).
+
+whitespace_only_field([]).
+whitespace_only_field([FirstChar|RestChars]) :-
+	is_white(FirstChar),
+	whitespace_only_field(RestChars).
+
+extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFields,
+		  Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL, Lines) :-
+	Lines0 = [FirstLine|RestLines],
+	% This is for Steven Bedrick's --blanklines idea
+	glom_whitespace_fields(RestLines, FirstLine, Lines00),
+	replace_tabs_in_strings(Lines00, Lines1),
 	replace_nonprints_in_strings(Lines1, Lines2),
 	( is_medline_citation(Lines2) ->
-	  extract_coord_sents_from_citation(Lines2, TextFields, NonTextFields,
+	  extract_coord_sents_from_citation(Lines2, ExtraChars, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
 					    AAs, UDAList, UDA_AVL),
 	  InputType = citation
 	; is_smart_fielded(Lines2) ->
-	  extract_coord_sents_from_smart(Lines2, TextFields, NonTextFields,
+	  extract_coord_sents_from_smart(Lines2, ExtraChars, TextFields, NonTextFields,
 					 Sentences, CoordinatedSentences,
 					 AAs, UDAList, UDA_AVL),
 	  InputType = smart,
 	  NonTextFields = []
 	; form_dummy_citation(Lines2, TextID, CitationLines),
-	  extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
+	  extract_coord_sents_from_citation(CitationLines, ExtraChars, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
 					    AAs, UDAList, UDA_AVL),
 	  InputType = simple
@@ -232,6 +271,13 @@ extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
 	update_strings_with_UDAs(Lines2, UDAList, Lines),
 	!.
 
+% The following logic recognizes MEDLINE citations indicated by (case insensitive)
+% "PMID" or "UI" followed by
+% optional whitespace followed by
+% one of "-", "|", ":", or "." followed by
+% optional whitespace followed by
+% any text, i.e.,
+% (PMID|UI)<whitespace>[-|:.]<whitespace><any text>
 
 medline_PMID_indicator_char(0'-).
 medline_PMID_indicator_char(0'|).
@@ -244,13 +290,11 @@ is_medline_citation([First|_]) :-
 	% split into at least two tokens
 	Tokens0 = [_,_|_],	
 	remove_nulls(Tokens0, Tokens),
-	Tokens = [String1, String2|_],
+	Tokens = [String1,_String2|_],
 	lower_chars(String1, LowerString1),
 	trim_whitespace(LowerString1, TrimmedLowerString1),
 	atom_codes(LowerAtom1, TrimmedLowerString1),
-	lower_chars(String2, LowerString2),
-	atom_codes(LowerAtom2, LowerString2),
-	medline_citation_indicator(LowerAtom1, LowerAtom2),
+	medline_citation_indicator(LowerAtom1),
 	!.
 
 remove_nulls([], []).
@@ -261,22 +305,17 @@ remove_nulls([First|Rest], Result) :-
 	),
 	remove_nulls(Rest, RestResult).
 
-medline_citation_indicator('pmid',  _).
-medline_citation_indicator('pmid-', _).
-medline_citation_indicator('pmid|', _).
-medline_citation_indicator('pmid:', _).
-medline_citation_indicator('pmid.', _).
-
-% medline_citation_indicator(pmid,  '-').
-% medline_citation_indicator(pmid,  '|').
-% medline_citation_indicator(pmid,  ':').
-% medline_citation_indicator(pmid,  '.').
-
-medline_citation_indicator(ui,    '-').
-medline_citation_indicator('ui-',   _).
+medline_citation_indicator('pmid').
+medline_citation_indicator(ui).
+% medline_citation_indicator('pmid-').
+% medline_citation_indicator('pmid|').
+% medline_citation_indicator('pmid:').
+% medline_citation_indicator('pmid.').
+% 
+% medline_citation_indicator('ui-').
 
 is_smart_fielded([First,_|_]) :-
-    append(".",_,First).
+	append(".", _, First).
 
 /* form_dummy_citation(+Lines, -CitationLines)
 
@@ -317,17 +356,17 @@ set_text_id_and_field_type(TempTextID, TextID, FieldType) :-
    				     -Sentences, -CoordinatedSentences, AAs)
 */
 
-extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
+extract_coord_sents_from_citation(CitationLines, ExtraChars, TextFields, NonTextFields,
 				  Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL) :-
     extract_all_fields(CitationLines, CitationFields),
     (   member([FieldIDString,Field], CitationFields),
 	lower_chars(FieldIDString, LowerFieldIDString),
 	atom_codes(LowerFieldIDAtom, LowerFieldIDString), 
-	medline_citation_indicator(LowerFieldIDAtom, _) ->
+	medline_citation_indicator(LowerFieldIDAtom) ->
         extract_ui(Field, UI)
     ;   UI="00000000"
     ),
-    extract_coord_sents_from_fields(UI, CitationFields, TextFields, NonTextFields,
+    extract_coord_sents_from_fields(UI, ExtraChars, CitationFields, TextFields, NonTextFields,
 				    Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL),
     !.
 
@@ -781,14 +820,14 @@ medline_field('UOF',
 medline_field('VI',
 	      'Volume', 'Journal volume').
 
-extract_coord_sents_from_smart(SmartLines, TextFields, NonTextFields,
+extract_coord_sents_from_smart(SmartLines, ExtraChars, TextFields, NonTextFields,
 			       Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL) :-
     extract_all_smart_fields(SmartLines,CitationFields),
     (select_field("UI",CitationFields,UIField) ->
         extract_ui(UIField,UI)
     ;   UI="00000000"
     ),
-    extract_coord_sents_from_fields(UI, CitationFields, TextFields, NonTextFields,
+    extract_coord_sents_from_fields(UI, ExtraChars, CitationFields, TextFields, NonTextFields,
 				    Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL),
     !.
 
@@ -878,13 +917,13 @@ extract_ui(Field, UI) :-
 	; UI  = "00000000"
 	).
 
-extract_coord_sents_from_fields(UI, Fields, TextFields, NonTextFields,
+extract_coord_sents_from_fields(UI, ExtraChars, Fields, TextFields, NonTextFields,
 				Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL) :-
 	extract_text_fields(Fields, TextFields0, NonTextFields),
 	padding_string(Padding),
 	unpad_fields(TextFields0, Padding, TextFields1),
 	right_trim_last_string(TextFields1, TextFields2),
-	find_and_coordinate_sentences(UI, TextFields2, Sentences, CoordinatedSentences,
+	find_and_coordinate_sentences(UI, ExtraChars, TextFields2, Sentences, CoordinatedSentences,
 				      AAs, UDAList, UDA_AVL),
 	update_text_fields_with_UDAs(TextFields0, UDAList, TextFields),
 	!.
@@ -968,27 +1007,29 @@ unpad_lines([First|Rest], Padding, [UnPaddedFirst|UnPaddedRest]) :-
 	),
 	unpad_lines(Rest, Padding, UnPaddedRest).
 
-convert_all_utf8_to_ascii(UTF8Strings, _, _, ASCIIStrings) :-
-	!,
-	ASCIIStrings = UTF8Strings.
+convert_all_utf8_to_ascii(UTF8Strings, CurrPos, ExtraChars, ASCIIStrings) :-
+	( control_option('UTF8') ->
+	  convert_all_utf8_to_ascii_1(UTF8Strings, CurrPos, ExtraChars, ASCIIStrings)
+	; ExtraChars = [],
+	  ASCIIStrings = UTF8Strings
+	).
 
-convert_all_utf8_to_ascii([], _CurrPos, [], []).
-convert_all_utf8_to_ascii([OneUTF8|RestUTF8], CurrPos,
-			  [OneExtraChars|RestExtraChars], [OneASCIIString|RestASCIIStrings]) :-
+convert_all_utf8_to_ascii_1([], _CurrPos, [], []).
+convert_all_utf8_to_ascii_1([OneUTF8|RestUTF8], CurrPos,
+			    [OneExtraChars|RestExtraChars], [OneASCIIString|RestASCIIStrings]) :-
 	convert_one_utf8_to_ascii(OneUTF8, CurrPos, OneExtraChars, OneASCIICodes),
+	% sum the Ys in X-Y list, and subtract sum from length of OneUTF8?
 	append(OneASCIICodes, OneASCIIString),
 	length(OneUTF8, OneUTF8Length),
-	NextPos is CurrPos + OneUTF8Length,
-	convert_all_utf8_to_ascii(RestUTF8, NextPos, RestExtraChars, RestASCIIStrings).
+	NextPos is CurrPos + OneUTF8Length + 1,
+	convert_all_utf8_to_ascii_1(RestUTF8, NextPos, RestExtraChars, RestASCIIStrings).
 
 convert_one_utf8_to_ascii([], _Pos, [], []).
 convert_one_utf8_to_ascii([OneUTF8Code|RestUTF8Codes], CurrPos,
 			  ExtraChars, [OneASCIICodes|RestASCIIChars]) :-
-	utf8_to_ascii(OneUTF8Code, ASCIIChar),
+	utf8_to_ascii(OneUTF8Code, ASCIIChar, ExtraLength),
 	atom_codes(ASCIIChar, OneASCIICodes),
-	length(OneASCIICodes, Length),
-	( Length > 1 ->
-	  ExtraLength is Length - 1,
+	( ExtraLength > 0 ->
 	  ExtraChars = [CurrPos-ExtraLength|RestExtraChars]
 	; ExtraChars = RestExtraChars
 	),

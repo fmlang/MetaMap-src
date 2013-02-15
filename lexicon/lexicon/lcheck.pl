@@ -32,7 +32,7 @@
 */
 
 :- use_module(lexicon(qp_fm_lexrec), [
-	fm_lexical_record/3
+	fm_lexical_record/4
    ]).
 
 
@@ -61,7 +61,7 @@ go :-
 	assertz(ofs(CharCount, LineCount)),
 
 	(   read_lex_record(Stream, Record) ->
-		(   fm_lexical_record(_, Record, []) ->
+		(   fm_lexical_record(_, _EUI, Record, []) ->
 			fail
 		    ;   report_fm_failure(Record), fail
 		)

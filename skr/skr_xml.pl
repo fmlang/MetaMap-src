@@ -45,7 +45,7 @@
    ]).
 
 :- use_module(metamap(metamap_utilities), [
-	candidate_term/15
+	candidate_term/16
    ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -104,7 +104,6 @@ generate_and_print_xml(AllMMO) :-
 	  generate_xml_MMO_term(XMLArgTerm, XMLAATerm, XMLNegExTerm, XMLUtterancesTerm, MMOXML),
 	  xml_parse(XMLChars, XMLTerm, [format(TrueOrFalse)]),
 	  % format(user_output, 'Increasing indent~n', []), ttyflush,
-	  % conditionally_increase_indent_by_one(Format, XMLChars, XMLChars1),
 	  XMLChars1 = XMLChars,
 	  print_xml_output(OutputStream, XMLChars1)
 	; true
@@ -115,24 +114,6 @@ generate_xml_MMO_term(XMLArgTerm, XMLAATerm, XMLNegExTerm, XMLUtterancesTerm, MM
 			     [],
 			     [XMLArgTerm,XMLAATerm,XMLNegExTerm,XMLUtterancesTerm],
 			     MMOXML).
-
-% Increase the indentation of the XML beginning with <MMO>,
-% because <MMOs> is left justified.
-
-conditionally_increase_indent_by_one('XMLf1', XMLChars, XMLChars1) :-
-	increase_indent_by_one(XMLChars, XMLChars1).
-conditionally_increase_indent_by_one('XMLf', XMLChars, XMLChars1) :-
-	increase_indent_by_one(XMLChars, XMLChars1).
-conditionally_increase_indent_by_one('XMLn1', XMLChars, XMLChars).
-conditionally_increase_indent_by_one('XMLn',  XMLChars, XMLChars).
-
-increase_indent_by_one([], []).
-increase_indent_by_one([H|T], IncreasedIndent) :-
-	( H =:= 10 ->
-	  IncreasedIndent = [10,32|RestIncreasedIndent]
-	; IncreasedIndent = [H|RestIncreasedIndent]
-	),
-	increase_indent_by_one(T, RestIncreasedIndent).
 
 print_xml_output(OutputStream, XMLChars) :-
 	% 0 means inner header/footer
@@ -297,7 +278,7 @@ generate_xml_candidates_list([FirstMMOCandidate|RestMMOCandidates],
 generate_one_xml_candidate(MMOCandidate, XMLCandidate) :-
 	candidate_term(NegValue, CUI, CandidateMatched, PreferredName, MatchedWords,
 		       SemTypes, MatchMap, _LSComponents, _TargetLSComponent,
-		       IsHead, IsOverMatch, Sources, PosInfo, Status, MMOCandidate),
+		       IsHead, IsOverMatch, Sources, PosInfo, Status, Negated, MMOCandidate),
 	generate_xml_candidate_score(NegValue, XMLNegValue),
 	generate_xml_CUI(CUI, XMLCUI),
 	generate_xml_concept_matched(CandidateMatched, XMLCandidateMatched),
@@ -310,11 +291,12 @@ generate_one_xml_candidate(MMOCandidate, XMLCandidate) :-
 	generate_xml_sources(Sources, XMLSources),
 	generate_xml_pos_info(PosInfo, 'ConceptPIs', 'ConceptPI', XMLPosInfo),
 	generate_xml_status(Status, XMLStatus),
+	generate_xml_negated(Negated, XMLNegated),
         create_xml_element('Candidate',
                            [],
                            [XMLNegValue,XMLCUI,XMLCandidateMatched,XMLPreferredName,
                             XMLMatchedWords,XMLSemTypes,XMLMatchMap,XMLIsHead,
-                            XMLIsOverMatch,XMLSources,XMLPosInfo,XMLStatus],
+                            XMLIsOverMatch,XMLSources,XMLPosInfo,XMLStatus,XMLNegated],
                             XMLCandidate).
 
 generate_xml_candidate_score(NegValue, XMLNegValue) :-
@@ -456,6 +438,13 @@ generate_xml_status(Status, XMLStatus) :-
 			   [],
 			   [pcdata(StatusString)],
 			   XMLStatus).
+
+generate_xml_negated(Negated, XMLNegated) :-
+	number_codes(Negated, NegatedString),
+	create_xml_element('Negated',
+			   [],
+			   [pcdata(NegatedString)],
+			   XMLNegated).
 
 generate_xml_is_overmatch(IsOverMatch, XMLIsOverMatch) :-
 	atom_codes(IsOverMatch, IsOverMatchString),

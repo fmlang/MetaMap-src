@@ -37,6 +37,8 @@
 	compare_utterance_lengths/2,
 	compute_sum/3,
 	conditionally_print_end_info/0,
+	conditionally_skr_begin_write/2,
+	conditionally_skr_end_write/2,
 	conditionally_print_header_info/4,
 	debug_call/2,
 	debug_message/3,
@@ -46,7 +48,6 @@
  	ensure_number/2,
  	expand_split_word_list/2,
 	fatal_error/2,
-	force_to_atoms/2,
 	generate_aa_term/2,
 	generate_bracketed_output/2,
 	generate_candidates_output/7,
@@ -65,6 +66,7 @@
 	replace_crs_with_blanks/4,
 	replace_blanks_with_crs/4,
 	send_message/2,
+	set_message/5,
 	skr_begin_write/1,
 	skr_end_write/1,
 	% must be exported for mm_print
@@ -86,7 +88,7 @@
     ]).
 
 :- use_module(metamap(metamap_variants), [
-	write_all_variants/1
+	write_all_variants/4
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -94,10 +96,15 @@
     ]).
 
 :- use_module(metamap(metamap_utilities), [
+	candidate_term/16,
 	dump_aphrase_mappings/2,
 	dump_evaluations_indented/6,
 	num_dump_evaluations_indented/6,
 	write_list_indented/1
+    ]).
+
+:- use_module(skr_lib(negex), [
+	default_negex_semtypes/1
     ]).
 
 :- use_module(skr_lib(nls_strings), [
@@ -177,10 +184,11 @@
 	append/2,
 	last/2,
 	selectchk/3
-    ]).
+   ]).
 
 :- use_module(library(sets), [
-	intersection/3
+	intersection/3,
+	subtract/3
     ]).
 
 :- use_module(library(system), [
@@ -351,28 +359,29 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_sources_values(SourcesValues),
 	verify_semantic_type_options(SemTypeOptions),
 	verify_semantic_type_values(SemTypeValues),
-	verify_gap_size_values(GapSizeValues),
+	% verify_gap_size_values(GapSizeValues),
 	verify_acros_abbrs_settings(AcrosAbbrsSettings),
 	verify_derivational_variants_settings(DerivationalVariantsSettings),
 	verify_tagger_server_settings(TaggerServerSettings),
 	verify_WSD_server_settings(WSDServerSettings),
 	verify_pruning_settings(PruningSettings),
 	verify_sldi_settings(SLDISettings),
+	verify_negex_settings(NegExSettings),
 	verify_all_results([TaggerOutputSettings, SingleOutputFormat,
 			    XMLSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
-			    SemTypeOptions, SemTypeValues, GapSizeValues,
+			    SemTypeOptions, SemTypeValues, % GapSizeValues,
 			    AcrosAbbrsSettings, DerivationalVariantsSettings,
 			    TaggerServerSettings, WSDServerSettings,
-			    PruningSettings, SLDISettings],
+			    PruningSettings, SLDISettings, NegExSettings],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, DefaultRelease).
 
 verify_model_settings :-
 	( control_option(strict_model),
 	  control_option(relaxed_model) ->
-	  send_message('WARNING: Both strict_model and relaxed_model have been specified.~n', []),
-	  send_message('         The strict_model will be used.~n', [])
+	  send_message('~n### WARNING: Both strict_model and relaxed_model have been specified.~n', []),
+	  send_message('The strict_model will be used.~n', [])
 	; true
 	).
 
@@ -381,8 +390,8 @@ verify_model_settings :-
 verify_tagger_output_settings(Result) :-
 	( control_option(tagger_output),
 	  control_option(formal_tagger_output) ->
-	  send_message('FATAL ERROR: Only one of --tagger_output and~n', []),
-	  send_message('                         --formal_tagger_output can be specified.~n', []),
+	  send_message('~n### MetaMap ERROR: Only one of --tagger_output and ', []),
+	  send_message('--formal_tagger_output can be specified.~n', []),
 	  Result is 1
 	; Result is 0
 	).
@@ -391,8 +400,8 @@ verify_tagger_output_settings(Result) :-
 verify_single_output_format(Result) :-
 	( control_option(machine_output),
 	  xml_output_format(XMLFormat) ->
-	  send_message('FATAL ERROR: Only one of --machine_output and~n', []),
-	  send_message('                         --~w can be specified.~n', [XMLFormat]),
+	  send_message('~n### MetaMap ERROR: Only one of --machine_output and ', []),
+	  send_message('--~w can be specified.~n', [XMLFormat]),
 	  Result is 1
 	; Result is 0
 	).
@@ -429,8 +438,8 @@ verify_mmi_settings(0).
 verify_sources_options(Result) :-
 	( control_option(restrict_to_sources),
 	  control_option(exclude_sources) ->
-	  send_message('FATAL ERROR: Only one of --restrict_to_sources and~n', []),
-	  send_message('                         --exclude_sources     can be specified.~n', []),
+	  send_message('~n### MetaMap ERROR: Only one of --restrict_to_sources and ', []),
+	  send_message('--exclude_sources can be specified.~n', []),
 	  Result is 1
 	; Result is 0
 	).
@@ -451,10 +460,78 @@ verify_sources_values(0).
 verify_semantic_type_options(Result) :-
 	( control_option(restrict_to_sts),
 	  control_option(exclude_sts) ->
-	  send_message('FATAL ERROR: Only one of --restrict_to_sts and~n', []),
-	  send_message('                         --exclude_sts     can be specified.~n', []),
+	  send_message('~n### MetaMap ERROR: Only one of --restrict_to_sts and ', []),
+	  send_message('--exclude_sts can be specified.~n', []),
 	  Result is 1
 	; Result is 0
+	).
+
+% Error if any of negex_st_add, negex_st_del, negex_st_set is set and invalid ST is specified.
+% Each of those three options, if set, contributes 1 to Total.
+% If Total > 1, more than one of the three options has been set,
+% so declare a fatal error.
+verify_negex_settings(Result) :-
+	% If the user has specified negex_st_add,
+	( control_value(negex_st_add, SemTypesToAdd0) ->
+	  sort(SemTypesToAdd0, SemTypesToAdd1),
+	  % remove all and 'ALL' from the SemTypes
+	  subtract(SemTypesToAdd1, [all,'ALL'], SemTypesToAdd),
+	  % and verify that all remaining specified SemTypes are valid.
+	  % verify_sts/1 will throw a fatal error if an invalid ST is found.
+	  verify_sts(SemTypesToAdd),
+	  verify_useless_sts(add, SemTypesToAdd),
+	  ADD is 1
+	; ADD is 0
+	),
+	( control_value(negex_st_del, SemTypesToDel0) ->
+	  sort(SemTypesToDel0, SemTypesToDel),
+	  verify_all_del(SemTypesToDel),
+	  verify_sts(SemTypesToDel),
+	  verify_useless_sts(del, SemTypesToDel),
+	  DEL is 1
+	; DEL is 0
+	),
+	( control_value(negex_st_set, SemTypesToSet0) ->
+	  subtract(SemTypesToSet0, [all,'ALL'], SemTypesToSet),
+	  verify_sts(SemTypesToSet),
+	  SET is 1
+	; SET is 0
+	),
+	% Do not allow SET along with either ADD or DEL
+	( 1 is SET /\ ( ADD \/ DEL ) ->
+	  send_message('~n### MetaMap ERROR: --negex_st_set cannot be combined ', []),
+	  send_message('with either --negex_st_add or --negex_st_del.~n', []),
+	  Result is 1
+	; Result is 0
+	).
+
+verify_all_del(SemTypesToDel) :-
+	intersection(SemTypesToDel, [all,'ALL'], Intersection),
+	( Intersection = [_|_] ->
+	  fatal_error('"all" and "ALL" cannot be used with negex_st_del~n.', [])
+	; true
+	).
+
+verify_useless_sts(add, SemTypesToAdd) :-
+	default_negex_semtypes(DefaultNegExSemTypes),
+	intersection(SemTypesToAdd, DefaultNegExSemTypes, Intersection),
+	( Intersection \== [] ->
+	  set_message(Intersection, PluralIndicator, Verb, Pronoun, Determiner),
+	  send_message('~n### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
+		       [PluralIndicator,Intersection,Verb,Determiner,PluralIndicator]),
+	  send_message('             Adding ~w has no effect.~n', [Pronoun])
+	; true
+	).
+verify_useless_sts(del, SemTypesToAdd) :-
+	default_negex_semtypes(DefaultNegExSemTypes),
+	subtract(SemTypesToAdd, DefaultNegExSemTypes, LeftOvers),
+	( LeftOvers \= [] ->
+	  set_message(LeftOvers, PluralIndicator, Verb, Pronoun, Determiner),
+	  send_message('~n### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
+		       [PluralIndicator,LeftOvers,Verb,Determiner,PluralIndicator]),
+	  send_message('             Deleting ~w has no effect.~n', [Pronoun])
+
+	; true
 	).
 
 % Error if either restrict_to_sts and exclude_sts is set and invalid ST is specified
@@ -469,31 +546,31 @@ verify_semantic_type_values(Result) :-
 	).
 verify_semantic_type_values(0).
 
-% Error if invalid gap size is specified (obsolete)
-verify_gap_size_values(Result) :-
-	control_value(gap_size, GapSize),
-	!,
-	( verify_gap_size_values_aux(GapSize) ->
-	  Result is 0
-	; send_message('FATAL ERROR: gap_size argument must be of form Int1,Int2 ', []),
-	  send_message('with Int1 >= Int2+2~n', []),
-	  Result is 1
-	).
-verify_gap_size_values(0).
-
-verify_gap_size_values_aux(GapSize) :-
-	GapSize = [MinPhraseLength, MaxGapSize],
-	integer(MinPhraseLength),
-	integer(MaxGapSize),
-	MinPhraseLength >= MaxGapSize + 2.
+%%% % Error if invalid gap size is specified (obsolete)
+%%% verify_gap_size_values(Result) :-
+%%% 	control_value(gap_size, GapSize),
+%%% 	!,
+%%% 	( verify_gap_size_values_aux(GapSize) ->
+%%% 	  Result is 0
+%%% 	; send_message('gap_size argument must be of form Int1,Int2 ', []),
+%%% 	  send_message('with Int1 >= Int2+2~n', []),
+%%% 	  Result is 1
+%%% 	).
+%%% verify_gap_size_values(0).
+%%% 
+%%% verify_gap_size_values_aux(GapSize) :-
+%%% 	GapSize = [MinPhraseLength, MaxGapSize],
+%%% 	integer(MinPhraseLength),
+%%% 	integer(MaxGapSize),
+%%% 	MinPhraseLength >= MaxGapSize + 2.
 
 
 % Error if both all_acros_abbrs and unique_acros_abbrs_only are set
 verify_acros_abbrs_settings(Result) :-
 	( control_option(all_acros_abbrs),
 	  control_option(unique_acros_abbrs_only) ->
-	  send_message('FATAL ERROR: Only one of --all_acros_abbrs         and~n', []),
-	  send_message('                         --unique_acros_abbrs_only can be specified.~n', []),
+	  send_message('~n### MtaMap ERROR: Only one of --all_acros_abbrs and ', []),
+	  send_message('--unique_acros_abbrs_only can be specified.~n', []),
 	  Result is 1
 	; Result is 0
 	).			    
@@ -503,8 +580,8 @@ verify_acros_abbrs_settings(Result) :-
 verify_derivational_variants_settings(Result) :-
 	( control_option(all_derivational_variants),
 	  control_option(no_derivational_variants) ->
-	  send_message('FATAL ERROR: Only one of --all_derivational_variants and~n', []),
-	  send_message('                         --no_derivational_variants  can be specified.~n', []),
+	  send_message('~n### MetaMap ERROR: Only one of --all_derivational_variants and ', []),
+	  send_message('--no_derivational_variants can be specified.~n', []),
 	  Result is 1
 	; Result is 0
 	).			    
@@ -513,9 +590,8 @@ verify_derivational_variants_settings(Result) :-
 verify_tagger_server_settings(Result) :-
 	( control_option(no_tagging),
 	  control_value(tagger, ChosenTaggerServer) ->
-	  send_message('FATAL ERROR: If no_tagging is specified~n', []),
-	  send_message('             a specific tagger (~s) cannot be chosen.~n',
-		       [ChosenTaggerServer]),
+	  send_message('~n### MetaMap ERROR: If no_tagging is specified, ', []),
+	  send_message('a specific tagger (~s) cannot be chosen.~n', [ChosenTaggerServer]),
 	  Result is 1
 	; Result is 0
 	).
@@ -524,9 +600,8 @@ verify_tagger_server_settings(Result) :-
 verify_WSD_server_settings(Result) :-
 	( \+ control_option(word_sense_disambiguation),
 	  control_value('WSD', ChosenWSDServer) ->
-	  send_message('FATAL ERROR: If WSD is not specified,~n', []),
-	  send_message('             a specific WSD server (~s) cannot be chosen.~n',
-		       [ChosenWSDServer]),
+	  send_message('~n### MetaMap ERROR: If WSD is not specified, ', []),
+	  send_message('a specific WSD server (~s) cannot be chosen.~n', [ChosenWSDServer]),
 	  Result is 1
 	; Result is 0
 	).			    
@@ -535,7 +610,7 @@ verify_WSD_server_settings(Result) :-
 verify_pruning_settings(Result) :-
 	( control_value(prune, _),
 	  control_option(no_prune) ->
-	  send_message('FATAL ERROR: Cannot specify --prune and --no_prune.~n', []),
+	  send_message('## MetaMap ERROR: Cannot specify --prune and --no_prune.~n', []),
 	  Result is 1
 	; Result is 0
 	).			    
@@ -545,7 +620,7 @@ verify_pruning_settings(Result) :-
 verify_sldi_settings(Result) :-
 	( control_option(sldi),
 	  control_option(sldiID) ->
-	  send_message('FATAL ERROR: Cannot specify --sldi and --sldiID.~n', []),
+	  send_message('~n### MetaMap ERROR: Cannot specify --sldi and --sldiID.~n', []),
 	  Result is 1
 	; Result is 0
 	).			    
@@ -563,8 +638,8 @@ verify_all_results(ValuesList, InputStream, OutputStream) :-
 warning_check([], _OutputOption).
 warning_check([WarningOption|RestOptions], OutputOption) :-
 	( control_option(WarningOption) ->
-	  send_message('WARNING: The ~w option has no effect on ~w output.~n',
-		       [WarningOption, OutputOption])
+	  send_message('~n### WARNING: The ~w option has no effect on ~w output.~n',
+		       [WarningOption,OutputOption])
 	; true
 	),
 	warning_check(RestOptions, OutputOption).
@@ -573,7 +648,7 @@ warning_check([WarningOption|RestOptions], OutputOption) :-
 fatal_error_check([], _OutputOption, Result, Result).
 fatal_error_check([FatalErrorOption|RestOptions], OutputOption, ResultIn, ResultOut) :-
 	( control_option(FatalErrorOption) ->
-	  send_message('FATAL_ERROR: The ~w option cannot be used with ~w output.~n',
+	  send_message('~n### MetaMap ERROR: The ~w option cannot be used with ~w output.~n',
 		       [FatalErrorOption, OutputOption]),
 	  ResultNext is 1
 	; ResultNext is ResultIn
@@ -721,8 +796,8 @@ do_formal_tagger_output :-
 	; true
 	).
 
-generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length, ReplacementPos,
-		       BracketedOutput, PhraseMMO) :-
+generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length,
+		       ReplacementPos, BracketedOutput, PhraseMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
         ( ( control_option(machine_output)
 	  ; xml_output_format(_XMLFormat)
@@ -766,22 +841,37 @@ generate_bracketed_output(BracketedOutput, PhraseWordInfo) :-
 	; true
 	).
 
-generate_variants_output(GVCs, BracketedOutput) :-
+
+generate_variants_output([], _BracketedOutput).
+generate_variants_output([GVC|RestGVCs], BracketedOutput) :-
+	AllGVCs = [GVC|RestGVCs],
 	( control_option(variants) ->
-	  ( GVCs == [] ->
-	    true
-	  ; ( BracketedOutput == 1 ->
-	      skr_begin_write('Variants')
-	    ; format('~n', [])
-	    ),
-	    write_all_variants(GVCs),
-	    ( BracketedOutput == 1 ->
-	      skr_end_write('Variants')
-	    ; true
-	    )
+	  ( BracketedOutput == 1 ->
+	    skr_begin_write('Variants')
+	  ; format('~n', [])
+	  ),
+	  compute_varnum_length(AllGVCs, MaxNumDigits),
+	  write_all_variants(AllGVCs, MaxNumDigits, 1, _FinalCount),
+	  ( BracketedOutput == 1 ->
+	    skr_end_write('Variants')
+	  ; true
 	  )
 	; true
 	).
+
+% Count how many variants are in all the GVCs, and then
+% compute the number of digits in that number
+% (i.e., the length of the character representation of the integer).
+compute_varnum_length(AllGVCs, NumDigits) :-
+	  (  foreach(gvc(_G,Vs,_Cs), AllGVCs),
+	     fromto(0, SumIn, SumNext, VariantTotal)
+	  do length(Vs, Length),
+	     SumNext is SumIn + Length
+	  ),
+	  number_codes(VariantTotal, VariantTotalCodes),
+	  length(VariantTotalCodes, NumDigits).
+
+
 
 generate_candidates_output(Evaluations3, TotalCandidateCount,
 			   ExcludedCandidateCount, PrunedCandidateCount,
@@ -796,11 +886,11 @@ generate_candidates_output(Evaluations3, TotalCandidateCount,
 				     RemainingCandidateCount,Evaluations3)
 	; \+ control_option(hide_candidates),
 	  Evaluations3 \== [] ->
-	  conditionally_skr_begin_write(BracketedOutput),
+	  conditionally_skr_begin_write(BracketedOutput, 'Candidates'),
 	  conditionally_dump_evals(Evaluations3, TotalCandidateCount,
 				   ExcludedCandidateCount, PrunedCandidateCount,
 				   RemainingCandidateCount),
-	  conditionally_skr_end_write(BracketedOutput)
+	  conditionally_skr_end_write(BracketedOutput, 'Candidates')
 	; true
 	).
 
@@ -813,15 +903,15 @@ test_generate_candidate_output_control_options :-
 	).
 
 
-conditionally_skr_begin_write(BracketedOutput) :-
-	( BracketedOutput == 1 ->
-	  skr_begin_write('Candidates')
+conditionally_skr_begin_write(BracketedOutput, Message) :-
+	( BracketedOutput =:= 1 ->
+	  skr_begin_write(Message)
 	; true
 	).
 
-conditionally_skr_end_write(BracketedOutput) :-
-	( BracketedOutput == 1 ->
-	  skr_end_write('Candidates')
+conditionally_skr_end_write(BracketedOutput, Message) :-
+	( BracketedOutput =:= 1 ->
+	  skr_end_write(Message)
 	; true
 	).
 
@@ -1066,12 +1156,12 @@ write_MMO_candidate_list([Next|Rest], ThisCandidateTerm) :-
 
 % Simply hide the LSComponents and TargetLSComponent terms
 write_MMO_candidate_term(CandidateTerm) :-
-	CandidateTerm = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-			   MatchMap,_LSComponents,_TargetLSComponent,
-			   InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status),
-	format('ev(~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q)',
+	candidate_term(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
+		       MatchMap,_LSComponents,_TargetLSComponent,InvolvesHead,
+		       IsOvermatch,UniqueSources,PosInfo,Status,Negated,CandidateTerm),
+	format('ev(~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q)',
 	       [NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
-		MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status]).
+		MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status,Negated]).
 
 write_mappings_MMO_component(MappingsTerm) :-
 	MappingsTerm = mappings(MappingsList),
@@ -1258,14 +1348,6 @@ ensure_number(Atom, Number) :-
 	  number_codes(Number, AtomCodes)
 	).
 
-force_to_atoms([], []).
-force_to_atoms([H|T], [AtomH|AtomsT]) :-
-	% term_to_chars/2 will not work here, because "ii-server5" will become "-(ii,server5)"
-	% term_to_chars(H, CharsH),
-	with_output_to_codes(write(H), CharsH),
-	atom_codes(AtomH, CharsH),
-	force_to_atoms(T, AtomsT).
-
 check_generate_utterance_output_control_options_1 :-
 	( control_option(machine_output)     -> true
 	; control_option(fielded_mmi_output) -> true
@@ -1316,15 +1398,13 @@ split_word('', '', '').
 
 check_valid_file_type(File, Type) :-
 	( \+ file_exists(File) ->
-	  send_message('~n~*c~nERROR: ~w file~n~w~ndoes not exist. Aborting.~n~*c~n~n',
-		       [80,0'#,Type,File,80,0'#]),
-	  abort
+	  fatal_error('~n~*c~n~w file~n~w~ndoes not exist. Aborting.~n~*c~n~n',
+		       [80,0'#,Type,File,80,0'#])
 	; true
 	),
 	( \+ file_exists(File, read) ->
-	  send_message('~n~*c~nERROR: ~q file~n~w~nis not not readable. Aborting.~n~*c~n~n',
-		       [80,0'#,Type,File,80,0'#]),
-	  abort
+	  fatal_error('~n~*c~n~q file~n~w~nis not not readable. Aborting.~n~*c~n~n',
+		      [80,0'#,Type,File,80,0'#])
 	; true
 	).
 
@@ -1336,126 +1416,88 @@ get_all_candidate_features(FeatureList, Candidate, FeatureValueList) :-
 	).
 
 get_candidate_feature(negvalue, Candidate, NegValue) :-
-	( Candidate = ev(NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-			 _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	  % This is simply for mm_print, which sees the printed representation of candidates,
-	  % which does NOT include the LSComponents and TargetLSComponents fields.
-	; Candidate = ev(NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-		       _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+	candidate_term(NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(cui, Candidate, CUI) :-
-	( Candidate = ev(_NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(metaterm, Candidate, MetaTerm) :-
-	( Candidate = ev(_NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(metaconcept, Candidate, MetaConcept) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(metawords, Candidate, MetaWords) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(semtypes, Candidate, SemTypes) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(matchmap, Candidate, MatchMap) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 MatchMap, _InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(lscomponents, Candidate, LSComponents) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(targetlscomponent, Candidate, TargetLSComponent) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(involveshead, Candidate, InvolvesHead) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,InvolvesHead,_IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(isovermatch, Candidate, IsOvermatch) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       IsOvermatch,_Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,IsOvermatch,_Sources,_PosInfo,_Status)
-	).
+		       IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(sources, Candidate, Sources) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,Sources,_PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,Sources,_PosInfo,_Status)
-	).
+		       _IsOvermatch,Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(posinfo, Candidate, PosInfo) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,PosInfo,_Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,PosInfo,_Status)
-	).
+		       _IsOvermatch,_Sources,PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(status, Candidate, Status) :-
-	( Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
-		       _IsOvermatch,_Sources,_PosInfo,Status) ->
-	  true
-	; Candidate = ev(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
-			 _MatchMap,_InvolvesHead,_IsOvermatch,_Sources,_PosInfo,Status)
-	).
-
+		       _IsOvermatch,_Sources,_PosInfo,Status,_Negated, Candidate).
+get_candidate_feature(negated, Candidate, Negated) :-
+	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
+		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
+		       _IsOvermatch,_Sources,_PosInfo,_Status,Negated, Candidate).
 fatal_error(Message, Args) :-
+	format(user_output, '~n### MetaMap ERROR: ', []),
 	format(user_output, Message, Args),
 	ttyflush,
 	current_output(OutputStream),
 	% don't duplicate message if the default output stream is user_output!
-	( stream_property(OutputStream, alias(user_output)) ->
-	  true
-	; format(Message, Args)
+	( \+ stream_property(OutputStream, alias(user_output)) ->
+	  format(OutputStream, '~n### MetaMap ERROR: ', []),
+	  format(OutputStream, Message, Args),
+	  flush_output(OutputStream)
+	; true
+	),
+	abort.
+
+set_message(SourceList, PluralIndicator, Verb, Pronoun, Determiner) :-
+	length(SourceList, Length),
+	( Length is 1 ->
+	  PluralIndicator = '',
+	  Verb = 'is',
+	  Pronoun = 'it',
+	  Determiner = ' a'
+	; PluralIndicator = 's',
+	  Verb = 'are',
+	  Pronoun = 'them',
+	  Determiner = ''
 	).
