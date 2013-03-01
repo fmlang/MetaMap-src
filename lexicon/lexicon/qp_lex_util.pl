@@ -33,7 +33,7 @@
 
 :- module(qp_lex_util, [
 	lex_get_base_from_record_3/3,
-	lex_get_spvar_from_record/2,
+	% lex_get_spvar_from_record/2,
 	lex_form_ci_ord_5/5
     ]).
 
@@ -61,7 +61,9 @@
 lex_get_base_from_record_3(Record, Categories, Base) :-
     lex_get_entries_from_record(Record, Entries),
     entries_intersect_categories(Entries, Categories),
-    Record = lexrec:[base:[Base]|_].
+    ( Record = lexrec:[base:[Base]|_]
+    ; Record = lexrec:[spelling_variants:[Base]|_]
+    ).
 
 entries_intersect_categories([Entry|_Rest], Categories) :-
     entry_intersects_categories(Entry, Categories),
@@ -81,8 +83,8 @@ get_entry_category([_|Rest], CategorySet) :-
 
 %%% lex_get_spvar_from_record(+Record, -Spvar)
 %%% Extracts the spelling variants list for a lexical record.
-lex_get_spvar_from_record(Record, Spvar) :-
-    Record = lexrec:[base:[_Base], spelling_variants:Spvar|_].
+%%% lex_get_spvar_from_record(Record, Spvar) :-
+%%%     Record = lexrec:[base:[_Base], spelling_variants:Spvar|_].
 
 %%% lex_get_entries_from_record(+Record, -Entries)
 %%% Extracts the lexical entries list for a lexical record.

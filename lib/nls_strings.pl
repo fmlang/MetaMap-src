@@ -35,7 +35,7 @@
 % Source:   strings_lra.pl
 
 
-:- module(nls_strings,[
+:- module(nls_strings, [
 	atom_codes_list/2,
 	atom_codes_list_list/2,
 	concatenate_items_to_atom/2,
@@ -73,7 +73,7 @@
     ]).
 
 
-:- use_module(metamap(metamap_tokenization),[
+:- use_module(metamap(metamap_tokenization), [
 	tokenize_text_more_lc/2
     ]).
 
@@ -81,7 +81,7 @@
         fatal_error/2
    ]).
 
-:- use_module(skr_lib(ctypes),[
+:- use_module(skr_lib(ctypes), [
 	is_alpha/1,
 	is_alnum/1,
 	is_print/1,
@@ -90,26 +90,26 @@
 	to_lower/2
     ]).
 
-:- use_module(skr_lib(nls_text),[
+:- use_module(skr_lib(nls_text), [
 	string_uninvert/2
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
+:- use_module(skr_lib(sicstus_utils), [
 	concat_strings_with_separator/3,
 	midstring/6
     ]).
 
-:- use_module(lexicon(lexical),[
+:- use_module(lexicon(lexical), [
 	concatenate_strings/3
     ]).
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	append/2,
 	maplist/3,
 	rev/2
     ]).
 
-:- use_module(library(lists3),[
+:- use_module(library(lists3), [
 	substitute/4
     ]).
 

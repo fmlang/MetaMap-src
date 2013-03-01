@@ -85,20 +85,18 @@ foreign(c_dm_variants, c, c_dm_variants(+string, +term, -term, [-integer])).
 dm_variants(Term, Cats, LexiconServerStream, Var) :-
 	dm_variants_LEXACCESS_TOGGLE(Term, Cats, LexiconServerStream, Var).
 
-dm_variants_LEXACCESS_TOGGLE(Term, Cats, LexiconServerStream, Var) :-
+dm_variants_LEXACCESS_TOGGLE(Term, Cats, LexiconServerStream, VarList) :-
 	( control_value(lexicon, c) ->
-	  get_all_cats_if_necessary(Cats, AllCats),
-	  c_dm_variants(Term, AllCats, Var1, 1)
- 	; control_value(lexicon, java) ->
- 	  lexAccess_get_dm_variants_by_category(Term, Cats, LexiconServerStream, Var1)
-	; fatal_error('lexicon setting must be either c or java!~n', [])
-	),
-	reformat_dm_list(Var1, Var2),
-	rev(Var2, Var).
+	  c_dm_variants(Term, Cats, VarList0, 1),
+	  (  foreach(V0, VarList0),
+	     foreach(V,  VarList)
+	  do functor(V0, LexicalItem, 1),
+	     arg(1, V0, LexicalCategory),
+	     V = LexicalItem:[cat:[LexicalCategory]]
+	  )     
+ 	; lexAccess_get_dm_variants_by_category(Term, Cats, LexiconServerStream, VarList)
+	).
 
-get_all_cats_if_necessary([],             [adj, adv, noun, verb]).
-get_all_cats_if_necessary([Cat|RestCats], [Cat|RestCats]).
- 
 %%% changes Term(Cat) to Term:[cat:[Cat]]
 reformat_dm_list([], []).
 reformat_dm_list([F|R], [X|Y]) :-

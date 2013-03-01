@@ -198,7 +198,6 @@ is_control_option(metamap,   z, term_processing, 		no, none).
 is_control_option(metamap,  '', debug, 			 	no,
                   aspec(debug, mandatory, list, none, no_default, 'Debugging settings')).
 is_control_option(metamap,  '', help, 		 	 	no, none).
-% is_control_option(metamap,  '', longest_lexicon_match, 	 	no, none).
 is_control_option(metamap,  '', negex,		 	 	no, none).
 is_control_option(metamap,  '', negex_st_add, 		 	no,
                   aspec(negex_st_add, mandatory, list, none, no_default, 'SemTypes to add to NegEx')).
@@ -214,7 +213,6 @@ is_control_option(metamap, '', 'LEXICON_SERVER', no,
                   aspec('LEXICON_SERVER', mandatory, none, none, no_default,
                         'Which lexicon server to use')).
 		  
-is_control_option(metamap,  '', list,		 	 	no, none).
 is_control_option(metamap,  '', silent,		 	 	no, none).
 is_control_option(metamap,  '', aas_only,                	no, none).
 % is_control_option(metamap,  '', max_ambiguity,	 	 no,
@@ -249,13 +247,11 @@ is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLn1',		 	no, none).
 
+is_control_option(metamap,  '', 'allcats',		 	no, none).
+
 is_control_option(metamap,  '', lexicon, no,
                    aspec(lexicon, mandatory, none, none, no_default,
                          'Use C code or Java version of lexicon')).
-
-is_control_option(metamap,  '', javalex, no,
-                   aspec(javalex, mandatory, integer, none, no_default,
-                         'Year of lexAccess to use (2010 or 2011)')).
 
 is_control_option(metamap,  '', map_thresh, no,
                    aspec(map_thresh, mandatory, none, none, no_default,
@@ -264,55 +260,6 @@ is_control_option(metamap,  '', map_thresh, no,
 % Bypass lexical lookup
 is_control_option(metamap,  '', 'no_lex',		 	no, none).
 		   
-
-
-% is_control_option(metamap,  '', clfi, no,
-%                   aspec(clfi, mandatory, 'c or java', none, no_default,
-%                         'Whether to use original C code or lexAccess version of lex_form_input')).
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% MetaMap %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-is_control_option(usemrep,   b, debug_format,                no,  none).
-is_control_option(usemrep,   d, dbase_format,                no,  none).
-is_control_option(usemrep, 'D', dimitar_format,              no,  none).
-is_control_option(usemrep, 'E', eot_mode,                    no,  none).
-is_control_option(usemrep,   e, evaluation_format,           no,  none).
-is_control_option(usemrep, 'F', flag_interesting_semtypes,   no,  none).
-is_control_option(usemrep,   g, force_genetics_processing,   no,  none).
-is_control_option(usemrep, 'G', genetics_processing,         no,  none).
-is_control_option(usemrep,   h, help,                        no,  none).
-is_control_option(usemrep,   i, info,                        no,  none).
-is_control_option(usemrep, 'J', no_jdi_filter,               no,  none).
-is_control_option(usemrep, 'L', longest_lexicon_match,       no,  none).
-is_control_option(usemrep,   m, mmofile,                     no,
-                  aspec(mmofile,mandatory,file,read,no_default,'MMO file')).
-% -o program: Run another program, program in {mca, phrasex, tgp}
-is_control_option(usemrep, 'o', other_program,               no,
-    aspec(other_program, mandatory,none,none, no_default,'Program to run')).
-is_control_option(usemrep, 'p', prolog_format,               no,  none).
-is_control_option(usemrep, 'P', prompt_for_more,             no,  none).
-is_control_option(usemrep, 'Q', add_MMO_filename,            no,  none).
-is_control_option(usemrep,   r, respect_whitespace,          yes, none).
-% 'R' and 'Y', and 'W' and 'Z', options work together.
-is_control_option(usemrep, 'R', read_smo_data,               no,  none).
-is_control_option(usemrep,   s, semantic_analysis,           yes, none).
-is_control_option(usemrep, 'S', generic_processing,          no,  none).
-is_control_option(usemrep, 'T', tag,                         yes, none).
-is_control_option(usemrep,   w, warnings,                    no,  none).
-is_control_option(usemrep, 'W', write_smo_data,              no,  none).
-is_control_option(usemrep,   x, syntactic_analysis,          yes, none).
-is_control_option(usemrep, 'X', debug_call,                  no,
-                  aspec(debug_call,mandatory,integer,none,no_default,debug_call)).
-
-is_control_option(usemrep,   y, write_syntax,                no,  none).
-is_control_option(usemrep, 'Y', read_smo_file,               no,
-    aspec(read_smo_file, mandatory,file, read, no_default,'SMO file')).
-is_control_option(usemrep, 'Z', write_smo_file,              no,
-    aspec(write_smo_file, mandatory,file, write,no_default,'SMO file')).
-is_control_option(usemrep,   z, time,                        no,  none).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Other programs %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

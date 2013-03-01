@@ -55,7 +55,8 @@
 	lex_is_a_root_ci/1,	% root form, case insensitive
 	lex_is_a_root_ci_cats/2,
 	lex_is_a_form_ci/1,	% lexical form, case insensitive
-	lex_form_ci_recs_input_7_LEXACCESS_TOGGLE/7,
+	% lex_form_ci_recs_input_7_LEXACCESS_TOGGLE/7,
+	lex_form_ci_recs_input_6/6,
         lex_init/2,
 	default_lexicon_file/1,
 	default_index_file/1,
@@ -64,14 +65,13 @@
 
 :- use_module(skr(testlvg),[
 	lexAccess_find_prefix/3,
-	lexAccess_find_subterms/3,
+	% lexAccess_find_subterms/3,
 	get_all_lexical_records/3,
- 	lexAccess_get_lex_form_cats/3,
  	lexAccess_get_varlist_for_form/4
    ]).
 
 :- use_module(lexicon(qp_fm_lexrec), [
-	fm_lexical_record/3
+	fm_lexical_record/4
    ]).
 
 :- use_module(lexicon(qp_recio), [
@@ -250,18 +250,19 @@ conditionally_announce_lexicon(Lexicon) :-
 
  %%% Retrieve records given root form
 
-lex_form_ci_recs(Form, LexiconServerStream, LexicalRecords) :-
-	lex_form_ci_recs_LEXACCESS_TOGGLE(Form, LexiconServerStream, LexicalRecords).
-
-lex_form_ci_recs_LEXACCESS_TOGGLE(Form, LexiconServerStream, LexicalRecords) :-
-	( control_value(lexicon, c) ->
+lex_form_ci_recs(Form, _LexiconServerStream, LexicalRecords) :-
 	  default_lexicon_file(Lexicon),
 	  default_index_file(Index),
-	  lex_recs(form, Form, LexicalRecords, 1, 0, Lexicon, Index)
-	; control_value(lexicon, java) ->
-	  get_all_lexical_records([Form], LexiconServerStream, LexicalRecords)
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
-	).
+	  lex_recs(form, Form, LexicalRecords, 1, 0, Lexicon, Index).
+
+
+%%% lex_form_ci_recs_LEXACCESS_TOGGLE(Form, LexiconServerStream, LexicalRecords) :-
+%%% 	( control_value(lexicon, c) ->
+%%% 	  default_lexicon_file(Lexicon),
+%%% 	  default_index_file(Index),
+%%% 	  lex_recs(form, Form, LexicalRecords, 1, 0, Lexicon, Index).
+%%% 	  get_all_lexical_records([Form], LexiconServerStream, LexicalRecords)
+%%% 	).
 
 %%% Retrieves category given root form
 
@@ -292,10 +293,8 @@ lex_form_ci_var_lists_5(Form, Lexicon, Index, LexiconServerStream, VarLists) :-
 lex_form_ci_var_lists_5_LEXACCESS_TOGGLE(Form, Lexicon, Index, LexiconServerStream, VarLists) :-
 	( control_value(lexicon, c) ->
 	  lex_var_lists(form, Form, VarLists, 1, Lexicon, Index)
-	; control_value(lexicon, java) ->
-	  lexAccess_get_varlist_for_form(Form, LexiconServerStream, VarLists0, []),
+	; lexAccess_get_varlist_for_form(Form, LexiconServerStream, VarLists0, []),
 	  VarLists = [VarLists0]
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
 	).
 
 %%% generic record retrieval predicate
@@ -309,7 +308,12 @@ lex_recs(form, Form, Rec, LowerFlag, FlushFlag, Lexicon, Index) :-
 lex_cats(form, Form, Cats, LowerFlag, Index) :-
 	LexiconType = 0,
 	% LexiconType = 0,
-	c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1).
+	% This is now in an if-then-else because we no longer test for
+	% is_a_form/1 in metamap_variants.pl
+	( c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1) ->
+	  true
+	; Cats = []
+	).
 	% format(user_output, '~q~n', [c_lex_form_cats(Index, Form, LexiconType, LowerFlag, Cats, 1)]).
 
 %%% generic variant retrieval predicate
@@ -396,20 +400,22 @@ lex_is_a_root_ci_cats_3(Root, Cats, Index) :-
 	LexiconType = 0,
 	c_lex_is_a_root_cats(Index, Root, LexiconType, 1, Cats, 1).
 
-lex_form_ci_recs_input_7_LEXACCESS_TOGGLE(Input, Recs, Remaining, TagList,
-					  LexiconServerStream, Lexicon, Index) :-
-	( control_value(lexicon, c) ->
+% lex_form_ci_recs_input_7_LEXACCESS_TOGGLE(Input, Recs, Remaining, TagList,
+% 					  LexiconServerStream, Lexicon, Index) :-
+% 	( control_value(lexicon, c) ->
+% 	  lex_form_ci_recs_input_6_C(Input, OldRecs, OldRemaining, TagList, Lexicon, Index),
+% 	  Recs = OldRecs,
+% 	  Remaining = OldRemaining.
+%  	; lex_form_ci_recs_input_7_JAVA(Input, NewRecs, NewRemaining, TagList,
+%  					LexiconServerStream, Lexicon, Index),
+%  	  Recs = NewRecs,
+%  	  Remaining = NewRemaining
+% 	).
+
+lex_form_ci_recs_input_6(Input, Recs, Remaining, TagList, Lexicon, Index) :-
 	  lex_form_ci_recs_input_6_C(Input, OldRecs, OldRemaining, TagList, Lexicon, Index),
 	  Recs = OldRecs,
-	  Remaining = OldRemaining
-	; control_value(lexicon, java) ->
-	  lex_form_ci_recs_input_7_JAVA(Input, NewRecs, NewRemaining, TagList,
-					LexiconServerStream, Lexicon, Index),
-	  Recs = NewRecs,
-	  Remaining = NewRemaining
-	; fatal_error('Must specify lexicon setting (c or java).~n', []),
-	  abort
-	).
+	  Remaining = OldRemaining.
 
 lex_form_ci_recs_input_6_C(Input, OrigRecs, OrigRemaining, TagList, Lexicon, Index) :-
 	LexiconType = 0,
@@ -418,6 +424,11 @@ lex_form_ci_recs_input_6_C(Input, OrigRecs, OrigRemaining, TagList, Lexicon, Ind
 	get_best_match(SortedMatches, BestMatch),
 	BestMatch = match(OrigLexMatch, OfsList, BestLength),
 	get_records_from_offsets(OfsList, OrigLexRecs, Lexicon),
+	% (  foreach(LexRec, OrigLexRecs)
+  	% do LexRec = lexrec:List,
+	%    memberchk(entries:[entry:[num:[EUI]|_]|_], List),
+	%    format('### LEX    lex_rec:~w~n', [EUI])
+	% ),			      
 	skip_n_tokens(BestLength, Input, OrigInputMatch0, OrigRemaining),
 	re_attach_apostrophe_s_to_prev_word(OrigInputMatch0, TagList, OrigInputMatch),
 	% re-glue the apostrophe-s in OrigInputMatch?
@@ -451,12 +462,6 @@ lex_form_ci_recs_input_7_JAVA(InputTokenList, LexRecs, RemainingTokens, TagList,
 			   records:AllLexicalEntries].
 
 
-get_all_lexmatches([], LexMatches, LexMatches).
-get_all_lexmatches([H|T], [LCLexMatch-LCLexMatch|LexMatcheNext], LexMatchesOut) :-
-	H = _NegConsumedTokenCount-LexMatch-_EUIList,
-	lower(LexMatch, LCLexMatch),
-	get_all_lexmatches(T, LexMatcheNext, LexMatchesOut).
-
 %%% gets the best match, and collapses all offsets
 get_best_match([FirstMatch|RestMatches], N) :-
 	FirstMatch = match(Type, Term, Ofs, Length),
@@ -488,7 +493,7 @@ skip_n_tokens(N, List, Tokens, Remaining) :-
 get_records_from_offsets([], [], _Lexicon).
 get_records_from_offsets([Ofs|R], [X|Y], Lexicon) :-
 	read_lex_record(Lexicon, Ofs, Rec),
-	fm_lexical_record(X, Rec, []),
+	fm_lexical_record(X, _EUI, Rec, []),
 	get_records_from_offsets(R, Y, Lexicon).
 
 %%% sort_matches(+In, -Out)

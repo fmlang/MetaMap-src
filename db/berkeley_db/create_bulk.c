@@ -53,8 +53,8 @@ void process_db(char *input_file);
 
 DBT key, content;
 DB *db = NULL;
-char config_file[MAXLINE];
-char database_home[MAXLINE];
+char config_file[MAXLINE + 1];
+char database_home[MAXLINE + 1];
 
 int NUM_TABLES;
 int first_flag = TRUE;
@@ -63,7 +63,7 @@ struct config_struct **config_info;
 int main()
 
 {
-  char input_file[MAXLINE];
+  char input_file[MAXLINE + 1];
   int i;
 
   /* Initialize environment dependant variables */
@@ -123,7 +123,7 @@ int main()
 void get_value_from_field(int pos, char *term, char *line)
 {
     int i;
-    char tmp1[MAXLINE], tmp2[MAXLINE];
+    char tmp1[MAXLINE + 1], tmp2[MAXLINE + 1];
 
     strcpy(tmp1, line);
     for(i = 0; i < pos; i++)
@@ -137,7 +137,7 @@ void get_value_from_field(int pos, char *term, char *line)
 
 void setup_db(char *database_home, char *index_file)
 {
-    char database[MAXLINE];
+    char database[MAXLINE + 1];
 
     /* Remove any existing db first */
 
@@ -165,8 +165,8 @@ void setup_db(char *database_home, char *index_file)
 void process_db(char *input_file)
 {
     FILE *fp = NULL;
-    char line[MAXLINE];
-    char term[MAXLINE];
+    char line[MAXLINE + 1];
+    char term[MAXLINE + 1];
     long term_counter = 0;
     int status = 0;
     int len;
@@ -243,10 +243,10 @@ void process_db(char *input_file)
 void parse_config_line()
 {
    FILE *fp;
-   char line[MAXLINE];
+   char line[MAXLINE + 1];
    int num_fields, i;
    int pos;
-   char tmp[MAXLINE], tmp2[MAXLINE], tmp3[5];
+   char tmp[MAXLINE + 1], tmp2[MAXLINE + 1], tmp3[5];
 
    if ((fp = fopen(config_file,"r")) == NULL)
    {
@@ -310,13 +310,20 @@ void parse_config_line()
       } /* fi */
    } /* while */
 
+   if(pos < NUM_TABLES)
+   {
+       NUM_TABLES = pos;
+       config_info = (struct config_struct **) realloc(config_info,
+                      sizeof(struct config_struct *) * (NUM_TABLES + 1));
+   } /* fi */
+
    fclose(fp);
 } /* parse_config_line */
 
 
 void Setup_Env()
 {
-  char tmp[MAXLINE];
+  char tmp[MAXLINE + 1];
   char* ptr;
   struct stat buf;
 

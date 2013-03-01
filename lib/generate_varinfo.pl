@@ -80,12 +80,14 @@ generate_variant_info_1(lexicon, LexiconServerStream,
 			[lexmatch:[LexMatch], InputMatch|_],
 			RestDefinitions, [LexMatch:ThisVarInfo|NewGap]) :-
 	!,
-	get_varlist(LexMatch, LexiconServerStream, VarInfo),
+	lower(LexMatch, LexMatchLC),
+	get_varlist(LexMatchLC, LexiconServerStream, VarInfo),
 	get_this_variant(VarInfo, LexMatch, ThisVarInfo, VariantTail),
 	% format(user_output, 'ThisVarInfo: ~q~n', [ThisVarInfo]),	
 	% append(ThisVarInfo, [InputMatch], ThisVarInfoAndInputMatch),   % Lan needs InputMatch
 	VariantTail = [InputMatch], 
 	generate_variant_info(RestDefinitions, LexiconServerStream, NewGap).
+
 % This is for shapes, punctuation, and perhaps other stuff
 generate_variant_info_1(Other, LexiconServerStream, OtherList,
 			RestDefinitions, [Other:OtherList|NewGap]) :-

@@ -33,34 +33,34 @@
 % Purpose:  Provide access to the new lexicon access facility
 
 :- module(lex_access, [
-	get_base_forms_for_form/4,
+	% get_base_forms_for_form/4,
         get_categories_for_form/3,
-	get_citation_forms_for_form_with_cats/4,
+	get_base_forms_for_form_with_cats/4,
 	get_derivational_variants_for_form/4,
 	get_spellings_and_inflections_for_form/5,
 	get_variants_for_citation_form/3,
 	get_variants_for_form/3,
 	get_varlist/3,
 	initialize_lexicon/2,
-	is_a_base_form/2,
-	is_a_base_form_with_categories/3,
-	is_a_form/2,
+	% is_a_base_form/2,
+	is_a_base_form_with_categories/2,
+	% is_a_form/2,
 	tokenize_string_for_lexical_lookup/2
     ]).
 
-:- use_module(skr(testlvg),[
-	lexAccess_get_citation_forms_for_form/3,
-	lexAccess_get_citation_forms_for_form_with_cats/4,
+:- use_module(skr(testlvg), [
+	lexAccess_get_base_forms_for_form/3,
+	lexAccess_get_base_forms_for_form_with_cats/4,
 	lexAccess_get_lex_form_cats/3,
 	get_varlist_for_all_forms/3,
-	lexAccess_get_varlist_for_citation_form/3,
-	lexAccess_get_varlist_for_form/4,
-	lexAccess_is_form/2,
-	lexAccess_is_root_form/2,
-	lexAccess_is_root_form_with_cats/3
+	% lexAccess_get_varlist_for_citation_form/3,
+	lexAccess_get_varlist_for_form/4
+	% lexAccess_is_form/2
+	% lexAccess_is_root_form/2
+	% lexAccess_is_root_form_with_cats/3
   ]).
 
-:- use_module(lexicon(qp_lexicon),[
+:- use_module(lexicon(qp_lexicon), [
 	lex_init/2,
 	lex_cit_ci_vars/2,
 	lex_form_ci_cats/2,
@@ -72,14 +72,14 @@
 	reformat_list/2
     ]).
 
-:- use_module(lexicon(qp_token),[
+:- use_module(lexicon(qp_token), [
 	tokenize_string/2
     ]).
 
-:- use_module(lexicon(qp_lex_util),[
+:- use_module(lexicon(qp_lex_util), [
 	lex_form_ci_ord_5/5,
-	lex_get_base_from_record_3/3,
-	lex_get_spvar_from_record/2
+	lex_get_base_from_record_3/3
+	% lex_get_spvar_from_record/2
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -120,7 +120,7 @@ initialize_lexicon(L,I) :-
     lex_init(L,I),
     !.
 initialize_lexicon(_L, _I) :-
-    fatal_error('Cannot connect to a lexicon.~n',[]).
+    fatal_error('Cannot connect to a lexicon.~n', []).
 
 /* tokenize_string_for_lexical_lookup(+String, -TokenLists)
 
@@ -130,56 +130,37 @@ tokenize_string_for_lexical_lookup(S,T) :-
     tokenize_string(S,T).
 
 
-is_a_form(Form, LexiconServerStream) :-
-	is_a_form_LEXACCESS_TOGGLE(Form, LexiconServerStream).
+%%% is_a_form(Form, LexiconServerStream) :-
+%%% 	is_a_form_LEXACCESS_TOGGLE(Form, LexiconServerStream).
+%%% 
+%%% is_a_form_LEXACCESS_TOGGLE(Form, LexiconServerStream) :-
+%%% 	( control_value(lexicon, c) ->
+%%% 	  % format(user_output, 'is_a_form(~q)~n', [Form]),
+%%% 	  lex_is_a_form_ci(Form)
+%%%  	; lexAccess_is_form(Form, LexiconServerStream)
+%%% 	).
 
-is_a_form_LEXACCESS_TOGGLE(Form, LexiconServerStream) :-
-	( control_value(lexicon, c) ->
-	  % format(user_output, 'is_a_form(~q)~n', [Form]),
-	  lex_is_a_form_ci(Form)
- 	; control_value(lexicon, java) ->
- 	  ( lexAccess_is_form(Form, LexiconServerStream) ->
-	    true
-	    % format(user_output, 'FORM YES: ~q~n', [Form])
-	    % ; format(user_output, 'FORM NO:  ~q~n', [Form]),
-	    ; fail
-	  )
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
-	).
+%%% is_a_base_form(Form, LexiconServerStream) :-
+%%% 	is_a_base_form_LEXACCESS_TOGGLE(Form, LexiconServerStream).
+%%% 
+%%% is_a_base_form_LEXACCESS_TOGGLE(Form, LexiconServerStream) :-
+%%% 	( control_value(lexicon, c) ->
+%%% 	  lex_is_a_root_ci(Form)
+%%%  	; lexAccess_is_root_form(Form, LexiconServerStream)
+%%% 	).	
 
-is_a_base_form(Form, LexiconServerStream) :-
-	is_a_base_form_LEXACCESS_TOGGLE(Form, LexiconServerStream).
+is_a_base_form_with_categories(Form, Categories) :-
+	  lex_is_a_root_ci_cats(Form, Categories).
 
-is_a_base_form_LEXACCESS_TOGGLE(Form, LexiconServerStream) :-
-	( control_value(lexicon, c) ->
-	  lex_is_a_root_ci(Form)
- 	; control_value(lexicon, java) ->
- 	  lexAccess_is_root_form(Form, LexiconServerStream)
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
-	).	
-
-is_a_base_form_with_categories(Form, LexiconServerStream, Categories) :-
-	is_a_base_form_with_categories_LEXACCESS_TOGGLE(Form, LexiconServerStream, Categories).
-
-is_a_base_form_with_categories_LEXACCESS_TOGGLE(Form, LexiconServerStream, Categories) :-
-	( control_value(lexicon, c) ->
-	  lex_is_a_root_ci_cats(Form, Categories)
- 	; control_value(lexicon, java) ->
- 	  lexAccess_is_root_form_with_cats(Form, LexiconServerStream, Categories)
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
-	).	
-
-get_variants_for_citation_form(CitationForm, LexiconServerStream, VarList) :-
-	get_variants_for_citation_form_LEXACCESS_TOGGLE(CitationForm, LexiconServerStream, VarList).
-
-
-get_variants_for_citation_form_LEXACCESS_TOGGLE(CitationForm, LexiconServerStream, VarList) :-
-	( control_value(lexicon, c) ->
-	  lex_cit_ci_vars(CitationForm, VarList)
- 	; control_value(lexicon, java) ->
- 	  lexAccess_get_varlist_for_citation_form(CitationForm, LexiconServerStream, VarList)
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
-	).
+%%% get_variants_for_citation_form(CitationForm, LexiconServerStream, VarList) :-
+%%% 	get_variants_for_citation_form_LEXACCESS_TOGGLE(CitationForm, LexiconServerStream, VarList).
+%%% 
+%%% 
+%%% get_variants_for_citation_form_LEXACCESS_TOGGLE(CitationForm, LexiconServerStream, VarList) :-
+%%% 	( control_value(lexicon, c) ->
+%%% 	  lex_cit_ci_vars(CitationForm, VarList)
+%%%  	; lexAccess_get_varlist_for_citation_form(CitationForm, LexiconServerStream, VarList)
+%%% 	).
 	
 % get_varlist first computes the citation form(s) for the token,
 % then computes the variants of the citation form(s).
@@ -189,12 +170,10 @@ get_varlist(LexMatch, LexiconServerStream, VarInfo) :-
 get_varlist_LEXACCESS_TOGGLE(LexMatch, LexiconServerStream, VarInfo) :-
 	( control_value(lexicon, c) ->
 	  lex_form_ci_vars(LexMatch, VarInfo)
- 	; control_value(lexicon, java) ->
-	  get_citation_forms_for_form_apostrophe_s(LexMatch, LexiconServerStream, CitationForms),
-	  sort(CitationForms, SortedCitationForms),
-	  get_varlist_for_all_forms(SortedCitationForms, LexiconServerStream, VarInfo0),
+ 	; get_base_forms_for_form_apostrophe_s(LexMatch, LexiconServerStream, BaseForms),
+	  sort(BaseForms, SortedBaseForms),
+	  get_varlist_for_all_forms(SortedBaseForms, LexiconServerStream, VarInfo0),
 	  sort(VarInfo0, VarInfo)
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
 	).
 
 % get_variants_for_form simply computes the variants of the given token,
@@ -205,9 +184,7 @@ get_variants_for_form(Form, LexiconServerStream, VarList) :-
 get_variants_for_form_LEXACCESS_TOGGLE(Form, LexiconServerStream, VarList) :-
 	( control_value(lexicon, c) ->
 	  lex_form_ci_vars(Form, VarList)
- 	; control_value(lexicon, java) ->
- 	  lexAccess_get_varlist_for_form(Form, LexiconServerStream, VarList, [])
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
+ 	; lexAccess_get_varlist_for_form(Form, LexiconServerStream, VarList, [])
 	).
 	
 get_categories_for_form(Form, LexiconServerStream, LexCats) :-
@@ -216,88 +193,83 @@ get_categories_for_form(Form, LexiconServerStream, LexCats) :-
 get_categories_for_form_LEXACCESS_TOGGLE(Form, LexiconServerStream, LexCats) :-
 	( control_value(lexicon, c) ->
 	  lex_form_ci_cats(Form, LexCats)
- 	; control_value(lexicon, java) ->
- 	  lexAccess_get_lex_form_cats(Form, LexiconServerStream, LexCats)
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
+ 	; lexAccess_get_lex_form_cats(Form, LexiconServerStream, LexCats)
 	).
 
 get_spellings_and_inflections_for_form(Term, Categories, LexiconServerStream, Spelling, Inflections) :-
     lex_form_ci_ord_5(Term, Categories, LexiconServerStream, Spelling, Inflections).
 
 
-get_citation_forms_for_form_apostrophe_s(FormAtom, LexiconServerStream, CitationForms) :-
-	( lexAccess_get_citation_forms_for_form(FormAtom, LexiconServerStream, CitationForms),
-	  CitationForms = [_|_] ->
+get_base_forms_for_form_apostrophe_s(FormAtom, LexiconServerStream, BaseForms) :-
+	( lexAccess_get_base_forms_for_form(FormAtom, LexiconServerStream, BaseForms),
+	  BaseForms = [_|_] ->
 	  true
 	; midstring(FormAtom, FormAtomWithoutApostropheS, '''s', 0, _Length, 2),
-	  lexAccess_get_citation_forms_for_form(FormAtomWithoutApostropheS,
-						LexiconServerStream, CitationForms),
-	  CitationForms = [_|_] ->
+	  lexAccess_get_base_forms_for_form(FormAtomWithoutApostropheS,
+						LexiconServerStream, BaseForms),
+	  BaseForms = [_|_] ->
 	  true
-	; CitationForms = []
+	; format(user_output, '### WARNING: no base forms for "~q"!~n', [FormAtom]),
+	  BaseForms = [FormAtom]
 	).
 
-get_citation_forms_for_form_with_cats(Form, CategoryList, LexiconServerStream, CitationForms) :-
-	get_citation_forms_for_form_with_cats_LEXACCESS_TOGGLE(Form, CategoryList,
-							       LexiconServerStream, CitationForms).
+get_base_forms_for_form_with_cats(Form, CategoryList, LexiconServerStream, BaseForms) :-
+	get_base_forms_for_form_with_cats_LEXACCESS_TOGGLE(Form, CategoryList,
+							   LexiconServerStream, BaseForms).
 
-get_citation_forms_for_form_with_cats_LEXACCESS_TOGGLE(Form, CategoryList,
-						       LexiconServerStream, CitationForms) :-
-	( control_value(lexicon, c) ->
-	  lex_form_ci_recs(Form, LexiconServerStream, LexRecords),
-	   (findall(Cit,
-		    (member(LexRecord,LexRecords),
-		     lex_get_base_from_record_3(LexRecord,CategoryList,Cit)),
-		    CitationForms) ->
-	             true
-	   ;   CitationForms=[]
-	   )
-	; control_value(lexicon, java) ->
-	  get_citation_forms_for_form_apostrophe_s(Form, CategoryList,
-						   LexiconServerStream, CitationForms)
-	; fatal_error('Lexicon setting must be either c or java!~n', [])
-	).
+get_base_forms_for_form_with_cats_LEXACCESS_TOGGLE(Form, CategoryList,
+						   LexiconServerStream, BaseForms) :-
+ 	( control_value(lexicon, c) ->
+ 	  lex_form_ci_recs(Form, LexiconServerStream, LexRecords),
+ 	   (findall(Cit,
+ 		    (member(LexRecord,LexRecords),
+ 		     lex_get_base_from_record_3(LexRecord,CategoryList,Cit)),
+ 		    BaseForms) ->
+ 	             true
+ 	   ;   BaseForms=[]
+ 	   )
+ 	; get_base_forms_for_form_apostrophe_s(Form, CategoryList,
+					       LexiconServerStream, BaseForms)
+ 	).
 
-get_citation_forms_for_form_apostrophe_s(FormAtom, CategoryList,
-					 LexiconServerStream, CitationForms) :-
-	( lexAccess_get_citation_forms_for_form_with_cats(FormAtom, CategoryList,
-							  LexiconServerStream, CitationForms),
-	  CitationForms = [_|_] ->
+get_base_forms_for_form_apostrophe_s(FormAtom, CategoryList,
+				     LexiconServerStream, BaseForms) :-
+	( lexAccess_get_base_forms_for_form_with_cats(FormAtom, CategoryList,
+						      LexiconServerStream, BaseForms),
+	  BaseForms = [_|_] ->
 	  true
 	; midstring(FormAtom, FormAtomWithoutApostropheS, '''s', 0, _Length, 2),
-	  lexAccess_get_citation_forms_for_form_with_cats(FormAtomWithoutApostropheS, CategoryList,
-							  LexiconServerStream, CitationForms),
-	  CitationForms = [_|_] ->
+	  lexAccess_get_base_forms_for_form_with_cats(FormAtomWithoutApostropheS, CategoryList,
+						      LexiconServerStream, BaseForms),
+	  BaseForms = [_|_] ->
 	  true
-	; CitationForms = []
+	; BaseForms = []
 	).
-
-
 
 /* 
-   get_base_forms_for_form(+Form, +Categories, +LexiconServerStream, -Bases)
-
-get_base_forms_for_form/2 calls lex_form_ci_recs/2 followed by calls
-to lex_get_base_from_record/2 (where here, base really means citation)
-and lex_get_spvar_from_record/2.
-get_base_forms_for_form/3 respects Categories. */
-
-get_base_forms_for_form(Form, Categories, LexiconServerStream, Bases) :-
-	lex_form_ci_recs(Form, LexiconServerStream, LexRecords),
-	add_base_forms2(LexRecords,Categories,[],Bases),
-	!.
-
-add_base_forms2([], _Categories, Bases, Bases).
-add_base_forms2([FirstLexRecord|RestLexRecords], Categories, BasesIn, BasesOut) :-
-	( add_base_forms2(FirstLexRecord, Categories, FirstBases) ->
-	  append(BasesIn, FirstBases, BasesInOut)
-	; BasesInOut = BasesIn
-	),
-	add_base_forms2(RestLexRecords, Categories, BasesInOut, BasesOut).
-
-add_base_forms2(LexRecord, Categories, Bases) :-
-	lex_get_base_from_record_3(LexRecord, Categories, CitForm),
-	( lex_get_spvar_from_record(LexRecord, Spvars) ->
-	  Bases = [CitForm|Spvars]
-	; Bases=[CitForm]
-	).
+%%%    get_base_forms_for_form(+Form, +Categories, +LexiconServerStream, -Bases)
+%%% 
+%%% get_base_forms_for_form/2 calls lex_form_ci_recs/2 followed by calls
+%%% to lex_get_base_from_record/2 (where here, base really means citation)
+%%% and lex_get_spvar_from_record/2.
+%%% get_base_forms_for_form/3 respects Categories. */
+%%% 
+%%% get_base_forms_for_form(Form, Categories, LexiconServerStream, Bases) :-
+%%% 	lex_form_ci_recs(Form, LexiconServerStream, LexRecords),
+%%% 	add_base_forms2(LexRecords,Categories,[],Bases),
+%%% 	!.
+%%% 
+%%% add_base_forms2([], _Categories, Bases, Bases).
+%%% add_base_forms2([FirstLexRecord|RestLexRecords], Categories, BasesIn, BasesOut) :-
+%%% 	( add_base_forms2(FirstLexRecord, Categories, FirstBases) ->
+%%% 	  append(BasesIn, FirstBases, BasesInOut)
+%%% 	; BasesInOut = BasesIn
+%%% 	),
+%%% 	add_base_forms2(RestLexRecords, Categories, BasesInOut, BasesOut).
+%%% 
+%%% add_base_forms2(LexRecord, Categories, Bases) :-
+%%% 	lex_get_base_from_record_3(LexRecord, Categories, CitForm),
+%%% 	( lex_get_spvar_from_record(LexRecord, Spvars) ->
+%%% 	  Bases = [CitForm|Spvars]
+%%% 	; Bases=[CitForm]
+%%% 	).

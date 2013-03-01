@@ -75,8 +75,8 @@ get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream)
 get_server_stream('LEXICON', ServerStream) :-
 	( control_value(lexicon, java) ->
 	  get_server_stream_1('LEXICON', ServerStream)
-	; control_value(lexicon, db) ->
-	  get_server_stream_1('LEXICON', ServerStream)
+	% ; control_value(lexicon, db) ->
+	%   get_server_stream_1('LEXICON', ServerStream)
 	; ServerStream = ''
 	).
 get_server_stream('TAGGER', ServerStream) :-
