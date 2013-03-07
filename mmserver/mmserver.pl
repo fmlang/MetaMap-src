@@ -1,11 +1,20 @@
 :- module(mmserver,[ main/0 ]).
 
-:- use_module(library(prologbeans), [ register_query/2,
-				      register_event_listener/2,
-				      get_server_property/1,
-				      start/0, start/1, shutdown/1 ]).
-:- use_module(library(codesio),     [ read_from_codes/2 ]).
-:- use_module(library(system),      [ environ/2 ]).
+:- use_module(library(prologbeans), [
+	register_query/2,
+	register_event_listener/2,
+	get_server_property/1,
+	start/0,
+	start/1,
+	shutdown/1
+   ]).
+:- use_module(library(codesio), [
+	 read_from_codes/2
+   ]).
+
+:- use_module(library(system), [
+	 environ/2
+   ]).
 
 :- use_module(skr(skr_fe), [
 	postprocess_sentences/10,
@@ -29,7 +38,6 @@
 :- use_module(skr_lib(nls_system), [
 	add_to_control_options/1,
 	subtract_from_control_options/1,
-	reset_control_options/1,
 	toggle_control_options/1,
 	get_control_options_for_modules/2,
 	set_control_options/1,        				    
@@ -54,7 +62,11 @@
 	get_UDAs/1
    ]).
 
-:- use_module(skr_lib(negex), [ compute_negex/4, generate_negex_output/1 ]).
+:- use_module(skr_lib(negex), [
+	compute_negex/4,
+	generate_negex_output/1
+   ]).
+
 
 %% Register acceptable queries and start the server (using default port)
 main :-
@@ -82,6 +94,9 @@ main :-
     % 		    or(['<infile>','.','out'],user_output),
     % 		    'Output file')
     % 	      ],
+    get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream),
+    AllServerStreams = (LexiconServerStream,TaggerServerStream,WSDServerStream),
+    bb_put(all_server_streams, AllServerStreams),
     parse_command_line(CLTerm),
     CLTerm=command_line(Options,Args),
     ( \+ member(q,Options) -> append(Options, [q], OptionsFinal) ; Options=OptionsFinal),
@@ -101,6 +116,7 @@ server_shutdown_listener :-
    flush_output(user_error).
 
 shutdown_server :-
+    close_all_streams,
     shutdown(now).
 
 set_options(OptionString) :-
@@ -163,7 +179,6 @@ get_options(AllOptions) :-
 	setof(X,control_option_as_iopt(X),AllOptions).
 
 reset_options :-
- 	reset_control_options([metamap]),
 	%% Temporary code for use until a final lex access method is
 	%% determined.  This will need re-factoring to remove
 	%% references to lexicon.
@@ -182,10 +197,9 @@ process_string(Input,Output) :-
 	remove_final_CRLF(TrimmedInput1, TrimmedInput),
 	TagOption = tag,
 	split_string_completely(TrimmedInput,"\n",Strings),
-	get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream),
-	AllServerStreams = (LexiconServerStream,TaggerServerStream,WSDServerStream),
 	ExtraChars = [],
 	get_UDAs(UDAList),
+	bb_get(all_server_streams, AllServerStreams),
 	process_text(Strings, "0000000", ExtraChars,
 		     TagOption, AllServerStreams,
 		     ExpRawTokenList, AAs, UDAList, MMResults),
