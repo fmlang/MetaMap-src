@@ -29,9 +29,8 @@
 ***************************************************************************/
 
 :- module(wsdmod, [
-	do_WSD/11,
+	do_WSD/9,
 	% called by MetaMap API -- do not change signature!
-	get_WSD_server_hosts_and_port/3,
 	extract_SemRep_phrases_1/3
     ]).
 
@@ -40,21 +39,26 @@
    ]).
 
 :- use_module(skr(skr_utilities), [
-         get_candidate_feature/3
+	fatal_error/2,
+        get_candidate_feature/3
     ]).
+
+:- use_module(skr_lib(nls_lists), [
+         get_from_list/3
+    ]).
+
+:- use_module(skr_lib(nls_strings), [
+	trim_whitespace_right/2
+   ]).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
    ]).
 
-:- use_module(skr_lib(nls_lists), [
-         get_from_list/3
-    ]).
-
 :- use_module(skr_lib(skr_tcp), [
 	establish_tcp_connection/4
-   ]).
+    ]).
 
 :- use_module(skr(skr), [
 	extract_phrases_from_aps/2,
@@ -65,6 +69,7 @@
 :- use_module(skr(skr_utilities), [
 	debug_message/3,
 	ensure_number/2,
+	fatal_error/2,
 	generate_aa_term/2
    ]).
 
@@ -76,6 +81,10 @@
 
 :- use_module(skr_lib(sicstus_utils), [
 	ttyflush/0
+   ]).
+
+:- use_module(skr_lib(xml), [
+	xml_parse/3
    ]).
 
 :- use_module(wsd(mmoxml), [
@@ -92,6 +101,7 @@
 
 :- use_module(library(lists),[
 	append/2,
+	max_member/2,
 	rev/2
    ]).
 
@@ -114,8 +124,7 @@
 % :- prolog_flag(character_escapes,_,on).
 
 do_WSD(UtteranceText, InputLabel, CitationTextAtom, AAs, Tokens,
-       WSDServerHosts, WSDForced, WSDServerPort,
-       MMOPhrases, DisambMMOPhrases, SemRepPhrasesWithWSD) :-
+       WSDServerStream, MMOPhrases, DisambMMOPhrases, SemRepPhrasesWithWSD) :-
 	( control_option(word_sense_disambiguation) ->
 	  generate_aa_term([mm_output(utterance, citation, modifiedtext, tagging,
 				      AAs, syntax, MMOPhrases, extractedphrases)],
@@ -125,9 +134,7 @@ do_WSD(UtteranceText, InputLabel, CitationTextAtom, AAs, Tokens,
 			       AATerm, syntax,
 			       MMOPhrases, extractedphrases),
 	 % format(user_output, 'BEFORE disambiguate_mmoutput~n', []), ttyflush,
-	 disambiguate_mmoutput([MMOutput],
-			       WSDServerHosts, WSDForced, WSDServerPort,
-			       [DisambMMOutput]),
+	 disambiguate_mmoutput([MMOutput], WSDServerStream, [DisambMMOutput]),
 	 % format(user_output, 'AFTER disambiguate_mmoutput~n', []), ttyflush,
 	 DisambMMOutput = mm_output(utterance(InputLabel, UtteranceText, PosInfo, ReplPos),
 				    citation(CitationTextAtom), modifiedtext, tagging,
@@ -265,16 +272,14 @@ find_word_with_gap(WordAtom, [Token|Rest], [Token|BeforeRest], Match, After) :-
 	find_word_with_gap(WordAtom, Rest, BeforeRest, Match, After).
 	
 	
-/* disambiguate_mmoutput(MMOutput,
-		         +WSDServerHosts, +WSDForced, +WSDServerPort,
-		         -DisambMMOutput)
+/* disambiguate_mmoutput(MMOutput, -DisambMMOutput)
    extract_mmo_from_utterance(+MMOutput, +UttNum, -MMO, -MarkedMappings, -MarkedMMOutput)
    extract_mmo_phrases(+MMOutput, +UttNum, +PhraseNum, -MMO, -MarkedMappings,
                        -MarkedMMOutput)
    disambiguate_mmo(+MMOIn, -MMOOut)
    reinsert_mmo(+DisambMMO, +MarkedMappings, +MarkedMMOutput, -ModifiedMMOutput)
 
-disambiguate_mmoutput/5 performs word sense disambiguation (WSD) on the
+disambiguate_mmoutput/3 performs word sense disambiguation (WSD) on the
 MetaMap output embedded in MMOutput forming DisambMMOutput.
 extract_mmo/5 extracts the actual MetaMap output (MMO) from MMOutput
 creating MarkedMappings and MarkedMMOutput (with marked mappings (phrases,
@@ -295,16 +300,12 @@ mm_output(ExpSentence, Citation, ModifiedText, Tagging, AA, Syntax, MMOPhrases, 
 
 */
 
-disambiguate_mmoutput(MMOutput,
-		      _WSDServerHosts, _WSDForced, _WSDServerPort,
-		      DisambMMOutput) :-
+disambiguate_mmoutput(MMOutput, _WSDServerStream, DisambMMOutput) :-
 	unambiguous_output(MMOutput, _UtteranceText),
 	!,
 	% format('~n~n### Unambiguous utterance: ~w~n~n', [UtteranceText]),
 	DisambMMOutput = MMOutput.
-disambiguate_mmoutput(MMOutput,
-		      WSDServerHosts, WSDForced, WSDServerPort,
-		      DisambMMOutput) :-
+disambiguate_mmoutput(MMOutput, WSDServerStream, DisambMMOutput) :-
 	InitialUtteranceNumber is 1,
 	extract_mmo_from_utterance(MMOutput, Citation,
 				   InitialUtteranceNumber,
@@ -313,14 +314,10 @@ disambiguate_mmoutput(MMOutput,
 				   MarkedMMOutput),
 	MMOutput = [mm_output(_Utt,_Cit,_ModTxt,_Tag,AAs,_Stx,_MMOPhrases,_ExtrPhrases)|_],
 	% MarkedMappings is now built up using difference lists; no need to append!
-	disambiguate_mmo([Citation,AAs|MMO],
-			 WSDServerHosts, WSDForced, WSDServerPort,
-			 DisambMMO),
+	disambiguate_mmo([Citation,AAs|MMO], WSDServerStream, DisambMMO),
 	reinsert_mmo(DisambMMO, MarkedMappings, MarkedMMOutput, DisambMMOutput),
 	!.
-disambiguate_mmoutput(MMOutput,
-		      _WSDServerHosts, _WSDForced, _WSDServerPort,
-		      MMOutput) :-
+disambiguate_mmoutput(MMOutput, _WSDServerStream, MMOutput) :-
 	format('disambiguate_mmoutput/2 failed for:~n~p~nIgnoring any disambiguations.~n',
 	       [MMOutput]).
 
@@ -448,37 +445,17 @@ extract_mmo_phrases([Phrase|Rest],
 	extract_mmo_phrases(Rest, UttNum, NextPhraseNum, MMONext, MMOOut,
 			    MarkedMappingsNext, MarkedMappingsOut, MarkedPhraseRest).
 
-disambiguate_mmo(MMOTermList,
-		 WSDServerHosts, WSDForced, WSDServerPort,
-		 DisambMMO) :-
-	( call_WSD(MMOTermList,
-		   WSDServerHosts, WSDForced, WSDServerPort,
-		   RawDisambMMOString) ->
+disambiguate_mmo(MMOTermList, WSDServerStream, DisambMMO) :-
+	( call_WSD(MMOTermList, WSDServerStream, RawDisambMMOString) ->
 	  test_parse_disamb_mmo(RawDisambMMOString, DisambMMO)
-	; format(user_output,
-		 'Fatal error: call_WSD/2 could not process:~n~p~n',
-		 [MMOTermList]),
-	  ttyflush,
-	  format('Fatal error: call_WSD/2 could not process:~n~p~n',
-		 [MMOTermList]),
-	  current_output(CurrentOutputStream),
-	  flush_output(CurrentOutputStream),
-	  abort
-      ).
+	; fatal_error('call_WSD/2 could not process:~n~p~n', [MMOTermList])
+	).
 
 test_parse_disamb_mmo(RawDisambMMOString, DisambMMO) :-
 	( parse_disamb_mmo(RawDisambMMOString, DisambMMO) ->
 	  true
 	; atom_codes(RawDisambMMOAtom, RawDisambMMOString),
-	  format(user_output,
-		 'Fatal error: disambiguate_mmo/2 could not parse:~n~p~n',
-		 [RawDisambMMOAtom]),
-	  ttyflush,
-	  format('Fatal error: disambiguate_mmo/2 could not parse:~n~p~n',
-	  	 [RawDisambMMOAtom]),
-	  current_output(CurrentOutputStream),
-	  flush_output(CurrentOutputStream),
-	  abort
+	  fatal_error('disambiguate_mmo/2 could not parse:~n~p~n', [RawDisambMMOAtom])
 	  ).
 
 /*
@@ -524,9 +501,7 @@ parse_disamb_mmo_aux([First|Rest], Result) :-
 	  Result=DisambRest
         ; Fields=[Label0,I0,N0,AllSenses0,DisambSenses0,_],
           ( append("[Error JDI",_,DisambSenses0) ->
-	    format('Fatal error: parse_disamb_mmo_aux/2 failed ~p on ~p~n',
-		   [DisambSenses0,First]),
-	    abort
+	    fatal_error('parse_disamb_mmo_aux/2 failed ~p on ~p~n', [DisambSenses0,First])
 	  ; true
 	  ),
           ( ( DisambSenses0 == "[No match found.]"
@@ -555,7 +530,6 @@ parse_disamb_mmo_aux([First|Rest], Result) :-
       parse_disamb_mmo_aux(Rest, DisambRest).
 parse_disamb_mmo_aux([_First|Rest], DisambRest) :-
 	% temp
-	%format('ERROR: parse_disamb_mmo_aux/2 failed on ~p. Continuing.~n',[First]),
 	parse_disamb_mmo_aux(Rest, DisambRest).
 
 % parse_senses("[]", []) :- !.
@@ -563,10 +537,6 @@ parse_senses(Senses0, Senses) :-
 	Senses0 = [_|RestSensesChars],
 	last(Senses1, _LastSensesChar, RestSensesChars),
 	phrase(term_list(Senses), Senses1).
-
-% parse_senses(Senses0, []) :-
-% 	% temp
-% 	format('ERROR: parse_senses/2 failed on ~p. Continuing.~n', [Senses0]).
 
 % ---------------------------------------------------------
 % -------------- $-separated term list grammar --------------
@@ -616,10 +586,9 @@ reinsert_mmo(DisambMMO, MarkedMappings, MarkedMMOutput, DisambMMOutput) :-
 	!.
 % temp
 reinsert_mmo(DisambMMO, _MarkedMappings, MarkedMMOutput, MarkedMMOutput) :-
-	%    format('ERROR: reinsert_mmo/4 failed for~nDisambMMO: ~p~nMarkedMappings: ~p~nMarkedMMOutput: ~p~nContinuing...~n',
+	%    fatal_error('reinsert_mmo/4 failed for~nDisambMMO: ~p~nMarkedMappings: ~p~nMarkedMMOutput: ~p~nContinuing...~n',
 	%	   [DisambMMO,MarkedMappings,MarkedMMOutput]).
-	format('ERROR: reinsert_mmo/4 failed for~nDisambMMO: ~p~nContinuing...~n',
-	       [DisambMMO]).
+	fatal_error('reinsert_mmo/4 failed for~nDisambMMO: ~p~n', [DisambMMO]).
 
 
 % The cut in the base clause is necessary, because the third clause has a var first arg.
@@ -640,7 +609,7 @@ strip_mappings([disamb(_Label,UttNum,PhraseNum,AllSenses,SensesToKeep)|RestDisam
 	%    NDiff is NS-NSTS,
 	%    (NDiff=:=1 ->
 	%	true
-	%    ;   format('ERROR: strip_mappings/3 found bad senses (~p) with sense ~p~n',
+	%    ;   fatal_error('strip_mappings/3 found bad senses (~p) with sense ~p~n',
 	%	       [Senses,Sense])
 	%    ),
 	strip_mappings_aux(SensesToStrip, SensesToKeep, Mappings, StrippedMappings),
@@ -819,7 +788,7 @@ reinsert_mmoutput([mm_output(Utterance,Citation,ModifiedText,Tagging,
 	%),
 	reinsert_mmoutput(RestMMOutput, StrippedMarkedMappingsNext, RestReinserted).
 reinsert_mmoutput(MarkedMMOutput, StrippedMarkedMappings, MarkedMMOutput) :-
-	format('ERROR: reinsert_mmoutput/3 failed for~nMarkedMMOutput: ~p~nStrippedMarkedMappings: ~p~nContinuing...~n',
+	fatal_error('reinsert_mmoutput/3 failed for~nMarkedMMOutput: ~p~nStrippedMarkedMappings: ~p~~n',
 	       [MarkedMMOutput,StrippedMarkedMappings]).
 
 reinsert_mmoutput_aux([], StrippedMarkedMappingsIn, StrippedMarkedMappingsIn, [], []) :-
@@ -844,20 +813,16 @@ reinsert_mmoutput_aux([markedphrase(UttNum,PhraseNum,Phrase1,Candidates,
 	reinsert_mmoutput_aux(RestMarkedPhrases,
 			      RestStrippedMarkedMappings, StrippedMarkedMappingsOut,
 			      RestReinsertedMMOPhrases, RestReinsertedExtractedPhrases).
-% temp
+
 reinsert_mmoutput_aux(MMOPhrases, StrippedMarkedMappings, _, MMOPhrases, _) :-
-	format('ERROR: reinsert_mmoutput/4 failed for~nMMOPhrases: ~p~nStrippedMarkedMappings: ~p~nContinuing...~n',
+	fatal_error('reinsert_mmoutput/4 failed for~nMMOPhrases: ~p~nStrippedMarkedMappings: ~p~n~n',
 	       [MMOPhrases,StrippedMarkedMappings]).
 
-call_WSD(MMOTermList,
-	 WSDServerHosts, WSDForced, WSDServerPort,
-	 WSDString) :-
+call_WSD(MMOTermList, WSDServerStream, WSDString) :-
 	get_WSD_parameters(MethodList, BeginDelimiterChars, EndDelimiterChars),
-	choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost),	
 	mmo_terms_to_xml_chars(MMOTermList, MethodList, XMLRequest),
 	% format(user_output, 'BEFORE call_WSD_client~n', []),
-	call_WSD_server(XMLRequest,
-			ChosenWSDServerHost, WSDForced, WSDServerPort, Response),
+	call_WSD_server(XMLRequest, WSDServerStream, Response),
 	append([BeginDelimiterChars, WSDString, EndDelimiterChars, [10]], Response),
 	!.
 	% atom_codes(WSDAtomOut, WSDString).
@@ -878,42 +843,20 @@ get_WSD_parameters(MethodList, BeginDelimiterChars, EndDelimiterChars) :-
 	atom_codes(END_DELIMITER, EndDelimiterChars),
 	make_method_list(Methods, Weights, MethodList).
 
-call_WSD_server(XMLRequest, WSDServerHost, WSDForced, WSDServerPort, Response) :-
-	wsd_server_message(WSDForced, WSDServerMessage),
-	between(1, 10, _),
-	   ServerName = 'WSD',
-           establish_tcp_connection(ServerName, WSDServerHost, WSDServerPort, SocketStream),
-	   format(user_output,
-	          'Established connection to WSD Server on ~w~w.~n',
-	          [WSDServerMessage, WSDServerHost]),
-	   % format("initiating conversation: request: ~s~n~n^THE_END^~n",[XMLRequest]),
-	   % atom_codes(XMLRequestAtom, XMLRequest),
-	   % format(user_output, 'BEFORE post_WSD_query: ~w~n', [XMLRequestAtom]),
-	   test_post_WSD_query(SocketStream, XMLRequest),
-	   % format(user_output, 'BEFORE get_WSD_result~n', []),
-	   test_get_WSD_result(SocketStream, XMLRequest, Response),
-	   % atom_codes(ResponseAtom, Response),
-	   % format(user_output, 'WSD: ~w~n', [ResponseAtom]),
-	   % atom_codes(ResponseAtom, Response),
-	   % format(user_output, 'RESULT: ~q~n~n', [ResponseAtom]), ttyflush,
-	   close(SocketStream).
-	   % format("conversation ended: response: ~s.~n",[Response]).
-
-wsd_server_message(WSDForced, Message) :-
-	( WSDForced == 0 ->
-	  Message = ''
-        ; Message = '***USER SPECIFIED*** '
-    	).
+call_WSD_server(XMLRequest, WSDServerStream, Response) :-
+	test_post_WSD_query(WSDServerStream, XMLRequest),
+	% format(user_output, 'BEFORE get_WSD_result~n', []),
+	test_get_WSD_result(WSDServerStream, XMLRequest, Response),
+	% format(user_output, 'RESULT: ~q~n~n', [ResponseAtom]), ttyflush,
+	!.
 
 % post_WSD_query/2
 % first argument is an XML request for Knowledge Source server.
 test_post_WSD_query(SocketStream, Request) :-
-	( format(SocketStream, "~s~n~n^THE_END^~n", [Request]),
+	( format(SocketStream, "~s~n~n", [Request]),
 	  flush_output(SocketStream) ->
 	  true
-        ; format(user_output, 'ERROR: Unable to post WSD query~n~w~n', [Request]),
-	  ttyflush,
-	  abort
+        ; fatal_error('Unable to post WSD query~n~w~n', [Request])
         ).
 
 % get_WSD_result/2
@@ -921,14 +864,12 @@ test_post_WSD_query(SocketStream, Request) :-
 test_get_WSD_result(SocketStream, Request, StreamTerm) :-
 	( get_codes_WSD(SocketStream, StreamTerm) ->
 	  true
-        ; format(user_output, 'ERROR: Unable to get WSD result for ~n~w~n', [Request]),
-	  ttyflush,
-	  abort
+        ; fatal_error('Unable to get WSD result for ~n~w~n', [Request])
         ).
 
 get_codes_WSD(Stream, Input) :-
 	get_code(Stream, Code),
-	( Code is -1 ->
+	( Code is 0 ->
 	  Input = []
 	; Input = [Code|RestCodes],
 	  get_codes_WSD(Stream, RestCodes)
@@ -940,56 +881,41 @@ make_method_list([Method0|Methods], [Weight|Weights], [MethodElement|MethodList]
 	MethodElement = method(Method, Weight),
 	make_method_list(Methods, Weights, MethodList).
 
-get_WSD_server_hosts_and_port(WSDServerHosts, UserChoice, WSDServerPort) :-
-	( control_value('WSD', ChosenWSDServerHost) ->
-	  UserChoice = ChosenWSDServerHost,
-	  WSDServerHosts = []
-	; UserChoice is 0,
-	  environ('WSD_SERVER_HOSTS', WSDServerHostsEnv),
-	  atom_codes(WSDServerHostsEnv, WSDServerHostsChars0),
-	  trim_and_compress_whitespace(WSDServerHostsChars0, WSDServerHostsChars),
-	  split_string_completely(WSDServerHostsChars, " ", WSDServerHostsStrings),
-	  atom_codes_list(WSDServerHosts, WSDServerHostsStrings)
+display_WSD_methods :-
+	get_WSD_methods(WSDMethods),
+	sort(WSDMethods, SortedWSDMethods),
+	(  foreach(ThisShortName-_ThisLongName, SortedWSDMethods),
+	   foreach(ThisShortNameLength, ShortNameLengths)
+	do
+	   length(ThisShortName, ThisShortNameLength)
 	),
-        environ('WSD_SERVER_PORT', WSDServerPortAtom),
-	ensure_number(WSDServerPortAtom, WSDServerPort),
-	!.
+	max_member(LongestShortNameLength, ShortNameLengths),
+	member(ShortName-LongName, SortedWSDMethods),
+	trim_whitespace_right(LongName, TrimmedLongName),
+	length(ShortName, ShortNameLength),
+	Padding is LongestShortNameLength - ShortNameLength,
+	format('~s~*c : ~s~n', [ShortName,Padding,32,TrimmedLongName]),
+	fail
+      ; true.
 
-/*
-get_WSD_server_hosts_and_port(WSDServerHosts, UserChoice, WSDServerPort) :-
-	environ('WSD_SERVER_HOSTS', WSDServerHostsEnv),
-	atom_codes(WSDServerHostsEnv, WSDServerHostsChars0),
-	% SICStus Prolog's read_from_codes/2 requires a terminating period,
-	% which Quintus Prolog's chars_to_term/2 does not!
-	append(WSDServerHostsChars0, ".", WSDServerHostsChars),
-	read_from_codes(WSDServerHostsChars, WSDServerHostsAtoms),
-	reformat_WSD_server_hosts(WSDServerHostsAtoms, WSDServerHosts),	
-	( control_value('WSD', ChosenWSDServerHost) ->
-	  UserChoice = ChosenWSDServerHost,
-     	  member(ChosenWSDServerHost-_IP, WSDServerHosts)
-	; UserChoice is 0
-	),
-        environ('WSD_SERVER_PORT', WSDServerPortAtom),
-	!,
-	ensure_number(WSDServerPortAtom, WSDServerPort).
-*/
 
-get_WSD_server_hosts_and_port(_WSDServerHosts, UserChoice, _WSDServerPort) :-
-	( control_value('WSD', UserChoice) ->
-	  format(user_output,
-		 '~nCould not set WSD Server hosts and port for ~q.~nAborting.~n', [UserChoice])
-	; format(user_output,
-		 '~nCould not set WSD Server hosts and port.~nAborting.~n', [])
-	),
-	halt.
-
-% :- nondet choose_WSD_server/3.
-
-choose_WSD_server(WSDForced, WSDServerHosts, ChosenWSDServerHost) :-
-	( WSDForced \== 0 ->
-	  ChosenWSDServerHost = WSDForced
-	; repeat,
-	     % must be backtrackable!
- 	     random_member(ChosenWSDServerHost, WSDServerHosts)
-       ).
+get_WSD_methods(Methods) :-
+	call_WSD_server("<?xml version=""1.0""?><rdf:RDF xmlns:rdf=""http://www.w3.org/1999/02/22-rdf-syntax-ns#""           xmlns:wsd=""http://wsd.nlm.nih.gov/wsdserver#"">      <rdf:description about=""methodslistrequest"">      </rdf:description></rdf:RDF>",'ii-server2',0,5554, ResponseString),
+	xml_parse(ResponseString, ResponseTerm, [format(false)]),
+	arg(2, ResponseTerm, [_,NS,_]),
+	arg(3, NS, RDFElement),
+	arg(3, RDFElement, List1),
+	memberchk(element(description,_,List2), List1),
+	memberchk(element('Bag',_,List3), List2),
+	(  foreach(Member, List3),
+	   fromto([], S0, S, Methods)
+	do ( Member = element(li, [], _) ->
+	     arg(3, Member, [NameSpaceTerm]),
+	     arg(3, NameSpaceTerm, MethodElement),
+	     arg(2, MethodElement, [id=MethodShortName]),
+	     arg(3, MethodElement, [pcdata(MethodLongName)]),
+	     S = [MethodShortName-MethodLongName|S0]
+	   ; S = S0
+	   )
+	).	
 

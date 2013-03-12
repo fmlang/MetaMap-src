@@ -34,14 +34,17 @@
 % Purpose:  Provide access to the NLS Tagger Server
 
 :- module(tagger_access, [
-	get_tagger_server_hosts_and_port/3,
 	% must be exported for filter_mrconso
 	tag_text/2,
- 	tag_text/7
+ 	tag_text/5
    ]).
 
 :- use_module(metamap(metamap_tokenization), [
 	no_combine_pronoun/1
+   ]).
+
+:- use_module(skr(skr_utilities), [
+        fatal_error/2
    ]).
 
 :- use_module(skr_lib(nls_strings), [
@@ -57,8 +60,8 @@
 	control_value/2
    ]).
 
-:- use_module(skr_lib(skr_tcp), [
-	establish_tcp_connection/4
+:- use_module(skr_lib(server_choice), [
+	get_server_stream/2
    ]).
 
 :- use_module(skr(skr_utilities), [
@@ -72,7 +75,6 @@
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/2,
-	number_to_atom/2,
 	replist/3,
 	ttyflush/0,
 	with_input_from_chars/3
@@ -116,59 +118,35 @@ TaggedTextStrings strings consisting of the human-readable output. */
 
 % tag_text/2 is used by filter_mrconso -- do not remove!
 tag_text(Input, TaggedTextList) :-
-	get_tagger_server_hosts_and_port(TaggerServerHosts, TaggerForced, TaggerServerPort),
-        tag_text_with_options(Input, TaggerServerHosts, TaggerForced, TaggerServerPort,
-			      syn, prolog, TaggedTextList).
+	get_server_stream('TAGGER', TaggerServerStream),
+        tag_text_with_options(Input, TaggerServerStream, syn, prologfull, TaggedTextList).
 
-tag_text(Input,
-	 TaggerServerHosts, TaggerForced, TaggerServerPort,
-	 FullTaggedTextList, TaggedTextList, TaggedTextStrings) :-
-	tag_text_with_options(Input,
-			      TaggerServerHosts, TaggerForced, TaggerServerPort,
-			      syn, prologfull, FullTaggedTextList),
+tag_text(Input, TaggerServerStream, FullTaggedTextList, TaggedTextList, TaggedTextStrings) :-
+	tag_text_with_options(Input, TaggerServerStream, syn, prologfull, FullTaggedTextList),
 	!,
 	( atom_codes_list_list(FullTaggedTextList, FullTaggedTextListStrings) ->
 	  form_prolog_output(FullTaggedTextListStrings, TaggedTextList),
 	  form_human_readable_output(FullTaggedTextListStrings, TaggedTextStrings)
-	; format(user_output,
-		 'ERROR: tag_text/4 failed for ~p~n returning ~p~n',
-		 [Input,FullTaggedTextList]),
-	  format('ERROR: tag_text/4 failed for ~p~n returning ~p~n',
-		 [Input,FullTaggedTextList]),
-	  !,
-	  halt
+	; fatal_error('tag_text/4 failed for ~p~n returning ~p~n', [Input,FullTaggedTextList])
 	),
 	!.
 
-tag_text_with_options([], _, _, _, _, _, []) :- !.
-tag_text_with_options(Input, TaggerServerHosts, TaggerForced, TaggerServerPort,
-		      ModeOption, PrologOption, TaggedTextList) :-
-
+tag_text_with_options([], _, _, _, []) :- !.
+tag_text_with_options(Input, TaggerServerStream, ModeOption, PrologOption, TaggedTextList) :-
 	concat_atom([ModeOption, '|', PrologOption], Options),
 	ensure_atom(Input, QueryAtom),
-	call_tagger(Options,
-		    TaggerServerHosts, TaggerForced, TaggerServerPort,
-		    QueryAtom, TaggedTextList0),
+	call_tagger(Options, TaggerServerStream, QueryAtom, TaggedTextList0),
 	TaggedTextList0 \== '',
 	TaggedTextList0 \== end_of_file,
 	postprocess_apostrophe_s(TaggedTextList0, TaggedTextList),
+	% TaggedTextList = TaggedTextList0,
 	!.
-tag_text_with_options(Input, _, _, _, _, _Tagger, []) :-
-	format(user_output,
-	       'ERROR: tagger_access:tag_text_with_options/4 failed for ~p~n',
-	       [Input]),
-	format('ERROR: tagger_access:tag_text_with_options/4 failed for ~p~n',
-	       [Input]),
-	halt.
+tag_text_with_options(Input, _, _, _Tagger, []) :-
+	format('tagger_access:tag_text_with_options/4 failed for ~p~n', [Input]).
 
-call_tagger(Options,
-	    TaggerServerHosts, TaggerForced, TaggerServerPort,
-	    QueryAtom, TaggedTextList) :-
-	choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost),
+call_tagger(Options, TaggerServerStream, QueryAtom, TaggedTextList) :-
 	% format(user_output, 'Chose tagger ~w~n', [ChosenTaggerServerHost]),
-	call_tagger_server(Options, ChosenTaggerServerHost, 
-			   TaggerForced, TaggerServerPort,
-			   QueryAtom, TaggedTextAtom),
+	call_tagger_server(Options, TaggerServerStream, QueryAtom, TaggedTextAtom),
 	!,
 	atom_codes(TaggedTextAtom, TaggedTextString),
 	escape_backslashes(TaggedTextString, EscapedString),
@@ -180,12 +158,8 @@ call_tagger(Options,
 				EscapedString)
 	).
 
-call_tagger(_Options,
-	    _TaggerServerHosts, _TaggerForced, _TaggerServerPort,
-	    QueryAtom, _TaggedTextList) :-
-	format(user_output, '~nERROR: Tagger (call_tagger_aux) failed on "~w"~n.', [QueryAtom]),
-	format('~nERROR: Tagger (call_tagger_aux) failed on "~w"~n.', [QueryAtom]),
-	halt.
+call_tagger(_Options, _TaggerServerStream, QueryAtom, _TaggedTextList) :-
+	fatal_error('Tagger (call_tagger_aux) failed on "~w"~n.', [QueryAtom]).
 
 
 % There's something I don't completely understand about SP's being compliant
@@ -263,9 +237,7 @@ form_human_readable_output_aux([[Word,Type]|Rest],CurWords,CurTypes,RRIn,RROut) 
     ),
     form_human_readable_output_aux(Rest,NewCurWords,NewCurTypes,RRInOut,RROut).
 
-call_tagger_server(Options,
-		   TaggerServerHost, TaggerForced, TaggerServerPort,
-		   QueryAtom, TaggedTextAtom) :-
+call_tagger_server(Options, TaggerServerStream, QueryAtom, TaggedTextAtom) :-
 	% GIVEN:
 	%   options <- Options (is an atom?)
 	%   text <- QueryAtom
@@ -277,58 +249,28 @@ call_tagger_server(Options,
 	%   strcat(input, "\n");
 	%   strcat(input, "\n");
 	% Try to connect 100 times; if it still fails, give up!
-	tagger_server_message(TaggerForced, TaggerServerMessage),
 	atom_codes(NewLine, [10]), % is there a more elegant way to do this?
 	concat_atom([Options,NewLine,QueryAtom,NewLine,NewLine], Request),
-	% The call to between/3 is silly:
-	% If a tagger server doesn't respond, just try another one.
-	% between(1, 10, _),
-	   ServerName = 'Tagger',
-	   establish_tcp_connection(ServerName, TaggerServerHost, TaggerServerPort, SocketStream),
-	   conditionally_announce_tagger_connection(TaggerServerMessage, TaggerServerHost),
-	   test_post_tagger_query(SocketStream, Request),
-	   test_get_tagger_result(SocketStream, Request, Response),
-	   % At this point, we know the tagger is OK,
-	   % so we can cut out the choice point created by between/3 above
-	   !,
-	   atom_codes(TaggedTextAtom, Response),
-	   close(SocketStream).
-
-conditionally_announce_tagger_connection(TaggerServerMessage, Host) :-
-	( \+ control_option(silent) ->
-	   format(user_output,
-		  'Established connection to Tagger Server on ~w~w.~n',
-		  [TaggerServerMessage, Host])
-	; true
-	).  
-
-tagger_server_message(TaggerForced, Message) :-
-	( TaggerForced == 0 ->
-	  Message = ''
-        ; Message = '***USER SPECIFIED*** '
-    	).
+	test_post_tagger_query(TaggerServerStream, Request),
+	test_get_tagger_result(TaggerServerStream, Request, Response),
+	% At this point, we know the tagger is OK,
+	% so we can cut out the choice point created by between/3 above
+	atom_codes(TaggedTextAtom, Response).
+	% close(SocketStream).
 
 % post_Tagger_query/2
 test_post_tagger_query(SocketStream, Request) :-
 	( format(SocketStream, '~a~n~n^THE_END^~n', [Request]),
 	  flush_output(SocketStream) ->
 	  true
-        ; format(user_output, 'ERROR: Unable to post Tagger query~n~w~n', [Request]),
-	  ttyflush,
-	  format(SocketStream, 'ERROR: Unable to post Tagger query~n~w~n', [Request]),
-	  flush_output(SocketStream),
-	  halt
+        ; fatal_error('Unable to post Tagger query~n~w~n', [Request])
         ).
 
 % get_tagger_result/2
 test_get_tagger_result(SocketStream, Request, StreamTerm) :-
 	( get_chars_tagger(SocketStream, StreamTerm) ->
 	  true
-        ; format(user_output, 'ERROR: Unable to get Tagger result for ~n~w~n', [Request]),
-	  ttyflush,
-	  format(SocketStream, 'ERROR: Unable to get Tagger result for ~n~w~n', [Request]),
-	  flush_output(SocketStream),
-	  halt
+        ; fatal_error('Unable to get Tagger result for ~n~w~n', [Request])
         ).
 
 % The tagger server sends back "%%" to signal EOF. No idea why.
@@ -341,38 +283,6 @@ get_chars_tagger(Stream, Input) :-
 	; otherwise ->
 	  Input = [Code|Codes],
 	  get_chars_tagger(Stream, Codes)
-	).
-
-get_tagger_server_hosts_and_port(TaggerServerHosts, UserChoice, TaggerServerPort) :-
-	( control_value(tagger, ChosenTaggerServerHost) ->
-	  UserChoice = ChosenTaggerServerHost,
-	  TaggerServerHosts = []
-     	  % memberchk(ChosenTaggerServerHost-_IP, TaggerServerHosts),
-	; UserChoice is 0,
-	  environ('TAGGER_SERVER_HOSTS', TaggerServerHostsEnv),
-	  atom_codes(TaggerServerHostsEnv, TaggerServerHostsChars0),
-	  trim_and_compress_whitespace(TaggerServerHostsChars0, TaggerServerHostsChars),
-	  split_string_completely(TaggerServerHostsChars, " ", TaggerServerHostsStrings),
-	  atom_codes_list(TaggerServerHosts, TaggerServerHostsStrings)
-	),
-        environ('TAGGER_SERVER_PORT', TaggerServerPortAtom),
-	ensure_number(TaggerServerPortAtom, TaggerServerPort),
-	!.
-get_tagger_server_hosts_and_port(_TaggerServerHosts, _UserChoice, _TaggerServerPort) :-
-	( control_value(tagger, UserChoice) ->
-	  format(user_output,
-		 '~nCould not set tagger Server hosts and port for ~q.~nAborting.~n', [UserChoice])
-	; format(user_output,
-		 '~nCould not set tagger Server hosts and port.~nAborting.~n', [])
-	),
-	halt.
-
-choose_tagger_server(TaggerForced, TaggerServerHosts, ChosenTaggerServerHost) :-
-	( TaggerForced \== 0 ->
-	  ChosenTaggerServerHost = TaggerForced
-	; repeat,
-	     % must be backtrackable!
- 	     random_member(ChosenTaggerServerHost, TaggerServerHosts)
 	).
 
 % The idea here is to overcome a feature of the tagger that

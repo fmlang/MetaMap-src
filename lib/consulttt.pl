@@ -37,12 +37,20 @@
 
 % ----- Module declaration and exported predicates
 
-:- module(consulttt,                [ consult_tagged_text/5 ]).
+:- module(consulttt, [
+	consult_tagged_text/5
+    ]).
 
 
 % ----- Imported predicates
 
-:- use_module( library( lists ),    [ nth1/3 ] ).
+:- use_module(skr_lib(nls_system), [
+	control_option/1
+   ]).
+
+:- use_module(library(lists), [
+	nth1/3
+   ]).
 
 /* CONSULT_TAGGED_TEXT
 
@@ -220,12 +228,11 @@ consult_tagged_text( [ unknown:[ inputmatch:[Token]| _ ] | MoreDefinitions ],
 
 
     nth1( IndexIn, TaggedTextIn, [ Token, Tag ] ), !,  
-
-    (  memberchk( Tag, [ bl, ba, dq, ap, bq, at, nm, dl, pc,
-                         up, am, ax ,pl, eq, tl, un, lb, rb, ls, gr ] )
-
-       -> Label = punc
-       ;  Label = not_in_lex
+    (  punc_tag(Tag) ->
+       Label = punc
+     ; control_option(no_lex) ->
+       Label = Tag
+     ; Label = not_in_lex
     ),
 
     functor( ThisItem, Label, 1),
@@ -250,3 +257,24 @@ can_be_pastP([_|More]) :-
 can_be_adj([adj:_|_]) :- !.
 can_be_adj([_|More]) :-
 	can_be_adj(More).
+
+punc_tag(bl).
+punc_tag(ba).
+punc_tag(dq).
+punc_tag(ap).
+punc_tag(bq).
+punc_tag(at).
+punc_tag(nm).
+punc_tag(dl).
+punc_tag(pc).
+punc_tag(up).
+punc_tag(am).
+punc_tag(ax).
+punc_tag(pl).
+punc_tag(eq).
+punc_tag(tl).
+punc_tag(un).
+punc_tag(lb).
+punc_tag(rb).
+punc_tag(ls).
+punc_tag(gr).

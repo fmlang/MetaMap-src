@@ -32,11 +32,16 @@
 */
 
 :- module(qp_lookup, [
-	assembledefns/2
+	assemble_definitions/4
    ]).
 
+:- use_module(lexicon(lexical), [
+	lowercase_list/2
+    ]).
+
 :- use_module(lexicon(qp_lexicon), [
-	lex_form_ci_recs_input_5/5,
+	% lex_form_ci_recs_input_7_LEXACCESS_TOGGLE/7,
+	lex_form_ci_recs_input_6/6,
 	default_lexicon_file/1,
 	default_index_file/1
    ]).
@@ -50,42 +55,71 @@
 	is_punct/1
    ]).
 
+:- use_module(skr_lib(nls_system), [
+	control_option/1
+   ]).
+
+:- use_module(library(avl), [
+	ord_list_to_avl/2
+   ]).
+
+
 :- use_module(library(lists), [
 	append/2
    ]).
 
 
-%%% top level call to lexical lookup from parser
-assembledefns(Input, Recs) :-
+assemble_definitions(Input, TagList, LexiconServerInfo, Recs) :-
 	default_lexicon_file(Lexicon),
 	default_index_file(Index),
-	assembledefns_4(Input, Recs, Lexicon, Index).
+	assembledefns_6(Input, TagList, LexiconServerInfo, Lexicon, Index, Recs),
+	maybe_display_defns(Recs).
 
-assembledefns_4([], [], _Lexicon, _Index).
-assembledefns_4([F|R], AllRecs, Lexicon, Index) :-
-	assembledefns_aux(F, '', SomeRecs, [], Lexicon, Index),
+maybe_display_defns(Defns) :-
+	( control_option(showlex) ->
+	  (  foreach(LexicalRecord, Defns)
+	  do format(user_output, 'LEXICON: ~q~n', [LexicalRecord])
+	  )
+	; true
+	).
+
+assembledefns_6([], _TagList,  _LexiconServerInfo, _Lexicon, _Index, []).
+assembledefns_6([FirstPhrase|RestPhrases], TagList, LexiconServerInfo, Lexicon, Index,  AllRecs) :-
+	assembledefns_aux(FirstPhrase, '', [], TagList, LexiconServerInfo, Lexicon, Index, SomeRecs),
 	append(SomeRecs, MoreRecs, AllRecs),
-	assembledefns_4(R, MoreRecs, Lexicon, Index).
+	assembledefns_6(RestPhrases, TagList, LexiconServerInfo, Lexicon, Index, MoreRecs).
 
 %%% returns matching records in the form: lexicon:[lexmatch:X, inputmatch:Y, records:Z]
 %%% where X is the "best" lexical item that matched, Y is a list of tokens from the
 %%% input, and Z is a list of records of the form: lexrec:[base:B, ...etc]
-assembledefns_aux([], _PrevToken, [], [], _Lexicon, _Index).
+assembledefns_aux([], _PrevToken, [], _TagList, _LexiconServerInfo, _Lexicon, _Index, []).
 
 %%% from lexicon
-assembledefns_aux([Token|MoreTokens], _PreviousToken, [Recs|MoreRecs], Rest, Lexicon, Index) :-
-	lex_form_ci_recs_input_5([Token|MoreTokens], Recs, Remaining, Lexicon, Index),
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList,
+		  LexiconServerInfo, Lexicon, Index, [Recs|MoreRecs]) :-
+	\+ control_option(no_lex),
+	atom_codes(Token, Codes),
+	Codes = [FirstChar|_],
+	\+ is_punct(FirstChar),
+	% lex_form_ci_recs_input_7_LEXACCESS_TOGGLE([Token|MoreTokens], Recs, Remaining, TagList,
+ 	% 					  LexiconServerInfo, Lexicon, Index),
+
+       	lex_form_ci_recs_input_6([Token|MoreTokens], Recs, Remaining, TagList, Lexicon, Index),
 	!,
-	assembledefns_aux(Remaining, Token, MoreRecs, Rest, Lexicon, Index).
+	assembledefns_aux(Remaining, Token, Rest, TagList,
+			  LexiconServerInfo, Lexicon, Index, MoreRecs).
 
 %%% punctuation
-assembledefns_aux([Token|MoreTokens], _PreviousToken, [R|MoreRecs], Rest, Lexicon, Index) :-
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList,
+		  LexiconServerInfo, Lexicon, Index, [R|MoreRecs]) :- 
 	punct_token(Token, R),
 	!,
-	assembledefns_aux(MoreTokens, Token, MoreRecs, Rest, Lexicon, Index).
+	assembledefns_aux(MoreTokens, Token, Rest, TagList,
+			  LexiconServerInfo, Lexicon, Index, MoreRecs).
 
 %%% from shapes
-assembledefns_aux([Token|MoreTokens], _PreviousToken, Recs, Rest, Lexicon, Index) :-
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList,
+		  LexiconServerInfo, Lexicon, Index, Recs) :-
 	% shapes(Shapes, PreviousToken, [Token|MoreTokens], Remaining),
 	shapes(Shapes, [Token|MoreTokens], Remaining),
 	( Shapes = [_|_] ->
@@ -93,13 +127,16 @@ assembledefns_aux([Token|MoreTokens], _PreviousToken, Recs, Rest, Lexicon, Index
 	; Recs = [Shapes|MoreRecs]
 	),
 	!,
-	assembledefns_aux(Remaining, Token, MoreRecs, Rest, Lexicon, Index).
+	assembledefns_aux(Remaining, Token, Rest, TagList,
+			  LexiconServerInfo, Lexicon, Index, MoreRecs).
 
 %%% unknown token
-assembledefns_aux([Token|MoreTokens], _PreviousToken, [R|MoreRecs], Rest, Lexicon, Index) :-
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList,
+		  LexiconServerInfo, Lexicon, Index, [R|MoreRecs]) :-
 	R = unknown:[inputmatch:[Token]],
-	assembledefns_aux(MoreTokens, Token, MoreRecs, Rest, Lexicon, Index).
-
+	% format(user_output, '### UNKNOWN token ~q~n', [Token]),
+	assembledefns_aux(MoreTokens, Token, Rest, TagList,
+			  LexiconServerInfo, Lexicon, Index, MoreRecs).
 
 %%% punctuation records
 punct_token(Token, punctuation:[lexmatch:[Token], inputmatch:[Token], records:[punct:PunctName]]) :-

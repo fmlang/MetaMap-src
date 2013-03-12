@@ -38,6 +38,9 @@
     maybe_atom_gc/2
    ]).
 
+:- use_module(skr(skr_utilities), [
+	fatal_error/2
+    ]).
 
 :- dynamic atom_gc_threshold/1.
 
@@ -101,10 +104,8 @@ maybe_atom_gc(Notify,DidGC,SpaceCollected) :-
         SpaceCollected = 0
     ),
     !.
-maybe_atom_gc(_Notify,DidGC,SpaceCollected) :-
-    format('ERROR: maybe_atom_gc/3 did not finish normally.~n',[]),
-    DidGC=unknown,
-    SpaceCollected = -1.
+maybe_atom_gc(_Notify,_DidGC,_SpaceCollected) :-
+    fatal_error('maybe_atom_gc/3 did not finish normally.~n',[]).
 
 
 /* atom_gc_threshold(?Threshold)

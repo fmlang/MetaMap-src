@@ -295,12 +295,12 @@ public class DisambiguatorServerThread extends Thread
 	      }
               }
             logger.info("Finished processing");
-            if (logger.isDebugEnabled())
-            {
-                logger.debug("Free socket resources: " + SocketResourcePool.getInstance().getFreeSocketResourceCount());
-                logger.debug("Used socket resources: " + SocketResourcePool.getInstance().getUsedSocketResourceCount());
-                logger.debug("Broken socket resources: " + SocketResourcePool.getInstance().getBrokenSocketResourceCount());
-            }
+            // if (logger.isDebugEnabled())
+            // {
+            //     logger.debug("Free socket resources: " + SocketResourcePool.getInstance().getFreeSocketResourceCount());
+            //     logger.debug("Used socket resources: " + SocketResourcePool.getInstance().getUsedSocketResourceCount());
+            //     logger.debug("Broken socket resources: " + SocketResourcePool.getInstance().getBrokenSocketResourceCount());
+            // }
 
 	}
 	catch (NullPointerException npe)

@@ -38,22 +38,19 @@
 % ----- Module declaration and exported predicates
 
 :- module(generate_varinfo, [
-	generate_variant_info/2
+	generate_variant_info/3
    ]).
 
 
 % ----- Imported predicates
 
-% :- use_module( skr(testlvg), [
-% 	lexAccess_get_varlist_for_all_forms_init/2
-%   ]).
+:- use_module(skr(skr_utilities), [
+	fatal_error/2
+  ]).
 
-% :- use_module( lexicon(lex_access), [
-% 	get_citation_forms_for_form/2
-%   ]).
-
-:- use_module( lexicon(qp_lexicon), [
-	lex_form_ci_vars/2
+:- use_module(lexicon(lex_access), [
+	get_variants_for_form/3,
+	get_varlist/3
   ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -63,52 +60,40 @@
 
 :- use_module(skr_lib(sicstus_utils), [
 	lower/2,
-	string_char/3,
+	midstring/6,
 	string_size/2
   ]).
 
 
 % ******************************* GENERATE_VARIANT_INFO *******************************
 
-generate_variant_info([], []).
-generate_variant_info([LexiconOrOther:List|RestDefinitions], Variants) :-
-	generate_variant_info_1(LexiconOrOther, List, RestDefinitions, Variants).
+generate_variant_info([], _LexiconServerStream, []).
+generate_variant_info([LexiconOrOther:List|RestDefinitions], LexiconServerStream, Variants) :-
+	generate_variant_info_1(LexiconOrOther, LexiconServerStream, List, RestDefinitions, Variants).
 
-generate_variant_info_1(unknown, UnkList, RestDefinitions, [ThisItem|NewGap]) :-
+generate_variant_info_1(unknown, LexiconServerStream, UnkList, RestDefinitions, [ThisItem|NewGap]) :-
 	!,
 	get_lex_item(UnkList, inputmatch, InpMatch),
 	InpMatch = [ThisItem],
-	generate_variant_info(RestDefinitions, NewGap).
-generate_variant_info_1(lexicon, [lexmatch:[LexMatch], InputMatch|_], RestDefinitions,
-		      [LexMatch:ThisVarInfo|NewGap]) :-
+	generate_variant_info(RestDefinitions, LexiconServerStream, NewGap).
+generate_variant_info_1(lexicon, LexiconServerStream,
+			[lexmatch:[LexMatch], InputMatch|_],
+			RestDefinitions, [LexMatch:ThisVarInfo|NewGap]) :-
 	!,
-	get_varlist_LEXACCESS_TOGGLE(LexMatch, VarInfo),
-	% lex_form_ci_vars(LexMatch, VarInfo),
-	% get_citation_forms_for_form(LexMatch, _Cats, CitationForms),
-	% lexAccess_get_varlist_for_all_forms_init(CitationForms, VarInfo),
+	lower(LexMatch, LexMatchLC),
+	get_varlist(LexMatchLC, LexiconServerStream, VarInfo),
 	get_this_variant(VarInfo, LexMatch, ThisVarInfo, VariantTail),
 	% format(user_output, 'ThisVarInfo: ~q~n', [ThisVarInfo]),	
 	% append(ThisVarInfo, [InputMatch], ThisVarInfoAndInputMatch),   % Lan needs InputMatch
 	VariantTail = [InputMatch], 
-	generate_variant_info(RestDefinitions, NewGap).
-% This is for shapes, punctuation, and perhaps other stuff
-generate_variant_info_1(Other, OtherList, RestDefinitions, [Other:OtherList|NewGap]) :-
-	generate_variant_info(RestDefinitions, NewGap).
+	generate_variant_info(RestDefinitions, LexiconServerStream, NewGap).
 
-get_varlist_LEXACCESS_TOGGLE(LexMatch, VarInfo) :-
-%	( control_value(lexicon, c) ->
-	  lex_form_ci_vars(LexMatch, VarInfo).
-% 	; control_value(lexicon, java) ->
-% 	  get_citation_forms_for_form(LexMatch, CitationForms),
-%	  sort(CitationForms, SortedCitationForms),
-% 	  lexAccess_get_varlist_for_all_forms_init(SortedCitationForms, VarInfo)
-%	; format(user_error, '### ERROR: lexicon setting must be either c or java!~n', []),
-%	  abort
-%	).
+% This is for shapes, punctuation, and perhaps other stuff
+generate_variant_info_1(Other, LexiconServerStream, OtherList,
+			RestDefinitions, [Other:OtherList|NewGap]) :-
+	generate_variant_info(RestDefinitions, LexiconServerStream, NewGap).
 
 % ----- GET_LEX_ITEM
-
-% get_lex_item([], _Item, _ItemInfo) :- !, fail.
 
 get_lex_item([Item:ItemInfo|_More], Item, ItemInfo) :-
 	!.
@@ -125,23 +110,18 @@ get_this_variant([LexKey:[ThisList]|MoreVariants], ThisWord, [ThisList|Rest], Ta
 	% get_actual_lex_key(LexKey, ActualLexKey, _AgrInfo),
 	ActualLexKey = LexKey,
 	lower(ActualLexKey, LowerLexKey),
-	lower(ThisWord, LowerLexKey),
+	% ThisWord can end in "'s"
+	lower_apostrophe_s(ThisWord, LowerLexKey),
 	!,
 	% format(user_output, 'ThisList: ~q~n', [ThisList]),
 	get_this_variant(MoreVariants, ThisWord, Rest, Tail).
 get_this_variant([_Other|MoreVariants], ThisWord, ThisVarInfo, Rest) :-
 	get_this_variant(MoreVariants, ThisWord, ThisVarInfo, Rest).
 
-/*
-%--- GET_ACTUAL_LEX_KEY
 
-get_actual_lex_key(LexKey, ActualLexKey, AgrInfo) :-
-	string_char(Index, LexKey, 0';), %' % Comment is there just to fake out Emacs
-	!,
-	string_size(LexKey, Length),
-	LLen is Index - 1,
-	RLen is Length - Index,
-	midstring(LexKey, _, LexKeyAndAgrInfo , LLen, 1, RLen),
-	midstring(LexKeyAndAgrInfo, ActualLexKey, AgrInfo, 0, LLen).
-get_actual_lex_key(ActualLexKey, ActualLexKey, none).
-*/
+lower_apostrophe_s(ThisWord, LowerLexKey) :-
+	( lower(ThisWord, LowerLexKey) ->
+	  true
+	; midstring(ThisWord, ThisWordWithoutApostropheS, '''s', 0, _Length, 2),
+	  lower(ThisWordWithoutApostropheS, LowerLexKey)
+	).

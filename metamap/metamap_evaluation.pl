@@ -48,8 +48,8 @@
 
 
 :- use_module(metamap(metamap_utilities), [
-	candidate_term/15,
-	extract_unique_sources/3,
+	candidate_term/16,
+	extract_unique_sources/2,
 	positions_overlap/2
     ]).
 
@@ -60,12 +60,12 @@
 :- use_module(skr(skr_utilities), [
     	compute_sum/3,
     	debug_message/3,
+	fatal_error/2,
 	split_word/3
     ]).
 
 :- use_module(skr_db(db_access), [
 	db_get_concept_cui/2,
-	db_get_concept_cuis/2,
 	db_get_cui_sourceinfo/2
     ]).
 
@@ -139,13 +139,13 @@ evaluate_all_GVCs([First|Rest], DebugFlags, Label, UtteranceText, Variants, Toke
 			 PhraseTokens,  RawTokensOut, AAs,
 			 InputmatchPhraseWords,
 			 CCsIn, CCsInOut,
-			 EvaluationsIn, EvaluationsInOut),
+			 EvaluationsIn, EvaluationsNext),
 	evaluate_all_GVCs(Rest, DebugFlags, Label, UtteranceText, Variants, TokenPhraseWords,
 			  PhraseTokenLength, TokenHeadWords,
 			  PhraseTokens, RawTokensOut, AAs,
 			  InputmatchPhraseWords,
 			  CCsInOut, CCsOut,
-			  EvaluationsInOut, EvaluationsOut).
+			  EvaluationsNext, EvaluationsOut).
 
 evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, Variants,
 		 TokenPhraseWords, PhraseTokenLength,
@@ -217,7 +217,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				 RawTokensOut, AAs,
 				 InputmatchPhraseWords,
 				 TokenHeadWords, PhraseTokens, Evaluation) ->
-	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]) ->
+	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]),
 	  debug_evaluate_candidate_list_3(DebugFlags, Evaluation),
 	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
 	  % format(user_output, '     ~q~n', [Evaluation]),	    
@@ -235,32 +235,6 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				PhraseTokens, RawTokensOut, AAs,
 				InputmatchPhraseWords,
 				CCsNext, CCsOut, RestEvaluations).
-
-% evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
-% 			DebugFlags, Label, UtteranceText,
-% 			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
-% 			PhraseTokens, RawTokensOut, AAs,
-% 			InputmatchPhraseWords,
-% 			CCsIn, CCsOut, Evaluations) :-
-% 	% control_option(allow_duplicate_concept_names),
-% 	( compute_all_evaluations(MetaCanonical, DebugFlags, Label, UtteranceText,
-% 				  MetaString, MetaConcept,
-% 				  Variants, TokenPhraseWords, PhraseTokenLength,
-% 				  RawTokensOut, AAs,
-% 				  InputmatchPhraseWords,
-% 				  TokenHeadWords, PhraseTokens, NewEvaluations) ->
-% 	  debug_evaluate_candidate_list_5(DebugFlags, NewEvaluations),
-% 	  append(NewEvaluations, RestEvaluations, Evaluations)
-% 	; Evaluations = RestEvaluations,
-% 	  debug_evaluate_candidate_list_6(DebugFlags)
-% 	),
-% 	% format('~N### Eval 3: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
-% 	add_to_avl(MetaCanonical, MetaConcept, CCsIn, CCsNext),
-% 	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
-% 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
-% 				PhraseTokens, RawTokensOut, AAs,
-% 				InputmatchPhraseWords,
-% 				CCsNext, CCsOut, RestEvaluations).
 
 /* 
    compute_one_evaluation(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaTerm, +MetaConcept,
@@ -291,6 +265,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
 	% get_matching_phrasewords(TokenPhraseWords, MatchMap, MatchingWords),
 	% format(user_output,'MetaWords     = ~q~n', [MetaWords]),	
+	% format(user_output,'MatchMap      = ~q~n', [MatchMap]),	
 	% format(user_output,'MetaTerm      = ~q~n', [MetaTerm]),	
 	% format(user_output,'MetaConcept   = ~q~n', [MetaConcept]),
 	test_minimum_length(TokenPhraseWords, MatchMap),
@@ -306,15 +281,17 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 				       MatchMap, MatchCCs, ExtraMetaWords),
 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
 			    ExtraMetaWords, Variants, InvolvesHead, Value),
+	% format(user_output,'MatchValue    = ~q~n', [Value]),	
 	debug_compute_one_evaluation_2(DebugFlags, MetaTerm),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
-	db_get_cui_sourceinfo(CUI, SourceInfo),
-	extract_unique_sources(SourceInfo, [], UniqueSources),
+	db_get_cui_sourceinfo(CUI, Sources),
+	extract_unique_sources(Sources, UniqueSources),
         compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, _SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-		       IsOvermatch, UniqueSources, PosInfo, _Status, Evaluation),
+		       IsOvermatch, UniqueSources, PosInfo, _Status, _Negated, Evaluation),
+	
 	% format(user_output, 'EV:~q:~n', [Evaluation]),
 	% format(user_output, '~N~q:~q:~q~n', [MetaTerm,MetaWords,TokenPhraseWords]),
 	% This is just so the debugger will let me examine Evaluation
@@ -354,61 +331,6 @@ get_all_indexes([], _PhraseWords, []).
 get_all_indexes([Index|RestIndexes], PhraseWords, [MatchingWord|RestMatchingWords]) :-
 	nth1(Index, PhraseWords, MatchingWord),
 	get_all_indexes(RestIndexes, PhraseWords, RestMatchingWords).
-
-% We no longer consolidate MatchMaps because of
-% the thorny issue of combining lexical variation scores
-% consolidate_matchmap(MatchMapTail, MatchMapHead, ConsolidatedMatchMap) :-
-%	ConsolidatedMatchMap = [MatchMapHead|MatchMapTail].
-
-% consolidate_matchmap(MatchMapTail, MatchMapHead, ConsolidatedMatchMap) :-
-% 	consolidate_matchmap_aux(MatchMapTail, MatchMapHead, MatchMap0),
-% 	ConsolidatedMatchMap = MatchMap0.
-% 	% force_variation_to_integer(MatchMap0, ConsolidatedMatchMap).	
-
-% consolidate_matchmap_aux([], MatchMapHead, [MatchMapHead]).
-% consolidate_matchmap_aux([MatchMap2|RestMatchMap], MatchMap1, MatchMap) :-
-% 	( merge_matchmap_components(MatchMap1, MatchMap2, MergedMatchMap) ->
-% 	  consolidate_matchmap_aux(RestMatchMap, MergedMatchMap, MatchMap)
-% 	; MatchMap = [MatchMap1|MatchMapOut],
-% 	  consolidate_matchmap_aux(RestMatchMap, MatchMap2, MatchMapOut)
-% 	).
-
-% force_variation_to_integer([], []).
-% force_variation_to_integer([HIn|TIn], [HOut|TOut]) :-
-% 	HIn  = [TextMatch,ConceptMatch,Variation],
-% 	HOut = [TextMatch,ConceptMatch,VariationInt],
-% 	VariationInt is round(Variation),
-% 	force_variation_to_integer(TIn, TOut).
-
-merge_matchmap_components([[Text1Start,Text1End], [Concept1Start,Concept1End], Variation1],
-			  [[Text2Start,Text2End], [Concept2Start,Concept2End], Variation2],
-			  [[Text1Start,Text2End], [Concept1Start,Concept2End], Variation3]) :-
-	Text2Start is Text1End + 1,
-	Concept2Start is Concept1End + 1,
-	Variation3 is Variation1 + Variation2.
-
-	% Sum
-	% Variation3 is Variation1 + Variation2.
-	% Max
-	% Variation3 is max(Variation1, Variation2).
-
-%%% modify_pos_info_for_aa_count(AAExtraCharCount, TempPosInfo, PosInfo) :-
-%%% 	( AAExtraCharCount =:= 0 ->
-%%% 	  PosInfo = TempPosInfo;
-%%% 	  TempPosInfo = [FirstTempPosInfo|RestTempPosInfo],
-%%% 	  increase_final_length(RestTempPosInfo, FirstTempPosInfo, AAExtraCharCount, PosInfo)
-%%% 	).
-%%% 	
-%%% increase_final_length([], LastTempPosInfo, AAExtraCharCount, [PosInfo]) :-
-%%% 	LastTempPosInfo = LastStartPos/LastLength,
-%%% 	NewLastLength is LastLength + AAExtraCharCount,
-%%% 	PosInfo = LastStartPos/NewLastLength.
-%%% 
-%%% increase_final_length([NextTempPosInfo|RestTempPosInfo], FirstTempPosInfo,
-%%% 		      AAExtraCharCount,
-%%% 		      [FirstTempPosInfo|RestPosInfo]) :-
-%%% 	increase_final_length(RestTempPosInfo, NextTempPosInfo, AAExtraCharCount, RestPosInfo).
-
 
 % A MatchMap list is a list of lists of the form [[X1,Y1], [X2,Y2], Z].
 % In each MatchMap list, all we care about is the [X1,Y1],
@@ -502,10 +424,8 @@ get_one_word_pos_info(MatchingPhraseWord, [FirstToken|RestTokens],
 				MatchingToken, RemainingTokens,
 				StartPos, Length) ->
 	  true
-	; format(user_output,
-		 '~n### ERROR: get_one_word_pos_info failed on ~q/~p~n',
-		 [MatchingPhraseWord, [FirstToken|RestTokens]]),
-	  abort
+	; fatal_error('get_one_word_pos_info failed on ~q/~p~n',
+		      [MatchingPhraseWord, [FirstToken|RestTokens]])
 	).
 
 get_rest_word_pos_info([], PhraseTokens, _RawTokensOut, [], PhraseTokens, []).
@@ -537,59 +457,6 @@ matching_token(lc, MatchingPhraseWordAtom,
 	  )
 	; MatchingPhraseWordCodes = LCTokenString
 	).	  
-
-
-% compute_all_evaluations(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, MetaConcept,
-% 			Variants, TokenPhraseWords, PhraseTokenLength,
-% 			RawTokensOut, AAs, InputmatchPhraseWords,
-% 			TokenHeadWords, PhraseTokens, Evaluations) :-
-% 	% filter_out_multiple_meaning_designators(MetaWords0,MetaWords),
-% 	debug_message(trace, '~N### computing ALL evaluations: ~q~n', [MetaWords]),
-% 	compute_phrase_match(TokenHeadWords, Label, UtteranceText,
-% 			     TokenPhraseWords, MetaWords, Variants, PhraseTokenLength,
-% 			     MatchMap, InvolvesHead, IsOvermatch),
-% 	% TempMatchMap = [MatchMapHead|MatchMapTail],
-% 	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
-% 	test_minimum_length(TokenPhraseWords, MatchMap),
-%         % format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
-% 	MatchMap \== [],
-% 	compute_connected_components(MatchMap, MatchCCs),
-% 	length( TokenPhraseWords, NTokenPhraseWords),
-% 	length(MetaWords, NMetaWords),
-% 	compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords),
-% 	( memberchk(5, DebugFlags) ->
-% 	  format('~n~p~n~p~n~p~n~p~n~p~n',
-% 		 [TokenPhraseWords,MetaWords,MatchMap,MatchCCs,ExtraMetaWords])
-% 	; true
-% 	),
-% 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
-% 			    ExtraMetaWords, Variants, InvolvesHead, Value),
-% 	( memberchk(5, DebugFlags) ->
-% 	  format(' <-- ~p~n',[MetaTerm])
-% 	; true
-% 	),
-% 	NegValue is -Value,
-% 	db_get_concept_cuis(MetaConcept, CUIs),
-% 	form_evaluations(CUIs, NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
-% 			 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-% 			 InputmatchPhraseWords, InvolvesHead, IsOvermatch, Evaluations).
-% 
-% form_evaluations([], _, _, _, _, _, _, _, _, _, _, _, _, []) :- !.
-% form_evaluations([CUI|Rest], NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
-% 		 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-% 		 InputmatchPhraseWords,
-%                  InvolvesHead, IsOvermatch, [FirstEvaluation|RestEvaluations]) :-
-% 	db_get_cui_sourceinfo(CUI, SourceInfo),
-% 	extract_unique_sources(SourceInfo, [], UniqueSources),
-%         compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
-% 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, _SemTypes,
-% 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-% 		       IsOvermatch, UniqueSources, PosInfo, _Status, FirstEvaluation),
-% 	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo),
-% 	form_evaluations(Rest, NegValue, MetaTerm, MetaConcept, MetaWords, MatchMap,
-% 			 TokenPhraseWords, PhraseTokens, RawTokensOut, AAs,
-% 			 InputmatchPhraseWords,
-% 			 InvolvesHead, IsOvermatch, RestEvaluations).
 
 compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords) :-
 	extract_components(MatchMap, _PhraseComponents, MetaComponents),
@@ -1236,23 +1103,6 @@ debug_evaluate_candidate_list_4(DebugFlags) :-
 	    format('  NO~n',[])
 	  ; true
 	  ).
-
-
-debug_evaluate_candidate_list_5(DebugFlags, NewEvaluations) :-
-	  ( control_value(debug, DebugFlags),
-	    memberchk(3, DebugFlags) ->
-	    format('  YES~n    ~p~n',[NewEvaluations])
-	  ; true
-	  ).
-
-
-debug_evaluate_candidate_list_6(DebugFlags) :-
-	  ( control_value(debug, DebugFlags),
-	    memberchk(3, DebugFlags) ->
-	    format('  NO~n',[])
-	  ; true
-	  ).
-
 
 debug_compute_one_evaluation_1(DebugFlags, TokenPhraseWords, MetaWords,
 			       MatchMap,MatchCCs,ExtraMetaWords) :-

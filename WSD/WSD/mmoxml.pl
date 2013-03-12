@@ -38,7 +38,7 @@
     ]).
 
 :- use_module(metamap(metamap_utilities), [
-	candidate_term/15
+	candidate_term/16
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -92,9 +92,19 @@ mmo_terms_to_xml_doc(MMOTermList, MethodList, XMLDoc) :-
         handle_methods(MethodList, MethodsTerm),
         % append([CitationOutputTerm|UtteranceTerms],[MethodsTerm],TermList),
         % append(UtteranceTerms,[MethodsTerm],TermList),
-	TermList = [CitationOutputTerm, AAOutputTerm, UtteranceTerms, MethodsTerm],
-        MachineOutputTerm = element(machine_output,[],TermList),
+	handle_server_options([serveroption(keepalive,"true")], ServerOptionsTerm),
+        TermList = [CitationOutputTerm,AAOutputTerm,UtteranceTerms,MethodsTerm,ServerOptionsTerm],
+	MachineOutputTerm = element(machine_output,[],TermList),
         XMLDoc = xml([version="1.0"],[MachineOutputTerm]).
+
+handle_server_options(ServerOptionList, ServerOptionsTerm) :-
+       handle_server_optionlist(ServerOptionList, OptionTermList),
+       ServerOptionsTerm = element(serveroptionlist,[],OptionTermList).
+
+handle_server_optionlist([], []).
+handle_server_optionlist([serveroption(Name,Value)|Rest], [Term|Terms]) :-
+       Term = element(serveroption,[Name=Value],[]),
+       handle_server_optionlist(Rest,Terms).
 
 get_utterance_list([], []).
 get_utterance_list([X|RestMMOTermListIn], [UtteranceTerm|UtteranceTerms]) :-
@@ -201,7 +211,8 @@ handle_evaluations([FirstCandidate|RestCandidates], [EvTerm|EvTerms]) :-
 	% WSD doesn't need to know about LSComponents, TargetLSComponent, or Status
 	candidate_term(Score0, Cui0, ConceptName0, PrefName0, MatchedWords0, SemTypes0,
 		       MatchMap0, _LSComponents, _TargetLSComponent,
-		       HeadFlag0, OverMatchFlag0, Sources0, PosInfo0, _Status, FirstCandidate),
+		       HeadFlag0, OverMatchFlag0, Sources0, PosInfo0, _Status, _Negated,
+		       FirstCandidate),
 	% First = ev(Score0,Cui0,ConceptName0,PrefName0,MatchedWords0,SemTypes0,
 	% 	   MatchMap0,HeadFlag0,OverMatchFlag0,Sources0,PosInfo0,_Status0),
 	number_codes(Score0, Score),
