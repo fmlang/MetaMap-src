@@ -87,7 +87,7 @@
 	convert_all_utf8_to_ascii/4,
 	extract_sentences/12,
 	get_skr_text/2,
-	medline_PMID_indicator_char/1
+	medline_field_separator_char/1
 	% is_sgml_text/1
 	% warn_remove_non_ascii_from_input_lines/2
    ]).
@@ -154,7 +154,7 @@
 	interpret_args/4,
 	interpret_options/4,
 	parse_command_line/1,
-	reset_control_options/1,
+	% reset_control_options/1,
 	set_control_values/2,
 	toggle_control_options/1,
 	update_command_line/5
@@ -167,7 +167,7 @@
    ]).
 
 :- use_module(skr_lib(server_choice), [
-	get_all_server_streams/3
+	get_server_streams/1
    ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -206,17 +206,6 @@
    ]).
 
 
-bp :-
-	current_predicate(Pred, Mod:Skel),
-	sub_atom(Pred, _, _, _, lexAccess),
-	\+ sub_atom(Pred, _, _, _, prefix),
-	functor(Skel, Pred, Arity),
-	add_breakpoint([pred(Mod:Pred/Arity),
-			goal(_:G)]-
-			[call,proceed,true(format(user_output, 'CALL: ~q~n', [G]))], _BID),
-	fail
-      ; true.
-
 /* go
    skr_fe_go
    go(+HaltFlag)
@@ -233,7 +222,7 @@ go(HaltOption) :-
 	go(HaltOption, CLTerm).
 
 go(HaltOption, command_line(Options0,Args0)) :-
-	reset_control_options(metamap),
+	% reset_control_options(metamap),
 	update_command_line(Options0, Args0, metamap, Options, Args),
 	get_program_name(ProgramName),
 	default_release(Release),
@@ -292,16 +281,17 @@ skr_fe(InterpretedArgs, ProgramName, UDAList, DefaultRelease, IOptions) :-
 	xml_header_footer_print_setting(1, XMLMode, PrintSetting),
 	get_output_stream(OutputStream),
 	conditionally_print_xml_header(PrintSetting, OutputStream),
-	get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream),
-	AllServerStreams = (LexiconServerStream,TaggerServerStream,WSDServerStream),
+	get_server_streams(ServerStreams),
+	% ServerStreams = LexiconServerStream-TaggerServerStream-WSDServerStream,
 	( InputStream = user_input,
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
           process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-		      UDAList, AllServerStreams, TagOption, InterpretedArgs, IOptions)
+		      UDAList, ServerStreams,
+		      TagOption, InterpretedArgs, IOptions)
           % batch_skr is for batch processing
         ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease, UDAList,
-		    AllServerStreams, TagOption, TagMode, IOptions, InputStream)
+		    ServerStreams, TagOption, TagMode, IOptions, InputStream)
 	),
 	% conditionally_print_xml_footer/4 will be called here
 	% only if MetaMap is in batch mode, because otherwise (in interactive use)
@@ -332,8 +322,7 @@ file names from InterpretedArgs and redirects I/O to them.
 Meta concepts are computed for each noun phrase in the input.  */
 
 batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
-	  UDAList, AllServerStreams, TagOption,
-	  TagMode, IOptions, InputStream) :-
+	  UDAList, ServerStreams, TagOption, TagMode, IOptions, InputStream) :-
 	get_from_iargs(infile,  name,   InterpretedArgs, InputFile),
 	get_from_iargs(infile,  stream, InterpretedArgs, InputStream),
 	get_from_iargs(outfile, name,   InterpretedArgs, OutputFile),
@@ -342,7 +331,7 @@ batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 	set_input(InputStream),
 	set_output(OutputStream),
 	( process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-		      UDAList, AllServerStreams, TagOption, InterpretedArgs, IOptions) ->
+		      UDAList, ServerStreams, TagOption, InterpretedArgs, IOptions) ->
 	  true
 	; true
 	),
@@ -350,7 +339,6 @@ batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 	conditionally_print_end_info.
 
 /* process_all(+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
-	       +WSDServerHosts, +WSDForced, +WSDServerPort,
    	       +InterpretedArgs, +IOptions)
 
 process_all/9 reads utterances from user_input and performs all SKR
@@ -359,12 +347,12 @@ user_input and user_output may have been redirected to files.)
 If TagOption is 'tag', then tagging is done. */
 
 process_all(ProgramName, DefaultRelease, InputStream, OutputStream, UDAList,
-	    AllServerStreams, TagOption, InterpretedArgs, IOptions) :-
+	    ServerStreams, TagOption, InterpretedArgs, IOptions) :-
 	do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream),
-	process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions).
+	process_all_1(UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions).
 
 
-process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions) :-
+process_all_1(UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions) :-
 	get_skr_text(StringsUTF8, TextID),
 	convert_all_utf8_to_ascii(StringsUTF8, 0, TempExtraChars, Strings0),
 	append(TempExtraChars, ExtraChars),
@@ -373,12 +361,12 @@ process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions) :
 	% Removed call for Steven Bedrick
 	TrimmedStrings = Strings0,
 	( TrimmedStrings \== [] ->
-	  process_text(TrimmedStrings, TextID, ExtraChars, TagOption,
-		       AllServerStreams, ExpRawTokenList, AAs, UDAList, MMResults),
+	  process_text(TrimmedStrings, TextID, ExtraChars, TagOption, ServerStreams,
+		       ExpRawTokenList, AAs, UDAList, MMResults),
 	  output_should_be_bracketed(BracketedOutput),
  	  postprocess_text(TrimmedStrings, BracketedOutput, InterpretedArgs,
 			   IOptions, ExpRawTokenList, AAs, MMResults),
-	  process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions)
+	  process_all_1(UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions)
 	; true
 	),
 	!.
@@ -390,7 +378,6 @@ process_all_1(UDAList, TagOption, AllServerStreams, InterpretedArgs, IOptions) :
 
 /* process_text(+Lines,
    		+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
-		+WSDServerHosts, +WSDForced, +WSDServerPort,
 		-ExpRawTokenList, -MMResults)
 
    postprocess_text(+Lines, +BracketedOutputFlag, +InterpretedArgs,
@@ -450,15 +437,15 @@ in Sentences in case the original text is preferred. */
 % 	 aphrases(APhrases))
 
 %%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
-process_text(Text, TextID, ExtraChars, TagOption, AllServerStreams,
+process_text(Text, TextID, ExtraChars, TagOption, ServerStreams,
 	     RawTokenList, AAs, UDAList, MMResults) :-
-	( process_text_1(Text, TextID, ExtraChars, TagOption,
-			 AllServerStreams, RawTokenList, AAs, UDAList, MMResults) ->
+	( process_text_1(Text, TextID, ExtraChars, TagOption, ServerStreams,
+			 RawTokenList, AAs, UDAList, MMResults) ->
 	  true
  	; fatal_error('process_text/4 failed for~n~p~n', [Text])
 	).
 
-process_text_1(Lines0, TextID, ExtraChars, TagOption, AllServerStreams,
+process_text_1(Lines0, TextID, ExtraChars, TagOption, ServerStreams,
 	       ExpRawTokenList, AAs, UDAList, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
@@ -528,19 +515,19 @@ process_text_1(Lines0, TextID, ExtraChars, TagOption, AllServerStreams,
 	ExpRawTokenList \== '',
 	empty_avl(WordDataCacheIn),
 	empty_avl(USCCacheIn),
-	process_text_aux(ExpandedUtterances, TagOption, AllServerStreams,
+	process_text_aux(ExpandedUtterances, TagOption, ServerStreams,
 			 CitationTextAtomWithCRs, AAs, UDAs,
 			 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut, MMOutput),
         !.
 
 process_text_aux([],
-		 _TagOption, _AllServerStreams,
+		 _TagOption, _ServerStreams,
 		 _CitationTextAtom, _AAs, _UDAs,
 		 ExpRawTokenList, WordDataCache, USCCache,
 		 ExpRawTokenList, WordDataCache, USCCache, []).
 process_text_aux([ExpandedUtterance|Rest],
-		 TagOption, AllServerStreams,
+		 TagOption, ServerStreams,
 		 CitationTextAtom, AAs, UDAs,
 		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
 		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
@@ -557,16 +544,16 @@ process_text_aux([ExpandedUtterance|Rest],
 	conditionally_announce_processing(InputLabel, Text0),
 	maybe_atom_gc(_DidGC,_SpaceCollected),
 	set_utterance_text(Text0, UtteranceText),
-	do_syntax_processing(TagOption, AllServerStreams,
+	do_syntax_processing(TagOption, ServerStreams,
 			     UtteranceText, FullTagList, TagList,
 			     HRTagStrings, Definitions, SyntAnalysis0),
 	conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
 		    AAs, UDAs, SyntAnalysis,
 		    WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
-		    AllServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
+		    ServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 		    DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases),
-	process_text_aux(Rest, TagOption, AllServerStreams,
+	process_text_aux(Rest, TagOption, ServerStreams,
 			 CitationTextAtom, AAs, UDAs,
 			 ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 			 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
@@ -933,9 +920,9 @@ set_utterance_text(Text0, UtteranceText) :-
 	; UtteranceText = Text0
 	).
 
-do_syntax_processing(TagOption, AllServerStreams, UtteranceText, FullTagList, TagList,
+do_syntax_processing(TagOption, ServerStreams, UtteranceText, FullTagList, TagList,
 		     HRTagStrings, Definitions, SyntAnalysis0) :-
-	AllServerStreams  = (LexiconServerStream,TaggerServerStream,_WSDServerStream),
+	ServerStreams = LexiconServerStream-TaggerServerStream-_WSDServerStream,
 	( TagOption == tag ->
 	  tag_text(UtteranceText, TaggerServerStream, FullTagList, TagList, HRTagStrings),
 	  % If tag_text succeeded, cut out the choice point
@@ -1033,7 +1020,7 @@ trim_field_name_prefix(Field, CharsIn, FieldLength, NumBlanksTrimmed, CharsNext3
 	trim_whitespace_left(CharsNext0, CharsNext1, NumBlanksTrimmed1),
 	% trim off the hyphen after the blanks
 	CharsNext1 = [FirstChar|CharsNext2],
-	medline_PMID_indicator_char(FirstChar),
+	medline_field_separator_char(FirstChar),
 	% trim off any whitespace immediately after the hyphen
 	trim_whitespace_left(CharsNext2, CharsNext3, NumBlanksTrimmed2),
 	% The "+1" is for the hyphen

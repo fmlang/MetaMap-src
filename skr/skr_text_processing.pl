@@ -38,7 +38,7 @@
 	extract_sentences/12,
 	get_skr_text/2,
 	get_skr_text_2/2,
-	medline_PMID_indicator_char/1,
+	medline_field_separator_char/1,
 	text_field/1
 	% is_sgml_text/1,
 	% moved from labeler % needed by sgml_extractor?
@@ -75,6 +75,7 @@
 	split_string/4,
 	split_string_completely/3,
 	trim_whitespace/2,
+	trim_whitespace_left/2,
 	trim_whitespace_right/2
     ]).
 
@@ -251,7 +252,7 @@ extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFiel
 	glom_whitespace_fields(RestLines, FirstLine, Lines00),
 	replace_tabs_in_strings(Lines00, Lines1),
 	replace_nonprints_in_strings(Lines1, Lines2),
-	( is_medline_citation(Lines2) ->
+	( medline_citation(Lines2) ->
 	  extract_coord_sents_from_citation(Lines2, ExtraChars, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
 					    AAs, UDAList, UDA_AVL),
@@ -271,31 +272,44 @@ extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFiel
 	update_strings_with_UDAs(Lines2, UDAList, Lines),
 	!.
 
-% The following logic recognizes MEDLINE citations indicated by (case insensitive)
-% "PMID" or "UI" followed by
-% optional whitespace followed by
-% one of "-", "|", ":", or "." followed by
-% optional whitespace followed by
-% any text, i.e.,
-% (PMID|UI)<whitespace>[-|:.]<whitespace><any text>
+% To be recognized as a MEDLINE citation, a list of strings must be such that
+% (1) The first string begins with
+%     * optional whitespace followed by
+%     * "PMID" or "UI" (case insensitive) followed by
+%     * optional whitespace followed by
+%     * one of "-", "|", ":", or ".", i.e.,
+% <whitespace>(PMID|UI)<whitespace>[-|:.]
+% (2) A subsequent string begins with the same sequence as above,
+% but with "TI" instead of "PMID" or "UI".
 
-medline_PMID_indicator_char(0'-).
-medline_PMID_indicator_char(0'|).
-medline_PMID_indicator_char(0':).
-medline_PMID_indicator_char(0'.).
-
-is_medline_citation([First|_]) :-
-	medline_PMID_indicator_char(Char),
-	split_string_completely(First, [Char], Tokens0),
-	% split into at least two tokens
-	Tokens0 = [_,_|_],	
-	remove_nulls(Tokens0, Tokens),
-	Tokens = [String1,_String2|_],
-	lower_chars(String1, LowerString1),
-	trim_whitespace(LowerString1, TrimmedLowerString1),
-	atom_codes(LowerAtom1, TrimmedLowerString1),
-	medline_citation_indicator(LowerAtom1),
+medline_citation([FirstString,NextString|RestStrings]) :-
+	medline_PMID_field_name(PMIDFieldNameAtom),
+	atom_codes(PMIDFieldNameAtom, PMIDFieldNameString),
+	medline_field_string(FirstString, PMIDFieldNameString),
+	!,
+	medline_title_field_name(TitleFieldNameAtom),
+	atom_codes(TitleFieldNameAtom, TitleFieldNameString),
+	member(OtherString, [NextString|RestStrings]),
+	medline_field_string(OtherString, TitleFieldNameString),
 	!.
+
+medline_field_string(PMIDString, FieldNameString) :-
+	trim_whitespace_left(PMIDString, TrimmedPMIDString),
+	lower_chars(TrimmedPMIDString, LowerTrimmedPMIDString),
+	append(FieldNameString, StringWithoutCitationIndicator, LowerTrimmedPMIDString),
+	trim_whitespace_left(StringWithoutCitationIndicator, TrimmedStringWithoutCitationIndicator),
+	TrimmedStringWithoutCitationIndicator = [FirstChar|_RestChars],
+	medline_field_separator_char(FirstChar).
+
+medline_field_separator_char(0'-).
+medline_field_separator_char(0'|).
+medline_field_separator_char(0':).
+medline_field_separator_char(0'.).
+
+medline_PMID_field_name(pmid).
+medline_PMID_field_name(ui).
+
+medline_title_field_name(ti).
 
 remove_nulls([], []).
 remove_nulls([First|Rest], Result) :-
@@ -304,15 +318,6 @@ remove_nulls([First|Rest], Result) :-
 	; Result = [First|RestResult]
 	),
 	remove_nulls(Rest, RestResult).
-
-medline_citation_indicator('pmid').
-medline_citation_indicator(ui).
-% medline_citation_indicator('pmid-').
-% medline_citation_indicator('pmid|').
-% medline_citation_indicator('pmid:').
-% medline_citation_indicator('pmid.').
-% 
-% medline_citation_indicator('ui-').
 
 is_smart_fielded([First,_|_]) :-
 	append(".", _, First).
@@ -362,7 +367,7 @@ extract_coord_sents_from_citation(CitationLines, ExtraChars, TextFields, NonText
     (   member([FieldIDString,Field], CitationFields),
 	lower_chars(FieldIDString, LowerFieldIDString),
 	atom_codes(LowerFieldIDAtom, LowerFieldIDString), 
-	medline_citation_indicator(LowerFieldIDAtom) ->
+	medline_PMID_field_name(LowerFieldIDAtom) ->
         extract_ui(Field, UI)
     ;   UI="00000000"
     ),
@@ -516,7 +521,7 @@ f_begins_field(FR) -->
 
 % Cleaned-up DCG version
 f_dense_token(T) -->
-	[Char], { \+ Char == 0' }, { \+ medline_PMID_indicator_char(Char) },
+	[Char], { \+ Char == 0' }, { \+ medline_field_separator_char(Char) },
 	( f_dense_token(U) ->
 	  { T = [Char|U] }
 	; { T = [Char] }
@@ -547,7 +552,7 @@ f_dense_token(T) -->
 f_separator(S) -->
 	f_blanks(_B1),
 	[Char],
-	{ medline_PMID_indicator_char(Char) },
+	{ medline_field_separator_char(Char) },
 	f_blanks(_B2),
 	{ S = Char }.
 
@@ -928,7 +933,9 @@ extract_coord_sents_from_fields(UI, ExtraChars, Fields, TextFields, NonTextField
 	update_text_fields_with_UDAs(TextFields0, UDAList, TextFields),
 	!.
 
-right_trim_last_string(TextFieldsIn, TextFieldsOut) :-
+right_trim_last_string([], []).
+right_trim_last_string([H|T], TextFieldsOut) :-
+	TextFieldsIn = [H|T],
 	% get the last [FieldName, Fieldtrings] in TextFieldsIn
 	append(TextFieldsIn0, [[LastFieldName, LastTextFieldStrings]], TextFieldsIn),
 	% get the last String in FieldStrings
