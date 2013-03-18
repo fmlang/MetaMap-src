@@ -92,9 +92,19 @@ mmo_terms_to_xml_doc(MMOTermList, MethodList, XMLDoc) :-
         handle_methods(MethodList, MethodsTerm),
         % append([CitationOutputTerm|UtteranceTerms],[MethodsTerm],TermList),
         % append(UtteranceTerms,[MethodsTerm],TermList),
-	TermList = [CitationOutputTerm, AAOutputTerm, UtteranceTerms, MethodsTerm],
-        MachineOutputTerm = element(machine_output,[],TermList),
+	handle_server_options([serveroption(keepalive,"true")], ServerOptionsTerm),
+        TermList = [CitationOutputTerm,AAOutputTerm,UtteranceTerms,MethodsTerm,ServerOptionsTerm],
+	MachineOutputTerm = element(machine_output,[],TermList),
         XMLDoc = xml([version="1.0"],[MachineOutputTerm]).
+
+handle_server_options(ServerOptionList, ServerOptionsTerm) :-
+       handle_server_optionlist(ServerOptionList, OptionTermList),
+       ServerOptionsTerm = element(serveroptionlist,[],OptionTermList).
+
+handle_server_optionlist([], []).
+handle_server_optionlist([serveroption(Name,Value)|Rest], [Term|Terms]) :-
+       Term = element(serveroption,[Name=Value],[]),
+       handle_server_optionlist(Rest,Terms).
 
 get_utterance_list([], []).
 get_utterance_list([X|RestMMOTermListIn], [UtteranceTerm|UtteranceTerms]) :-

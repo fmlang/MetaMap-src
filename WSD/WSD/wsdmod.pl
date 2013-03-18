@@ -56,6 +56,10 @@
 	control_value/2
    ]).
 
+:- use_module(skr_lib(skr_tcp), [
+	establish_tcp_connection/4
+    ]).
+
 :- use_module(skr(skr), [
 	extract_phrases_from_aps/2,
 	get_inputmatch_atoms_from_phrase/2,
@@ -65,6 +69,7 @@
 :- use_module(skr(skr_utilities), [
 	debug_message/3,
 	ensure_number/2,
+	fatal_error/2,
 	generate_aa_term/2
    ]).
 
@@ -267,7 +272,7 @@ find_word_with_gap(WordAtom, [Token|Rest], [Token|BeforeRest], Match, After) :-
 	find_word_with_gap(WordAtom, Rest, BeforeRest, Match, After).
 	
 	
-/* disambiguate_mmoutput(MMOutput, +WSDServerStream, -DisambMMOutput)
+/* disambiguate_mmoutput(MMOutput, -DisambMMOutput)
    extract_mmo_from_utterance(+MMOutput, +UttNum, -MMO, -MarkedMappings, -MarkedMMOutput)
    extract_mmo_phrases(+MMOutput, +UttNum, +PhraseNum, -MMO, -MarkedMappings,
                        -MarkedMMOutput)
@@ -443,30 +448,14 @@ extract_mmo_phrases([Phrase|Rest],
 disambiguate_mmo(MMOTermList, WSDServerStream, DisambMMO) :-
 	( call_WSD(MMOTermList, WSDServerStream, RawDisambMMOString) ->
 	  test_parse_disamb_mmo(RawDisambMMOString, DisambMMO)
-	; format(user_output,
-		 'Fatal error: call_WSD/2 could not process:~n~p~n',
-		 [MMOTermList]),
-	  ttyflush,
-	  format('Fatal error: call_WSD/2 could not process:~n~p~n',
-		 [MMOTermList]),
-	  current_output(CurrentOutputStream),
-	  flush_output(CurrentOutputStream),
-	  abort
-      ).
+	; fatal_error('call_WSD/2 could not process:~n~p~n', [MMOTermList])
+	).
 
 test_parse_disamb_mmo(RawDisambMMOString, DisambMMO) :-
 	( parse_disamb_mmo(RawDisambMMOString, DisambMMO) ->
 	  true
 	; atom_codes(RawDisambMMOAtom, RawDisambMMOString),
-	  format(user_output,
-		 'Fatal error: disambiguate_mmo/2 could not parse:~n~p~n',
-		 [RawDisambMMOAtom]),
-	  ttyflush,
-	  format('Fatal error: disambiguate_mmo/2 could not parse:~n~p~n',
-	  	 [RawDisambMMOAtom]),
-	  current_output(CurrentOutputStream),
-	  flush_output(CurrentOutputStream),
-	  abort
+	  fatal_error('disambiguate_mmo/2 could not parse:~n~p~n', [RawDisambMMOAtom])
 	  ).
 
 /*
@@ -512,9 +501,7 @@ parse_disamb_mmo_aux([First|Rest], Result) :-
 	  Result=DisambRest
         ; Fields=[Label0,I0,N0,AllSenses0,DisambSenses0,_],
           ( append("[Error JDI",_,DisambSenses0) ->
-	    format('Fatal error: parse_disamb_mmo_aux/2 failed ~p on ~p~n',
-		   [DisambSenses0,First]),
-	    abort
+	    fatal_error('parse_disamb_mmo_aux/2 failed ~p on ~p~n', [DisambSenses0,First])
 	  ; true
 	  ),
           ( ( DisambSenses0 == "[No match found.]"
@@ -826,7 +813,7 @@ reinsert_mmoutput_aux([markedphrase(UttNum,PhraseNum,Phrase1,Candidates,
 	reinsert_mmoutput_aux(RestMarkedPhrases,
 			      RestStrippedMarkedMappings, StrippedMarkedMappingsOut,
 			      RestReinsertedMMOPhrases, RestReinsertedExtractedPhrases).
-% temp
+
 reinsert_mmoutput_aux(MMOPhrases, StrippedMarkedMappings, _, MMOPhrases, _) :-
 	fatal_error('reinsert_mmoutput/4 failed for~nMMOPhrases: ~p~nStrippedMarkedMappings: ~p~n~n',
 	       [MMOPhrases,StrippedMarkedMappings]).
@@ -857,25 +844,16 @@ get_WSD_parameters(MethodList, BeginDelimiterChars, EndDelimiterChars) :-
 	make_method_list(Methods, Weights, MethodList).
 
 call_WSD_server(XMLRequest, WSDServerStream, Response) :-
-	% format("initiating conversation: request: ~s~n~n^THE_END^~n",[XMLRequest]),
-	% atom_codes(XMLRequestAtom, XMLRequest),
-	% format(user_output, 'BEFORE post_WSD_query: ~w~n', [XMLRequestAtom]),
 	test_post_WSD_query(WSDServerStream, XMLRequest),
 	% format(user_output, 'BEFORE get_WSD_result~n', []),
 	test_get_WSD_result(WSDServerStream, XMLRequest, Response),
-	% atom_codes(ResponseAtom, Response),
-	% format(user_output, 'WSD: ~w~n', [ResponseAtom]),
-	% atom_codes(ResponseAtom, Response),
 	% format(user_output, 'RESULT: ~q~n~n', [ResponseAtom]), ttyflush,
-	% close(SocketStream),
 	!.
-	% format("conversation ended: response: ~s.~n",[Response]).
-
 
 % post_WSD_query/2
 % first argument is an XML request for Knowledge Source server.
 test_post_WSD_query(SocketStream, Request) :-
-	( format(SocketStream, "~s~n~n^THE_END^~n", [Request]),
+	( format(SocketStream, "~s~n~n", [Request]),
 	  flush_output(SocketStream) ->
 	  true
         ; fatal_error('Unable to post WSD query~n~w~n', [Request])
@@ -891,7 +869,7 @@ test_get_WSD_result(SocketStream, Request, StreamTerm) :-
 
 get_codes_WSD(Stream, Input) :-
 	get_code(Stream, Code),
-	( Code is -1 ->
+	( Code is 0 ->
 	  Input = []
 	; Input = [Code|RestCodes],
 	  get_codes_WSD(Stream, RestCodes)
@@ -940,3 +918,4 @@ get_WSD_methods(Methods) :-
 	   ; S = S0
 	   )
 	).	
+

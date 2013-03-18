@@ -29,7 +29,7 @@
 ***************************************************************************/
 
 :- module(server_choice, [
-	get_all_server_streams/3,
+	get_server_streams/1,
 	get_server_stream/2
     ]).
 
@@ -60,7 +60,7 @@
 	environ/2
    ]).
 
-get_all_server_streams(LexiconServerStream, TaggerServerStream, WSDServerStream) :-
+get_server_streams(LexiconServerStream-TaggerServerStream-WSDServerStream) :-
 	get_server_stream('LEXICON', LexiconServerStream),
 	get_server_stream('TAGGER',  TaggerServerStream),
 	get_server_stream('WSD',     WSDServerStream).

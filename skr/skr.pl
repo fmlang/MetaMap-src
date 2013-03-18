@@ -272,12 +272,12 @@ warn_if_no_sab_files :-
 skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
 	    AAs, UDAs, SyntacticAnalysis,
 	    WordDataCacheIn, USCCacheIn, RawTokensIn,
-	    AllServerStream, RawTokensOut, WordDataCacheOut, USCCacheOut,
+	    ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 	    MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) :-
 	( skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
 			  AAs, UDAs, SyntacticAnalysis,
 			  WordDataCacheIn, USCCacheIn, RawTokensIn,
-			  AllServerStream, RawTokensOut, WordDataCacheOut, USCCacheOut,
+			  ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 			  MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) ->
 	  true
         ; fatal_error('skr_phrases/14 failed for text ~p: ~p~n',
@@ -285,12 +285,12 @@ skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
         ).
 
 skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-		AAs, UDAs, SyntacticAnalysis, 
+		AAs, UDAs, SyntacticAnalysis,
 		WordDataCacheIn, USCCacheIn, RawTokensIn,
-		AllServerStream, RawTokensOut, WordDataCacheOut, USCCacheOut,
+		ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 		DisambiguatedMMOPhrases, ExtractedPhrases,
 		minimal_syntax(SemRepPhrasesWithWSD)) :-
-	AllServerStream  = (LexiconServerStream,_TaggerServerStream,WSDServerStream),
+	ServerStreams = LexiconServerStream-_TaggerServerStream-WSDServerStream,
 	maybe_atom_gc(_DidGC, _SpaceCollected),
 	SyntacticAnalysis = minimal_syntax(Phrases0),
 	add_tokens_to_phrases(Phrases0, Phrases),

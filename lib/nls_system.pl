@@ -57,7 +57,7 @@
 	pwd/0,
 	pwd/1,
 	% called by MetaMap API -- do not change signature!
-	reset_control_options/1,
+	% reset_control_options/1,
 	% called by MetaMap API -- do not change signature!
 	set_control_options/1,
 	% called by MetaMap API -- do not change signature!
@@ -716,34 +716,34 @@ get_control_options_for_modules(Modules,Options) :-
     sort(Options0,Options).
 
 
-/* reset_control_options(+Module(s))
-
-set_control_options/0 retracts all control_option/1 clauses and sets the
-defaults for Module(s).  */
-
-reset_control_options(ModuleOrModules) :-
-	retractall(control_option(_)),
-	retractall(control_value(_,_)),
-	% retractall(control_value(_,_,_)),
-	( atom(ModuleOrModules) ->
-	  reset_control_options_aux([ModuleOrModules])
-	; reset_control_options_aux(ModuleOrModules)
-	).
-
-reset_control_options_aux([]).
-reset_control_options_aux([Module|Rest]) :-
-	toggle_default_control_options(Module),
-	reset_control_options_aux(Rest).
-
-/* toggle_default_control_options(+Module)
-
-toggle_default_control_options/1 toggles those control options of the form
-is_control_option(Module,_,ControlOption,yes,_), i.e., with IsDefault
-set to yes.  */
-
-toggle_default_control_options(Module) :-
-    findall(Option,is_control_option(Module,_,Option,yes,_),DefaultOptions),
-    toggle_control_options(DefaultOptions).
+%%% /* reset_control_options(+Module(s))
+%%% 
+%%% set_control_options/0 retracts all control_option/1 clauses and sets the
+%%% defaults for Module(s).  */
+%%% 
+%%% reset_control_options(ModuleOrModules) :-
+%%% 	retractall(control_option(_)),
+%%% 	retractall(control_value(_,_)),
+%%% 	% retractall(control_value(_,_,_)),
+%%% 	( atom(ModuleOrModules) ->
+%%% 	  reset_control_options_aux([ModuleOrModules])
+%%% 	; reset_control_options_aux(ModuleOrModules)
+%%% 	).
+%%% 
+%%% reset_control_options_aux([]).
+%%% reset_control_options_aux([Module|Rest]) :-
+%%% 	toggle_default_control_options(Module),
+%%% 	reset_control_options_aux(Rest).
+%%% 
+%%% /* toggle_default_control_options(+Module)
+%%% 
+%%% toggle_default_control_options/1 toggles those control options of the form
+%%% is_control_option(Module,_,ControlOption,yes,_), i.e., with IsDefault
+%%% set to yes.  */
+%%% 
+%%% toggle_default_control_options(Module) :-
+%%%     findall(Option,is_control_option(Module,_,Option,yes,_),DefaultOptions),
+%%%     toggle_control_options(DefaultOptions).
 
 
 /* toggle_control_options(+Options)
