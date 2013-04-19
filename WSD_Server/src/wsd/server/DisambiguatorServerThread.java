@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -113,9 +112,11 @@ public class DisambiguatorServerThread extends Thread
      */
     public void run()
     {
-        String inputLine = new String();
-        StringBuffer entireText = new StringBuffer();
-        StringBuffer outputLine = new StringBuffer();
+        String inputLine;
+	boolean keepAlive = false; /* keep the connection alive if
+				    * true, default is false, close
+				    * connection after response. */
+
 
         BufferedReader in = null;
         PrintWriter out = null;
@@ -127,175 +128,239 @@ public class DisambiguatorServerThread extends Thread
 
 	try
         {
-            logger.info("Receiving data from socket..");
+	    logger.debug("Receiving data from socket originating at: " +
+			 fSocket.getInetAddress().toString());
+	    logger.info("Session Begin: " + fSocket.getInetAddress().toString());
             out = new PrintWriter(fSocket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(fSocket.getInputStream()));
 
 	    if (in == null) {
 	      logger.error("socket input stream in is null.");
 	    } 
+	    SAXBuilder builder = new SAXBuilder(false);
+	    while (true) {
+	      StringBuffer entireText = new StringBuffer();
+	      StringBuffer outputLine = new StringBuffer();
+	      // first read the entire string coming from the socket
+	      if (fSocket.isClosed()) break;
+	      if (in != null) {
+		while (((inputLine = in.readLine()) != null) && (inputLine.length() > 0)) {
+		  if (inputLine != null) {
+		    entireText.append(inputLine.trim());
+		  } 
+		}
+	      }
+	      logger.debug("entireText: " + entireText);
 
-            //first read the entire string coming from the socket
-            while ((inputLine = in.readLine()).length() > 0)
-                entireText.append(inputLine);
+	      // byte[] byteArray = entireText.toString().getBytes();
+	      // logger.debug("byte array of entireText: " + byteArray);
+	      // int l = 0;
+	      // for (byte aByte: byteArray) {
+	      // 	logger.debug(l + ": " + aByte);
+	      // 	l++;
+	      // }
 
-            // create a DOM Tree from the incoming text
-            if (logger.isDebugEnabled())
+
+	      // check for empty input string buffer, if empty then client
+	      // has probably disconnected.
+	      if (entireText.toString().length() == 0) {
+		logger.debug("Empty input buffer, client has probably disconnected.");
+		logger.debug("Socket.isClosed: " + fSocket.isClosed() +
+			     ", Socket.isBound: " + fSocket.isBound() +
+			     ", in.ready() " + in.ready());
+		break;
+	      }
+
+	      // create a DOM Tree from the incoming text
+	      if (logger.isDebugEnabled())
                 logger.debug("Text[" + entireText.length() + "] from socket: " + entireText);
-            reader = new StringReader(entireText.toString());
-            SAXBuilder builder = new SAXBuilder(false);
-            Document doc = builder.build(reader);
-            logger.info("Built the XML tree.");
-            Element root = doc.getRootElement();
-            Namespace ns = root.getNamespace();
+	      reader = new StringReader(entireText.toString());
+	      Document doc = builder.build(reader);
+	      logger.info("Built the XML tree.");
+	      Element root = doc.getRootElement();
+	      Namespace ns = root.getNamespace();
 
-	    if (ns.getPrefix().equals("rdf"))
-	    {
-                logger.info("Reading rdf request from the socket..");
-		// handle request (rdf)
-		Iterator childIterator = root.getChildren().iterator();
-		while (childIterator.hasNext()) {
-		  Element element = (Element)childIterator.next();
-		  if (element.getName().equals("description")) {
-		    String about = element.getAttributeValue("about");
-		    if (about != null && about.equals("methodslistrequest")) {
-                      logger.info("Sending methods list.");
-		      //write the output to the socket
-		      StringBuffer sb = new StringBuffer();
-		      sb.append("<?xml version=\"1.0\"?>\n");
-		      sb.append("<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n");
-		      sb.append("         xmlns:wsd=\"http://wsd.nlm.nih.gov/wsdserver#\">\n");
-		      sb.append(" <rdf:description about=\"methodslistresponse\">\n");
-		      sb.append("  <rdf:Bag>\n");
-		      Iterator keyIterator = WSDEnvironment.fAvailableMethods.keySet().iterator();
-		      while (keyIterator.hasNext()) {
-			String methodName = (String)keyIterator.next();
-			String description = null;
-			if (WSDEnvironment.fMethodDescriptions.containsKey(methodName)) {
-			  description = (String)WSDEnvironment.fMethodDescriptions.get(methodName);
-			} else {
-			  description = methodName;
+	      if (ns.getPrefix().equals("rdf"))
+		{
+		  logger.info("Reading rdf request from the socket..");
+		  // handle request (rdf)
+		  Iterator childIterator = root.getChildren().iterator();
+		  while (childIterator.hasNext()) {
+		    Element element = (Element)childIterator.next();
+		    if (element.getName().equals("description")) {
+		      String about = element.getAttributeValue("about");
+		      if (about != null && about.equals("methodslistrequest")) {
+			logger.info("Sending methods list.");
+			//write the output to the socket
+			StringBuffer sb = new StringBuffer();
+			sb.append("<?xml version=\"1.0\"?>\n");
+			sb.append("<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"\n");
+			sb.append("         xmlns:wsd=\"http://wsd.nlm.nih.gov/wsdserver#\">\n");
+			sb.append(" <rdf:description about=\"methodslistresponse\">\n");
+			sb.append("  <rdf:Bag>\n");
+			Iterator keyIterator = WSDEnvironment.fAvailableMethods.keySet().iterator();
+			while (keyIterator.hasNext()) {
+			  String methodName = (String)keyIterator.next();
+			  String description = null;
+			  if (WSDEnvironment.fMethodDescriptions.containsKey(methodName)) {
+			    description = (String)WSDEnvironment.fMethodDescriptions.get(methodName);
+			  } else {
+			    description = methodName;
+			  }
+			  sb.append("   <rdf:li><wsd:method id=\"")
+			    .append(methodName).append("\">")
+			    .append(description)
+			    .append("      </wsd:method></rdf:li>\n");
 			}
-			sb.append("   <rdf:li><wsd:method id=\"")
-			  .append(methodName).append("\">")
-			  .append(description)
-			  .append("      </wsd:method></rdf:li>\n");
+			sb.append("  </rdf:Bag>\n");
+			sb.append(" </rdf:description>\n");
+			sb.append("</rdf:RDF>");
+			out.println(sb.toString());
 		      }
-		      sb.append("  </rdf:Bag>\n");
-		      sb.append(" </rdf:description>\n");
-		      sb.append("</rdf:RDF>");
-		      out.println(sb.toString());
 		    }
 		  }
-		}
-		out.close();
-		in.close();
-		fSocket.close();
-                logger.info("Input and output streams and the socket is closed.");
-	      } // handle rdf request
-	    else
-	      {
-		/* calculate methods and weights */
-		calculateMethodWeights(root.getChild("methods"),ns);
+		} // handle rdf request
+	      else
+		{
+		  /* calculate methods and weights */
+		  calculateMethodWeights(root.getChild("methods"),ns);
 
-		// determine the disambiguation methods to run. Add
-		// requested methods to list.
-		for (int i =0; i < fMethods.length; i ++)
-		  {
-		    if (WSDEnvironment.fAvailableMethods.containsKey(fMethods[i]))
-		      {
-			this.requestedMethods.add(fMethods[i]);
-		      }
-                      else
-                      {
-                          logger.error("Cannot find the method: " + fMethods[i]);
-                      }
-		  }
-		logger.info("Determined the methods and weights.");
-		// call the requested methods and perform disambiguation.
-		 ListIterator methodIterator = this.requestedMethods.listIterator();
-		 while (methodIterator.hasNext()) {
-		     String methodName = (String)methodIterator.next();
-                     List methodResults = getMatchFromMethod(methodName, doc);
-		     ListIterator methodResultsIter = methodResults.listIterator();
-		     while (methodResultsIter.hasNext()) {
-		       Result res = (Result)methodResultsIter.next();
-		       res.setMethodName(methodName);
-		     }
-                     logger.info("Completed disambiguation with " + methodName);
-                     if (methodResults != null)
-                         results.add(methodResults);
-                     else
-                         logger.info(methodName + " did not return any answers.");
-		  }
-
-                 // read the disambiguation results and for each ambiguity,
-                 // create a list of answers and send them to arbitrator.
-                 int k=0;
-                 if (results.size() ==  0)
-                 {
-                    logger.warn("Result list is empty!");
-                 }
-                 else
-                 {
-                   String errorCondition = null;
-                 while (k < ((List)results.get(0)).size())
-                 {
-                     for (int j=0; j < results.size(); j++)
-                     {
-                        Result res = (Result)((List)results.get(j)).get(k);
-
-                        /*check to see if there are any errors in the results,
-                          The result should probably be modified to mark errors*/
-			if (res != null) {
-			  if ((List)res.getPreferredConceptNames() != null) {
-			    if (((List)res.getPreferredConceptNames()).size() > 0) {
-			      if (((String)res.getPreferredConceptNames().get(0)).startsWith("[Error")) {
-				errorCondition = (String)res.getPreferredConceptNames().get(0);
-			      }
-			    }
-			    resultsToArbitrator.add(res);
+		  /* Get server option list if serveroptionlist tag is
+		   * present */
+		  Element optionlist = root.getChild("serveroptionlist");
+		  if (optionlist != null) {
+		    for (Object childObj: optionlist.getChildren()) {
+		      Element child = (Element)childObj;
+		      /* <serveroption keepalive="true" /> 
+		       * set state variable keepAlive based on value of option
+		       */
+		      if (child.getName().equals("serveroption")) {
+			if (child.getAttribute("keepalive") != null) {
+			  if (child.getAttributeValue("keepalive").equals("true")) {
+			    keepAlive = true;
+			  } else {
+			    keepAlive = false;
 			  }
 			}
-                     }
-                     // add the static part of the disambiation output
-                     outputLine.append(((Result)resultsToArbitrator.get(0)).getUi() + "|");
-                     outputLine.append(((Result)resultsToArbitrator.get(0)).getUtterancePos() + "|");
-                     outputLine.append(((Result)resultsToArbitrator.get(0)).getPhrasePos() + "|");
-                     PreferredNameVector candidates =
-                        new PreferredNameVector(((Result)resultsToArbitrator.get(0)).getCandidatePreferredConceptNames());
-                     outputLine.append(candidates.convertToString() + "|");
+		      }
+		    }
+		  }
 
-                     if (errorCondition == null) {
-                       // perform arbitration and write the output
-                       arbitrationResults = new PreferredNameVector(arbitrate(resultsToArbitrator));
-                       if (arbitrationResults.size() == 0)
-                         outputLine.append("[No match found.]|\n");
-                       else
-                         outputLine.append(arbitrationResults.convertToString() + "|\n");
-                     } else {
-                       outputLine.append(errorCondition + "|\n");
-                     }
+		  // determine the disambiguation methods to run. Add
+		  // requested methods to list.
+		  for (int i =0; i < fMethods.length; i ++)
+		    {
+		      if (WSDEnvironment.fAvailableMethods.containsKey(fMethods[i]))
+			{
+			  this.requestedMethods.add(fMethods[i]);
+			}
+                      else
+			{
+                          logger.error("Cannot find the method: " + fMethods[i]);
+			}
+		    }
+		  logger.info("Determined the methods and weights.");
+		  // call the requested methods and perform disambiguation.
+		  ListIterator methodIterator = this.requestedMethods.listIterator();
+		  while (methodIterator.hasNext()) {
+		    String methodName = (String)methodIterator.next();
+		    List methodResults = getMatchFromMethod(methodName, doc);
+		    ListIterator methodResultsIter = methodResults.listIterator();
+		    while (methodResultsIter.hasNext()) {
+		      Result res = (Result)methodResultsIter.next();
+		      res.setMethodName(methodName);
+		    }
+		    logger.info("Completed disambiguation with " + methodName);
+		    if (methodResults != null)
+		      results.add(methodResults);
+		    else
+		      logger.info(methodName + " did not return any answers.");
+		  }
 
-                     resultsToArbitrator.clear();
-                     k++;
-                 }
-                 results.clear();
+		  // read the disambiguation results and for each ambiguity,
+		  // create a list of answers and send them to arbitrator.
+		  int k=0;
+		  if (results.size() ==  0)
+		    {
+		      logger.warn("Result list is empty!");
+		    }
+		  else
+		    {
+		      String errorCondition = null;
+		      while (k < ((List)results.get(0)).size())
+			{
+			  for (int j=0; j < results.size(); j++)
+			    {
+			      Result res = (Result)((List)results.get(j)).get(k);
 
-		 //write the output to the socket
-                 if (logger.isDebugEnabled()) logger.debug("Output to the socket: " + outputLine.toString());
-		 out.println("<Response>" + outputLine.toString() + "</Response>");
-                 logger.info("Output written to the socket.");
+			      /*check to see if there are any errors in the results,
+				The result should probably be modified to mark errors*/
+			      if (res != null) {
+				if ((List)res.getPreferredConceptNames() != null) {
+				  if (((List)res.getPreferredConceptNames()).size() > 0) {
+				    if (((String)res.getPreferredConceptNames().get(0)).startsWith("[Error")) {
+				      errorCondition = (String)res.getPreferredConceptNames().get(0);
+				    }
+				  }
+				  resultsToArbitrator.add(res);
+				}
+			      }
+			    }
+			  // add the static part of the disambiation output
+			  outputLine.append(((Result)resultsToArbitrator.get(0)).getUi() + "|");
+			  outputLine.append(((Result)resultsToArbitrator.get(0)).getUtterancePos() + "|");
+			  outputLine.append(((Result)resultsToArbitrator.get(0)).getPhrasePos() + "|");
+			  PreferredNameVector candidates =
+			    new PreferredNameVector(((Result)resultsToArbitrator.get(0)).getCandidatePreferredConceptNames());
+			  outputLine.append(candidates.convertToString() + "|");
 
-		 out.close();
-		 in.close();
-		 fSocket.close();
+			  if (errorCondition == null) {
+			    // perform arbitration and write the output
+			    arbitrationResults = new PreferredNameVector(arbitrate(resultsToArbitrator));
+			    if (arbitrationResults.size() == 0)
+			      outputLine.append("[No match found.]|\n");
+			    else
+			      outputLine.append(arbitrationResults.convertToString() + "|\n");
+			  } else {
+			    outputLine.append(errorCondition + "|\n");
+			  }
 
-                 logger.info("Input and output streams and the socket is closed.");
-	      }
-              }
-            logger.info("Finished processing");
-            // if (logger.isDebugEnabled())
+			  resultsToArbitrator.clear();
+			  k++;
+			}
+		      results.clear();
+
+		      //write the output to the socket
+		      if (logger.isDebugEnabled()) logger.debug("Output to the socket: " + 
+								"<Response>" + outputLine.toString().trim() + "</Response>");
+		      if (keepAlive) {
+			/* If we are keeping alive the connection,
+			 * send a null (0) at the end of the message
+			 * to inform the client that this is the end
+			 * of the message. */
+			out.print("<Response>" + outputLine.toString().trim() + "</Response>\n\0");
+		      } else {
+			/* Send the message in the previous (normal?)
+			 * manner if we are not keeping the connection
+			 * alive. */
+			out.print("<Response>" + outputLine.toString() + "</Response>\n");
+		      }
+		      out.flush();
+		      logger.info("Output written to the socket.");
+		    } /* else results size != 0 */
+		  out.flush();
+		  /** if keepAlive is false, then break and close connection. */
+		  if (keepAlive == false) break;
+		  if (fSocket.isClosed()) break;
+		} /* else disambiguation request */
+	      logger.info("Finished processing");
+	    } /* while */
+	    out.close();
+	    in.close();
+	    fSocket.close();
+	    
+	    logger.info("Input and output streams and the socket is closed.");
+	    // if (logger.isDebugEnabled())
             // {
             //     logger.debug("Free socket resources: " + SocketResourcePool.getInstance().getFreeSocketResourceCount());
             //     logger.debug("Used socket resources: " + SocketResourcePool.getInstance().getUsedSocketResourceCount());
