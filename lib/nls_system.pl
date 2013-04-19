@@ -37,6 +37,7 @@
 	args/0,
 	% called by MetaMap API -- do not change signature!
 	add_to_control_options/1,
+	assert_control_value/2,
 	control_option/1,
 	control_value/2,
 	display_control_options_for_modules/2,
@@ -57,7 +58,7 @@
 	pwd/0,
 	pwd/1,
 	% called by MetaMap API -- do not change signature!
-	% reset_control_options/1,
+	reset_control_options/1,
 	% called by MetaMap API -- do not change signature!
 	set_control_options/1,
 	% called by MetaMap API -- do not change signature!
@@ -141,8 +142,8 @@ is_control_option(metamap, 'L', lexicon_year, 	 		no,
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
 is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
-is_control_option(metamap, 'Q', composite_phrases, 		no,
-                  aspec(composite_phrases, mandatory, integer, none, no_default,
+is_control_option(metamap, 'Q', composite_phrases, 		yes,
+                  aspec(composite_phrases, mandatory, integer, no, 4,
                         'Max number of prepositional phrases to glom on')).
 is_control_option(metamap, 'R', restrict_to_sources, no,
                   aspec(restrict_to_sources, mandatory, list, none, no_default,
@@ -209,9 +210,9 @@ is_control_option(metamap,  '', negex_st_set, 		 	no,
 is_control_option(metamap,  '', blanklines, 		 	no,
                   aspec(blanklines, mandatory, integer, none, no_default,
 			'Number of newlines to read to signal end of citation')).
-is_control_option(metamap, '', 'LEXICON_SERVER', no,
-                  aspec('LEXICON_SERVER', mandatory, none, none, no_default,
-                        'Which lexicon server to use')).
+% is_control_option(metamap, '', 'LEXICON_SERVER', no,
+%                   aspec('LEXICON_SERVER', mandatory, none, none, no_default,
+%                         'Which lexicon server to use')).
 		  
 is_control_option(metamap,  '', silent,		 	 	no, none).
 is_control_option(metamap,  '', aas_only,                	no, none).
@@ -251,7 +252,7 @@ is_control_option(metamap,  '', 'allcats',		 	no, none).
 
 is_control_option(metamap,  '', lexicon, no,
                    aspec(lexicon, mandatory, none, none, no_default,
-                         'Use C code or Java version of lexicon')).
+                         'Specify "c" or "db" for lexicon version.')).
 
 is_control_option(metamap,  '', map_thresh, no,
                    aspec(map_thresh, mandatory, none, none, no_default,
@@ -268,47 +269,6 @@ is_control_option(metamap,  '', 'no_lex',		 	no, none).
 is_control_option(build_ambig_examples,h,help,no,none).
 is_control_option(build_ambig_examples,w,warnings,no,none).
 
-is_control_option(chartally,h,help,no,none).
-is_control_option(check_ambiguity,c,ignore_case,no,none).
-is_control_option(check_ambiguity,p,report_positives,no,none).
-is_control_option(check_ambiguity,h,help,no,none).
-is_control_option(check_ambiguity,i,info,no,none).
-is_control_option(check_ambiguity,w,warnings,no,none).
-is_control_option(chunk_mrconso,h,help,no,none).
-is_control_option(chunk_mrconso,i,info,no,none).
-is_control_option(chunk_mrconso,w,warnings,no,none).
-is_control_option(compute_categories,h,help,no,none).
-is_control_option(compute_categories,i,info,no,none).
-is_control_option(compute_categories,w,warnings,no,none).
-is_control_option(compute_mrconso_types,h,help,no,none).
-is_control_option(compute_tree_depths,p,write_pairs,no,none).
-is_control_option(compute_tree_depths,t,write_table,no,none).
-is_control_option(compute_tree_depths,h,help,no,none).
-is_control_option(compute_tree_depths,i,info,no,none).
-is_control_option(compute_tree_depths,w,warnings,no,none).
-is_control_option(create_pvm_io,h,help,no,none).
-is_control_option(create_solexicon,h,help,no,none).
-is_control_option(create_solexicon,i,info,no,none).
-is_control_option(create_solexicon,w,warnings,no,none).
-
-is_control_option(db_test,h,help,no,none).
-is_control_option(document_joiner,h,help,no,none).
-is_control_option(document_joiner,w,warnings,no,none).
-is_control_option(document_planner,i,ignore_head,yes,none).
-is_control_option(document_planner,l,level,no,
-                  aspec(level,mandatory,integer,none,no_default,
-                        'Hierarchical level at which to construct the plan')).
-is_control_option(document_planner,h,help,no,none).
-is_control_option(document_planner,w,warnings,no,none).
-is_control_option(dummy,h,help,no,none).
-
-is_control_option(explore_intractables,h,help,no,none).
-is_control_option(exp_utt, 'U', unexpanded_utterances, no, none).
-is_control_option(exp_utt, 'N', numbered_utterances,   no, none).
-is_control_option(exp_utt, 'P', no_PMID,               no, none).
-is_control_option(extract_generif,h,help,no,none).
-is_control_option(extract_generif,i,info,no,none).
-is_control_option(extract_generif,w,warnings,no,none).
 is_control_option(extract_mrconso_sources,f,first_of_each_source_only,yes,none).
 is_control_option(extract_mrconso_sources,h,help,no,none).
 is_control_option(extract_mrconso_sources,i,info,no,none).
@@ -320,24 +280,6 @@ is_control_option(extract_mrconso_sources, t, total_lines, no,
                   aspec(total_lines,mandatory,integer,none,no_default,
                         'Total number of lines to process')).
 
-is_control_option(extractm,x,halt_on_error,yes,none).
-is_control_option(extractm,i,indented,yes,none).
-is_control_option(extractm,c,compact_format,no,none).
-is_control_option(extractm,s,short_subheadings,no,none).
-is_control_option(extractm,h,help,no,none).
-is_control_option(extract_framerd_phrases,l,display_labels,yes,none).
-is_control_option(extract_framerd_phrases,h,help,no,none).
-is_control_option(extract_framerd_phrases,i,info,no,none).
-is_control_option(extract_framerd_phrases,w,warnings,no,none).
-
-is_control_option(filter_cases,l,lower_bound,no,
-                  aspec(lower_bound,mandatory,integer,none,no_default,
-                        'Lower bound of occurrence count')).
-is_control_option(filter_cases,u,upper_bound,no,
-                  aspec(upper_bound,mandatory,integer,none,no_default,
-                        'Upper bound of occurrence count')).
-is_control_option(filter_cases,w,warnings,no,none).
-is_control_option(filter_cases,h,help,no,none).
 is_control_option(filter_mrconso,s,strict_filtering,no,none).
 is_control_option(filter_mrconso,'E',end_of_processing,no,none).
 % is_control_option(filter_mrconso,'S',filter_by_term_status,no,none).
@@ -353,144 +295,15 @@ is_control_option(filter_mrconso, p, progress_bar_interval, no,
 is_control_option(filter_mrconso,t,total_lines,no,
                   aspec(total_lines, mandatory, integer, none, no_default,
                         'Total number of lines to process')).
-
 is_control_option(filter_mrconso,  '', lexicon, no,
                   aspec(lexicon, mandatory, none, none, no_default,
                         'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
 is_control_option(filter_mrconso,  '', clfi, no,
                   aspec(clfi, mandatory, none, none, no_default,
                         'Whether to use original C code or lexAccess version of lex_form_input')).
-
-
 is_control_option(filter_mrconso,'N',silent,no,none).
 is_control_option(filter_mrconso,w,warnings,no,none).
-is_control_option(find_subwords,a,use_atoms,no,none).
-is_control_option(find_subwords,h,help,no,none).
-is_control_option(find_subwords,i,info,no,none).
-is_control_option(flip_variants,h,help,no,none).
-is_control_option(flip_variants,i,info,no,none).
-is_control_option(flip_variants,w,warnings,no,none).
 
-is_control_option(glean_ambig,h,help,no,none).
-is_control_option(glean_ambig,w,warnings,no,none).
-is_control_option(glean_ambig,'R',mrrank_file,no,
-                  aspec(mrrank_file,mandatory,file,read,no_default,
-                        'MRRANK file')).
-is_control_option(glean_ambig, p, progress_bar_interval, no,
-                  aspec(progress_bar_interval,mandatory,integer,none,no_default,
-                        'Interval of progress bar')).
-is_control_option(glean_ambig, t, total_lines, no,
-                  aspec(total_lines,mandatory,integer,none,no_default,
-                        'Total number of lines to process')).
-		  
-is_control_option(glean_co_st,n,normalize,yes,none).
-is_control_option(glean_co_st,h,help,no,none).
-is_control_option(glean_from_mm,t,three_column_output,yes,none).
-is_control_option(glean_from_mm,r,remove_raw_output_file,yes,none).
-is_control_option(glean_from_mm,h,help,no,none).
-is_control_option(glean_mrcon,f,first_term_is_concept,yes,none).
-is_control_option(glean_mrcon,c,generate_CUIs,no,none).
-is_control_option(glean_mrcon,s,generate_strings,no,none).
-is_control_option(glean_mrcon,w,generate_words,no,none).
-is_control_option(glean_mrcon,h,help,no,none).
-is_control_option(glean_synonyms,h,help,no,none).
-is_control_option(glean_synonyms,i,info,no,none).
-is_control_option(glean_synonyms,w,warnings,no,none).
-is_control_option(glean_unique_aa,h,help,no,none).
-
-is_control_option(inq_annotate_best,e,best_of_each,yes,none).
-is_control_option(inq_annotate_best,h,help,no,none).
-is_control_option(inq_annotate_best,i,info,no,none).
-is_control_option(inq_annotate_best,w,warnings,no,none).
-is_control_option(inq_extract_annotations,h,help,no,none).
-is_control_option(inq_extract_annotations,i,info,no,none).
-is_control_option(inq_extract_annotations,w,warnings,no,none).
-is_control_option(inq_form_c_cits,u,uninverted_concepts,no,none).
-is_control_option(inq_form_c_cits,x,ranking_factor,no,
-                  aspec(ranking_factor,mandatory,integer,none,no_default,
-                        'Weight for multiplying MMI concept factors')).
-is_control_option(inq_form_c_cits,s,single_concepts_only,no,none).
-is_control_option(inq_form_c_cits,r,relation_file,no,
-                  aspec(relation_file,mandatory,file,read,no_default,
-                        'Input file of ABS relations')).
-is_control_option(inq_form_c_cits,h,help,no,none).
-is_control_option(inq_form_c_cits,i,info,no,none).
-is_control_option(inq_form_c_cits,w,warnings,no,none).
-is_control_option(inq_form_wpc_queries,f,field_operator,yes,none).
-is_control_option(inq_form_wpc_queries,m,mesh_rather_than_mmi,no,none).
-is_control_option(inq_form_wpc_queries,g,cphrase_rather_than_csum,no,none).
-is_control_option(inq_form_wpc_queries,n,no_weighting,no,none).
-is_control_option(inq_form_wpc_queries,u,uninverted_concepts,no,none).
-is_control_option(inq_form_wpc_queries,b,feedback_parameter_file,no,
-                  aspec(feedback_parameter_file,mandatory,file,read,no_default,
-                        'File of feedback parameters')).
-is_control_option(inq_form_wpc_queries,x,restricted_word_feedback,no,none).
-is_control_option(inq_form_wpc_queries,q,restricted_phrase_feedback,no,none).
-is_control_option(inq_form_wpc_queries,d,concept_feedback_limit,no,
-                  aspec(concept_feedback_limit,mandatory,integer,none,
-                        no_default,
-                        'Maximum number of concepts per feedback citation')).
-is_control_option(inq_form_wpc_queries,t,title_weight,no,
-                  aspec(title_weight,mandatory,integer,none,no_default,
-                        'Weight for title evidence (abstract is 1)')).
-is_control_option(inq_form_wpc_queries,w,wweight,no,
-                  aspec(wweight,mandatory,integer,none,no_default,
-                        'Weight for bag-of-words evidence')).
-is_control_option(inq_form_wpc_queries,p,pweight,no,
-                  aspec(pweight,mandatory,integer,none,no_default,
-                        'Weight for phrase evidence')).
-is_control_option(inq_form_wpc_queries,c,cweight,no,
-                  aspec(cweight,mandatory,integer,none,no_default,
-                        'Weight for concept evidence')).
-is_control_option(inq_form_wpc_queries,h,help,no,none).
-is_control_option(inq_form_wpc_queries,i,info,no,none).
-is_control_option(inq_pp_ranked,h,help,no,none).
-is_control_option(inq_pp_ranked,w,warnings,no,none).
-is_control_option(inq_transform_results,p,percentages,no,none).
-is_control_option(inq_transform_results,h,help,no,none).
-is_control_option(inq_transform_results,i,info,no,none).
-is_control_option(inq_transform_results,w,warnings,no,none).
-
-is_control_option(ll_to_umls,d,dump_labeled_terms,no,none).
-is_control_option(ll_to_umls,f,ambiguity_file,no,
-                  aspec(ambiguity_file,mandatory,file,read,no_default,
-                        'File of ambiguous terms')).
-is_control_option(ll_to_umls,m,max_ambiguity,no,
-                  aspec(max_ambiguity,mandatory,integer,none,no_default,
-                        'The maximum degree of ambiguity allowed')).
-is_control_option(ll_to_umls,h,help,no,none).
-is_control_option(ll_to_umls,i,info,no,none).
-is_control_option(ll_to_umls,w,warnings,no,none).
-
-is_control_option(medline_to_sgml,p,pre_parsed_mesh,no,none).
-is_control_option(medline_to_sgml,s,standard_sgml_format,no,none).
-is_control_option(medline_to_sgml,m,multiple_field_occurrences,no,none).
-is_control_option(medline_to_sgml,n,no_mesh_subheadings,no,none).
-is_control_option(medline_to_sgml,'N',ngi_processing,no,none).
-is_control_option(medline_to_sgml,h,help,no,none).
-is_control_option(medline_to_sgml,i,info,no,none).
-is_control_option(medline_to_sgml,w,warnings,no,none).
-is_control_option(merge_iis_output,h,help,no,none).
-is_control_option(merge_iis_output,w,warnings,no,none).
-is_control_option(merge_lexicons,h,help,no,none).
-is_control_option(mesh_terminology,h,help,no,none).
-is_control_option(mesh_terminology,i,info,no,none).
-is_control_option(mesh_update,h,help,no,none).
-is_control_option(mesh_update,i,info,no,none).
-is_control_option(mesh_update,w,warnings,yes,none).
-is_control_option(mesh_update_prep,d,delete_items,no,none).
-is_control_option(mesh_update_prep,u,update_items,no,none).
-is_control_option(mesh_update_prep,h,help,no,none).
-is_control_option(mesh_update_prep,i,info,no,none).
-is_control_option(metastat,h,help,no,none).
-is_control_option(metastat,i,info,no,none).
-is_control_option(metastat,w,warnings,no,none).
-is_control_option(mm_convert_mo,o,other_filter,no,none).
-is_control_option(mm_convert_mo,h,help,no,none).
-is_control_option(mm_extract_fielded,h,help,no,none).
-is_control_option(mm_extract_fielded,w,warnings,no,none).
-is_control_option(mm_filter,c,duplicate_concepts,no,none).
-is_control_option(mm_filter,h,help,no,none).
 is_control_option(mm_print, 'A',alnum_filter,no,none).
 is_control_option(mm_print, z,stop_phrase_file,no,
                   aspec(stop_phrase_file,mandatory,file,read,no_default,
@@ -535,31 +348,7 @@ is_control_option(mm_print,  '', 'XMLf1',	 	 no, none).
 is_control_option(mm_print,  '', 'XMLn',		 no, none).
 is_control_option(mm_print,  '', 'XMLn1',	 	 no, none).
 is_control_option(mm_print,  '', negex, no, none).
-is_control_option(mm_select,h,help,no,none).
 
-is_control_option(mm_tally,m,metamap_mo_format,no,none).
-is_control_option(mm_tally,c,mrcon_format,no,none).
-is_control_option(mm_tally,p,phrase_lengths,no,none).
-is_control_option(mm_tally,w,phrase_words,no,none).
-is_control_option(mm_tally,h,help,no,none).
-is_control_option(mm_time,h,help,no,none).
-is_control_option(mm_tokenizer,s,whitespace_tokenization,no,none).
-is_control_option(mm_tokenizer,w,wordind_tokenization,no,none).
-is_control_option(mm_tokenizer,m,metamap_tokenization,no,none).
-is_control_option(mm_tokenizer,c,complete_tokenization,no,none).
-is_control_option(mm_tokenizer,l,lower_case,no,none).
-is_control_option(mm_tokenizer,u,unique_tokens,no,none).
-is_control_option(mm_tokenizer,q,prolog_output,no,none).
-is_control_option(mm_tokenizer,b,brief_output,no,none).
-is_control_option(mm_tokenizer,h,help,no,none).
-is_control_option(mm_update_mh,x,dump_mesh,no,none).
-is_control_option(mm_update_mh,g,glean_mesh,no,none).
-is_control_option(mm_update_mh,p,pre_parsed_mesh,no,none).
-is_control_option(mm_update_mh,m,create_multiple_mesh_fields,no,none).
-is_control_option(mm_update_mh,l,create_multi_line_mesh_field,no,none).
-is_control_option(mm_update_mh,h,help,no,none).
-is_control_option(mm_update_mh,i,info,no,none).
-is_control_option(mm_update_mh,d,debug,no,none).
 is_control_option(mm_variants,u,unique_acros_abbrs_only,no,none).
 is_control_option(mm_variants,'D',all_derivational_variants,no,none).
 is_control_option(mm_variants,'E',end_of_processing,no,none).
@@ -577,11 +366,6 @@ is_control_option(mm_variants,  '', lexicon, no,
                    aspec(lexicon, mandatory, none, none, no_default,
                          'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
 
-
-is_control_option(phrasex,t,tag_text,yes,none).
-is_control_option(phrasex,h,help,no,none).
-is_control_option(phrasex,w,warnings,no,none).
-is_control_option(phrasex,d,dump,no,none).
 is_control_option(prefilter_mrconso,b,brand_name_suppression,no,none).
 is_control_option(prefilter_mrconso,d,dump_prefilter_cases,no,none).
 is_control_option(prefilter_mrconso,v,filter_all_vocabularies,no,none).
@@ -589,114 +373,334 @@ is_control_option(prefilter_mrconso,h,help,no,none).
 is_control_option(prefilter_mrconso,i,info,no,none).
 is_control_option(prefilter_mrconso,w,warnings,no,none).
 
-is_control_option(qualcon,r,relaxed_mode,no,none).
-is_control_option(qualcon,h,help,no,none).
-is_control_option(qualcon,w,warnings,no,none).
+% Obsolete programs:
+% is_control_option(check_ambiguity,c,ignore_case,no,none).
+% is_control_option(check_ambiguity,p,report_positives,no,none).
+% is_control_option(check_ambiguity,h,help,no,none).
+% is_control_option(check_ambiguity,i,info,no,none).
+% is_control_option(check_ambiguity,w,warnings,no,none).
+% is_control_option(chunk_mrconso,h,help,no,none).
+% is_control_option(chunk_mrconso,i,info,no,none).
+% is_control_option(chunk_mrconso,w,warnings,no,none).
+% is_control_option(compute_categories,h,help,no,none).
+% is_control_option(compute_categories,i,info,no,none).
+% is_control_option(compute_categories,w,warnings,no,none).
+% is_control_option(compute_mrconso_types,h,help,no,none).
+% is_control_option(compute_tree_depths,p,write_pairs,no,none).
+% is_control_option(compute_tree_depths,t,write_table,no,none).
+% is_control_option(compute_tree_depths,h,help,no,none).
+% is_control_option(compute_tree_depths,i,info,no,none).
+% is_control_option(compute_tree_depths,w,warnings,no,none).
+% is_control_option(create_pvm_io,h,help,no,none).
+% is_control_option(create_solexicon,h,help,no,none).
+% is_control_option(create_solexicon,i,info,no,none).
+% is_control_option(create_solexicon,w,warnings,no,none).
+ 
+% is_control_option(db_test,h,help,no,none).
+% is_control_option(document_joiner,h,help,no,none).
+% is_control_option(document_joiner,w,warnings,no,none).
+% is_control_option(document_planner,i,ignore_head,yes,none).
+% is_control_option(document_planner,l,level,no,
+%                   aspec(level,mandatory,integer,none,no_default,
+%                         'Hierarchical level at which to construct the plan')).
+% is_control_option(document_planner,h,help,no,none).
+% is_control_option(document_planner,w,warnings,no,none).
+% is_control_option(dummy,h,help,no,none).
+ 
+% is_control_option(explore_intractables,h,help,no,none).
+% is_control_option(exp_utt, 'U', unexpanded_utterances, no, none).
+% is_control_option(exp_utt, 'N', numbered_utterances,   no, none).
+% is_control_option(exp_utt, 'P', no_PMID,               no, none).
+% is_control_option(extract_generif,h,help,no,none).
+% is_control_option(extract_generif,i,info,no,none).
+% is_control_option(extract_generif,w,warnings,no,none).
 
-is_control_option(random_split,h,help,no,none).
-is_control_option(random_split,i,info,no,none).
-is_control_option(random_split,w,warnings,no,none).
-is_control_option(rebuild_ambig,h,help,no,none).
-is_control_option(rebuild_ambig,w,warnings,no,none).
+% is_control_option(extractm,x,halt_on_error,yes,none).
+% is_control_option(extractm,i,indented,yes,none).
+% is_control_option(extractm,c,compact_format,no,none).
+% is_control_option(extractm,s,short_subheadings,no,none).
+% is_control_option(extractm,h,help,no,none).
+% is_control_option(extract_framerd_phrases,l,display_labels,yes,none).
+% is_control_option(extract_framerd_phrases,h,help,no,none).
+% is_control_option(extract_framerd_phrases,i,info,no,none).
+% is_control_option(extract_framerd_phrases,w,warnings,no,none).
 
-is_control_option(sp_to_umls,d,dump_labeled_terms,no,none).
-is_control_option(sp_to_umls,f,ambiguity_file,no,
-                  aspec(ambiguity_file,mandatory,file,read,no_default,
-                        'File of ambiguous terms')).
-is_control_option(sp_to_umls,m,max_ambiguity,no,
-                  aspec(max_ambiguity,mandatory,integer,none,no_default,
-                        'The maximum degree of ambiguity allowed')).
-is_control_option(sp_to_umls,h,help,no,none).
-is_control_option(sp_to_umls,i,info,no,none).
-is_control_option(sp_to_umls,w,warnings,no,none).
-is_control_option(spattern,x,only_non_semnet,no,none).
-is_control_option(spattern,y,no_semnet_filtering,no,none).
-is_control_option(spattern,l,left_limit,no,
-                  aspec(left_limit,mandatory,integer,none,no_default,
-                        'Limit to search to the left')).
-is_control_option(spattern,r,right_limit,no,
-                  aspec(right_limit,mandatory,integer,none,no_default,
-                        'Limit to search to the right')).
-is_control_option(spattern,f,filter_file,no,
-                  aspec(filter_file,mandatory,file,read,no_default,
-                        'File of semantic types to filter out')).
-is_control_option(spattern,s,statistics_file,no,
-                  aspec(statistics_file,mandatory,file,write,no_default,
-                        'File of statistics')).
-is_control_option(spattern,i,include_relations,yes,none).
-is_control_option(spattern,o,'relational_output',no,none).
-is_control_option(spattern,m,mod_head_tuples,no,none).
-is_control_option(spattern,p,preposition_triples,no,none).
-is_control_option(spattern,v,verb_triples,no,none).
-is_control_option(spattern,t,head_triples,no,none).
-is_control_option(spattern,n,nominalization_triples,no,none).
-is_control_option(spattern,d,phrase_dump,no,none).
-is_control_option(spattern,w,warnings,no,none).
-is_control_option(spattern,h,help,no,none).
-is_control_option(spattern_dump,f,full_pattern_headers,no,none).
-is_control_option(spattern_dump,r,phrase_headers,no,none).
-is_control_option(spattern_dump,p,pattern_headers,no,none).
-is_control_option(spattern_dump,h,help,no,none).
-is_control_option(spattern_print,f,filter_file,no,
-                  aspec(filter_file,mandatory,file,read,no_default,
-                        'File of filter patterns')).
-is_control_option(spattern_print,m,max_to_print,no,
-                  aspec(max_to_print,mandatory,integer,none,no_default,
-                        'Maximum number of examples per pattern to print')).
-is_control_option(spattern_print,h,help,no,none).
-is_control_option(synonym_baser,d,dump_details,no,none).
-is_control_option(synonym_baser,w,warnings,no,none).
-is_control_option(synonym_baser,h,help,no,none).
+% is_control_option(filter_cases,l,lower_bound,no,
+%                   aspec(lower_bound,mandatory,integer,none,no_default,
+%                         'Lower bound of occurrence count')).
+% is_control_option(filter_cases,u,upper_bound,no,
+%                   aspec(upper_bound,mandatory,integer,none,no_default,
+%                         'Upper bound of occurrence count')).
+% is_control_option(filter_cases,w,warnings,no,none).
+% is_control_option(filter_cases,h,help,no,none).
 
-is_control_option(text_object_explorer,i,ignore_comments,yes,none).
-is_control_option(text_object_explorer,r,respect_whitespace,yes,none).
-is_control_option(text_object_explorer,g,gate_output,no,none).
-is_control_option(text_object_explorer,a,aas,no,none).
-is_control_option(text_object_explorer,b,sentence_boundary,no,none).
-is_control_option(text_object_explorer,p,parenthetical,no,none).
-is_control_option(text_object_explorer,c,compound_token,no,none).
-is_control_option(text_object_explorer,m,chemicals,no,none).
-is_control_option(text_object_explorer,'A',tfidf_csb,no,none).
-is_control_option(text_object_explorer,'B',tfidf_h,no,none).
+% is_control_option(find_subwords,a,use_atoms,no,none).
+% is_control_option(find_subwords,h,help,no,none).
+% is_control_option(find_subwords,i,info,no,none).
+% is_control_option(flip_variants,h,help,no,none).
+% is_control_option(flip_variants,i,info,no,none).
+% is_control_option(flip_variants,w,warnings,no,none).
 
-is_control_option(text_object_explorer,l,lower_bound,no,
-                  aspec(lower_bound,mandatory,integer,none,no_default,
-                        'Lower bound for various options')).
-is_control_option(text_object_explorer,'1',debug1,no,none).
-is_control_option(text_object_explorer,'2',debug2,no,none).
-is_control_option(text_object_explorer,'3',debug3,no,none).
-is_control_option(text_object_explorer,'4',debug4,no,none).
-is_control_option(text_object_explorer,h,help,no,none).
-is_control_option(text_object_explorer,i,info,no,none).
-is_control_option(text_object_explorer,w,warnings,no,
-                  aspec(warnings_file,mandatory,file,write,no_default,
-                        'File of warnings')).
-is_control_option(text_to_medline,h,help,no,none).
-is_control_option(text_to_medline,i,info,no,none).
-is_control_option(text_to_medline,w,warnings,no,none).
-is_control_option(thesaurus_parser,v,validate,yes,none).
-is_control_option(thesaurus_parser,h,help,no,none).
-is_control_option(thesaurus_parser,w,warnings,no,none).
-is_control_option(thesaurus_to_umls,h,help,no,none).
-is_control_option(thesaurus_to_umls,w,warnings,no,none).
-is_control_option(tr_to_umls,d,dump_labeled_terms,no,none).
-is_control_option(tr_to_umls,f,ambiguity_file,no,
-                  aspec(ambiguity_file,mandatory,file,read,no_default,
-                        'File of ambiguous terms')).
-is_control_option(tr_to_umls,m,max_ambiguity,no,
-                  aspec(max_ambiguity,mandatory,integer,none,no_default,
-                        'The maximum degree of ambiguity allowed')).
-is_control_option(tr_to_umls,h,help,no,none).
-is_control_option(tr_to_umls,i,info,no,none).
-is_control_option(tr_to_umls,w,warnings,no,none).
-is_control_option(treecodes,h,help,no,none).
+% is_control_option(glean_ambig,h,help,no,none).
+% is_control_option(glean_ambig,w,warnings,no,none).
+% is_control_option(glean_ambig,'R',mrrank_file,no,
+%                   aspec(mrrank_file,mandatory,file,read,no_default,
+%                         'MRRANK file')).
+% is_control_option(glean_ambig, p, progress_bar_interval, no,
+%                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
+%                         'Interval of progress bar')).
+% is_control_option(glean_ambig, t, total_lines, no,
+%                   aspec(total_lines,mandatory,integer,none,no_default,
+%                         'Total number of lines to process')).
+		  
+% is_control_option(glean_co_st,n,normalize,yes,none).
+% is_control_option(glean_co_st,h,help,no,none).
+% is_control_option(glean_from_mm,t,three_column_output,yes,none).
+% is_control_option(glean_from_mm,r,remove_raw_output_file,yes,none).
+% is_control_option(glean_from_mm,h,help,no,none).
+% is_control_option(glean_mrcon,f,first_term_is_concept,yes,none).
+% is_control_option(glean_mrcon,c,generate_CUIs,no,none).
+% is_control_option(glean_mrcon,s,generate_strings,no,none).
+% is_control_option(glean_mrcon,w,generate_words,no,none).
+% is_control_option(glean_mrcon,h,help,no,none).
+% is_control_option(glean_synonyms,h,help,no,none).
+% is_control_option(glean_synonyms,i,info,no,none).
+% is_control_option(glean_synonyms,w,warnings,no,none).
+% is_control_option(glean_unique_aa,h,help,no,none).
+ 
+% is_control_option(inq_annotate_best,e,best_of_each,yes,none).
+% is_control_option(inq_annotate_best,h,help,no,none).
+% is_control_option(inq_annotate_best,i,info,no,none).
+% is_control_option(inq_annotate_best,w,warnings,no,none).
+% is_control_option(inq_extract_annotations,h,help,no,none).
+% is_control_option(inq_extract_annotations,i,info,no,none).
+% is_control_option(inq_extract_annotations,w,warnings,no,none).
+% is_control_option(inq_form_c_cits,u,uninverted_concepts,no,none).
+% is_control_option(inq_form_c_cits,x,ranking_factor,no,
+%                   aspec(ranking_factor,mandatory,integer,none,no_default,
+%                         'Weight for multiplying MMI concept factors')).
+% is_control_option(inq_form_c_cits,s,single_concepts_only,no,none).
+% is_control_option(inq_form_c_cits,r,relation_file,no,
+%                   aspec(relation_file,mandatory,file,read,no_default,
+%                         'Input file of ABS relations')).
+% is_control_option(inq_form_c_cits,h,help,no,none).
+% is_control_option(inq_form_c_cits,i,info,no,none).
+% is_control_option(inq_form_c_cits,w,warnings,no,none).
+% is_control_option(inq_form_wpc_queries,f,field_operator,yes,none).
+% is_control_option(inq_form_wpc_queries,m,mesh_rather_than_mmi,no,none).
+% is_control_option(inq_form_wpc_queries,g,cphrase_rather_than_csum,no,none).
+% is_control_option(inq_form_wpc_queries,n,no_weighting,no,none).
+% is_control_option(inq_form_wpc_queries,u,uninverted_concepts,no,none).
+% is_control_option(inq_form_wpc_queries,b,feedback_parameter_file,no,
+%                   aspec(feedback_parameter_file,mandatory,file,read,no_default,
+%                         'File of feedback parameters')).
+% is_control_option(inq_form_wpc_queries,x,restricted_word_feedback,no,none).
+% is_control_option(inq_form_wpc_queries,q,restricted_phrase_feedback,no,none).
+% is_control_option(inq_form_wpc_queries,d,concept_feedback_limit,no,
+%                   aspec(concept_feedback_limit,mandatory,integer,none,
+%                         no_default,
+%                         'Maximum number of concepts per feedback citation')).
+% is_control_option(inq_form_wpc_queries,t,title_weight,no,
+%                   aspec(title_weight,mandatory,integer,none,no_default,
+%                         'Weight for title evidence (abstract is 1)')).
+% is_control_option(inq_form_wpc_queries,w,wweight,no,
+%                   aspec(wweight,mandatory,integer,none,no_default,
+%                         'Weight for bag-of-words evidence')).
+% is_control_option(inq_form_wpc_queries,p,pweight,no,
+%                   aspec(pweight,mandatory,integer,none,no_default,
+%                         'Weight for phrase evidence')).
+% is_control_option(inq_form_wpc_queries,c,cweight,no,
+%                   aspec(cweight,mandatory,integer,none,no_default,
+%                         'Weight for concept evidence')).
+% is_control_option(inq_form_wpc_queries,h,help,no,none).
+% is_control_option(inq_form_wpc_queries,i,info,no,none).
+% is_control_option(inq_pp_ranked,h,help,no,none).
+% is_control_option(inq_pp_ranked,w,warnings,no,none).
+% is_control_option(inq_transform_results,p,percentages,no,none).
+% is_control_option(inq_transform_results,h,help,no,none).
+% is_control_option(inq_transform_results,i,info,no,none).
+% is_control_option(inq_transform_results,w,warnings,no,none).
+ 
+% is_control_option(ll_to_umls,d,dump_labeled_terms,no,none).
+% is_control_option(ll_to_umls,f,ambiguity_file,no,
+%                   aspec(ambiguity_file,mandatory,file,read,no_default,
+%                         'File of ambiguous terms')).
+% is_control_option(ll_to_umls,m,max_ambiguity,no,
+%                   aspec(max_ambiguity,mandatory,integer,none,no_default,
+%                         'The maximum degree of ambiguity allowed')).
+% is_control_option(ll_to_umls,h,help,no,none).
+% is_control_option(ll_to_umls,i,info,no,none).
+% is_control_option(ll_to_umls,w,warnings,no,none).
+ 
+% is_control_option(medline_to_sgml,p,pre_parsed_mesh,no,none).
+% is_control_option(medline_to_sgml,s,standard_sgml_format,no,none).
+% is_control_option(medline_to_sgml,m,multiple_field_occurrences,no,none).
+% is_control_option(medline_to_sgml,n,no_mesh_subheadings,no,none).
+% is_control_option(medline_to_sgml,'N',ngi_processing,no,none).
+% is_control_option(medline_to_sgml,h,help,no,none).
+% is_control_option(medline_to_sgml,i,info,no,none).
+% is_control_option(medline_to_sgml,w,warnings,no,none).
+% is_control_option(merge_iis_output,h,help,no,none).
+% is_control_option(merge_iis_output,w,warnings,no,none).
+% is_control_option(merge_lexicons,h,help,no,none).
+% is_control_option(mesh_terminology,h,help,no,none).
+% is_control_option(mesh_terminology,i,info,no,none).
+% is_control_option(mesh_update,h,help,no,none).
+% is_control_option(mesh_update,i,info,no,none).
+% is_control_option(mesh_update,w,warnings,yes,none).
+% is_control_option(mesh_update_prep,d,delete_items,no,none).
+% is_control_option(mesh_update_prep,u,update_items,no,none).
+% is_control_option(mesh_update_prep,h,help,no,none).
+% is_control_option(mesh_update_prep,i,info,no,none).
+% is_control_option(metastat,h,help,no,none).
+% is_control_option(metastat,i,info,no,none).
+% is_control_option(metastat,w,warnings,no,none).
+% is_control_option(mm_convert_mo,o,other_filter,no,none).
+% is_control_option(mm_convert_mo,h,help,no,none).
+% is_control_option(mm_extract_fielded,h,help,no,none).
+% is_control_option(mm_extract_fielded,w,warnings,no,none).
+% is_control_option(mm_filter,c,duplicate_concepts,no,none).
+% is_control_option(mm_filter,h,help,no,none).
 
-is_control_option(uttok_pp,h,help,no,none).
-is_control_option(uttok_pp,i,info,no,none).
-is_control_option(uwda_to_umls,h,help,no,none).
-is_control_option(uwda_to_umls,w,warnings,no,none).
+% is_control_option(mm_select,h,help,no,none).
 
-is_control_option(xfer_to_occs,h,help,no,none).
+% is_control_option(mm_tally,m,metamap_mo_format,no,none).
+% is_control_option(mm_tally,c,mrcon_format,no,none).
+% is_control_option(mm_tally,p,phrase_lengths,no,none).
+% is_control_option(mm_tally,w,phrase_words,no,none).
+% is_control_option(mm_tally,h,help,no,none).
+% is_control_option(mm_time,h,help,no,none).
+% is_control_option(mm_tokenizer,s,whitespace_tokenization,no,none).
+% is_control_option(mm_tokenizer,w,wordind_tokenization,no,none).
+% is_control_option(mm_tokenizer,m,metamap_tokenization,no,none).
+% is_control_option(mm_tokenizer,c,complete_tokenization,no,none).
+% is_control_option(mm_tokenizer,l,lower_case,no,none).
+% is_control_option(mm_tokenizer,u,unique_tokens,no,none).
+% is_control_option(mm_tokenizer,q,prolog_output,no,none).
+% is_control_option(mm_tokenizer,b,brief_output,no,none).
+% is_control_option(mm_tokenizer,h,help,no,none).
+% is_control_option(mm_update_mh,x,dump_mesh,no,none).
+% is_control_option(mm_update_mh,g,glean_mesh,no,none).
+% is_control_option(mm_update_mh,p,pre_parsed_mesh,no,none).
+% is_control_option(mm_update_mh,m,create_multiple_mesh_fields,no,none).
+% is_control_option(mm_update_mh,l,create_multi_line_mesh_field,no,none).
+% is_control_option(mm_update_mh,h,help,no,none).
+% is_control_option(mm_update_mh,i,info,no,none).
+% is_control_option(mm_update_mh,d,debug,no,none).
+
+% is_control_option(phrasex,t,tag_text,yes,none).
+% is_control_option(phrasex,h,help,no,none).
+% is_control_option(phrasex,w,warnings,no,none).
+% is_control_option(phrasex,d,dump,no,none).
+
+% is_control_option(qualcon,r,relaxed_mode,no,none).
+% is_control_option(qualcon,h,help,no,none).
+% is_control_option(qualcon,w,warnings,no,none).
+
+% is_control_option(random_split,h,help,no,none).
+% is_control_option(random_split,i,info,no,none).
+% is_control_option(random_split,w,warnings,no,none).
+% is_control_option(rebuild_ambig,h,help,no,none).
+% is_control_option(rebuild_ambig,w,warnings,no,none).
+
+% is_control_option(sp_to_umls,d,dump_labeled_terms,no,none).
+% is_control_option(sp_to_umls,f,ambiguity_file,no,
+%                   aspec(ambiguity_file,mandatory,file,read,no_default,
+%                         'File of ambiguous terms')).
+% is_control_option(sp_to_umls,m,max_ambiguity,no,
+%                   aspec(max_ambiguity,mandatory,integer,none,no_default,
+%                         'The maximum degree of ambiguity allowed')).
+% is_control_option(sp_to_umls,h,help,no,none).
+% is_control_option(sp_to_umls,i,info,no,none).
+% is_control_option(sp_to_umls,w,warnings,no,none).
+% is_control_option(spattern,x,only_non_semnet,no,none).
+% is_control_option(spattern,y,no_semnet_filtering,no,none).
+% is_control_option(spattern,l,left_limit,no,
+%                   aspec(left_limit,mandatory,integer,none,no_default,
+%                         'Limit to search to the left')).
+% is_control_option(spattern,r,right_limit,no,
+%                   aspec(right_limit,mandatory,integer,none,no_default,
+%                         'Limit to search to the right')).
+% is_control_option(spattern,f,filter_file,no,
+%                   aspec(filter_file,mandatory,file,read,no_default,
+%                         'File of semantic types to filter out')).
+% is_control_option(spattern,s,statistics_file,no,
+%                   aspec(statistics_file,mandatory,file,write,no_default,
+%                         'File of statistics')).
+% is_control_option(spattern,i,include_relations,yes,none).
+% is_control_option(spattern,o,'relational_output',no,none).
+% is_control_option(spattern,m,mod_head_tuples,no,none).
+% is_control_option(spattern,p,preposition_triples,no,none).
+% is_control_option(spattern,v,verb_triples,no,none).
+% is_control_option(spattern,t,head_triples,no,none).
+% is_control_option(spattern,n,nominalization_triples,no,none).
+% is_control_option(spattern,d,phrase_dump,no,none).
+% is_control_option(spattern,w,warnings,no,none).
+% is_control_option(spattern,h,help,no,none).
+% is_control_option(spattern_dump,f,full_pattern_headers,no,none).
+% is_control_option(spattern_dump,r,phrase_headers,no,none).
+% is_control_option(spattern_dump,p,pattern_headers,no,none).
+% is_control_option(spattern_dump,h,help,no,none).
+% is_control_option(spattern_print,f,filter_file,no,
+%                   aspec(filter_file,mandatory,file,read,no_default,
+%                         'File of filter patterns')).
+% is_control_option(spattern_print,m,max_to_print,no,
+%                   aspec(max_to_print,mandatory,integer,none,no_default,
+%                         'Maximum number of examples per pattern to print')).
+% is_control_option(spattern_print,h,help,no,none).
+% is_control_option(synonym_baser,d,dump_details,no,none).
+% is_control_option(synonym_baser,w,warnings,no,none).
+% is_control_option(synonym_baser,h,help,no,none).
+
+% is_control_option(text_object_explorer,i,ignore_comments,yes,none).
+% is_control_option(text_object_explorer,r,respect_whitespace,yes,none).
+% is_control_option(text_object_explorer,g,gate_output,no,none).
+% is_control_option(text_object_explorer,a,aas,no,none).
+% is_control_option(text_object_explorer,b,sentence_boundary,no,none).
+% is_control_option(text_object_explorer,p,parenthetical,no,none).
+% is_control_option(text_object_explorer,c,compound_token,no,none).
+% is_control_option(text_object_explorer,m,chemicals,no,none).
+% is_control_option(text_object_explorer,'A',tfidf_csb,no,none).
+% is_control_option(text_object_explorer,'B',tfidf_h,no,none).
+ 
+% is_control_option(text_object_explorer,l,lower_bound,no,
+%                   aspec(lower_bound,mandatory,integer,none,no_default,
+%                         'Lower bound for various options')).
+% is_control_option(text_object_explorer,'1',debug1,no,none).
+% is_control_option(text_object_explorer,'2',debug2,no,none).
+% is_control_option(text_object_explorer,'3',debug3,no,none).
+% is_control_option(text_object_explorer,'4',debug4,no,none).
+% is_control_option(text_object_explorer,h,help,no,none).
+% is_control_option(text_object_explorer,i,info,no,none).
+% is_control_option(text_object_explorer,w,warnings,no,
+%                   aspec(warnings_file,mandatory,file,write,no_default,
+%                         'File of warnings')).
+% is_control_option(text_to_medline,h,help,no,none).
+% is_control_option(text_to_medline,i,info,no,none).
+% is_control_option(text_to_medline,w,warnings,no,none).
+% is_control_option(thesaurus_parser,v,validate,yes,none).
+% is_control_option(thesaurus_parser,h,help,no,none).
+% is_control_option(thesaurus_parser,w,warnings,no,none).
+% is_control_option(thesaurus_to_umls,h,help,no,none).
+% is_control_option(thesaurus_to_umls,w,warnings,no,none).
+% is_control_option(tr_to_umls,d,dump_labeled_terms,no,none).
+% is_control_option(tr_to_umls,f,ambiguity_file,no,
+%                   aspec(ambiguity_file,mandatory,file,read,no_default,
+%                         'File of ambiguous terms')).
+% is_control_option(tr_to_umls,m,max_ambiguity,no,
+%                   aspec(max_ambiguity,mandatory,integer,none,no_default,
+%                         'The maximum degree of ambiguity allowed')).
+% is_control_option(tr_to_umls,h,help,no,none).
+% is_control_option(tr_to_umls,i,info,no,none).
+% is_control_option(tr_to_umls,w,warnings,no,none).
+% is_control_option(treecodes,h,help,no,none).
+% 
+% is_control_option(uttok_pp,h,help,no,none).
+% is_control_option(uttok_pp,i,info,no,none).
+% is_control_option(uwda_to_umls,h,help,no,none).
+% is_control_option(uwda_to_umls,w,warnings,no,none).
+ 
+% is_control_option(xfer_to_occs,h,help,no,none).
 
 /* get_control_options_for_modules(+Module(s), -Options)
 
@@ -716,35 +720,43 @@ get_control_options_for_modules(Modules,Options) :-
     sort(Options0,Options).
 
 
-%%% /* reset_control_options(+Module(s))
-%%% 
-%%% set_control_options/0 retracts all control_option/1 clauses and sets the
-%%% defaults for Module(s).  */
-%%% 
-%%% reset_control_options(ModuleOrModules) :-
-%%% 	retractall(control_option(_)),
-%%% 	retractall(control_value(_,_)),
-%%% 	% retractall(control_value(_,_,_)),
-%%% 	( atom(ModuleOrModules) ->
-%%% 	  reset_control_options_aux([ModuleOrModules])
-%%% 	; reset_control_options_aux(ModuleOrModules)
-%%% 	).
-%%% 
-%%% reset_control_options_aux([]).
-%%% reset_control_options_aux([Module|Rest]) :-
-%%% 	toggle_default_control_options(Module),
-%%% 	reset_control_options_aux(Rest).
-%%% 
-%%% /* toggle_default_control_options(+Module)
-%%% 
-%%% toggle_default_control_options/1 toggles those control options of the form
-%%% is_control_option(Module,_,ControlOption,yes,_), i.e., with IsDefault
-%%% set to yes.  */
-%%% 
-%%% toggle_default_control_options(Module) :-
-%%%     findall(Option,is_control_option(Module,_,Option,yes,_),DefaultOptions),
-%%%     toggle_control_options(DefaultOptions).
+/* reset_control_options(+Module(s))
 
+set_control_options/0 retracts all control_option/1 clauses and sets the
+defaults for Module(s).  */
+
+reset_control_options(ModuleOrModules) :-
+	retractall(control_option(_)),
+	retractall(control_value(_,_)),
+	% retractall(control_value(_,_,_)),
+	( atom(ModuleOrModules) ->
+	  reset_control_options_aux([ModuleOrModules])
+	; reset_control_options_aux(ModuleOrModules)
+	).
+
+reset_control_options_aux([]).
+reset_control_options_aux([Module|Rest]) :-
+	toggle_default_control_options(Module),
+	reset_control_options_aux(Rest).
+
+/* toggle_default_control_options(+Module)
+
+toggle_default_control_options/1 toggles those control options of the form
+is_control_option(Module,_,ControlOption,yes,_), i.e., with IsDefault
+set to yes.  */
+
+toggle_default_control_options(Module) :-
+	findall(Option:Default,
+		option_and_default(Module, Option,Default),
+		DefaultOptions),
+	toggle_control_options(DefaultOptions).
+
+option_and_default(Module, Option, Default) :-
+	is_control_option(Module, _, Option, yes, LastArg),
+	( atom(LastArg) ->
+	  Default = LastArg
+	; LastArg = aspec(Option,_,_,yes,Default,_)
+	).
 
 /* toggle_control_options(+Options)
    set_control_options(+Options)
@@ -764,13 +776,16 @@ to the previous option configuration. */
 toggle_control_options([]).
 toggle_control_options([Option0|Rest]) :-
 	( Option0 = iopt(Option,_) ->
-	  true
-        ; Option=Option0
+	  Default = none
+        ; Option0 = Option:Default
         ),
-	( retract(control_option(Option)) ->
-	  true
-        ; assert_control_option(Option)
-        ),
+	retractall(control_option(Option)),
+        assert_control_option(Option),
+	( Default \== none ->
+	  retractall(control_value(Option, _V)),
+	  assert_control_value(Option, Default)
+	; true
+	),
 	toggle_control_options(Rest).
 
 set_control_options([]).
@@ -1480,7 +1495,8 @@ assert_control_option(Option) :-
 assert_control_value(Option, Value) :-
 	( control_value(Option, Value) ->
 	  true
-	; assert(control_value(Option, Value))
+	; retractall(control_value(Option, _V)),
+	  assert(control_value(Option, Value))
 	).
 
 % assert_control_value(Option, Attribute, Value) :-
@@ -1488,3 +1504,4 @@ assert_control_value(Option, Value) :-
 % 	  true
 % 	; assert(control_value(Option, Attribute, Value))
 % 	).
+
