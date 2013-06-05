@@ -99,6 +99,7 @@
 
 
 :- use_module(library(lists), [
+	nth1/3,
 	rev/2
     ]).
 
@@ -260,6 +261,7 @@ is_control_option(metamap,  '', map_thresh, no,
 
 % Bypass lexical lookup
 is_control_option(metamap,  '', 'no_lex',		 	no, none).
+is_control_option(metamap,  '', 'local_db',		 	no, none).
 		   
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -303,6 +305,12 @@ is_control_option(filter_mrconso,  '', clfi, no,
                         'Whether to use original C code or lexAccess version of lex_form_input')).
 is_control_option(filter_mrconso,'N',silent,no,none).
 is_control_option(filter_mrconso,w,warnings,no,none).
+
+is_control_option(glean_mrcon,f,first_term_is_concept,yes,none).
+is_control_option(glean_mrcon,c,generate_CUIs,no,none).
+is_control_option(glean_mrcon,s,generate_strings,no,none).
+is_control_option(glean_mrcon,w,generate_words,no,none).
+is_control_option(glean_mrcon,h,help,no,none).
 
 is_control_option(mm_print, 'A',alnum_filter,no,none).
 is_control_option(mm_print, z,stop_phrase_file,no,
@@ -458,11 +466,6 @@ is_control_option(prefilter_mrconso,w,warnings,no,none).
 % is_control_option(glean_from_mm,t,three_column_output,yes,none).
 % is_control_option(glean_from_mm,r,remove_raw_output_file,yes,none).
 % is_control_option(glean_from_mm,h,help,no,none).
-% is_control_option(glean_mrcon,f,first_term_is_concept,yes,none).
-% is_control_option(glean_mrcon,c,generate_CUIs,no,none).
-% is_control_option(glean_mrcon,s,generate_strings,no,none).
-% is_control_option(glean_mrcon,w,generate_words,no,none).
-% is_control_option(glean_mrcon,h,help,no,none).
 % is_control_option(glean_synonyms,h,help,no,none).
 % is_control_option(glean_synonyms,i,info,no,none).
 % is_control_option(glean_synonyms,w,warnings,no,none).
@@ -1046,35 +1049,97 @@ possibly_environ(EnvironVar, Value) :-
 % OptionsOut = [mm_data_year] and
 % ArgsOut    = ['10'].
 
+% Options is the list of command-line flags, e.g., ['Z', 'V', 'Z', 'V']
+% Args    is the list of args to the flags,  e.g., ['2012AB', 'USAbase', '2012AA', 'NLM']
+
+% If the option is repeated and takes an argument,
+% unify ArgsNext and the tail of ArgsIn, and unify ArgsOut and ArgsOutRest.
+% If the option is repeated and does not take an argument,
+% unify ArgsNext and ArgsIn and unify ArgsOut with [FirstArg|ArgsOutRest].
+set_next_args_1(Program, FirstOption, ArgsIn, ArgsNext, ArgsOut, ArgsOutRest) :-
+	  ( control_option_requires_argspec(Program, FirstOption) ->
+	    % Must handle the case of ArgsIn being []!
+	    ( ArgsIn = [_FirstArg|ArgsNext] ->
+	      true
+	    ; ArgsNext = ArgsIn
+	    ),
+	    ArgsOut = ArgsOutRest
+	  ; ArgsNext = ArgsIn,
+	    ( ArgsIn = [FirstArg|_] ->
+	      ArgsOut = [FirstArg|ArgsOutRest]
+	    ; ArgsOut = ArgsIn
+	    )
+	  ).
+
+% If the option is not repeated and takes an argument,
+% unify ArgsNext and the tail of ArgsIn, and unify ArgsOut [FirstArg|ArgsOutRest].
+% If the option is not repeated and does not take an argument,
+% unify ArgsNext and ArgsIn, and unify ArgsOut with ArgsOutRest.
+
+set_next_args_2(Program, FirstOption, ArgsIn, ArgsNext, ArgsOut, ArgsOutRest) :-
+	  ( control_option_requires_argspec(Program, FirstOption) ->
+	    ( ArgsIn = [FirstArg|ArgsNext] ->
+	      ArgsOut = [FirstArg|ArgsOutRest]
+	    ; ArgsNext = ArgsIn,
+	      ArgsOut = ArgsIn
+	    )
+	  ; ArgsNext = ArgsIn,
+	    ArgsOut = ArgsOutRest
+	  ).
+
 update_command_line([], Args, _Program, [], Args).
 update_command_line([FirstOption|RestOptions], ArgsIn, Program, OptionsOut, ArgsOut) :-
-	% If the first option is repeated,
+	% If the first control option is repeated,
 	( repeated_control_option(Program, FirstOption, ArgsIn, RestOptions) ->
 	% discard it by simply recursing on the final output variable OptionsOut
-	  OptionsOut = OptionsOutRest,
-	% and possibly remove the first arg
-	  possibly_remove_first_arg(ArgsIn, FirstOption, Program, RestArgs, ArgsOut, ArgsOutRest)
-	; OptionsOut = [FirstOption|OptionsOutRest],
-	  set_rest_args(ArgsIn, RestArgs, ArgsOut, ArgsOutRest)
+	  OptionsNext = OptionsOut,
+	  set_next_args_1(Program, FirstOption, ArgsIn, ArgsNext, ArgsOut, ArgsOutRest)	  
+	% If the first option is not repeated, keep it.
+	; OptionsOut = [FirstOption|OptionsNext],
+	  set_next_args_2(Program, FirstOption, ArgsIn, ArgsNext, ArgsOut, ArgsOutRest)
 	),
-	update_command_line(RestOptions, RestArgs, Program, OptionsOutRest, ArgsOutRest).
+	update_command_line(RestOptions, ArgsNext, Program, OptionsNext, ArgsOutRest).
 
+% possibly_remove_first_arg(ArgsIn, FirstOption, Program, ArgsNext, ArgsOut, ArgsOutRest)
+% If the current option being examined takes a mandatory argument,
+% and the first arg does not begin with a hyphen, remove the first arg.
 
-% set_rest_args(ArgsIn, RestArgs, ArgsOut, ArgsOutRest)
-set_rest_args([], [], [], _).
-set_rest_args([FirstArg|RestArgs], RestArgs, [FirstArg|ArgsOutRest], ArgsOutRest).
+%%% possibly_remove_first_arg([], _FirstOption, _Program, [], [], _).
+%%% possibly_remove_first_arg([FirstArg|RestArgs], FirstOption, Program, ArgsNext, ArgsOut, ArgsOutRest) :-
+%%% 	( control_option_requires_argspec(Program, FirstOption),
+%%% 	  atom_codes(FirstArg, FirstArgCodes),
+%%% 	  FirstArgCodes = [FirstChar|_],
+%%% 	  % FirstArg does not begin with a hyphen (ASCII 45)
+%%% 	  FirstChar =\= 45 ->
+%%% 	  ArgsOut = ArgsOutRest,
+%%% 	  ArgsNext = RestArgs
+%%% 	; ArgsOut = [FirstArg|ArgsOutRest],
+%%% 	  ArgsNext = [FirstArg|RestArgs]
+%%% 	).
+
+member_pos(Element, List, Program, Position) :-
+	member_pos_aux(Element, List, Program, 2, Position).
+
+member_pos_aux(Element, [Element|_Rest], _Program, Position, Position).
+member_pos_aux(Element, [Other|Rest], Program, PositionIn, Position) :-
+	( option_requires_arg(Program, Other) ->
+	  PositionNext is PositionIn + 1
+	; PositionNext is PositionIn
+	),
+	member_pos_aux(Element, Rest, Program, PositionNext, Position).
 	
 repeated_control_option(Program, FirstOption, ArgsIn, RestOptions) :-
-	member(OtherOption, RestOptions),
+	member_pos(OtherOption, RestOptions, Program, Position),
 	equivalent_control_options(Program, FirstOption, OtherOption),
 	!,
 	short_or_long_hyphens(Program, FirstOption, FirstOptionHyphens),
 	short_or_long_hyphens(Program, OtherOption, OtherOptionHyphens),
 	( option_requires_arg(Program, FirstOption) ->
-	  ArgsIn = [Value1,Value2|_],
-	  format(user_output, 'WARNING: Option "~w~w ~w" overridden by option "~w~w ~w".~n',
+	  ArgsIn = [Value1|_],
+	  nth1(Position, ArgsIn, Value2),
+	  format(user_output, '### WARNING: Option "~w~w ~w" overridden by option "~w~w ~w".~n',
 		 [FirstOptionHyphens,FirstOption,Value1,OtherOptionHyphens,OtherOption,Value2])
-	; format(user_output, 'WARNING: Option "~w~w" overridden by option "~w~w".~n',
+	; format(user_output, '### WARNING: Option "~w~w" overridden by option "~w~w".~n',
 		 [FirstOptionHyphens,FirstOption,OtherOptionHyphens,OtherOption])
 	).	
 
@@ -1100,25 +1165,6 @@ option_requires_arg(Program, Option) :-
 	  compound(ArgSpec)
 	; is_control_option(Program, _, Option, _, ArgSpec) ->
 	  compound(ArgSpec)
-	).
-
-% possibly_remove_first_arg(ArgsIn, FirstOption, Program, RestArgs, ArgsOut, ArgsOutRest)
-% If the current option being examined takes a mandatory argument,
-% and the first arg does not begin with a hyphen, remove the first arg.
-
-% possibly_remove_first_arg(ArgsIn, _FirstOption, _Program, RestArgs, ArgsOut, ArgsOutRest).
-
-possibly_remove_first_arg([], _FirstOption, _Program, [], [], _).
-
-possibly_remove_first_arg([FirstArg|RestArgs], FirstOption, Program, RestArgs, ArgsOut, ArgsOutRest) :-
-% possibly_remove_first_arg(FirstOption, FirstArg, Program, ArgsOut, ArgsOutRest) :-
-	( control_option_requires_argspec(Program, FirstOption),
-	  atom_codes(FirstArg, FirstArgCodes),
-	  FirstArgCodes = [FirstChar|_],
-	  % FirstArg does not begin with a hyphen (ASCII 45)
-	  FirstChar =\= 45 ->
-	  ArgsOut = ArgsOutRest
-	; ArgsOut = [FirstArg|ArgsOutRest]
 	).
 
 control_option_requires_argspec(Program, Option) :-
@@ -1495,7 +1541,7 @@ assert_control_option(Option) :-
 assert_control_value(Option, Value) :-
 	( control_value(Option, Value) ->
 	  true
-	; retractall(control_value(Option, _V)),
+	; % retractall(control_value(Option, _V)),
 	  assert(control_value(Option, Value))
 	).
 
