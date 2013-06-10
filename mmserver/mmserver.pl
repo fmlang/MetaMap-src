@@ -55,7 +55,7 @@
     ]).
 
 :- use_module(skr_lib(server_choice), [
-	get_all_server_streams/2
+	get_server_streams/1
    ]).
 
 :- use_module(text(text_objects), [
@@ -94,9 +94,10 @@ main :-
     % 		    or(['<infile>','.','out'],user_output),
     % 		    'Output file')
     % 	      ],
-    get_all_server_streams(TaggerServerStream, WSDServerStream),
-    AllServerStreams = (TaggerServerStream,WSDServerStream),
-    bb_put(all_server_streams, AllServerStreams),
+    % get_server_streams(TaggerServerStream, WSDServerStream),
+    % AllServerStreams = (TaggerServerStream,WSDServerStream),
+    get_server_streams(ServerStreams),
+    bb_put(all_server_streams, ServerStreams),
     parse_command_line(CLTerm),
     CLTerm=command_line(Options,Args),
     ( \+ member(q,Options) -> append(Options, [q], OptionsFinal) ; Options=OptionsFinal),
@@ -199,9 +200,9 @@ process_string(Input,Output) :-
 	split_string_completely(TrimmedInput,"\n",Strings),
 	ExtraChars = [],
 	get_UDAs(UDAList),
-	bb_get(all_server_streams, AllServerStreams),
+	bb_get(all_server_streams, ServerStreams),
 	process_text(Strings, "0000000", ExtraChars,
-		     TagOption, AllServerStreams,
+		     TagOption, ServerStreams,
 		     ExpRawTokenList, AAs, UDAList, MMResults),
 	parse_command_line(CLTerm),
 	CLTerm=command_line(Options,Args),
