@@ -45,7 +45,7 @@
 	% called by MetaMap API -- do not change signature!
 	initialize_skr/4,
 	% called by MetaMap API -- do not change signature!
-	postprocess_sentences/10,
+	postprocess_sentences/11,
 	% called by MetaMap API -- do not change signature!
 	process_text/9
    ]).

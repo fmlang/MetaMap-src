@@ -12,12 +12,16 @@
 	 read_from_codes/2
    ]).
 
+:- use_module(library(file_systems), [
+	close_all_streams/0
+   ]).
+
 :- use_module(library(system), [
 	 environ/2
    ]).
 
 :- use_module(skr(skr_fe), [
-	postprocess_sentences/10,
+	postprocess_sentences/11,
 	initialize_skr/4,
 	process_text/9
    ]).
@@ -55,7 +59,7 @@
     ]).
 
 :- use_module(skr_lib(server_choice), [
-	get_all_server_streams/2
+	get_server_streams/1
    ]).
 
 :- use_module(text(text_objects), [
@@ -94,7 +98,7 @@ main :-
     % 		    or(['<infile>','.','out'],user_output),
     % 		    'Output file')
     % 	      ],
-    get_all_server_streams(TaggerServerStream, WSDServerStream),
+    get_server_streams(TaggerServerStream-WSDServerStream),
     AllServerStreams = (TaggerServerStream,WSDServerStream),
     bb_put(all_server_streams, AllServerStreams),
     parse_command_line(CLTerm),
@@ -237,6 +241,6 @@ postprocess_text_mmserver(Lines0, BracketedOutput, InterpretedArgs,
 
 	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
 	generate_negex_output(NegationTerms),
-	postprocess_sentences(OrigUtterances, NegationTerms, InterpretedArgs, IOptions, AAs,
-			      Sentences, BracketedOutput, DisambMMOutput,
+	postprocess_sentences(user_output, OrigUtterances, NegationTerms, InterpretedArgs,
+			      IOptions, AAs, Sentences, BracketedOutput, DisambMMOutput,
 			      0, AllMMO).
