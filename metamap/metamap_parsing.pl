@@ -33,47 +33,47 @@
 % Purpose:  MetaMap parsing routines
 
 
-:- module(metamap_parsing,[
+:- module(metamap_parsing, [
 	demote_heads/2,
-	generate_syntactic_analysis_plus/5,
+	generate_syntactic_analysis_plus/4,
 	collapse_syntactic_analysis/2,
 	re_attach_apostrophe_s_to_prev_word/3
     ]).
 
-:- use_module(lexicon(lex_access),[
-	tokenize_string_for_lexical_lookup/2
+:- use_module(lexicon(qp_token), [
+	tokenize_string/2
     ]).
 
 :- use_module(lexicon(qp_lookup), [
-	assemble_definitions/4
+	assemble_definitions/3
     ]).
 
-:- use_module(skr_lib(consulttt),[
+:- use_module(skr_lib(consulttt), [
 	consult_tagged_text/5
    ]).
 
-:- use_module(skr_lib(generate_varinfo),[
-	generate_variant_info/3
+:- use_module(skr_lib(generate_varinfo), [
+	generate_variant_info/2
     ]).
 
-:- use_module(skr_lib(mincoman),[
+:- use_module(skr_lib(mincoman), [
 	minimal_commitment_analysis/4
     ]).
 
-:- use_module(skr_lib(nls_system),[
+:- use_module(skr_lib(nls_system), [
 	control_option/1
    ]).
 
-:- use_module(skr_lib(retokenize),[
+:- use_module(skr_lib(retokenize), [
 	remove_null_atom_defns/2,
 	retokenize/2
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
+:- use_module(skr_lib(sicstus_utils), [
 	concat_atom/2
     ]).
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	append/2
     ]).
 
@@ -86,14 +86,14 @@
    ************************************************************************
    ************************************************************************ */
 
-generate_syntactic_analysis_plus(ListOfAscii, LexiconServerInfo,
-				 TagList, SyntAnalysis, Definitions) :-
-	tokenize_string_for_lexical_lookup(ListOfAscii, Words0),
-	re_attach_apostrophe_s_syntax(Words0, TagList, Words1),
+generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions) :-
+	tokenize_string(ListOfAscii, Words0),
+	% re_attach_apostrophe_s_syntax(Words0, TagList, Words1),
+	Words1 = Words0,
 	retokenize(Words1, Words),
-	assemble_definitions(Words, TagList, LexiconServerInfo, Definitions0),
+	assemble_definitions(Words, TagList, Definitions0),
 	remove_null_atom_defns(Definitions0, Definitions),
-	generate_variant_info(Definitions, LexiconServerInfo, VarInfoList),
+	generate_variant_info(Definitions, VarInfoList),
 	% ChromosomeFound is 0,
 	% LeftOverWords = [],
 	% PrevTagWord = '',
@@ -107,9 +107,9 @@ maybe_consult_tagged_text([], _Definitions, _VarInfoList, [], _1).
 maybe_consult_tagged_text([H|T], Definitions, VarInfoList, LabeledText, 1) :-
 	consult_tagged_text(Definitions, VarInfoList, [H|T], LabeledText, 1).
 
-% The call to tokenize_string_for_lexical_lookup(ListOfAscii, Words0)
+% The call to tokenize_string(ListOfAscii, Words0)
 % will parse words ending in "'s" (apostrophe + s) into three tokens, e.g.,
-% tokenize_string_for_lexical_lookup("finkelstein's test positive", Words0)
+% tokenize_string("finkelstein's test positive", Words0)
 % will instantiate Words0 to [[finkelstein,'\'',s,test,positive]].
 % MetaMap's (new!) default behavior is to reattach the "'s" to the previous token.
 

@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -39,7 +38,8 @@
 	db_get_concept_cui/2,
 	% db_get_concept_sts/2,
 	db_get_cui_sourceinfo/2,
-	db_get_cui_sts/2,
+	% db_get_cui_sts/2,
+	db_get_cui_sources_and_semtypes/3,
 	db_get_mesh_mh/2,
 	db_get_mesh_tc_relaxed/2,
 	db_get_meta_mesh/2,
@@ -63,26 +63,21 @@
 	db_get_lex_base_forms/2,
 	db_get_lex_base_forms_with_cat/3,
 	db_get_lex_cats/2,
+	db_get_lex_prefix_EUIs/2,
 	db_get_lex_record/2,
-	db_get_lex_dm_variants/3,
-	db_get_lex_varlist/2
+	db_get_lex_record_list/2,
+	db_get_lex_dm_variants_no_cat/2,
+	db_get_lex_dm_variants_with_cat/3,
+	db_get_lex_im_varlist/2
     ]).
-
-% :- use_module(skr_db(freq_im_vars), [
-% 	freq_im_vars/2
-%     ]).
-% 
-% :- use_module(skr_db(freq_lex_form), [
-% 	freq_lex_form/2
-%     ]).
-% 
-% :- use_module(skr_db(freq_lex_rec), [
-% 	freq_lex_rec/2
-%     ]).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
+    ]).
+
+:- use_module(skr(skr_xml), [
+	xml_output_format/1
     ]).
 
 :- use_module(skr_lib(ctypes), [
@@ -95,6 +90,7 @@
 	concatenate_items_to_string/2,
 	eliminate_multiple_meaning_designator_string/2,
 	is_print_string/1,
+	split_atom_completely/3,
 	split_string_completely/3,
 	trim_whitespace/2
     ]).
@@ -113,6 +109,10 @@
 	send_message/2
     ]).
 
+:- use_module(library(codesio), [
+	read_from_codes/2
+    ]).
+
 :- use_module(library(file_systems), [
 	directory_exists/1,
 	directory_exists/2,
@@ -124,14 +124,12 @@
 	del_element/3
     ]).
 
-
 :- use_module(library(system),[
 	environ/2
     ]).
 
 :- use_module(library(lists),[
-	append/2,
-	remove_dups/2
+	append/2
     ]).
 
 :- dynamic db_access_status/3.
@@ -221,7 +219,8 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 	
-default_release('2012AB').
+% default_release('2013AA').
+default_release('2013AA').
 
 initialize_db_access :-
 	get_data_release(Release, 1),
@@ -234,7 +233,7 @@ initialize_db_access(Version, Release, Model) :-
 	!.
 initialize_db_access(Version, Release, Model) :-
 	set_var_table(VarTable),
-	% Version is one of normal (default), nal, level0, etc.
+	% Version is one of 'Base', 'USAbase', 'NLM', or 'Full'
 	% Model   is one of strict (default), relaxed
 	model_location(Version, Release, Model, BasePath, Location),
 	verify_valid_dbs(Location, BasePath, Release),
@@ -291,10 +290,10 @@ model_location(Version, Release, ModelName, Path, Location) :-
 
 model_location_base_dir(Path) :- environ('MODEL_LOCATION_BASE_DIR', Path).
 
-run_query(Query, QueryType, Results, Return) :-
+run_query(Query, Results, Return) :-
 	c_nls_db_exec_2_list_jgm(Query, Results, Return),
 	debug_call(db, length(Results, Length)),
-	debug_message(db, '~N### ~w query "~w" returned ~d result(s)~n', [QueryType, Query, Length]).
+	debug_message(db, '~N### query "~w" returned ~d result(s)~n', [Query, Length]).
 
 /* db_get_concept_cui(+Concept, -CUI)
 
@@ -314,7 +313,7 @@ db_get_concept_cui(Concept, []) :-
 
 db_get_concept_cui_aux(ConceptAtom, CUI) :-
 	form_simple_query("cui", "conceptcui", "concept", ConceptAtom, Query),
-	run_query(Query, simple, CUIs0, 1),
+	run_query(Query, CUIs0, 1),
 	append(CUIs0, CUI).
 
 get_cui_from_results([],      'C0000000').
@@ -329,7 +328,7 @@ db_get_versioned_source_name(RootSourceName, []) :-
 
 db_get_versioned_source_name_aux(RootSourceName, VersionedSourceNames) :-
 	form_simple_query("versioned, exists", "sab_rv", "root", RootSourceName, Query),
-	run_query(Query, simple, VersionedSourceNames, 1).
+	run_query(Query, VersionedSourceNames, 1).
 
 db_get_root_source_name(VersionedSourceName, RootSourceName) :-
 	ensure_string(VersionedSourceName, VersionedSourceNameString),
@@ -340,7 +339,7 @@ db_get_root_source_name(VersionedSourceName, []) :-
 
 db_get_root_source_name_aux(VersionedSourceName, RootSourceNames) :-
 	form_simple_query("root, exists", "sab_vr", "versioned", VersionedSourceName, Query),
-	run_query(Query, simple, RootSourceNames0, 1),
+	run_query(Query, RootSourceNames0, 1),
 	RootSourceNames0 = [RootSourceNames].
 
 /* db_get_cui_sourceinfo(+CUI, -Sourceinfo)
@@ -350,6 +349,14 @@ lists [I,STR,SAB,TTY] where I is the ith entry (the order being
 determined by mrconso.eng, STR is the string for source SAB with term type
 TTY). Warning, CUI can be a string, but returned elements are either atoms
 or numbers, not strings. */
+
+% There is no need to call this predicate unless one of
+% -G --sources
+% -R --restrict_to_sources <list>
+% -e --exclude_sources <list>
+% -q --machine_output
+% --XMLf --XMLf1 --XMLn --XMLn1
+% is set
 
 db_get_cui_sourceinfo(CUI, SourceInfo) :-
 	( CUI == [] ->
@@ -363,8 +370,8 @@ db_get_cui_sourceinfo(CUI, []) :-
 
 db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 	form_simple_query("i, str, src, tty", "cuisourceinfo", "cui", CUIAtom, Query),
-	run_query(Query, simple, SourceInfo0, 1),
-	sort(SourceInfo0, SourceInfo).
+	run_query(Query, SourceInfo0, 1),
+ 	sort(SourceInfo0, SourceInfo).
 
 %%% /* db_get_concept_sts(+Concept, -SemTypes)
 %%% 
@@ -383,27 +390,27 @@ db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 %%% 
 %%% db_get_concept_sts_aux(ConceptAtom, SemTypes) :-
 %%% 	form_simple_query("st", "conceptst", "concept", ConceptAtom, Query),
-%%% 	run_query(Query, simple, SemTypes0, 1),
+%%% 	run_query(Query, SemTypes0, 1),
 %%% 	append(SemTypes0, SemTypes).
 
 /* db_get_cui_sts(+CUI, -SemTypes)
 
-db_get_cui_sts/2 gets the (abbreviated) semantic types, SemTypes, for Input.  */
-
-db_get_cui_sts(CUI, SemTypes) :-
-	( CUI == [] ->
-	  SemTypes = []
-	; ensure_atom(CUI, CUIAtom),
-	  db_get_cui_sts_aux(CUIAtom, SemTypes)
-	),
-	!.
-db_get_cui_sts(CUI, []) :-
-	fatal_error('db_get_cui_sts failed for ~w~n', [CUI]).
-
-db_get_cui_sts_aux(CUIAtom, SemTypes) :-
-	form_simple_query("st", "cuist", "concept", CUIAtom, Query),
-	run_query(Query, simple, SemTypes0, 1),
-	append(SemTypes0, SemTypes).
+%%% db_get_cui_sts/2 gets the (abbreviated) semantic types, SemTypes, for Input.  */
+%%% 
+%%% db_get_cui_sts(CUI, SemTypes) :-
+%%% 	( CUI == [] ->
+%%% 	  SemTypes = []
+%%% 	; ensure_atom(CUI, CUIAtom),
+%%% 	  db_get_cui_sts_aux(CUIAtom, SemTypes)
+%%% 	),
+%%% 	!.
+%%% db_get_cui_sts(CUI, []) :-
+%%% 	fatal_error('db_get_cui_sts failed for ~w~n', [CUI]).
+%%% 
+%%% db_get_cui_sts_aux(CUIAtom, SemTypes) :-
+%%% 	form_simple_query("st", "cuist", "concept", CUIAtom, Query),
+%%% 	run_query(Query, SemTypes0, 1),
+%%% 	append(SemTypes0, SemTypes).
 
 /* db_get_all_acros_abbrs(+Word, -AAPairs)
 
@@ -425,7 +432,7 @@ db_get_all_acros_abbrs(Word, []) :-
 
 db_get_all_acros_abbrs_aux(Word, AAPairs) :-
 	form_simple_query("expansion, type", "nlsaa", "word", Word, Query),
-	run_query(Query, simple, AAListPairs, 1),
+	run_query(Query, AAListPairs, 1),
 	list_pairs_to_pairs(AAListPairs, AAPairs).
 
 list_pairs_to_pairs([], []).
@@ -454,7 +461,7 @@ db_get_unique_acros_abbrs(Word, []) :-
 % db_get_unique_acros_abbrs_aux(Word, [Expansion:Type]) :-
 db_get_unique_acros_abbrs_aux(Word, AAPairs) :-
 	form_simple_query("expansion, type", "nlsaau", "word", Word, Query),
-	run_query(Query, simple, AAListPairs, 1),
+	run_query(Query, AAListPairs, 1),
         list_pairs_to_pairs(AAListPairs, AAPairs).
 
 /* db_get_synonyms(+Word, -Synonyms)
@@ -478,9 +485,9 @@ db_get_synonyms(Word, []) :-
 
 db_get_synonyms_aux(WordAtom, Synonyms) :-
 	form_simple_query("syn, scat", "syns", "word", WordAtom, Query),
-	run_query(Query, simple, Synonyms0, 1),
+	run_query(Query, Synonyms0, 1),
 	normalize_synonyms(Synonyms0, Synonyms1),
-	remove_dups(Synonyms1, Synonyms).
+	sort(Synonyms1, Synonyms).
 
 remove_input([], _, []).
 remove_input([Input-_|Rest], Input, ModifiedRest) :-
@@ -503,9 +510,9 @@ db_get_synonyms(Word, WordCategory, []) :-
 
 db_get_synonyms_aux(WordAtom, WordCategoryAtom, Synonyms) :-
 	form_complex_query("syn, scat", "syns", "word", WordAtom, "wcat", WordCategoryAtom, Query),
-	run_query(Query, complex, Synonyms0, 1),
+	run_query(Query, Synonyms0, 1),
 	normalize_synonyms(Synonyms0, Synonyms1),
-	remove_dups(Synonyms1, Synonyms).
+	sort(Synonyms1, Synonyms).
 
 /* normalize_synonyms(+Synonyms, -NormalizedSynonyms)
    normalize_synonym(+Synonym, -NormalizedSynonym)
@@ -545,7 +552,7 @@ db_get_mesh_tc_relaxed(MeSH, []) :-
 
 db_get_mesh_tc_relaxed_aux(MeSHAtom, TreeCodes) :-
 	form_simple_query("tc", "meshtcrelaxed", "mesh", MeSHAtom, Query),
-	run_query(Query, simple, TreeCodes0, 1),
+	run_query(Query, TreeCodes0, 1),
 	append(TreeCodes0, TreeCodes).
 
 /* db_get_mesh_mh(+MeSH, -MH)
@@ -565,7 +572,7 @@ db_get_mesh_mh(MeSH, MH) :-
 
 db_get_mesh_mh_aux(MeSHAtom, MH) :-
 	form_simple_query("mh", "meshmh", "mesh", MeSHAtom, Query),
-	run_query(Query, simple, [[Result]], 1),
+	run_query(Query, [[Result]], 1),
 	( Result == 'X' ->
 	  MH = MeSHAtom
 	; MH = Result
@@ -590,7 +597,7 @@ db_get_meta_mesh(MeSH, MHString) :-
 
 db_get_meta_mesh_aux(MeSHAtom, MH) :-
 	form_simple_query("mesh", "metamesh", "meta", MeSHAtom, Query),
-	run_query(Query, simple, [[Result]], 1),
+	run_query(Query, [[Result]], 1),
 	( Result == 'X' ->
 	  MH = MeSHAtom
 	; MH = Result
@@ -648,7 +655,7 @@ db_get_mwi_word_data_aux(1, Table, Word, DebugFlags, RawResults) :-
 % This is the wide version
 db_get_mwi_word_data_WIDE(Table, Word, DebugFlags, RawResults) :-
 	form_simple_query("nmstr, str, concept", Table, "word", Word, Query),	
-        run_query(Query, simple, RawResults, 1),
+        run_query(Query, RawResults, 1),
 	debug_db_get_mwi_data_aux_2(DebugFlags, RawResults),
 	!.
 db_get_mwi_word_data_WIDE(Table, Word, _DebugFlags, _RawResults) :-
@@ -671,7 +678,7 @@ db_get_mwi_word_data_NARROW(Table, Word, DebugFlags, RawResults) :-
                                      Table, ".cui = cuiconcept.cui"],
                                     QueryTail),
         concatenate_items_to_atom([Query0,QueryTail], Query),
-        run_query(Query, join, RawResults, 1),
+        run_query(Query, RawResults, 1),
 	debug_db_get_mwi_data_aux_2(DebugFlags, RawResults),
 	!.
 
@@ -714,7 +721,7 @@ db_get_mwi_word_count(Table, Word, Count) :-
 
 db_get_mwi_word_count_aux(TableAtom, WordAtom, WordCount) :-
 	form_simple_query("wcount", TableAtom, "word", WordAtom, Query),
-	run_query(Query, simple, WordCount, 1).
+	run_query(Query, WordCount, 1).
 
 /* 
    db_get_variants(+Concept, +Category, -Variants)
@@ -725,12 +732,8 @@ Category is [], no filtering is done on Category.
 The table used ot obtain the variants is determined by db_access_var_table/1. */
 
 db_get_variants(Concept, Category, Variants) :-
-	( ensure_string(Concept, ConceptString),
-	  db_get_variants_aux(ConceptString, Category, Variants)
-	),
-	!.
-db_get_variants(Concept, Category, []) :-
-	fatal_error('db_get_variants/3 failed for ~p (~p).~n', [Concept,Category]).
+	ensure_string(Concept, ConceptString),
+	db_get_variants_aux(ConceptString, Category, Variants).
 
 % always treat adjectives as nouns, if possible
 db_get_variants_aux(Concept, Category0, Variants) :-
@@ -759,7 +762,7 @@ get_variants_from_db(Concept, Category, Variants) :-
 	  form_complex_query("var, vcat, dist, hist, roots",
 			     VarTableString, "word", Concept, "wcat", CategoryAtom, Query)
 	),
-	run_query(Query, complex, Variants0, 1),
+	run_query(Query, Variants0, 1),
 	% format('~nget_variants_aux:~nquery = ~p~nresult = ~p~n',[Query,Variants0]),
 	sort(Variants0, Variants1),
 	% format('~nafter sort~n', []),
@@ -771,7 +774,7 @@ convert_to_variant_terms([], []).
 %    !,
 %    convert_to_variant_terms(Rest,ConvertedRest).
 convert_to_variant_terms([[Var,VCat0,Distance,Hist0,Roots]|Rest],
-                         [v(Var,VCat,DistInteger,Hist,Roots,_)|ConvertedRest]) :-
+                         [v(Var,DistInteger,VCat,Hist,Roots,_)|ConvertedRest]) :-
 	ensure_atom(Distance, DistAtom),
 	atom_codes(DistAtom, DistCodes),
 	number_codes(DistInteger, DistCodes),
@@ -888,19 +891,19 @@ normalize_db_access_year(Release, NormalizedRelease) :-
 	    )
 	  ; ReleaseLength =:= 4,
 	    % Nonstandard, e.g., 08AA, 09AB, 10AA, etc.
-	    Codes = [D1, D2, AB1, AB2],
+	    Codes = [D1, D2, A, ABC],
 	    is_digit(D1),
 	    is_digit(D2),
-	    is_A_or_B(AB1),
-	    is_A_or_B(AB2) ->
+	    A == 0'A,
+	    is_ABC(ABC) ->
 	    choose_century(D1, Century),
 	    concat_atom([Century, Release], NormalizedRelease)
 	  ; ReleaseLength =:= 6,
 	    % e.g., 2008AA, 2009AB, 2010AA, etc.
-	    Codes = [D1, D2, D3, D4, AB1, AB2],
+	    Codes = [D1, D2, D3, D4, A, ABC],
 	    all_digits([D1,D2,D3,D4]),
-	    is_A_or_B(AB1),
-	    is_A_or_B(AB2) ->
+	    A == 0'A,
+	    is_ABC(ABC) ->
 	    NormalizedRelease = ReleaseAtom
 	  )
 	),
@@ -917,8 +920,9 @@ choose_century(Digit, Century) :-
 all_digits([]).
 all_digits([H|T]) :- is_digit(H), all_digits(T).
 
-is_A_or_B(0'A).
-is_A_or_B(0'B).
+is_ABC(0'A).
+is_ABC(0'B).
+is_ABC(0'C).
 
 
 get_data_model(Model) :-
@@ -972,95 +976,86 @@ ensure_string(AtomOrString, String) :-
         ; atom_codes(AtomOrString, String)
         ).
 
-% db_get_lex_base_forms(Word, BaseForms) :-
-%  	% first check freq_lex_form
-% 	( freq_lex_form(Word, LexFormData) ->
-% 	  (  foreach(_LexCat-BaseForm, LexFormData),
-% 	     foreach(BaseForm, BaseForms)
-% 	  do true
-% 	  )
-% 	; form_simple_query("baseform", "lex_form", "word", Word, Query),
-% 	  run_query(Query, simple, BaseForms0, 1),
-% 	  append(BaseForms0, BaseForms)
-% 	).
-% 	% ( BaseForms \== [] -> format('### LEX lex_form 1:~w~n', [Word]) ; true).
-% 
-% db_get_lex_base_forms_with_cat(Word, LexCat, BaseForms) :-
-%  	% first check freq_lex_form
-% 	( freq_lex_form(Word, LexFormData) ->
-% 	  (  foreach(_LexCat-BaseForm, LexFormData),
-% 	     foreach(BaseForm, BaseForms)
-% 	  do true
-% 	  )
-% 	; form_complex_query("baseform", "lex_form", "word", Word, "lexcat", LexCat, Query),
-% 	  run_query(Query, simple, BaseForms0, 1),
-% 	   append(BaseForms0, BaseForms)
-% 	).
-% 	% ( BaseForms \== [] -> format('### LEX lex_form 2:~w~n', [Word]) ; true).
-% 
-% db_get_lex_cats(Word, LexCats) :-
-%  	% first check freq_lex_form
-% 	( freq_lex_form(Word, LexFormData) ->
-% 	  (  foreach(LexCat-_BaseForm, LexFormData),
-% 	     foreach(LexCat, LexCats)
-% 	  do true
-% 	  )
-% 	; form_simple_query("lexcat", "lex_form", "word", Word, Query),
-% 	  run_query(Query, simple, LexCats0, 1),
-% 	  append(LexCats0, LexCats1),
-% 	  sort(LexCats1, LexCats)
-% 	).
-% 	% ( LexCats \== [] -> format('### LEX lex_form 3:~w~n', [Word]) ; true).
-
 db_get_lex_base_forms(Word, BaseForms) :-
 	form_simple_query("baseform", "lex_form", "word", Word, Query),
-	run_query(Query, simple, BaseForms0, 1),
+	run_query(Query, BaseForms0, 1),
 	append(BaseForms0, BaseForms).
-	% ( BaseForms \== [] -> format('### LEX lex_form 1:~w~n', [Word]) ; true).
 
 db_get_lex_base_forms_with_cat(Word, LexCat, BaseForms) :-
-	form_complex_query("baseform", "lex_form", "word", Word, "lexcat", LexCat, Query),
-	run_query(Query, simple, BaseForms0, 1),
-	append(BaseForms0, BaseForms).
-	% ( BaseForms \== [] -> format('### LEX lex_form 2:~w~n', [Word]) ; true).
+	( LexCat == [] ->
+	  db_get_lex_base_forms(Word, BaseForms)
+	; form_complex_query("baseform", "lex_form", "word", Word, "lexcat", LexCat, Query),
+	  run_query(Query, BaseForms0, 1),
+	  append(BaseForms0, BaseForms)
+	).
 
 db_get_lex_cats(Word, LexCats) :-
 	form_simple_query("lexcat", "lex_form", "word", Word, Query),
-	run_query(Query, simple, LexCats0, 1),
+	run_query(Query, LexCats0, 1),
 	append(LexCats0, LexCats1),
 	sort(LexCats1, LexCats).
-	% ( LexCats \== [] -> format('### LEX lex_form 3:~w~n', [Word]) ; true).
 
-% db_get_lex_record(EUI, LexRec) :-
-%  	% first check freq_lex_rec
-% 	( freq_lex_rec(EUI, LexRec) ->
-% 	  true
-% 	; form_simple_query("lexrec", "lex_rec", "EUI", EUI, Query),
-% 	  run_query(Query, simple, LexRec, 1)
-% 	).
- 
-db_get_lex_record(EUI, LexRecs) :-
+db_get_lex_record_list(EUIList, LexicalEntryList) :-
+	(  foreach(EUI, EUIList),
+	   foreach(LexicalEntry, LexicalEntryList)
+           % The BDB lexical entry is just an ordinary atom, so
+	do db_get_lex_record(EUI, LexicalEntryAtom),
+	   % transform it into a string, and
+	   atom_codes(LexicalEntryAtom, LexicalEntryString),
+	   % read the term from the string!
+	   read_from_codes(LexicalEntryString, LexicalEntry)
+	   ).
+
+% This predicate will not used until the find_prefix logic is ported to Prolog
+db_get_lex_record(EUI, LexRec) :-
 	form_simple_query("lexrec", "lex_rec", "EUI", EUI, Query),
-	run_query(Query, simple, LexRecs, 1).
+	run_query(Query, [[LexRec]], 1).
 
-
-% db_get_lex_varlist(Word, [VarList]) :-
-% 	% first check freq_im_vars
-% 	( freq_im_vars(Word, VarList) ->
-% 	  true
-% 	; form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
-% 			    Word, Query),
-% 	  run_query(Query, simple, VarList, 1)
-% 	).
-% 	% ( VarList \== [] -> format('### LEX    im_vars:~w~n', [Word]) ; true).
-
-db_get_lex_varlist(Word, [VarList]) :-
+db_get_lex_im_varlist(BaseForm, VarList) :-
 	form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
-			  Word, Query),
-	run_query(Query, simple, VarList, 1).
-	% ( VarList \== [] -> format('### LEX    im_vars:~w~n', [Word]) ; true).
+			   BaseForm, Query),
+	run_query(Query, VarList, 1).
 
-db_get_lex_dm_variants(Word, Category, DMVariants) :-
+% db_get_lex_im_varlist(Word, VarList) :-
+% 	form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
+% 			  Word, Query),
+% 	run_query(Query, VarList, 1).
+
+% This predicate is used only in dynamic variant generation.
+db_get_lex_dm_variants_no_cat(Word, DMVariants) :-
+	form_simple_query("dm_variant, dm_variant_lexcat", "dm_vars", "base_form", Word, Query),
+	run_query(Query, DMVariants, 1).
+db_get_lex_dm_variants_with_cat(Word, Category, DMVariants) :-
 	form_complex_query("dm_variant, dm_variant_lexcat", "dm_vars", "base_form",
 			   Word, "base_lexcat", Category, Query),
-	run_query(Query, simple, DMVariants, 1).
+	run_query(Query, DMVariants, 1).
+
+
+% Each element of EUIList is either the fake EUI '0' or an actual EUI, e.g., 'E0000001';
+% if the first EUI of EUIList is '0',
+% PrefixAtom is a (proper) prefix of a normalized lexical item.
+db_get_lex_prefix_EUIs(PrefixAtom, EUIList) :-
+	form_simple_query("EUI", "norm_prefix", "norm_prefix", PrefixAtom, Query),
+	% If the call to run_query returns [], it means failure,
+	% so force the result to be [H|T]!
+	run_query(Query, [H|T], 1),
+	append([H|T], EUIList).
+	% format(user_output, 'Q1: ~w~n', [PrefixAtom]).
+
+db_get_cui_sources_and_semtypes(CUI, SourcesList, SemTypesList) :-
+	% No need to get the sources unless they're necessary!
+	( \+ control_option(sources),
+	  \+ control_option(restrict_to_sources),
+	  \+ control_option(exclude_sources),
+	  \+ control_option(machine_output),
+	  \+ xml_output_format(_) ->
+	  form_simple_query("semtypes", "cui_srcs_sts", "cui", CUI, Query),
+	  run_query(Query, [[SemTypesAtom]], 1),
+	  SourcesAtom = []
+	; form_simple_query("sources, semtypes", "cui_srcs_sts", "cui", CUI, Query),
+	  run_query(Query, [[SourcesAtom, SemTypesAtom]], 1)
+	),
+	split_atom_completely(SourcesAtom,  ',', SourcesList0),
+	split_atom_completely(SemTypesAtom, ',', SemTypesList0),
+	sort(SourcesList0, SourcesList),
+	sort(SemTypesList0, SemTypesList).

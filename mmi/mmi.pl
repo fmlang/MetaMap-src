@@ -37,10 +37,6 @@
 	do_MMI_processing/4
     ]).
 
-:- use_module(lexicon(lexical),[
-	concatenate_strings/3
-    ]).
-
 :- use_module(metamap(metamap_evaluation),[
 	extract_components/3,
 	merge_contiguous_components/2
@@ -84,6 +80,7 @@
 
 :- use_module(skr_lib(sicstus_utils),[
 	concat_atom/3,
+	concat_strings_with_separator/3,
 	lower/2,
 	upper/2
    ]).
@@ -184,9 +181,9 @@ max_freq(13).
 process_citation(UIAtom, MMOutput, FieldedStream) :-
 	max_freq(MaxFreqIn),
 	compute_mesh_in_text(MMOutput, MaxFreqIn, TFInfo, MaxFreqOut),
-	format(user_output, '~p~n', [TFInfo]),
+	% format(user_output, '~p~n', [TFInfo]),
 	process_tf(TFInfo, MaxFreqOut, AATFInfo),
-	format(user_output, '~p~n', [AATFInfo]),
+	% format(user_output, '~p~n', [AATFInfo]),
         dump_aatf_info_fielded(AATFInfo, UIAtom, FieldedStream),
 	!.
 process_citation(UIAtom, _MMOutput, _FieldedStream) :-
@@ -710,7 +707,7 @@ form_fields_atom(Fields0, FieldsAtom) :-
 
 form_fields_atom_aux(Fields, FieldsAtom) :-
     atom_codes_list(Fields, FieldsStrings0),
-    concatenate_strings(FieldsStrings0, ";", FieldsString),
+    concat_strings_with_separator(FieldsStrings0, ";", FieldsString),
     atom_codes(FieldsAtom, FieldsString).
 
 augment_fields([], []).

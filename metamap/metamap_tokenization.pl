@@ -74,11 +74,6 @@
 	transparent_tag/1
     ]).
 
-:- use_module(lexicon(lexical),[
-	lowercase_list/2,
-	concatenate_strings/3
-    ]).
-
 :- use_module(skr_lib(ctypes),[
 	ctypes_bits/2
     ]).
@@ -100,6 +95,8 @@
     ]).
 
 :- use_module(skr_lib(sicstus_utils),[
+	concat_strings_with_separator/3,
+	lowercase_list/2,
 	ttyflush/0
     ]).
 
@@ -282,54 +279,6 @@ create_word_list/2 forms wdl(Words,LCWords).  */
 create_word_list(Words,wdl(Words,LCWords)) :-
     lowercase_list(Words,LCWords).
 
-/* opaque_tag(?Tag)
-
-opaque_tag/1 is a factual predicate of phrase tags which prevent further
-search for matching input.  */
-
-opaque_tag(error).    %  Unknown
-% Tagger tags
-opaque_tag(aux).
-opaque_tag(compl).
-opaque_tag(conj).
-opaque_tag(det).
-opaque_tag(modal).
-opaque_tag(prep).
-opaque_tag(pron).
-opaque_tag(punc).
-% Other tags
-opaque_tag(num).      %  digits only (Tagger tokenizer)
-opaque_tag(am).       %  & (Tagger tokenizer)
-opaque_tag(ap).       %  ' (Tagger tokenizer)
-opaque_tag(at).       %  @ (Tagger tokenizer)
-opaque_tag(ax).       %  * (Tagger tokenizer)
-opaque_tag(ba).       %  | (Tagger tokenizer)
-opaque_tag(bk).       %  [ or ] (Tagger tokenizer)
-opaque_tag(bl).       %  \ (Tagger tokenizer)
-opaque_tag(bq).       %  ` (Tagger tokenizer)
-opaque_tag(br).       %  { or } (Tagger tokenizer)
-opaque_tag(cl).       %  : (Tagger tokenizer)
-opaque_tag(cm).       %  , (Tagger tokenizer)
-opaque_tag(dl).       %  $ (Tagger tokenizer)
-opaque_tag(dq).       %  " (Tagger tokenizer)
-opaque_tag(eq).       %  = (Tagger tokenizer)
-opaque_tag(ex).       %  ! (Tagger tokenizer)
-opaque_tag(gr).       %  > (Tagger tokenizer)
-opaque_tag(hy).       %  - (Tagger tokenizer)
-opaque_tag(ls).       %  < (Tagger tokenizer)
-opaque_tag(nm).       %  # (Tagger tokenizer)
-opaque_tag(pa).       %  ( or ) (Tagger tokenizer)
-opaque_tag(pc).       %  % (Tagger tokenizer)
-opaque_tag(pd).       %  . (Tagger tokenizer)
-opaque_tag(pl).       %  + (Tagger tokenizer)
-opaque_tag(qu).       %  ? (Tagger tokenizer)
-opaque_tag(sc).       %  ; (Tagger tokenizer)
-opaque_tag(sl).       %  / (Tagger tokenizer)
-opaque_tag(tl).       %  ~ (Tagger tokenizer)
-opaque_tag(un).       %  _ (Tagger tokenizer)
-opaque_tag(up).       %  ^ (Tagger tokenizer)
-
-
 /* transparent_tag(?Tag)
 
 transparent_tag/1 is a factual predicate of phrase tags which are essentially
@@ -348,10 +297,63 @@ transparent_tag(mod).
 transparent_tag(pre).
 transparent_tag(shapes).
 transparent_tag(prefix).
-transparent_tag(not_in_lex).  %  Let unknowns through
-transparent_tag(no_tag).      %  Let unknowns through
-transparent_tag(ing).         %  Obsolete(?)
-transparent_tag(pastpart).    %  Obsolete(?)
+transparent_tag(not_in_lex).  % Let unknowns through
+transparent_tag(no_tag).      % Let unknowns through
+transparent_tag(ing).         % Obsolete(?)
+transparent_tag(pastpart).    % Obsolete(?)
+% The "unknown" tag is added by get_this_variant/4 in generate_variant_info
+% if no variants are found for a particular token. This is a hack.
+transparent_tag(unknown).
+
+/* opaque_tag(?Tag)
+
+opaque_tag/1 is a factual predicate of phrase tags which prevent further
+search for matching input.  */
+
+opaque_tag(Tag) :- \+ transparent_tag(Tag).
+
+%%% opaque_tag(error).    %  Unknown
+%%% opaque_tag(unknown).    %  Unknown
+%%% % Tagger tags
+%%% opaque_tag(aux).
+%%% opaque_tag(compl).
+%%% opaque_tag(conj).
+%%% opaque_tag(det).
+%%% opaque_tag(modal).
+%%% opaque_tag(prep).
+%%% opaque_tag(pron).
+%%% opaque_tag(punc).
+%%% % Other tags
+%%% opaque_tag(num).      %  digits only (Tagger tokenizer)
+%%% opaque_tag(am).       %  & (Tagger tokenizer)
+%%% opaque_tag(ap).       %  ' (Tagger tokenizer)
+%%% opaque_tag(at).       %  @ (Tagger tokenizer)
+%%% opaque_tag(ax).       %  * (Tagger tokenizer)
+%%% opaque_tag(ba).       %  | (Tagger tokenizer)
+%%% opaque_tag(bk).       %  [ or ] (Tagger tokenizer)
+%%% opaque_tag(bl).       %  \ (Tagger tokenizer)
+%%% opaque_tag(bq).       %  ` (Tagger tokenizer)
+%%% opaque_tag(br).       %  { or } (Tagger tokenizer)
+%%% opaque_tag(cl).       %  : (Tagger tokenizer)
+%%% opaque_tag(cm).       %  , (Tagger tokenizer)
+%%% opaque_tag(dl).       %  $ (Tagger tokenizer)
+%%% opaque_tag(dq).       %  " (Tagger tokenizer)
+%%% opaque_tag(eq).       %  = (Tagger tokenizer)
+%%% opaque_tag(ex).       %  ! (Tagger tokenizer)
+%%% opaque_tag(gr).       %  > (Tagger tokenizer)
+%%% opaque_tag(hy).       %  - (Tagger tokenizer)
+%%% opaque_tag(ls).       %  < (Tagger tokenizer)
+%%% opaque_tag(nm).       %  # (Tagger tokenizer)
+%%% opaque_tag(pa).       %  ( or ) (Tagger tokenizer)
+%%% opaque_tag(pc).       %  % (Tagger tokenizer)
+%%% opaque_tag(pd).       %  . (Tagger tokenizer)
+%%% opaque_tag(pl).       %  + (Tagger tokenizer)
+%%% opaque_tag(qu).       %  ? (Tagger tokenizer)
+%%% opaque_tag(sc).       %  ; (Tagger tokenizer)
+%%% opaque_tag(sl).       %  / (Tagger tokenizer)
+%%% opaque_tag(tl).       %  ~ (Tagger tokenizer)
+%%% opaque_tag(un).       %  _ (Tagger tokenizer)
+%%% opaque_tag(up).       %  ^ (Tagger tokenizer)
 
 
 /* extract_tokens(+PhraseItem, -TokenWords, -TokenHeadWords)
@@ -824,9 +826,10 @@ tokenize_fields_utterly([First|Rest], [TokFirst|TokRest]) :-
 	tokenize_fields_utterly(Rest, TokRest).
 
 tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
-	concatenate_strings(Lines, " ", FieldText),
+	concat_strings_with_separator(Lines, " ", FieldText),
 	tokenize_text_utterly(FieldText, TokField0),
-	re_attach_apostrophe_s_tokens(TokField0, TokField),
+	TokField  = TokField0,
+	% re_attach_apostrophe_s_tokens(TokField0, TokField),
 	!.
 
 % form_decimal_numbers([], []).

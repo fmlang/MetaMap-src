@@ -91,10 +91,6 @@
 	mmo_terms_to_xml_chars/3
    ]).
 
-:- use_module(library(between),[
-	between/3
-   ]).
-
 :- use_module(library(codesio),[
 	read_from_codes/2
    ]).
@@ -400,9 +396,9 @@ extract_mmo_from_utterance([MMOutput|RestMMOutput], Citation, UtteranceNum,
 			MarkedMMOutput),
 	NextUtteranceNum is UtteranceNum + 1,
 	extract_mmo_from_utterance(RestMMOutput, Citation, NextUtteranceNum,
-		    MMONext, MMOOut,
-		    MarkedMappingsNext, MarkedMappingsOut,
-		    RestMarkedMMOutput).
+				   MMONext, MMOOut,
+				   MarkedMappingsNext, MarkedMappingsOut,
+				   RestMarkedMMOutput).
 	   
 extract_mmo_aux(MMOutput, UttNum,
 		[Utterance|MMOIn], MMOOut,

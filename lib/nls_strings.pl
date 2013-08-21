@@ -49,8 +49,8 @@
 	normalized_syntactic_uninvert_string/2,
 	number_codes_list/2,
 	portray_strings_double_quoted/1,
-	prep_conj_det/1,
-	prep_conj_det_atom/1,
+	lex_stop_word/1,
+	lex_stop_word_atom/1,
 	% must be exported for mm_print and mwi_utilities 
 	replace_all_substrings/4,
 	replace_nonprints_in_strings/2,
@@ -78,6 +78,7 @@
     ]).
 
 :- use_module(skr(skr_utilities), [
+        ensure_atom/2,
         fatal_error/2
    ]).
 
@@ -97,10 +98,6 @@
 :- use_module(skr_lib(sicstus_utils), [
 	concat_strings_with_separator/3,
 	midstring/6
-    ]).
-
-:- use_module(lexicon(lexical), [
-	concatenate_strings/3
     ]).
 
 :- use_module(library(lists), [
@@ -465,17 +462,10 @@ short_last(String) :-  % "HRO-NOS protein" but not "ADVA-NOS-animal rider"
 
 is_integer_string/1 succeeds if String is a string of printable characters.  */
 
-is_integer_string("") :-
-	!,
-	fail.
-is_integer_string(String) :-
-	is_integer_string_aux(String).
-
-is_integer_string_aux("").
-is_integer_string_aux([First|Rest]) :-
+is_integer_string("").
+is_integer_string([First|Rest]) :-
 	is_digit(First),
-	is_integer_string_aux(Rest).
-
+	is_integer_string(Rest).
 
 /* is_print_string(+String)
 
@@ -543,121 +533,277 @@ special characters (blank, period, slash) that is either a preposition or
 a conjunction. See .../Support/LexLab/ for details.  */
 
 %% some clauses have been commented out to see if better results are obtained
+%% The data were updated using 2013 lex_form.txt file.
 
+
+prep_or_conj('a').
 prep_or_conj('aboard').
 prep_or_conj('about').
+prep_or_conj('above').
+prep_or_conj('according to').
 prep_or_conj('across').
+prep_or_conj('across from').
 prep_or_conj('after').
 prep_or_conj('against').
+prep_or_conj('ahead of').
 prep_or_conj('aka').
-prep_or_conj('albeit').
+prep_or_conj('all').
+prep_or_conj('all over').
+prep_or_conj('allover').
 prep_or_conj('along').
+prep_or_conj('along with').
 prep_or_conj('alongside').
-prep_or_conj('although').
+prep_or_conj('alongside of').
 prep_or_conj('amid').
 prep_or_conj('amidst').
 prep_or_conj('among').
 prep_or_conj('amongst').
-prep_or_conj('and').
-%%prep_or_conj('anti').
+prep_or_conj('an').
+prep_or_conj('another').
+% prep_or_conj('anti').
+prep_or_conj('any').
+prep_or_conj('apart from').
+prep_or_conj('apropos of').
 prep_or_conj('around').
 prep_or_conj('as').
+prep_or_conj('as far as').
+prep_or_conj('as for').
+prep_or_conj('as of').
+prep_or_conj('as regards').
+prep_or_conj('as to').
+prep_or_conj('aside from').
 prep_or_conj('astride').
 prep_or_conj('at').
+prep_or_conj('at odds with').
+prep_or_conj('at risk of').
+prep_or_conj('at the behest of').
+prep_or_conj('at variance with').
 prep_or_conj('atop').
-%%prep_or_conj('bar').
-prep_or_conj('because').
+prep_or_conj('away from').
+prep_or_conj('back of').
+% prep_or_conj('bar').
+prep_or_conj('because of').
 prep_or_conj('before').
+prep_or_conj('behind').
+prep_or_conj('below').
 prep_or_conj('beneath').
 prep_or_conj('beside').
 prep_or_conj('besides').
 prep_or_conj('between').
+prep_or_conj('betwixt').
+prep_or_conj('beyond').
+prep_or_conj('both').
 prep_or_conj('but').
+prep_or_conj('but for').
 prep_or_conj('by').
+prep_or_conj('by comparison with').
+prep_or_conj('by dint of').
+prep_or_conj('by force of').
+prep_or_conj('by means of').
+prep_or_conj('by virtue of').
+prep_or_conj('by way of').
+prep_or_conj('ca.').
+prep_or_conj('certain').
 prep_or_conj('circa').
+prep_or_conj('concerning').
 prep_or_conj('contra').
 prep_or_conj('despite').
-%%prep_or_conj('down').
+% prep_or_conj('down').
+prep_or_conj('downstream from').
+prep_or_conj('downstream of').
+prep_or_conj('due to').
 prep_or_conj('during').
+prep_or_conj('each').
+prep_or_conj('either').
+prep_or_conj('enough').
+prep_or_conj('every').
 prep_or_conj('ex').
 prep_or_conj('except').
+prep_or_conj('except for').
 prep_or_conj('excluding').
+prep_or_conj('exclusive of').
 prep_or_conj('failing').
+prep_or_conj('few').
+prep_or_conj('fewer').
 prep_or_conj('following').
 prep_or_conj('for').
+prep_or_conj('for sake of').
+prep_or_conj('for want of').
 prep_or_conj('from').
+prep_or_conj('from among').
+prep_or_conj('from want of').
 prep_or_conj('given').
-prep_or_conj('if').
 prep_or_conj('in').
+prep_or_conj('in accordance with').
+prep_or_conj('in addition to').
+prep_or_conj('in aid of').
+prep_or_conj('in back of').
+prep_or_conj('in behalf of').
+prep_or_conj('in between').
+prep_or_conj('in case of').
+prep_or_conj('in common with').
+prep_or_conj('in comparison to').
+prep_or_conj('in compliance with').
+prep_or_conj('in conformity with').
+prep_or_conj('in conjunction with').
+prep_or_conj('in contact with').
+prep_or_conj('in contrast to').
+prep_or_conj('in default of').
+prep_or_conj('in exchange for').
+prep_or_conj('in face of').
+prep_or_conj('in favor of').
+prep_or_conj('in favour of').
+prep_or_conj('in front of').
+prep_or_conj('in league with').
+prep_or_conj('in lieu of').
+prep_or_conj('in light of').
+prep_or_conj('in line with').
+prep_or_conj('in place of').
+prep_or_conj('in quest of').
+prep_or_conj('in reference to').
+prep_or_conj('in regard to').
+prep_or_conj('in relation to').
+prep_or_conj('in respect of').
+prep_or_conj('in respect to').
+prep_or_conj('in return for').
+prep_or_conj('in search of').
+prep_or_conj('in spite of').
+prep_or_conj('in step with').
+prep_or_conj('in terms of').
+prep_or_conj('in to').
+prep_or_conj('in view of').
+prep_or_conj('inbetween').
+prep_or_conj('incl').
+prep_or_conj('incl.').
+prep_or_conj('including').
+prep_or_conj('inclusive of').
+prep_or_conj('independent of').
+prep_or_conj('independently of').
 prep_or_conj('inside').
+prep_or_conj('inside of').
+prep_or_conj('instead of').
 prep_or_conj('into').
+prep_or_conj('irregardless of').
+prep_or_conj('irrespective of').
+prep_or_conj('last').
 prep_or_conj('less').
-prep_or_conj('lest').
-%%prep_or_conj('like').
-%%prep_or_conj('mid').
+% prep_or_conj('like').
+prep_or_conj('many').
+% prep_or_conj('mid').
 prep_or_conj('minus').
-%%prep_or_conj('near').
+prep_or_conj('modulo').
+prep_or_conj('more').
+prep_or_conj('most').
+prep_or_conj('much').
+prep_or_conj('nary a').
+prep_or_conj('nary an').
+% prep_or_conj('near').
 prep_or_conj('nearby').
 prep_or_conj('neath').
-prep_or_conj('nor').
+prep_or_conj('neither').
+prep_or_conj('next to').
+prep_or_conj('no').
 prep_or_conj('notwithstanding').
 prep_or_conj('of').
-%%prep_or_conj('off').
+% prep_or_conj('off').
+prep_or_conj('off of').
 prep_or_conj('on').
-prep_or_conj('once').
-%%prep_or_conj('only').
+prep_or_conj('on account of').
+prep_or_conj('on behalf of').
+prep_or_conj('on board').
+prep_or_conj('on grounds of').
+prep_or_conj('on the basis of').
+prep_or_conj('on to').
+prep_or_conj('on top of').
+prep_or_conj('on-board').
+prep_or_conj('onboard').
 prep_or_conj('onto').
-prep_or_conj('or').
-%%prep_or_conj('out').
-%%prep_or_conj('past').
+prep_or_conj('other').
+prep_or_conj('other than').
+prep_or_conj('out').
+prep_or_conj('out of').
+prep_or_conj('outside of').
+prep_or_conj('outwith').
+prep_or_conj('over').
+prep_or_conj('over against').
+prep_or_conj('over and above').
+prep_or_conj('overagainst').
+prep_or_conj('owing to').
+prep_or_conj('past').
 prep_or_conj('pending').
 prep_or_conj('per').
-%%prep_or_conj('plus').
-prep_or_conj('provided').
-prep_or_conj('providing').
+prep_or_conj('plus').
+prep_or_conj('previous to').
+prep_or_conj('prior to').
+prep_or_conj('pursuant to').
+prep_or_conj('qua').
+prep_or_conj('reg.').
 prep_or_conj('regarding').
+prep_or_conj('regardless of').
 prep_or_conj('respecting').
-%%prep_or_conj('round').
+prep_or_conj('round').
+prep_or_conj('s/p').
 prep_or_conj('sans').
 prep_or_conj('sensu').
+prep_or_conj('several').
+prep_or_conj('short of').
 prep_or_conj('since').
-prep_or_conj('so').
-prep_or_conj('suppose').
-prep_or_conj('supposing').
+prep_or_conj('some').
+prep_or_conj('status post').
+prep_or_conj('subject to').
+prep_or_conj('subsequent to').
+prep_or_conj('such').
+prep_or_conj('such as').
+prep_or_conj('suchlike').
 prep_or_conj('than').
-prep_or_conj('though').
+prep_or_conj('that').
+prep_or_conj('the').
+prep_or_conj('these').
+prep_or_conj('this').
+prep_or_conj('those').
+prep_or_conj('through').
 prep_or_conj('throughout').
+prep_or_conj('thru').
+prep_or_conj('thy').
+prep_or_conj('til').
+prep_or_conj('till').
 prep_or_conj('to').
+prep_or_conj('to within').
+prep_or_conj('together with').
 prep_or_conj('toward').
 prep_or_conj('towards').
+prep_or_conj('unbeknown to').
+prep_or_conj('unbeknownst to').
 prep_or_conj('under').
 prep_or_conj('underneath').
-prep_or_conj('unless').
 prep_or_conj('unlike').
 prep_or_conj('until').
 prep_or_conj('unto').
+prep_or_conj('up').
+prep_or_conj('up to').
 prep_or_conj('upon').
 prep_or_conj('upside').
-prep_or_conj('versus').
-prep_or_conj('vs').
+prep_or_conj('upstream from').
+prep_or_conj('upstream of').
+prep_or_conj('upto').
+prep_or_conj('via').
+prep_or_conj('vis-a-vis').
 prep_or_conj('w').
+prep_or_conj('w/o').
 prep_or_conj('wanting').
-prep_or_conj('when').
-prep_or_conj('whenever').
-prep_or_conj('where').
-prep_or_conj('whereas').
-prep_or_conj('wherein').
-prep_or_conj('whereof').
-prep_or_conj('whereupon').
-prep_or_conj('wherever').
-prep_or_conj('whether').
-prep_or_conj('while').
-prep_or_conj('whilst').
+prep_or_conj('what').
+prep_or_conj('whatever').
+prep_or_conj('which').
+prep_or_conj('whichever').
 prep_or_conj('with').
+prep_or_conj('with reference to').
+prep_or_conj('with regard to').
+prep_or_conj('with repect to').
+prep_or_conj('with respect to').
 prep_or_conj('within').
 prep_or_conj('without').
-%%prep_or_conj('worth').
-prep_or_conj('yet').
+prep_or_conj('worth').
+
 
 
 /* 
@@ -684,180 +830,373 @@ portray_strings_double_quoted(String) :-
 % confuses emacs.
 
 
-/* prep_conj_det_atom(?PrepOrConj)
-/* prep_conj_det(?PrepOrConj)
+/* lex_stop_word_atom(?Word)
+/* lex_stop_word(?Word)
 
-prep_conj_det_atom/1 is a factual predicate of prepositions/conjunctions/
+lex_stop_word_atom/1 is a factual predicate of prepositions/conjunctions/
 determiners. The data is derived from the 2006 lexicon and consists of any word
 without special characters (blank, period, hyphen, slash) that is either a
 preposition, a conjunction or a determiner. See .../Support/LexLab/ for details.
-prep_conj_det/1 is the same predicate for strings. */
+lex_stop_word/1 is the same predicate for strings. */
 
-prep_conj_det_atom('a').
-prep_conj_det_atom('aboard').
-prep_conj_det_atom('about').
-prep_conj_det_atom('above').
-prep_conj_det_atom('across').
-prep_conj_det_atom('after').
-prep_conj_det_atom('against').
-prep_conj_det_atom('aka').
-prep_conj_det_atom('albeit').
-prep_conj_det_atom('all').
-prep_conj_det_atom('along').
-prep_conj_det_atom('alongside').
-prep_conj_det_atom('although').
-prep_conj_det_atom('amid').
-prep_conj_det_atom('amidst').
-prep_conj_det_atom('among').
-prep_conj_det_atom('amongst').
-prep_conj_det_atom('an').
-prep_conj_det_atom('and').
-prep_conj_det_atom('another').
-% prep_conj_det_atom('anti').
-prep_conj_det_atom('any').
-prep_conj_det_atom('around').
-prep_conj_det_atom('as').
-prep_conj_det_atom('astride').
-prep_conj_det_atom('at').
-prep_conj_det_atom('atop').
-prep_conj_det_atom('bar').
-prep_conj_det_atom('because').
-prep_conj_det_atom('before').
-prep_conj_det_atom('beneath').
-prep_conj_det_atom('beside').
-prep_conj_det_atom('besides').
-prep_conj_det_atom('between').
-prep_conj_det_atom('betwixt').
-prep_conj_det_atom('beyond').
-prep_conj_det_atom('both').
-prep_conj_det_atom('but').
-prep_conj_det_atom('by').
-prep_conj_det_atom('certain').
-prep_conj_det_atom('circa').
-prep_conj_det_atom('contra').
-prep_conj_det_atom('despite').
-prep_conj_det_atom('down').
-prep_conj_det_atom('during').
-prep_conj_det_atom('each').
-prep_conj_det_atom('either').
-prep_conj_det_atom('enough').
-prep_conj_det_atom('every').
-prep_conj_det_atom('ex').
-prep_conj_det_atom('except').
-prep_conj_det_atom('excluding').
-prep_conj_det_atom('failing').
-prep_conj_det_atom('few').
-prep_conj_det_atom('fewer').
-prep_conj_det_atom('following').
-prep_conj_det_atom('for').
-prep_conj_det_atom('from').
-prep_conj_det_atom('given').
-prep_conj_det_atom('if').
-prep_conj_det_atom('in').
-prep_conj_det_atom('inbetween').
-prep_conj_det_atom('including').
-prep_conj_det_atom('inside').
-prep_conj_det_atom('into').
-prep_conj_det_atom('last').
-prep_conj_det_atom('less').
-prep_conj_det_atom('lest').
-prep_conj_det_atom('like').
-prep_conj_det_atom('many').
-prep_conj_det_atom('mid').
-prep_conj_det_atom('minus').
-prep_conj_det_atom('modulo').
-prep_conj_det_atom('more').
-prep_conj_det_atom('most').
-prep_conj_det_atom('much').
-prep_conj_det_atom('near').
-prep_conj_det_atom('nearby').
-prep_conj_det_atom('neath').
-prep_conj_det_atom('neither').
-prep_conj_det_atom('no').
-prep_conj_det_atom('nor').
-prep_conj_det_atom('notwithstanding').
-prep_conj_det_atom('of').
-prep_conj_det_atom('off').
-prep_conj_det_atom('on').
-prep_conj_det_atom('once').
-prep_conj_det_atom('only').
-prep_conj_det_atom('onto').
-prep_conj_det_atom('or').
-prep_conj_det_atom('other').
-prep_conj_det_atom('out').
-prep_conj_det_atom('outwith').
-prep_conj_det_atom('past').
-prep_conj_det_atom('pending').
-prep_conj_det_atom('per').
-prep_conj_det_atom('plus').
-prep_conj_det_atom('provided').
-prep_conj_det_atom('providing').
-prep_conj_det_atom('regarding').
-prep_conj_det_atom('respecting').
-prep_conj_det_atom('round').
-prep_conj_det_atom('sans').
-prep_conj_det_atom('sensu').
-prep_conj_det_atom('several').
-prep_conj_det_atom('since').
-prep_conj_det_atom('so').
-prep_conj_det_atom('some').
-prep_conj_det_atom('such').
-prep_conj_det_atom('suppose').
-prep_conj_det_atom('supposing').
-prep_conj_det_atom('than').
-prep_conj_det_atom('that').
-prep_conj_det_atom('the').
-prep_conj_det_atom('therefore').
-prep_conj_det_atom('these').
-prep_conj_det_atom('this').
-prep_conj_det_atom('those').
-prep_conj_det_atom('though').
-prep_conj_det_atom('through').
-prep_conj_det_atom('throughout').
-prep_conj_det_atom('thru').
-prep_conj_det_atom('thy').
-prep_conj_det_atom('to').
-prep_conj_det_atom('toward').
-prep_conj_det_atom('towards').
-prep_conj_det_atom('under').
-prep_conj_det_atom('underneath').
-prep_conj_det_atom('unless').
-prep_conj_det_atom('unlike').
-prep_conj_det_atom('until').
-prep_conj_det_atom('unto').
-prep_conj_det_atom('upon').
-prep_conj_det_atom('upside').
-prep_conj_det_atom('upto').
-prep_conj_det_atom('versus').
-prep_conj_det_atom('vs').
-prep_conj_det_atom('w').
-prep_conj_det_atom('wanting').
-prep_conj_det_atom('what').
-prep_conj_det_atom('whatever').
-prep_conj_det_atom('when').
-prep_conj_det_atom('whenever').
-prep_conj_det_atom('where').
-prep_conj_det_atom('whereafter').
-prep_conj_det_atom('whereas').
-prep_conj_det_atom('wherefore').
-prep_conj_det_atom('wherein').
-prep_conj_det_atom('whereof').
-prep_conj_det_atom('whereupon').
-prep_conj_det_atom('wherever').
-prep_conj_det_atom('whether').
-prep_conj_det_atom('which').
-prep_conj_det_atom('whichever').
-prep_conj_det_atom('while').
-prep_conj_det_atom('whilst').
-prep_conj_det_atom('with').
-prep_conj_det_atom('within').
-prep_conj_det_atom('without').
-prep_conj_det_atom('worth').
-prep_conj_det_atom('yet').
+%% The data were updated using 2013 lex_form.txt file.
 
-prep_conj_det(String) :-
-    name(Atom,String),
-    prep_conj_det_atom(Atom).
+lex_stop_word_atom('''''d').
+lex_stop_word_atom('''''m').
+lex_stop_word_atom('''''re').
+lex_stop_word_atom('''''s').
+lex_stop_word_atom('''''ve').
+lex_stop_word_atom('a').
+lex_stop_word_atom('aboard').
+lex_stop_word_atom('about').
+lex_stop_word_atom('above').
+lex_stop_word_atom('according as').
+lex_stop_word_atom('according to').
+lex_stop_word_atom('across').
+lex_stop_word_atom('across from').
+lex_stop_word_atom('after').
+lex_stop_word_atom('against').
+lex_stop_word_atom('ahead of').
+lex_stop_word_atom('aka').
+lex_stop_word_atom('albeit').
+lex_stop_word_atom('all').
+lex_stop_word_atom('all over').
+lex_stop_word_atom('allover').
+lex_stop_word_atom('along').
+lex_stop_word_atom('along with').
+lex_stop_word_atom('alongside').
+lex_stop_word_atom('alongside of').
+lex_stop_word_atom('although').
+lex_stop_word_atom('am').
+lex_stop_word_atom('amid').
+lex_stop_word_atom('amidst').
+lex_stop_word_atom('among').
+lex_stop_word_atom('amongst').
+lex_stop_word_atom('an').
+lex_stop_word_atom('and').
+lex_stop_word_atom('and/or').
+lex_stop_word_atom('another').
+% lex_stop_word_atom('anti').
+lex_stop_word_atom('any').
+lex_stop_word_atom('apart from').
+lex_stop_word_atom('apropos of').
+lex_stop_word_atom('are').
+lex_stop_word_atom('aren''''t').
+lex_stop_word_atom('around').
+lex_stop_word_atom('as').
+lex_stop_word_atom('as far as').
+lex_stop_word_atom('as for').
+lex_stop_word_atom('as if').
+lex_stop_word_atom('as of').
+lex_stop_word_atom('as regards').
+lex_stop_word_atom('as though').
+lex_stop_word_atom('as to').
+lex_stop_word_atom('as well as').
+lex_stop_word_atom('aside from').
+lex_stop_word_atom('astride').
+lex_stop_word_atom('at').
+lex_stop_word_atom('at odds with').
+lex_stop_word_atom('at risk of').
+lex_stop_word_atom('at the behest of').
+lex_stop_word_atom('at variance with').
+lex_stop_word_atom('atop').
+lex_stop_word_atom('away from').
+lex_stop_word_atom('back of').
+lex_stop_word_atom('bar').
+lex_stop_word_atom('be').
+lex_stop_word_atom('because').
+lex_stop_word_atom('because of').
+lex_stop_word_atom('been').
+lex_stop_word_atom('before').
+lex_stop_word_atom('behind').
+lex_stop_word_atom('being').
+lex_stop_word_atom('below').
+lex_stop_word_atom('beneath').
+lex_stop_word_atom('beside').
+lex_stop_word_atom('besides').
+lex_stop_word_atom('between').
+lex_stop_word_atom('betwixt').
+lex_stop_word_atom('beyond').
+lex_stop_word_atom('both').
+lex_stop_word_atom('but').
+lex_stop_word_atom('but for').
+lex_stop_word_atom('by').
+lex_stop_word_atom('by comparison with').
+lex_stop_word_atom('by dint of').
+lex_stop_word_atom('by force of').
+lex_stop_word_atom('by means of').
+lex_stop_word_atom('by virtue of').
+lex_stop_word_atom('by way of').
+lex_stop_word_atom('ca.').
+lex_stop_word_atom('certain').
+lex_stop_word_atom('circa').
+lex_stop_word_atom('concerning').
+lex_stop_word_atom('contra').
+lex_stop_word_atom('despite').
+lex_stop_word_atom('did').
+lex_stop_word_atom('didn''''t').
+lex_stop_word_atom('do').
+lex_stop_word_atom('does').
+lex_stop_word_atom('doesn''''t').
+lex_stop_word_atom('don''''t').
+lex_stop_word_atom('down').
+lex_stop_word_atom('downstream from').
+lex_stop_word_atom('downstream of').
+lex_stop_word_atom('due to').
+lex_stop_word_atom('during').
+lex_stop_word_atom('e.g.').
+lex_stop_word_atom('each').
+lex_stop_word_atom('either').
+lex_stop_word_atom('enough').
+lex_stop_word_atom('every').
+lex_stop_word_atom('ex').
+lex_stop_word_atom('except').
+lex_stop_word_atom('except for').
+lex_stop_word_atom('excluding').
+lex_stop_word_atom('exclusive of').
+lex_stop_word_atom('failing').
+lex_stop_word_atom('few').
+lex_stop_word_atom('fewer').
+lex_stop_word_atom('following').
+lex_stop_word_atom('for').
+lex_stop_word_atom('for sake of').
+lex_stop_word_atom('for want of').
+lex_stop_word_atom('forasmuch as').
+lex_stop_word_atom('from').
+lex_stop_word_atom('from among').
+lex_stop_word_atom('from want of').
+lex_stop_word_atom('given').
+lex_stop_word_atom('had').
+lex_stop_word_atom('hadn''''t').
+lex_stop_word_atom('has').
+lex_stop_word_atom('hasn''''t').
+lex_stop_word_atom('have').
+lex_stop_word_atom('haven''''t').
+lex_stop_word_atom('having').
+lex_stop_word_atom('however').
+lex_stop_word_atom('i.e.').
+lex_stop_word_atom('if').
+lex_stop_word_atom('in').
+lex_stop_word_atom('in accordance with').
+lex_stop_word_atom('in addition to').
+lex_stop_word_atom('in aid of').
+lex_stop_word_atom('in as much as').
+lex_stop_word_atom('in back of').
+lex_stop_word_atom('in behalf of').
+lex_stop_word_atom('in between').
+lex_stop_word_atom('in case of').
+lex_stop_word_atom('in common with').
+lex_stop_word_atom('in comparison to').
+lex_stop_word_atom('in compliance with').
+lex_stop_word_atom('in conformity with').
+lex_stop_word_atom('in conjunction with').
+lex_stop_word_atom('in contact with').
+lex_stop_word_atom('in contrast to').
+lex_stop_word_atom('in default of').
+lex_stop_word_atom('in exchange for').
+lex_stop_word_atom('in face of').
+lex_stop_word_atom('in favor of').
+lex_stop_word_atom('in favour of').
+lex_stop_word_atom('in front of').
+lex_stop_word_atom('in league with').
+lex_stop_word_atom('in lieu of').
+lex_stop_word_atom('in light of').
+lex_stop_word_atom('in line with').
+lex_stop_word_atom('in place of').
+lex_stop_word_atom('in quest of').
+lex_stop_word_atom('in reference to').
+lex_stop_word_atom('in regard to').
+lex_stop_word_atom('in relation to').
+lex_stop_word_atom('in respect of').
+lex_stop_word_atom('in respect to').
+lex_stop_word_atom('in return for').
+lex_stop_word_atom('in search of').
+lex_stop_word_atom('in spite of').
+lex_stop_word_atom('in step with').
+lex_stop_word_atom('in terms of').
+lex_stop_word_atom('in to').
+lex_stop_word_atom('in view of').
+lex_stop_word_atom('inasmuch as').
+lex_stop_word_atom('inbetween').
+lex_stop_word_atom('incl').
+lex_stop_word_atom('incl.').
+lex_stop_word_atom('including').
+lex_stop_word_atom('inclusive of').
+lex_stop_word_atom('independent of').
+lex_stop_word_atom('independently of').
+lex_stop_word_atom('inside').
+lex_stop_word_atom('inside of').
+lex_stop_word_atom('insofar as').
+lex_stop_word_atom('insomuch as').
+lex_stop_word_atom('instead of').
+lex_stop_word_atom('into').
+lex_stop_word_atom('irregardless of').
+lex_stop_word_atom('irrespective of').
+lex_stop_word_atom('is').
+lex_stop_word_atom('isn''''t').
+lex_stop_word_atom('last').
+lex_stop_word_atom('less').
+lex_stop_word_atom('lest').
+lex_stop_word_atom('like').
+lex_stop_word_atom('many').
+lex_stop_word_atom('mid').
+lex_stop_word_atom('minus').
+lex_stop_word_atom('modulo').
+lex_stop_word_atom('more').
+lex_stop_word_atom('most').
+lex_stop_word_atom('much').
+lex_stop_word_atom('nary a').
+lex_stop_word_atom('nary an').
+lex_stop_word_atom('near').
+lex_stop_word_atom('nearby').
+lex_stop_word_atom('neath').
+lex_stop_word_atom('neither').
+lex_stop_word_atom('next to').
+lex_stop_word_atom('no').
+lex_stop_word_atom('nor').
+lex_stop_word_atom('notwithstanding').
+lex_stop_word_atom('of').
+lex_stop_word_atom('off').
+lex_stop_word_atom('off of').
+lex_stop_word_atom('on').
+lex_stop_word_atom('on account of').
+lex_stop_word_atom('on behalf of').
+lex_stop_word_atom('on board').
+lex_stop_word_atom('on grounds of').
+lex_stop_word_atom('on the basis of').
+lex_stop_word_atom('on to').
+lex_stop_word_atom('on top of').
+lex_stop_word_atom('on-board').
+lex_stop_word_atom('onboard').
+lex_stop_word_atom('once').
+% lex_stop_word_atom('only').
+lex_stop_word_atom('onto').
+lex_stop_word_atom('or').
+lex_stop_word_atom('other').
+lex_stop_word_atom('other than').
+% lex_stop_word_atom('out').
+lex_stop_word_atom('out of').
+lex_stop_word_atom('outside of').
+lex_stop_word_atom('outwith').
+lex_stop_word_atom('over').
+lex_stop_word_atom('over against').
+lex_stop_word_atom('over and above').
+lex_stop_word_atom('overagainst').
+lex_stop_word_atom('owing to').
+% lex_stop_word_atom('past').
+lex_stop_word_atom('pending').
+lex_stop_word_atom('per').
+% lex_stop_word_atom('plus').
+lex_stop_word_atom('previous to').
+lex_stop_word_atom('prior to').
+lex_stop_word_atom('provided').
+lex_stop_word_atom('provided that').
+lex_stop_word_atom('providing').
+lex_stop_word_atom('providing that').
+lex_stop_word_atom('pursuant to').
+lex_stop_word_atom('qua').
+lex_stop_word_atom('rather than').
+lex_stop_word_atom('reg.').
+lex_stop_word_atom('regarding').
+lex_stop_word_atom('regardless of').
+lex_stop_word_atom('respecting').
+% lex_stop_word_atom('round').
+lex_stop_word_atom('s/p').
+lex_stop_word_atom('sans').
+lex_stop_word_atom('sensu').
+lex_stop_word_atom('several').
+lex_stop_word_atom('short of').
+lex_stop_word_atom('since').
+lex_stop_word_atom('so').
+lex_stop_word_atom('some').
+lex_stop_word_atom('status post').
+lex_stop_word_atom('subject to').
+lex_stop_word_atom('subsequent to').
+lex_stop_word_atom('such').
+lex_stop_word_atom('such as').
+lex_stop_word_atom('suchlike').
+lex_stop_word_atom('suppose').
+lex_stop_word_atom('supposing').
+lex_stop_word_atom('than').
+lex_stop_word_atom('that').
+lex_stop_word_atom('the').
+lex_stop_word_atom('therefore').
+lex_stop_word_atom('these').
+lex_stop_word_atom('this').
+lex_stop_word_atom('those').
+lex_stop_word_atom('though').
+lex_stop_word_atom('through').
+lex_stop_word_atom('throughout').
+lex_stop_word_atom('thru').
+lex_stop_word_atom('thy').
+lex_stop_word_atom('til').
+lex_stop_word_atom('till').
+lex_stop_word_atom('to').
+lex_stop_word_atom('to within').
+lex_stop_word_atom('together with').
+lex_stop_word_atom('toward').
+lex_stop_word_atom('towards').
+lex_stop_word_atom('unbeknown to').
+lex_stop_word_atom('unbeknownst to').
+lex_stop_word_atom('under').
+lex_stop_word_atom('underneath').
+lex_stop_word_atom('unless').
+lex_stop_word_atom('unlike').
+lex_stop_word_atom('until').
+lex_stop_word_atom('unto').
+lex_stop_word_atom('up').
+lex_stop_word_atom('up to').
+lex_stop_word_atom('upon').
+lex_stop_word_atom('upside').
+lex_stop_word_atom('upstream from').
+lex_stop_word_atom('upstream of').
+lex_stop_word_atom('upto').
+lex_stop_word_atom('v.').
+lex_stop_word_atom('versus').
+lex_stop_word_atom('via').
+lex_stop_word_atom('vis-a-vis').
+lex_stop_word_atom('vs').
+lex_stop_word_atom('vs.').
+lex_stop_word_atom('w').
+lex_stop_word_atom('w/o').
+lex_stop_word_atom('wanting').
+lex_stop_word_atom('was').
+lex_stop_word_atom('wasn''''t').
+lex_stop_word_atom('were').
+lex_stop_word_atom('weren''''t').
+lex_stop_word_atom('what').
+lex_stop_word_atom('what with').
+lex_stop_word_atom('whatever').
+lex_stop_word_atom('when').
+lex_stop_word_atom('whenever').
+lex_stop_word_atom('where').
+lex_stop_word_atom('whereafter').
+lex_stop_word_atom('whereas').
+lex_stop_word_atom('whereat').
+lex_stop_word_atom('whereby').
+lex_stop_word_atom('wherefore').
+lex_stop_word_atom('wherein').
+lex_stop_word_atom('whereof').
+lex_stop_word_atom('whereupon').
+lex_stop_word_atom('wherever').
+lex_stop_word_atom('whether').
+lex_stop_word_atom('which').
+lex_stop_word_atom('whichever').
+lex_stop_word_atom('while').
+lex_stop_word_atom('whilst').
+lex_stop_word_atom('with').
+lex_stop_word_atom('with reference to').
+lex_stop_word_atom('with regard to').
+lex_stop_word_atom('with repect to').
+lex_stop_word_atom('with respect to').
+lex_stop_word_atom('within').
+lex_stop_word_atom('without').
+% lex_stop_word_atom('worth').
+lex_stop_word_atom('yet').
+
+lex_stop_word(String) :-
+	ensure_atom(String, Atom),
+	lex_stop_word_atom(Atom).
 
 
 /* Note: right_parenthetical/1 has been removed to nls_strings_obs.pl. */
