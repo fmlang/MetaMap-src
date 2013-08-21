@@ -28,8 +28,8 @@
 *
 ***************************************************************************/
 
-% File:     semtype_translation_2012AA.pl
-% Module:   semtype_translation_2012AA
+% File:     semtype_translation_2013AA.pl
+% Module:   semtype_translation_2013AA
 % Author:   Lan
 % Purpose:  Provide translation among
 %             full semantic type names (e.g., Vitamin),
@@ -38,7 +38,7 @@
 %             their tree numbers (e.g., A1.4.1.1.3.4).
 
 
-:- module(semtype_translation_2012AA, [
+:- module(semtype_translation_2013AA, [
 	% must be exported for mm_print and mwi_utilities
 	semtype_translation/2,
 	expand_semtypes/2,
