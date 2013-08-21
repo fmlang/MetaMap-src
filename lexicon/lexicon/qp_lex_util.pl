@@ -34,7 +34,7 @@
 :- module(qp_lex_util, [
 	lex_get_base_from_record_3/3,
 	% lex_get_spvar_from_record/2,
-	lex_form_ci_ord_5/5
+	lex_form_ci_ord_4/4
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -61,8 +61,10 @@
 lex_get_base_from_record_3(Record, Categories, Base) :-
     lex_get_entries_from_record(Record, Entries),
     entries_intersect_categories(Entries, Categories),
-    ( Record = lexrec:[base:[Base]|_]
-    ; Record = lexrec:[spelling_variants:[Base]|_]
+    Record = lexrec:LexRecList,
+    ( memberchk(base:[Base], LexRecList)
+    ; memberchk(spelling_variants:SpVars, LexRecList),
+      member(Base, SpVars)
     ).
 
 entries_intersect_categories([Entry|_Rest], Categories) :-
@@ -99,18 +101,18 @@ lex_get_entries_from_record(Record, Entries) :-
 %%%      distinct lexical entries separate (otherwise, e.g., aid is
 %%%      computed to be a spelling variant of AIDS)
 
-lex_form_ci_ord_5(Term, Categories, LexiconServerStream, Spelling, Inflections) :-
+lex_form_ci_ord_4(Term, Categories, Spelling, Inflections) :-
 	default_lexicon_file(Lexicon),
 	default_index_file(Index),
-	lex_form_ci_ord_7(Term, Categories, LexiconServerStream, Spelling, Inflections, Lexicon, Index).
+	lex_form_ci_ord_7(Term, Categories, Spelling, Inflections, Lexicon, Index).
 
-lex_form_ci_ord_7(Term, Categories, LexiconServerStream, Spelling, Inflections, Lexicon, Index) :-
-	lex_form_ci_var_lists_5(Term, Lexicon, Index, LexiconServerStream, VariantLists0),
-	filter_by_categories(VariantLists0, Categories, VariantLists),
+lex_form_ci_ord_7(Term, Categories, Spelling, Inflections, Lexicon, Index) :-
+	lex_form_ci_var_lists_5(Term, Categories, Lexicon, Index, VariantLists0),
+	filter_by_categories([VariantLists0], Categories, VariantLists),
 	%    format('     lfco: ~p ~p~n~p~n~p~n~n',
 	%	   [Term,Categories,VariantLists0,VariantLists]),
 	compute_all_variant_sps_infls(VariantLists, Term, SpLists, InflLists),
-	append(SpLists, Sps0),
+	append([[Term]|SpLists], Sps0),
 	append(InflLists, Infls0),
 	sort(Sps0, Spelling),
 	sort(Infls0, Inflections).
@@ -134,40 +136,62 @@ filter_one_by_categories([First|Rest],Categories,[First|FilteredRest]) :-
 filter_one_by_categories([_|Rest], Categories, FilteredRest) :-
 	filter_one_by_categories(Rest, Categories, FilteredRest).
 
+
+% Token is a lexical token, e.g., "cesarian".
+% Variants is a list of lists of terms of the form Token:[LexCat:[Feature]], e.g.,
+% [ [caesarean:[adj:[spvar]],
+%    caesarian:[adj:[spvar]],
+%    cesarean:[adj:[spvar]],
+%    cesarian:[adj:[base]]]]
+% We want SpVars to be all spelling variants
+%      and Infls to be all inflections.
+% Inflections is easy: Just take the atom to the left of the colon in each element of Variants.
+% SpVars is more complicated:
+% (1) Find all X:[LexCatX:[InflX]] terms in Variants in which X is a lowermatch of Token.
+% (2) For each such term, find all Y:[LexCatX:[InflY]] terms in Variants such that
+%     (a) InflX == InflY, or
+%     (b) one of InflX and InflY is "base" and the other is "spvar".
+
+% I spent quite some time devising a non-findall version of the logic below,
+% and decided that the declarative readability of the findall version
+% outweighed any possible efficiency gains, especially because this code
+% is called only in dynamic variant generation (and therefore mm_variants),
+% so it doesn't have to be blazingly fast (it's not called by normal MetaMap).
+
 compute_all_variant_sps_infls([], _, [], []).
-compute_all_variant_sps_infls([Variants|Rest], Term,
-			      [Sps|RestSps],
-                              [Infls|RestInfls]) :-
-	% setof(Infl, X^member(Infl:X, Variants), Infls),
-	get_all_inflections(Variants, Infls),
-	% setof(S, Cat^Infl^SomeTerm^(
-	% 		   member(SomeTerm:[Cat:[Infl]], Variants),
-	% 		   lowermatch(Term, SomeTerm),
-	% 		   get_synonym(Cat:[Infl], Variants, S)), Sps),
-	findall(S, (   member(SomeTerm:[Cat:[Infl]], Variants),
-		       lowermatch(Term, SomeTerm),
-		       get_synonym(Cat:[Infl], Variants, S)), Sps),
-	compute_all_variant_sps_infls(Rest,Term,RestSps,RestInfls).
+compute_all_variant_sps_infls([Variants|Rest], Token,
+			      [SpVars|RestSpVars],
+                              [Inflections|RestInflections]) :-
+	get_all_inflections(Variants, Inflections0),
+	sort(Inflections0, Inflections),
+	findall(S, (   member(SomeToken:[LexCat:[Infl]], Variants),
+		       lowermatch(Token, SomeToken),
+		       get_synonym(LexCat:[Infl], Variants, S)), SpVars0),
+	sort(SpVars0, SpVars),
+	compute_all_variant_sps_infls(Rest, Token, RestSpVars, RestInflections).
 
-get_all_inflections([], []).
-get_all_inflections([Inflection:_|RestVariants], [Inflection|RestInflections]) :-
-	get_all_inflections(RestVariants, RestInflections).
-
+get_all_inflections(Variants, Inflections) :-
+	(  foreach(Infl:_, Variants),
+	   foreach(Infl, Inflections)
+	do true
+	).
 
 %%% does lowercase matching
-lowermatch(Term, Term) :- !.
-lowermatch(Term, SomeTerm) :-
-    lower(Term, LTerm),
-    lower(SomeTerm, LSomeTerm),
-    LTerm = LSomeTerm.
-
-%%% looks for another +Term with the same principal part
-get_synonym(Cat:[Infl], Variants, Synonym) :-
-	member(Synonym:[Cat:[SomeInfl]], Variants),
-	( Infl = SomeInfl ->
+lowermatch(Token, SomeToken) :-
+	( Token == SomeToken ->
 	  true
-	; Infl     = base ->
-	  SomeInfl = spvar
-	; Infl     = spvar ->
-	  SomeInfl = base
+	; lower(Token, LToken),
+	  lower(SomeToken, LSomeToken),
+ 	  LToken = LSomeToken
+ 	).
+
+%%% looks for another +Token with the same principal part
+get_synonym(Cat:[Feature], Variants, Synonym) :-
+	member(Synonym:[Cat:[SomeFeature]], Variants),
+	( Feature = SomeFeature ->
+	  true
+	; Feature     = base ->
+	  SomeFeature = spvar
+	; Feature     = spvar ->
+	  SomeFeature = base
 	).

@@ -35,7 +35,8 @@
 
 :- module(tagger_access, [
 	% must be exported for filter_mrconso
-	tag_text/2,
+	% not any more!
+	% tag_text/2,
  	tag_text/5
    ]).
 
@@ -117,9 +118,10 @@ token and its tag (both atoms, even if Input is a string).
 TaggedTextStrings strings consisting of the human-readable output. */
 
 % tag_text/2 is used by filter_mrconso -- do not remove!
-tag_text(Input, TaggedTextList) :-
-	get_server_stream('TAGGER', TaggerServerStream),
-        tag_text_with_options(Input, TaggerServerStream, syn, prologfull, TaggedTextList).
+% Not any more!
+% tag_text(Input, TaggedTextList) :-
+% 	get_server_stream('TAGGER', TaggerServerStream),
+%         tag_text_with_options(Input, TaggerServerStream, syn, prologfull, TaggedTextList).
 
 tag_text(Input, TaggerServerStream, FullTaggedTextList, TaggedTextList, TaggedTextStrings) :-
 	tag_text_with_options(Input, TaggerServerStream, syn, prologfull, FullTaggedTextList),
@@ -138,7 +140,8 @@ tag_text_with_options(Input, TaggerServerStream, ModeOption, PrologOption, Tagge
 	call_tagger(Options, TaggerServerStream, QueryAtom, TaggedTextList0),
 	TaggedTextList0 \== '',
 	TaggedTextList0 \== end_of_file,
-	postprocess_apostrophe_s(TaggedTextList0, TaggedTextList),
+	% postprocess_apostrophe_s(TaggedTextList0, TaggedTextList),
+	TaggedTextList = TaggedTextList0,
 	% TaggedTextList = TaggedTextList0,
 	!.
 tag_text_with_options(Input, _, _, _Tagger, []) :-

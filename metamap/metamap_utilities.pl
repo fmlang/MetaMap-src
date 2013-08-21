@@ -35,18 +35,18 @@
 
 :- module(metamap_utilities, [
 	% must be exported for mm_print
-	build_concept_name_1/4,
+	build_concept_name_1/5,
 	candidate_term/16,
 	dump_aphrase_mappings/2,
-	dump_evaluations_indented/6,
+	% dump_evaluations_indented/6,
 	% must be exported for mm_print
 	dump_evaluations_indented/7,
 	dump_variants_labelled/5,
 	extract_nonexcluded_sources/3,
 	extract_relevant_sources/3,
 	extract_name_in_source/2,
-	extract_unique_sources/2,
-	num_dump_evaluations_indented/6,
+	% extract_unique_sources/2,
+	num_dump_evaluations_indented/7,
 	positions_overlap/2,
 	wgvcs/1,
 	wl/1,
@@ -65,7 +65,7 @@
 	get_all_candidate_features/3
     ]).
 
-:- use_module(skr_lib(semtype_translation_2012AB), [
+:- use_module(skr_lib(semtype_translation_2013AA), [
 	expand_semtypes/2
     ]).
 
@@ -80,7 +80,8 @@
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
-	concat_atom/2
+	concat_atom/2,
+	concat_atom/3
     ]).
 
 :- use_module(library(lists), [
@@ -166,7 +167,7 @@ dump_mapping([H|T], Label, Score, DisplayCounter) :-
 dump_evaluations([]).
 dump_evaluations([FirstEV|RestEVs]) :-
 	RelatedEvaluations = [],
-	dump_one_evaluation(FirstEV:RelatedEvaluations),
+	num_dump_one_evaluation(FirstEV:RelatedEvaluations, 0, _),
 	dump_evaluations(RestEVs).
 
 % MetaMap now has status symbols :-)
@@ -186,29 +187,45 @@ choose_status_symbol(1, _Negated, 'E').
 %  2 means the candidate was Pruned
 choose_status_symbol(2, _Negated, 'P').
 
-dump_one_evaluation(Candidate:RelatedCandidates) :-
-	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,
-				    semtypes,sources,status,negated],
-				   Candidate,
-				   [NegValue,CUI,MetaTerm,MetaConcept,
-				    SemTypes0,SourceInfo,Status,Negated]),
-	Value is -NegValue,
-	% build_concept_name(CUI,MetaConcept,ConceptName),
-	build_concept_name_1(MetaConcept, CUI, SourceInfo, ConceptName),
-	choose_status_symbol(Status, Negated, StatusSymbol),
-	display_concept_info(MetaTerm, Value, CUI, ConceptName, StatusSymbol),
-	conditionally_expand_semtypes(SemTypes0),
-	format('~n', []),
-	dump_related_evaluations(RelatedCandidates).
+%%% dump_one_evaluation(Candidate:RelatedCandidates) :-
+%%% 	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,
+%%% 				    semtypes,sources,status,negated],
+%%% 				   Candidate,
+%%% 				   [NegValue,CUI,MetaTerm,PreferredName,
+%%% 				    SemTypes0,SourceInfo,Status,Negated]),
+%%% 	CandidateScore is -NegValue,
+%%% 	build_concept_name_1(PreferredName, CUI, SourceInfo, PreferredNameDisplay),
+%%% 	choose_status_symbol(Status, Negated, StatusSymbol),
+%%% 	display_concept_info(MetaTerm, PreferredName, CandidateScore,
+%%% 			     CUI, PreferredNameDisplay, StatusSymbol),
+%%% 	conditionally_expand_semtypes(SemTypes0),
+%%% 	format('~n', []),
+%%% 	dump_related_evaluations(RelatedCandidates).
 
-display_concept_info(MetaTerm, Value, CUI, ConceptName, StatusSymbol) :-
-	( control_option(show_cuis) ->
-	  DisplayCUI = CUI,
-	  Colon = ':'
-	; DisplayCUI = '',
-	  Colon = ''
-	),
-	format('~t~d ~w~8| ~p~w~p (~p)', [Value,StatusSymbol,DisplayCUI,Colon,MetaTerm,ConceptName]).
+%%% display_concept_info(MetaTerm, PreferredName, CandidateScore,
+%%% 		     CUI, PreferredNameDisplayIn, StatusSymbol) :-
+%%% 	( control_option(show_cuis) ->
+%%% 	  DisplayCUI = CUI,
+%%% 	  Colon = ':'
+%%% 	; DisplayCUI = '',
+%%% 	  Colon = ''
+%%% 	),
+%%% 	compute_preferred_name_display(MetaTerm, PreferredName,
+%%% 				       PreferredNameDisplayIn, PreferredNameDisplay),
+%%% 	format('~t~d ~w~8| ~w~w~w~p',
+%%% 	       [CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay]).
+
+compute_preferred_name_display(MetaTerm, PreferredName, SourcesAtom,
+			       PreferredNameDisplayIn, PreferredNameDisplay) :-
+	( MetaTerm == PreferredName,
+	  control_option(sources) ->
+	  PreferredNameDisplay = SourcesAtom
+	; MetaTerm == PreferredName ->
+	  PreferredNameDisplay = ''  
+	; control_option(show_preferred_names_only) ->
+	  PreferredNameDisplay = ''
+	; concat_atom([' (',PreferredNameDisplayIn,')'], PreferredNameDisplay)
+	).
 
 conditionally_expand_semtypes(SemTypes0) :-
     	( \+ control_option(hide_semantic_types) ->
@@ -217,50 +234,49 @@ conditionally_expand_semtypes(SemTypes0) :-
 	; true
 	).
 
-/* build_concept_name_1(+MetaConcept, +CUI, +Sources, -ConceptName) :-
+/* build_concept_name_1(+PreferredName, +CUI, +Sources, -PreferredNameDisplay) :-
 
-build_concept_name/4 constructs ConceptName from MetaConcept by optionally
-appending slist, the list of sources for ConceptName. slist is appended when
+build_concept_name/4 constructs PreferredNameDisplay from PreferredName by optionally
+appending slist, the list of sources for PreferredNameDisplay. slist is appended when
 -G (--sources) is active, and it is affected by options
 -R (--restrict_to_sources) and -e (--exlude_sources). */
 
-build_concept_name_1(MetaConcept, _CUI, _Sources, MetaConcept) :-
+build_concept_name_1(PreferredName, _CUI, _Sources, _SourcesAtom, PreferredName) :-
 	\+control_option(sources),
 	!.
-build_concept_name_1(MetaConcept, _CUI, Sources, ConceptName) :-
+build_concept_name_1(PreferredName, _CUI, OrigSources, SourcesAtom, PreferredNameDisplay) :-
 	( control_option(restrict_to_sources) ->
-	  control_value(restrict_to_sources, Sources),
-	  convert_to_root_sources(Sources, RootSources),
-	  extract_relevant_sources_1(Sources0, RootSources, Sources)
+	  control_value(restrict_to_sources, RestrictSources),
+	  convert_to_root_sources(RestrictSources, RestrictRootSources),
+	  extract_relevant_simple_sources(OrigSources, RestrictRootSources, NewSources)
 	; control_option(exclude_sources) ->
-	  control_value(exclude_sources, Sources),
-	  convert_to_root_sources(Sources, RootSources),
-	  extract_nonexcluded_sources_1(Sources0, RootSources, Sources)
-	; Sources = Sources0
+	  control_value(exclude_sources, ExcludeSources),
+	  convert_to_root_sources(ExcludeSources, ExcludeRootSources),
+	  extract_nonexcluded_simple_sources(OrigSources, ExcludeRootSources, NewSources)
+	; NewSources = OrigSources
 	),
-	build_concept_name_1_aux(Sources, MetaConcept, ConceptName),
+	build_concept_name_1_aux(NewSources, PreferredName, SourcesAtom, PreferredNameDisplay),
 	!.
 % should never occur
-build_concept_name_1(MetaConcept, CUI, _Sources, _ConceptName) :-
-	fatal_error('Unable to build concept name for ~q/~q~n', [CUI,MetaConcept]).
+build_concept_name_1(PreferredName, CUI, _Sources, _SourcesAtom, _PreferredNameDisplay) :-
+	fatal_error('Unable to build concept name for ~q/~q~n', [CUI,PreferredName]).
 
-build_concept_name_1_aux(Sources, MetaConcept, ConceptName) :-
-	Sources = [FirstSource|RestSources],
-	build_list(RestSources, [], RestSourceList),
-	append([[MetaConcept,' {',FirstSource],RestSourceList,['}']], ItemList),
-	concatenate_items_to_atom(ItemList, ConceptName).
+build_concept_name_1_aux(Sources, PreferredName, SourcesAtom, PreferredNameDisplay) :-
+	concat_atom(Sources, ',', SourcesAtom0),
+	concat_atom([' {', SourcesAtom0, '}'], SourcesAtom),
+	concat_atom([PreferredName, SourcesAtom], PreferredNameDisplay).
 
-extract_unique_sources(SourceInfo, UniqueSources) :-
-	(  foreach([_I, _Str, SRC, _TTY], SourceInfo),
-	   foreach(SRC, Sources)
-	do true
-	),
-	sort(Sources, UniqueSources).
+%%% extract_unique_sources(SourceInfo, UniqueSources) :-
+%%% 	(  foreach([_I, _Str, SRC, _TTY], SourceInfo),
+%%% 	   foreach(SRC, Sources)
+%%% 	do true
+%%% 	),
+%%% 	sort(Sources, UniqueSources).
 
-build_list([], ListIn, ListOut) :-
-	rev(ListIn, ListOut).
-build_list([First|Rest], ListIn, ListOut) :-
-	build_list(Rest,[First,', '|ListIn], ListOut).
+% build_list([], ListIn, ListOut) :-
+% 	rev(ListIn, ListOut).
+% build_list([First|Rest], ListIn, ListOut) :-
+% 	build_list(Rest,[First,', '|ListIn], ListOut).
 
 
 dump_evaluations_indented(Candidates, TotalCandidateCount,
@@ -268,9 +284,10 @@ dump_evaluations_indented(Candidates, TotalCandidateCount,
 			  RemainingCandidateCount, Label, OutputStream) :-
 	current_output(CurrentOutput),
 	set_output(OutputStream),
-	dump_evaluations_indented(Candidates, TotalCandidateCount,
-			  ExcludedCandidateCount, PrunedCandidateCount,
-			  RemainingCandidateCount, Label),
+	StartNum is 0,
+	num_dump_evaluations_indented(Candidates, TotalCandidateCount,
+				      ExcludedCandidateCount, PrunedCandidateCount,
+				      RemainingCandidateCount, StartNum, Label),
 	!,
 	set_output(CurrentOutput).
 
@@ -279,23 +296,23 @@ dump_evaluations_indented(Candidates, TotalCandidateCount,
 
 % This should never be called,
 % because generate_candidates_output/6 tests for Evaluations3 \== []
-dump_evaluations_indented([], _TotalCandidateCount,
-			  _ExcludedCandidateCount, _PrunedCandidateCount,
-			  _RemainingCandidateCount, Label) :-
-	format('Meta ~a (0): <none>~n', [Label]).
-dump_evaluations_indented([H|T], TotalCandidateCount,
-			  ExcludedCandidateCount, PrunedCandidateCount,
-			  RemainingCandidateCount, Label) :-
-	Candidates = [H|T],
-	( control_option(silent) ->
-	  format('Meta ~a (~d):~n', [Label,TotalCandidateCount])
-	; format('Meta ~a (Total=~d; Excluded=~d; Pruned=~d; Remaining=~d)~n',
-		 [Label,TotalCandidateCount,
-		  ExcludedCandidateCount,PrunedCandidateCount,
-		  RemainingCandidateCount])
-	),
-	construct_related_evaluations(Candidates, CandidatePairs),
-	dump_evaluations_indented_aux(CandidatePairs).
+%%% dump_evaluations_indented([], _TotalCandidateCount,
+%%% 			  _ExcludedCandidateCount, _PrunedCandidateCount,
+%%% 			  _RemainingCandidateCount, Label) :-
+%%% 	format('Meta ~a (0): <none>~n', [Label]).
+%%% dump_evaluations_indented([H|T], TotalCandidateCount,
+%%% 			  ExcludedCandidateCount, PrunedCandidateCount,
+%%% 			  RemainingCandidateCount, Label) :-
+%%% 	Candidates = [H|T],
+%%% 	( control_option(silent) ->
+%%% 	  format('Meta ~a (~d):~n', [Label,TotalCandidateCount])
+%%% 	; format('Meta ~a (Total=~d; Excluded=~d; Pruned=~d; Remaining=~d)~n',
+%%% 		 [Label,TotalCandidateCount,
+%%% 		  ExcludedCandidateCount,PrunedCandidateCount,
+%%% 		  RemainingCandidateCount])
+%%% 	),
+%%% 	construct_related_evaluations(Candidates, CandidatePairs),
+%%% 	dump_evaluations_indented_aux(CandidatePairs).
 
 construct_related_evaluations([], []).
 construct_related_evaluations([FirstCandidate|RestCandidates],
@@ -323,29 +340,29 @@ construct_related_evaluations_6([FirstCandidate|RestCandidates], Concept,
 					RelatedIn, RelatedOut,
 					[FirstCandidate|UnrelatedIn], UnrelatedOut).
 
-dump_evaluations_indented_aux([]).
-dump_evaluations_indented_aux([FirstEV|RestEVs]) :-
-	dump_one_evaluation(FirstEV),
-	dump_evaluations_indented_aux(RestEVs).
-
-dump_related_evaluations([]).
-dump_related_evaluations([FirstCandidate|RestCandidates]) :-
-	get_all_candidate_features([metaterm,status,negated],
-				   FirstCandidate,
-				   [MetaTerm,Status,Negated]),
-	choose_status_symbol(Status, Negated, StatusSymbol),
-	format('       ~w   ~p~n', [StatusSymbol,MetaTerm]),
-	dump_related_evaluations(RestCandidates).
+%%% dump_evaluations_indented_aux([]).
+%%% dump_evaluations_indented_aux([FirstEV|RestEVs]) :-
+%%% 	dump_one_evaluation(FirstEV),
+%%% 	dump_evaluations_indented_aux(RestEVs).
+%%% 
+%%% dump_related_evaluations([]).
+%%% dump_related_evaluations([FirstCandidate|RestCandidates]) :-
+%%% 	get_all_candidate_features([metaterm,status,negated],
+%%% 				   FirstCandidate,
+%%% 				   [MetaTerm,Status,Negated]),
+%%% 	choose_status_symbol(Status, Negated, StatusSymbol),
+%%% 	format('       ~w   ~p~n', [StatusSymbol,MetaTerm]),
+%%% 	dump_related_evaluations(RestCandidates).
 
 % This should never be called,
 % because generate_candidates_output/6 tests for Evaluations3 \== []
 num_dump_evaluations_indented([], _TotalCandidateCount,
 			      _ExcludedCandidateCount, _PrunedCandidateCount,
-			      _RemainingCandidateCount, Label) :-
+			      _RemainingCandidateCount, _StartNum, Label) :-
 	  format('Meta ~a (0): <none>~n', [Label]).
 num_dump_evaluations_indented([H|T], TotalCandidateCount,
-			  ExcludedCandidateCount, PrunedCandidateCount,
-			  RemainingCandidateCount, Label) :-
+			      ExcludedCandidateCount, PrunedCandidateCount,
+			      RemainingCandidateCount, StartNum, Label) :-
 	Candidates = [H|T],
 	( control_option(silent) ->
 	  format('Meta ~a (~d):~n', [Label,TotalCandidateCount])
@@ -355,43 +372,64 @@ num_dump_evaluations_indented([H|T], TotalCandidateCount,
 		  RemainingCandidateCount])
 	),
 	construct_related_evaluations(Candidates, CandidatePairs),
-	num_dump_evaluations_indented_aux(CandidatePairs, 1).
+	num_dump_evaluations_indented_aux(CandidatePairs, StartNum).
 
 num_dump_evaluations_indented_aux([], _).
 num_dump_evaluations_indented_aux([Candidate:RelatedCandidates|Rest], N) :-
-	num_dump_one_evaluation_indented(Candidate:RelatedCandidates, N, NextN),
+	num_dump_one_evaluation(Candidate:RelatedCandidates, N, NextN),
 	num_dump_evaluations_indented_aux(Rest, NextN).
 
-num_dump_one_evaluation_indented(Candidate:RelatedCandidates, N, NextN) :-
+num_dump_one_evaluation(Candidate:RelatedCandidates, N, NextN) :-
 	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,
 				    semtypes,sources,status,negated],
 				   Candidate,
-				   [NegValue,CUI,MetaTerm,MetaConcept,
+				   [NegValue,CUI,MetaTerm,PreferredName,
 				    SemTypes0,SourceInfo,Status,Negated]),
-	Value is -NegValue,
-	build_concept_name_1(MetaConcept, CUI, SourceInfo, ConceptName),
+	CandidateScore is -NegValue,
+	build_concept_name_1(PreferredName, CUI, SourceInfo, SourcesAtom, PreferredNameDisplay),
 	choose_status_symbol(Status, Negated, StatusSymbol),
-	num_display_concept_info(MetaTerm, N, Value, CUI, ConceptName, StatusSymbol),
+	num_display_concept_info(N, MetaTerm, PreferredName, SourcesAtom, CandidateScore,
+				 CUI, PreferredNameDisplay, StatusSymbol),
 	conditionally_expand_semtypes(SemTypes0),
-	format('~n',[]),
-	N1 is N + 1,
+	format('~n', []),
+	get_next_N(N, N1),
 	num_dump_related_evaluations(RelatedCandidates, N1, NextN).
 
-num_display_concept_info(MetaTerm, N, Value, CUI, ConceptName, StatusSymbol) :-
+
+get_next_N(N, N1) :-
+	( N =:= 0 ->
+	  N1 is 0
+	; N1 is N + 1
+	).
+
+num_display_concept_info(N, MetaTerm, PreferredName, SourcesAtom, CandidateScore,
+			 CUI, PreferredNameDisplayIn, StatusSymbol) :-
 	( control_option(show_cuis) ->
 	  DisplayCUI = CUI,
 	  Colon = ':'
 	; DisplayCUI = '',
 	  Colon = ''
 	),
-	format('~t~d~4|. ~t~d~10| ~t~w~12| ~p~w~p (~p)',
-	       [N,Value,StatusSymbol,DisplayCUI,Colon,MetaTerm,ConceptName]).
+	compute_preferred_name_display(MetaTerm, PreferredName, SourcesAtom,
+				       PreferredNameDisplayIn, PreferredNameDisplay),
+	( N =:= 0 ->
+	  format('~t~d ~w~8| ~w~w~w~p',
+	       [CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay])
+	; format('~t~d~4|. ~t~d~10| ~t~w~12| ~p~w~p ~p',
+		 [N,CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay])
+	).
 
 num_dump_related_evaluations([], NIn, NIn).
 num_dump_related_evaluations([FirstCandidate|RestCandidates], NIn, NOut) :-
-	get_candidate_feature(metaterm, FirstCandidate, MetaTerm),
-	format('~t~d~4|.           ~p~n', [NIn,MetaTerm]),
-	NInOut is NIn + 1,
+	get_all_candidate_features([metaterm,status,negated],
+				   FirstCandidate,
+				   [MetaTerm,Status,Negated]),
+	choose_status_symbol(Status, Negated, StatusSymbol),
+	( NIn =:= 0 ->
+	  format('       ~w   ~p~n',          [StatusSymbol,MetaTerm])
+	; format('~t~d~4|.       ~w    ~p~n', [NIn,StatusSymbol,MetaTerm])
+	),
+	get_next_N(NIn, NInOut),
 	num_dump_related_evaluations(RestCandidates, NInOut, NOut).
 
 /* dump_variants_labelled(+Label, +Variants)
@@ -409,7 +447,7 @@ dump_variants_labelled(Label, Variants, MaxNumDigits, CountIn, VariantsCount) :-
 	).
 
 dump_variants([], _MaxNumDigits, _Count).
-dump_variants([v(Word,Categories,VarLevel,History,_Roots,_NFR)|Rest], MaxNumDigits, CountIn) :-
+dump_variants([v(Word,VarLevel,Categories,History,_Roots,_NFR)|Rest], MaxNumDigits, CountIn) :-
 	rev(History, RevHistory),
 	number_codes(CountIn, CountInCodes),
 	length(CountInCodes, CountInNumDigits),
@@ -443,15 +481,13 @@ extract_relevant_sources([_|Rest], Sources, ExtractedRest) :-
 	extract_relevant_sources(Rest, Sources, ExtractedRest).
 
 
-extract_relevant_sources_1([], _, []).
-extract_relevant_sources_1([Source|RestSources],
-			   Sources,
-			   [Source|ExtractedRest]) :-
-	memberchk(Source, Sources),
-	!,
-	extract_relevant_sources_1(RestSources, Sources, ExtractedRest).
-extract_relevant_sources_1([_|Rest], Sources, ExtractedRest) :-
-	extract_relevant_sources_1(Rest, Sources, ExtractedRest).
+extract_relevant_simple_sources([], _, []).
+extract_relevant_simple_sources([FirstSource|RestSources], RestrictSources, ExtractedSources) :-
+	( memberchk(FirstSource, RestrictSources) ->
+	  ExtractedSources = [FirstSource|RestExtractedSources]
+	; ExtractedSources = RestExtractedSources
+	),
+	extract_relevant_simple_sources(RestSources, RestrictSources, RestExtractedSources).
 
 extract_nonexcluded_sources([], _, []).
 extract_nonexcluded_sources([[I,ConceptNameInSource,Source,TTY]|Rest],
@@ -463,16 +499,13 @@ extract_nonexcluded_sources([[I,ConceptNameInSource,Source,TTY]|Rest],
 extract_nonexcluded_sources([_|Rest], Sources, ExtractedRest) :-
 	extract_nonexcluded_sources(Rest, Sources, ExtractedRest).
 
-extract_nonexcluded_sources_1([] ,_, []).
-extract_nonexcluded_sources_1([Source|RestSources],
-			      Sources,
-			      [Source|ExtractedRest]) :-
-	\+ memberchk(Source, Sources),
-	!,
-	extract_nonexcluded_sources_1(RestSources, Sources, ExtractedRest).
-extract_nonexcluded_sources_1([_|Rest], Sources, ExtractedRest) :-
-	extract_nonexcluded_sources_1(Rest, Sources, ExtractedRest).
-
+extract_nonexcluded_simple_sources([] ,_, []).
+extract_nonexcluded_simple_sources([FirstSource|RestSources], ExcludeSources, ExtractedSources) :-
+	( \+ memberchk(FirstSource, ExcludeSources) ->
+	  ExtractedSources = [FirstSource|RestExtractedSources]
+	; ExtractedSources = RestExtractedSources
+	),
+	extract_nonexcluded_simple_sources(RestSources, ExcludeSources, RestExtractedSources).
 
 /* extract_name_in_source(+SourceInfo, -ConceptNameInSource)
 
@@ -535,15 +568,15 @@ write_list_indented([First|Rest]) :-
     write_list_indented(Rest).
 
 % Create candidate term or extract features
-candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
+candidate_term(NegValue, CUI, MetaTerm, PreferredName, MetaWords, SemTypes,
 	       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
 	       IsOvermatch, UniqueSources, PosInfo, Status, Negated, Evaluation) :-
-	( Evaluation = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
+	( Evaluation = ev(NegValue,CUI,MetaTerm,PreferredName,MetaWords,SemTypes,
 			  MatchMap,LSComponents,TargetLSComponent,
 			  InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status,Negated) ->
 	  true
 	  % This is simply for mm_print, which sees the printed representation of candidates,
 	  % which does NOT include the LSComponents and TargetLSComponents fields.
-	; Evaluation = ev(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
+	; Evaluation = ev(NegValue,CUI,MetaTerm,PreferredName,MetaWords,SemTypes,
 			  MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status,Negated)
 	).

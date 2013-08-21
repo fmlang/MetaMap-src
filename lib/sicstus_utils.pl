@@ -47,6 +47,7 @@
   	interleave_string/3,
 	lower/2,
 	lower_chars/2,
+	lowercase_list/2,
 	midstring/4,
 	midstring/5,
 	midstring/6,
@@ -130,11 +131,19 @@ lower(Text, Lower) :-
                 lower_chars(Text, Lower)
         ).
 
-lower_chars(-, _) :- !, fail.
 lower_chars([], []).
 lower_chars([T|Ts], [U|Us]) :-
         to_lower(T, U),
         lower_chars(Ts, Us).
+
+/* lowercase_list(+TextList, -LowercaseTextList)
+lowercase_list/2 creates LowercaseTextList, the list of lowercase
+strings/atoms corresponding to those in TextList. */
+
+lowercase_list([], []).
+lowercase_list([First|Rest], [LCFirst|LCRest]) :-
+	lower(First, LCFirst),
+	lowercase_list(Rest, LCRest).
 
 
 %   upper(+Text, ?Upper)

@@ -60,8 +60,7 @@
 	environ/2
    ]).
 
-get_server_streams(LexiconServerStream-TaggerServerStream-WSDServerStream) :-
-	get_server_stream('LEXICON', LexiconServerStream),
+get_server_streams(TaggerServerStream-WSDServerStream) :-
 	get_server_stream('TAGGER',  TaggerServerStream),
 	get_server_stream('WSD',     WSDServerStream).
 	

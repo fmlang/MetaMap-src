@@ -400,13 +400,15 @@ handle_special_token_type(aadef, PrevToken, _ExtraCharsIn,
 	% PrevToken = tok(PrevTokenType, _PrevString, _PrevLCString, _PrevPos),
 	token_template(PrevToken, PrevTokenType, _PrevString, _PrevLCString, _PrevPos),
 	% This hack is intended to handle text like "urinary (u-) ..."
-	AADefTokens = AADefTokens0,
+	remove_final_hyphen_and_ws_tokens(AADefTokens0, AADefTokens),
+	% AADefTokens = AADefTokens0,
 	create_new_tokens_and_consume_strings(AADefTokens, PrevTokenType, RestTokensIn,
 					      CurrentPos, InputStringIn,
 					      NewTokens, RestNewTokens, NextPos1,
 					      InputString1),
-	% Then, match and remove those aadef tokens from RestTokensIn
-	remove_tokens_no_consume(AADefTokens, RestTokensIn, RestTokens1),
+	% Then, match and remove those aadef tokens from RestTokensIn;
+	% the first argument must be AADefTokens0, and not AADefTokens.
+	remove_tokens_no_consume(AADefTokens0, RestTokensIn, RestTokens1),
 	InputString1 \== '',
 	consume_ws_tokens(RestTokens1, RestTokens2, 0, _NumWSTokens1),
 	trim_whitespace_left(InputString1, InputString2, NumBlanksTrimmed1),
@@ -594,6 +596,25 @@ consume_ws_tokens([FirstToken|RestTokens], RemainingTokens, NumSpacesIn, NumSpac
 	; RemainingTokens = [FirstToken|RestTokens],
 	  NumSpacesOut is NumSpacesIn
 	).
+
+remove_final_hyphen_and_ws_tokens(AADefTokens0, AADefTokens) :-
+	append(AADefTokensPrefix0, [LastAADefToken], AADefTokens0),
+	( hyphen_or_ws_token(LastAADefToken) ->
+	  AADefTokens1 = AADefTokensPrefix0
+	; AADefTokens1 = AADefTokens0
+	),
+	( AADefTokens1 = AADefTokens0 ->
+	  AADefTokens = AADefTokens1
+	; remove_final_hyphen_and_ws_tokens(AADefTokens1, AADefTokens)
+	).
+
+hyphen_or_ws_token(Token) :-
+	( token_template(Token, pn, HyphenString, HyphenString, _PosInfo),
+	  hyphen_punc(HyphenString) ->
+	  true
+	; token_template(Token, ws, _WSString, _WString, _PosInfo)
+	).
+	
 
 % We have a list of tokens, e.g.,
 % [tok(pn,"(","(",pos(61,62)),
@@ -1219,8 +1240,22 @@ add_raw_pos_info_2(CurrentToken, CurrentTokenType, PrevTokenType,
 % if the TokenType is xx and ends in "'s",
 % allowing for an extra space before and/or after the "'" in InputString.
 
-sublist_ws(CurrentTokenType, InputString, CurrentTokenText,
+get_aa_text(TokenList, AAString) :-
+	(  foreach(Token, TokenList),
+	   foreach(TokenString, TokenStringList)
+	do token_template(Token, _TokenType, TokenString, _LCTokenText, _PosTerm)
+	),
+	append(TokenStringList, AAString).
+
+sublist_ws(CurrentTokenType, InputString, CurrentTokenText0,
 	   InputStringPrefixLength, CurrentTokenTextLength) :-
+	% If the current topken is an AA, Current TokenText0 is a list like
+	% [tok(uc,"TGF","tgf",pos(33,36)),tok(ws," "," ",pos(36,37))],
+	% so extract and concatenate the strings.
+	( CurrentTokenType == aa ->
+	  get_aa_text(CurrentTokenText0, CurrentTokenText)
+	; CurrentTokenText = CurrentTokenText0
+	),
 	( sublist(InputString, CurrentTokenText, InputStringPrefixLength, CurrentTokenTextLength),
 	  ( CurrentTokenType == xx ->
 	    InputStringPrefixLength < 20

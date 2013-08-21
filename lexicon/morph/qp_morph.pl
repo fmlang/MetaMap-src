@@ -33,15 +33,15 @@
 */
 
 :- module(qp_morph, [
-	dm_variants/4
-   ]).
-
-:- use_module(skr(testlvg),[
-	lexAccess_get_dm_variants_by_category/4
+	dm_variants/3
    ]).
 
 :- use_module(skr(skr_utilities), [
 	fatal_error/2
+   ]).
+
+:- use_module(skr_db(db_access), [
+        db_get_lex_dm_variants_with_cat/3
    ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -49,9 +49,6 @@
         control_value/2
    ]).
 
-:- use_module(library(lists), [
-	rev/2
-   ]).
 
 % foreign_file(morph('morph'), [
 
@@ -82,10 +79,10 @@ foreign(c_dm_variants, c, c_dm_variants(+string, +term, -term, [-integer])).
 %%%	If +Cats is [], all categories apply.
 %%% -Var is a list of Var:[cat:[Cat]] terms.
 %%%	The list is ordered (longest matching suffix first).
-dm_variants(Term, Cats, LexiconServerStream, Var) :-
-	dm_variants_LEXACCESS_TOGGLE(Term, Cats, LexiconServerStream, Var).
+dm_variants(Term, Cats, Var) :-
+	dm_variants_TOGGLE(Term, Cats, Var).
 
-dm_variants_LEXACCESS_TOGGLE(Term, Cats, LexiconServerStream, VarList) :-
+dm_variants_TOGGLE(Term, Cats, VarList) :-
 	( control_value(lexicon, c) ->
 	  c_dm_variants(Term, Cats, VarList0, 1),
 	  (  foreach(V0, VarList0),
@@ -94,13 +91,25 @@ dm_variants_LEXACCESS_TOGGLE(Term, Cats, LexiconServerStream, VarList) :-
 	     arg(1, V0, LexicalCategory),
 	     V = LexicalItem:[cat:[LexicalCategory]]
 	  )     
- 	; lexAccess_get_dm_variants_by_category(Term, Cats, LexiconServerStream, VarList)
+ 	; control_value(lexicon, db) ->
+	  get_dm_variants_by_category(Term, Cats, VarList)
 	).
 
 %%% changes Term(Cat) to Term:[cat:[Cat]]
-reformat_dm_list([], []).
-reformat_dm_list([F|R], [X|Y]) :-
-	functor(F, Term, 1),
-	arg(1, F, Cat),
-	X = Term:[cat:[Cat]],
-	reformat_dm_list(R, Y).
+%%% reformat_dm_list([], []).
+%%% reformat_dm_list([F|R], [X|Y]) :-
+%%% 	functor(F, Term, 1),
+%%% 	arg(1, F, Cat),
+%%% 	X = Term:[cat:[Cat]],
+%%% 	reformat_dm_list(R, Y).
+
+get_dm_variants_by_category(Term, CategoryList, VariantList) :-
+	CategoryList = [Category],
+	control_value(lexicon, db),
+	db_get_lex_dm_variants_with_cat(Term, Category, VariantPairs),
+	(  foreach(VariantPair, VariantPairs),
+	   foreach(VariantTerm, VariantList)
+	do
+	   VariantPair = [LexicalItem,LexicalCategory],
+	   VariantTerm = LexicalItem:[cat:[LexicalCategory]]
+	).

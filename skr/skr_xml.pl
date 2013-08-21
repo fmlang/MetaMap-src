@@ -35,7 +35,7 @@
 :- module(skr_xml,[
 	conditionally_print_xml_header/2,
 	conditionally_print_xml_footer/3,
-	generate_and_print_xml/1,
+	generate_and_print_xml/2,
 	xml_header_footer_print_setting/3,
 	xml_output_format/1
     ]).
@@ -91,10 +91,9 @@
 % This code creates Prolog structures that are fed to xml:xml_parse,
 % which is defined in the Quintus Prolog library.
 
-generate_and_print_xml(AllMMO) :-
+generate_and_print_xml(AllMMO, OutputStream) :-
 	( xml_output_format(XMLFormat) ->
 	  get_xml_format_mode(XMLFormat, _OneOrZero, TrueOrFalse),
-	  current_output(OutputStream),
 	  XMLTerm = xml([], MMOXML),
 	  AllMMO = [ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO],
 	  generate_xml_arg_term(ArgsMMO,    XMLArgTerm),

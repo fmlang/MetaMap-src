@@ -143,8 +143,8 @@ is_control_option(metamap, 'L', lexicon_year, 	 		no,
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
 is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
-is_control_option(metamap, 'Q', composite_phrases, 		yes,
-                  aspec(composite_phrases, mandatory, integer, no, 4,
+is_control_option(metamap, 'Q', composite_phrases, 		no,
+                  aspec(composite_phrases, mandatory, integer, no, '4',
                         'Max number of prepositional phrases to glom on')).
 is_control_option(metamap, 'R', restrict_to_sources, no,
                   aspec(restrict_to_sources, mandatory, list, none, no_default,
@@ -259,9 +259,13 @@ is_control_option(metamap,  '', map_thresh, no,
                    aspec(map_thresh, mandatory, none, none, no_default,
                          'Integer specifying what percentage of mappings to keep (for internal use only!)')).
 
+is_control_option(metamap,  '', prompt, no,
+                   aspec(prompt, mandatory, none, none, no_default,
+                         'Specify the prompt for interactive use.')).
+
 % Bypass lexical lookup
 is_control_option(metamap,  '', 'no_lex',		 	no, none).
-is_control_option(metamap,  '', 'local_db',		 	no, none).
+
 		   
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -270,17 +274,6 @@ is_control_option(metamap,  '', 'local_db',		 	no, none).
 
 is_control_option(build_ambig_examples,h,help,no,none).
 is_control_option(build_ambig_examples,w,warnings,no,none).
-
-is_control_option(extract_mrconso_sources,f,first_of_each_source_only,yes,none).
-is_control_option(extract_mrconso_sources,h,help,no,none).
-is_control_option(extract_mrconso_sources,i,info,no,none).
-is_control_option(extract_mrconso_sources,w,warnings,no,none).
-is_control_option(extract_mrconso_sources, p, progress_bar_interval, no,
-                  aspec(progress_bar_interval,mandatory,integer,none,no_default,
-                        'Interval of progress bar')).
-is_control_option(extract_mrconso_sources, t, total_lines, no,
-                  aspec(total_lines,mandatory,integer,none,no_default,
-                        'Total number of lines to process')).
 
 is_control_option(filter_mrconso,s,strict_filtering,no,none).
 is_control_option(filter_mrconso,'E',end_of_processing,no,none).
@@ -291,6 +284,9 @@ is_control_option(filter_mrconso,i,info,no,none).
 is_control_option(filter_mrconso, 'R', mrrank_file, no,
                   aspec(mrrank_file,mandatory,file,read,no_default,
                         'MRRANK file')).
+is_control_option(filter_mrconso, 'V', mm_data_version, no,
+                  aspec(mm_data_version, mandatory, none, none, no_default,
+                        'Version of MetaMap data to use')).
 is_control_option(filter_mrconso, p, progress_bar_interval, no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
                         'Interval of progress bar')).
@@ -306,11 +302,11 @@ is_control_option(filter_mrconso,  '', clfi, no,
 is_control_option(filter_mrconso,'N',silent,no,none).
 is_control_option(filter_mrconso,w,warnings,no,none).
 
-is_control_option(glean_mrcon,f,first_term_is_concept,yes,none).
-is_control_option(glean_mrcon,c,generate_CUIs,no,none).
-is_control_option(glean_mrcon,s,generate_strings,no,none).
-is_control_option(glean_mrcon,w,generate_words,no,none).
-is_control_option(glean_mrcon,h,help,no,none).
+is_control_option(glean_mrconso, f, first_term_is_concept, yes, none).
+is_control_option(glean_mrconso, c, generate_CUIs,         no,  none).
+is_control_option(glean_mrconso, s, generate_strings,      no,  none).
+is_control_option(glean_mrconso, w, generate_words,        no,  none).
+is_control_option(glean_mrconso, h, help,                  no,  none).
 
 is_control_option(mm_print, 'A',alnum_filter,no,none).
 is_control_option(mm_print, z,stop_phrase_file,no,
@@ -373,6 +369,8 @@ is_control_option(mm_variants, 'Z', mm_data_year, no,
 is_control_option(mm_variants,  '', lexicon, no,
                    aspec(lexicon, mandatory, none, none, no_default,
                          'Whether to use original C code or lexAccess version of lexicon other than lex_form_input')).
+is_control_option(mm_variants,  '', debug, no,
+                  aspec(debug, mandatory, list, none, no_default, 'Debugging settings')).
 
 is_control_option(prefilter_mrconso,b,brand_name_suppression,no,none).
 is_control_option(prefilter_mrconso,d,dump_prefilter_cases,no,none).
@@ -432,6 +430,17 @@ is_control_option(prefilter_mrconso,w,warnings,no,none).
 % is_control_option(extract_framerd_phrases,h,help,no,none).
 % is_control_option(extract_framerd_phrases,i,info,no,none).
 % is_control_option(extract_framerd_phrases,w,warnings,no,none).
+
+% is_control_option(extract_mrconso_sources,f,first_of_each_source_only,yes,none).
+% is_control_option(extract_mrconso_sources,h,help,no,none).
+% is_control_option(extract_mrconso_sources,i,info,no,none).
+% is_control_option(extract_mrconso_sources,w,warnings,no,none).
+% is_control_option(extract_mrconso_sources, p, progress_bar_interval, no,
+%                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
+%                         'Interval of progress bar')).
+% is_control_option(extract_mrconso_sources, t, total_lines, no,
+%                   aspec(total_lines,mandatory,integer,none,no_default,
+%                         'Total number of lines to process')).
 
 % is_control_option(filter_cases,l,lower_bound,no,
 %                   aspec(lower_bound,mandatory,integer,none,no_default,
@@ -1023,10 +1032,12 @@ parse_command_line(command_line(Options,Args)) :-
 parse_command_line([], [], []).
 parse_command_line([RawArg|Rest], [Option|RestOptions], RestArgs) :-
 	midstring(RawArg, '--', Option, 0),
+	check_null_option(Option, '--'),
 	!,
 	parse_command_line(Rest, RestOptions, RestArgs).
 parse_command_line([RawArg|Rest], Options, RestArgs):-
 	midstring(RawArg, '-', RawOptions, 0),
+	check_null_option(RawOptions, '-'),
 	!,
 	% This is the SICStus atom_chars/2,
 	% which is different from atom_codes/2.
@@ -1043,6 +1054,12 @@ possibly_environ(EnvironVar, Value) :-
 	; Value = []
 	).
 
+check_null_option(Option, Hyphens) :-
+	( Option == '' ->
+	  fatal_error('Cannot specify "~a" with no option.~n', [Hyphens])
+	; true
+	).
+
 % remove duplicate options and args, and warn user about duplicates; e.g.,
 % update_command_line([mm_data_year,z], ['1011','10'], metamap, OptionsOut, ArgsOut)
 % will results in the removal of "z" and "10", so that
@@ -1055,9 +1072,10 @@ possibly_environ(EnvironVar, Value) :-
 % If the option is repeated and takes an argument,
 % unify ArgsNext and the tail of ArgsIn, and unify ArgsOut and ArgsOutRest.
 % If the option is repeated and does not take an argument,
-% unify ArgsNext and ArgsIn and unify ArgsOut with [FirstArg|ArgsOutRest].
+%??? unify ArgsNext and ArgsIn and unify ArgsOut with [FirstArg|ArgsOutRest].
+% unify ArgsNext and ArgsIn and unify ArgsOut with ArgsOutRest.
 set_next_args_1(Program, FirstOption, ArgsIn, ArgsNext, ArgsOut, ArgsOutRest) :-
-	  ( control_option_requires_argspec(Program, FirstOption) ->
+	  ( option_requires_arg(Program, FirstOption) ->
 	    % Must handle the case of ArgsIn being []!
 	    ( ArgsIn = [_FirstArg|ArgsNext] ->
 	      true
@@ -1065,10 +1083,11 @@ set_next_args_1(Program, FirstOption, ArgsIn, ArgsNext, ArgsOut, ArgsOutRest) :-
 	    ),
 	    ArgsOut = ArgsOutRest
 	  ; ArgsNext = ArgsIn,
-	    ( ArgsIn = [FirstArg|_] ->
-	      ArgsOut = [FirstArg|ArgsOutRest]
-	    ; ArgsOut = ArgsIn
-	    )
+	    ArgsOut = ArgsOutRest
+%	    ( ArgsIn = [FirstArg|_] ->
+%	      ArgsOut = [FirstArg|ArgsOutRest]
+%	    ; ArgsOut = ArgsIn
+%	    )
 	  ).
 
 % If the option is not repeated and takes an argument,
@@ -1077,7 +1096,7 @@ set_next_args_1(Program, FirstOption, ArgsIn, ArgsNext, ArgsOut, ArgsOutRest) :-
 % unify ArgsNext and ArgsIn, and unify ArgsOut with ArgsOutRest.
 
 set_next_args_2(Program, FirstOption, ArgsIn, ArgsNext, ArgsOut, ArgsOutRest) :-
-	  ( control_option_requires_argspec(Program, FirstOption) ->
+	  ( option_requires_arg(Program, FirstOption) ->
 	    ( ArgsIn = [FirstArg|ArgsNext] ->
 	      ArgsOut = [FirstArg|ArgsOutRest]
 	    ; ArgsNext = ArgsIn,
@@ -1106,7 +1125,7 @@ update_command_line([FirstOption|RestOptions], ArgsIn, Program, OptionsOut, Args
 
 %%% possibly_remove_first_arg([], _FirstOption, _Program, [], [], _).
 %%% possibly_remove_first_arg([FirstArg|RestArgs], FirstOption, Program, ArgsNext, ArgsOut, ArgsOutRest) :-
-%%% 	( control_option_requires_argspec(Program, FirstOption),
+%%% 	( option_requires_arg(Program, FirstOption),
 %%% 	  atom_codes(FirstArg, FirstArgCodes),
 %%% 	  FirstArgCodes = [FirstChar|_],
 %%% 	  % FirstArg does not begin with a hyphen (ASCII 45)
@@ -1167,11 +1186,11 @@ option_requires_arg(Program, Option) :-
 	  compound(ArgSpec)
 	).
 
-control_option_requires_argspec(Program, Option) :-
-        ( is_control_option(Program, Option, _LongName, _, aspec(_,_,_,_,_,_)) ->
-          true
-        ; is_control_option(Program, _ShortName, Option, _, aspec(_,_,_,_,_,_))
-        ).
+% control_option_requires_argspec(Program, Option) :-
+%         ( is_control_option(Program, Option, _LongName, _, aspec(_,_,_,_,_,_)) ->
+%           true
+%         ; is_control_option(Program, _ShortName, Option, _, aspec(_,_,_,_,_,_))
+%         ).
 
 
 /* interpret_options(+Options, +AllOptions, +Module, -InterpretedOptions)

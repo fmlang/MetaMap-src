@@ -118,7 +118,7 @@ or one containing only whitespace.
 */
 
 get_skr_text(Lines, TextID) :-
-	maybe_print_prompt,
+	maybe_set_prompt,
 	current_input(InputStream),
 	get_num_blank_lines(NumBlankLines),
 	get_skr_text_3(InputStream, NumBlankLines, Lines, TextID).
@@ -166,24 +166,14 @@ get_num_blank_lines(NumBlankLines) :-
 	; NumBlankLines is 1
 	).
 
-% print the "|:" read prompt iff MetaMap is being used interactively,
-% i.e., the user is interactively typing in input.
-% This seems to be a QP/SP difference.
-maybe_print_prompt :-
-	( seeing_user_input ->
-	  prompt(Prompt, Prompt),
-	  format(user_error, '~w', [Prompt])
-	; true
+maybe_set_prompt :-
+	( control_value(prompt, UserSpecifiedPrompt0) ->
+	  concat_atom([UserSpecifiedPrompt0, ' '], UserSpecifiedPrompt),
+	  prompt(_Prompt, UserSpecifiedPrompt)
+	; seeing(user) ->
+	  prompt(Prompt, Prompt)
+	; prompt(_Prompt, '')
 	).
-
-seeing_user_input :-
-	% user_input is for SP 4.1.3
-	( seeing(user_input) ->
-	  true
-	% user is for SP 4.2
-	; seeing(user)
-	).
-
 
 /*    extract_sentences(+Lines, -InputType, -Sentences, -CoordinateSentences, -AAs)
 
@@ -269,7 +259,7 @@ extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFiel
 					    AAs, UDAList, UDA_AVL),
 	  InputType = simple
 	),
-	update_strings_with_UDAs(Lines2, UDAList, Lines),
+	update_strings_with_UDAs(UDAList, Lines2, Lines),
 	!.
 
 % To be recognized as a MEDLINE citation, a list of strings must be such that
@@ -310,14 +300,6 @@ medline_PMID_field_name(pmid).
 medline_PMID_field_name(ui).
 
 medline_title_field_name(ti).
-
-remove_nulls([], []).
-remove_nulls([First|Rest], Result) :-
-	( First == [] ->
-	  RestResult = Result
-	; Result = [First|RestResult]
-	),
-	remove_nulls(Rest, RestResult).
 
 is_smart_fielded([First,_|_]) :-
 	append(".", _, First).
@@ -434,7 +416,6 @@ extract_coord_sents_from_citation(CitationLines, ExtraChars, TextFields, NonText
 
 extract_all_fields/2
 extract_all_fields/4
-xxx
 */
 
 extract_all_fields([], []) :- !.
@@ -465,7 +446,6 @@ extract_all_fields_4(FieldID, FirstFieldLine, RestLines,
                          -NewFirstFieldLine, -NewRestLines)
 
 extract_rest_of_field/5
-xxx
 */
 
 extract_rest_of_field([], [], none, [], []) :- !.
@@ -843,7 +823,6 @@ extract_coord_sents_from_smart(SmartLines, ExtraChars, TextFields, NonTextFields
 extract_all_smart_fields/2
 concatenate_broken_lines/2
 extract_each_smart_field/2
-xxx
 */
 
 extract_all_smart_fields(SmartLines0,CitationFields) :-
@@ -901,7 +880,6 @@ smartfield_to_citationfield(X,X) :- !.
 /* select_field(+FieldID, +CitationFields, -Field)
 
 select_field/3
-xxx
 */
 
 select_field(FieldID, [[FieldID,Field]|_Rest], Field) :-
@@ -913,7 +891,6 @@ select_field(FieldID, [_First|Rest], Field) :-
 /* extract_ui(+UIField, -UI)
 
 extract_ui/2
-xxx
 */
 
 extract_ui(Field, UI) :-
@@ -930,8 +907,7 @@ extract_coord_sents_from_fields(UI, ExtraChars, Fields, TextFields, NonTextField
 	right_trim_last_string(TextFields1, TextFields2),
 	find_and_coordinate_sentences(UI, ExtraChars, TextFields2, Sentences, CoordinatedSentences,
 				      AAs, UDAList, UDA_AVL),
-	update_text_fields_with_UDAs(TextFields0, UDAList, TextFields),
-	!.
+	update_text_fields_with_UDAs(UDAList, TextFields0, TextFields).
 
 right_trim_last_string([], []).
 right_trim_last_string([H|T], TextFieldsOut) :-
@@ -940,29 +916,44 @@ right_trim_last_string([H|T], TextFieldsOut) :-
 	append(TextFieldsIn0, [[LastFieldName, LastTextFieldStrings]], TextFieldsIn),
 	% get the last String in FieldStrings
 	append(LastTextFieldStrings0, [LastTextFieldLastString], LastTextFieldStrings),
+	!,
 	trim_whitespace_right(LastTextFieldLastString, TrimmedLastTextFieldLastString),
 	append(LastTextFieldStrings0, [TrimmedLastTextFieldLastString], LastTextFieldStrings1),
 	append(TextFieldsIn0, [[LastFieldName, LastTextFieldStrings1]], TextFieldsOut).
 
-update_text_fields_with_UDAs([], _UDAList, []).
-update_text_fields_with_UDAs([[FieldName,Strings]|RestField], UDAList,
-			     [[FieldName,UpdatedStrings]|UpdatedRestFields]) :-
-	update_strings_with_UDAs(Strings, UDAList, UpdatedStrings),
-	update_text_fields_with_UDAs(RestField, UDAList, UpdatedRestFields).
+% If there are no UDAs, simply return TextFields unchanged!
+update_text_fields_with_UDAs([], TextFields, TextFields).
+update_text_fields_with_UDAs([FirstUDA|RestUDAs], TextFieldsIn, TextFieldsOut) :-
+	update_text_fields_with_one_UDA(TextFieldsIn, FirstUDA, TextFieldsNext),
+	update_text_fields_with_UDAs(RestUDAs, TextFieldsNext, TextFieldsOut).
 
-update_strings_with_UDAs([], _UDAList, []).
-update_strings_with_UDAs([FirstString|RestStrings], UDAList,
-			 [UpdatedFirstString|UpdatedRestStrings]) :-
+
+update_text_fields_with_one_UDA([], _UDA, []).
+update_text_fields_with_one_UDA([[FieldName,Strings]|RestFields], UDA,
+				[[FieldName,UpdatedStrings]|UpdatedRestFields]) :-
+	update_strings_with_one_UDA(Strings, UDA, UpdatedStrings),
+	update_text_fields_with_one_UDA(RestFields, UDA, UpdatedRestFields).
+
+% Previous version:
+% update_text_fields_with_UDAs([], _UDAList, []).
+% update_text_fields_with_UDAs([[FieldName,Strings]|RestField], UDAList,
+% 			     [[FieldName,UpdatedStrings]|UpdatedRestFields]) :-
+% 	update_strings_with_UDAs(UDAList, Strings, UpdatedStrings),
+% 	update_text_fields_with_UDAs(RestField, UDAList, UpdatedRestFields).
+
+% If there are no UDAs, simply return Strings unchanged!
+update_strings_with_UDAs([], Strings, Strings).
+update_strings_with_UDAs([FirstUDA|RestUDAs], StringsIn, StringsOut) :-
+	update_strings_with_one_UDA(StringsIn, FirstUDA, StringsNext),
+	update_strings_with_UDAs(RestUDAs, StringsNext, StringsOut).
+
+update_strings_with_one_UDA([], _UDA, []).
+update_strings_with_one_UDA([FirstString|RestStrings], UDA:Expansion,
+			    [UpdatedFirstString|UpdatedRestStrings]) :-
 	tokenize_text_utterly(FirstString, TokenizedFirstString),
-	update_token_list_with_UDAs(UDAList, TokenizedFirstString, UpdatedTokenizedFirstString),
+	substitute(UDA, TokenizedFirstString, Expansion, UpdatedTokenizedFirstString),
 	append(UpdatedTokenizedFirstString, UpdatedFirstString),
-	update_strings_with_UDAs(RestStrings, UDAList, UpdatedRestStrings).
-
-update_token_list_with_UDAs([], String, String).
-update_token_list_with_UDAs([UDA:Expansion|RestUDAs], StringIn, StringOut) :-
-	substitute(UDA, StringIn, Expansion, StringNext),
-	update_token_list_with_UDAs(RestUDAs, StringNext, StringOut).
-       
+	update_strings_with_one_UDA(RestStrings, UDA:Expansion, UpdatedRestStrings).
 
 /* text_field(?TextField)
    text_field/1 is a factual predicate of the individual textual fields.
