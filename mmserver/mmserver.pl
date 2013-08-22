@@ -99,7 +99,7 @@ main :-
     % 		    'Output file')
     % 	      ],
     get_server_streams(TaggerServerStream-WSDServerStream),
-    AllServerStreams = (TaggerServerStream,WSDServerStream),
+    AllServerStreams = TaggerServerStream-WSDServerStream,
     bb_put(all_server_streams, AllServerStreams),
     parse_command_line(CLTerm),
     CLTerm=command_line(Options,Args),
