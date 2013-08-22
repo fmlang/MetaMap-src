@@ -31,7 +31,9 @@
     <javac srcdir="${project.src}"
       	   destdir="${project.classes}"
 	   deprecation="true" 
-	   debug="true">
+	   debug="true"
+	   source="1.6"
+	   target="1.6">
       <classpath>
         <!-- pathelement location="${berkeleydb.jar}"/ -->
         <pathelement location="${log4j-1.2.8.jar}"/>
