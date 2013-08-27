@@ -55,7 +55,7 @@
     ]).
 
 :- use_module(skr_lib(nls_strings), [
-	prep_conj_det_atom/1
+	lex_stop_word/1
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -161,7 +161,7 @@ extract_simple_variants_aux([v(Word,_,_,_,_,NFR)|Rest], CandidateCount, Result) 
 
 stop_variant(Word) :-
 	\+ control_option(allow_large_n),
-	( prep_conj_det_atom(Word) ->
+	( lex_stop_word(Word) ->
 	  true
 	; string_size(Word, Length),
 	  Length < 3,
@@ -172,9 +172,9 @@ stop_variant(Word) :-
 	maybe_warn_stop_variant(Word, Count).
 
 test_count_and_length(Count, Length) :-
-	  ( Count > 2000 ->
+	  ( Count > 4000 ->
 	    true
-	  ; Count > 1000,
+	  ; Count > 2000,
 	    Length < 2
 	  ).
 
@@ -351,19 +351,76 @@ determine_first_word_index(Word, AllVariants, Index) :-
 	; Index = first_wordsb
 	).
 
-frequent_first_word_pair('2',         acid).
-frequent_first_word_pair(arabidopsis, protein).
-frequent_first_word_pair(c,           protein).
-frequent_first_word_pair(drosophila,  protein).
-frequent_first_word_pair(e,           protein).
-frequent_first_word_pair(extended,    tablet).
-frequent_first_word_pair(human,       '1').
-frequent_first_word_pair(human,       protein).
-frequent_first_word_pair(mouse,       protein).
-frequent_first_word_pair(rat,         protein).
-frequent_first_word_pair(s,           protein).
-frequent_first_word_pair(skin,        hand).
-% frequent_first_word_pair(solution,    injection).
+frequent_first_word_pair('2', 'acid').
+frequent_first_word_pair('3', 'acid').
+frequent_first_word_pair('4', 'acid').
+frequent_first_word_pair('accidental', 'poisoning').
+frequent_first_word_pair('acetaminophen', 'tablet').
+frequent_first_word_pair('anterior', 'nerve').
+frequent_first_word_pair('arabidopsis', 'protein').
+frequent_first_word_pair('articular', 'vertebra').
+frequent_first_word_pair('ascorbic', 'tablet').
+frequent_first_word_pair('bacillus', 'protein').
+frequent_first_word_pair('bacteria', 'protein').
+frequent_first_word_pair('bony', 'bone').
+frequent_first_word_pair('bony', 'vertebra').
+frequent_first_word_pair('bronchoscopy', 'bronchus').
+frequent_first_word_pair('c', 'protein').
+frequent_first_word_pair('calcium', 'tablet').
+frequent_first_word_pair('chewable', 'tablet').
+frequent_first_word_pair('compact', 'bone').
+frequent_first_word_pair('compact', 'vertebra').
+frequent_first_word_pair('ctcae', 'injury').
+frequent_first_word_pair('decreased', '[pe]').
+frequent_first_word_pair('drosophila', 'protein').
+frequent_first_word_pair('e', 'protein').
+frequent_first_word_pair('entire', 'artery').
+frequent_first_word_pair('extended', 'capsule').
+frequent_first_word_pair('extended', 'tablet').
+frequent_first_word_pair('human', '1').
+frequent_first_word_pair('human', '2').
+frequent_first_word_pair('human', 'antigen').
+frequent_first_word_pair('human', 'protein').
+frequent_first_word_pair('increased', '[pe]').
+frequent_first_word_pair('intentional', 'poisoning').
+frequent_first_word_pair('left', 'artery').
+frequent_first_word_pair('left', 'trunk').
+frequent_first_word_pair('magnetic', 'signal').
+frequent_first_word_pair('magnetic', 'vertebra').
+frequent_first_word_pair('member', 'family').
+frequent_first_word_pair('member', 'receptor').
+frequent_first_word_pair('mouse', '1').
+frequent_first_word_pair('mouse', '2').
+frequent_first_word_pair('mouse', 'protein').
+frequent_first_word_pair('periosteum', 'bone').
+frequent_first_word_pair('periosteum', 'vertebra').
+frequent_first_word_pair('phenx', ':phenx').
+frequent_first_word_pair('phenx', 'protocol').
+frequent_first_word_pair('physical', 'hand').
+frequent_first_word_pair('posterior', 'nerve').
+frequent_first_word_pair('rat', 'protein').
+frequent_first_word_pair('right', 'artery').
+frequent_first_word_pair('right', 'trunk').
+frequent_first_word_pair('s', 'protein').
+frequent_first_word_pair('skin', 'foot').
+frequent_first_word_pair('skin', 'hand').
+frequent_first_word_pair('solution', 'injection').
+frequent_first_word_pair('stage', 'cancer').
+frequent_first_word_pair('stage', 'carcinoma').
+frequent_first_word_pair('stage', 'v6').
+frequent_first_word_pair('stage', 'v7').
+frequent_first_word_pair('surface', 'bone').
+frequent_first_word_pair('surface', 'vertebra').
+frequent_first_word_pair('trabecular', 'bone').
+frequent_first_word_pair('trabecular', 'vertebra').
+frequent_first_word_pair('trunk', 'artery').
+frequent_first_word_pair('trunk', 'nerve').
+frequent_first_word_pair('trunk', 'vein').
+frequent_first_word_pair('x', 'body').
+frequent_first_word_pair('x', 'joint').
+frequent_first_word_pair('xenopus', 'protein').
+frequent_first_word_pair('zebrafish', 'protein').
+
 
 %dump_uscs(_,_,[]) :-
 %    !.

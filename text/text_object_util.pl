@@ -43,11 +43,13 @@
 	an_type/1,
 	annotation_type/1,
 	at_an_tok/1,
-	at_whitespace_or_exlb_tok/1,
+	at_ws_or_exlb_tok/1,
 	at_ws_tok/1,
+	at_ws_or_pn_tok/1,
 	brackets/2,
 	break_punc/1,
 	contains_alpha_tok/1,
+	ex_lbracket/1,
 	ex_lbracket_char/1,
 	ex_lbracket_tok/1,
 	ex_rbracket_char/1,
@@ -116,13 +118,20 @@ higher_order_or_annotation_type(Type) :-
 	; annotation_type(Type)
 	).
 
+at_ws_or_pn_tok([Token|_]) :-
+	( ws_tok(Token) ->
+	  true
+	; pn_tok(Token)
+	).
+
+
 at_ws_tok([]).
+% at_ws_tok([tok(ws,_,_,_)|_]).
+at_ws_tok([Token|_]) :- ws_tok(Token).
 
-at_ws_tok([tok(ws,_,_,_)|_]).
-
-at_whitespace_or_exlb_tok([]).
-at_whitespace_or_exlb_tok([tok(ws,_,_,_)|_]) :- !.
-at_whitespace_or_exlb_tok([tok(pn,LB,LB,_)|_]) :- ex_lbracket(LB),
+at_ws_or_exlb_tok([]).
+at_ws_or_exlb_tok([tok(ws,_,_,_)|_]) :- !.
+at_ws_or_exlb_tok([tok(pn,LB,LB,_)|_]) :- ex_lbracket(LB),
     !.
 
 at_an_tok([]).

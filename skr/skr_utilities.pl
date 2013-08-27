@@ -77,14 +77,10 @@
 	token_template/6,
 	usage/0,
 	verify_xml_format/2,
-	write_MMO_terms/2,
+	write_MMO_terms/3,
 	write_raw_token_lists/2,
 	write_sentences/2,
 	write_token_list/3
-    ]).
-
-:- use_module(lexicon(lexical), [
-	concatenate_strings/3
     ]).
 
 :- use_module(metamap(metamap_variants), [
@@ -98,8 +94,8 @@
 :- use_module(metamap(metamap_utilities), [
 	candidate_term/16,
 	dump_aphrase_mappings/2,
-	dump_evaluations_indented/6,
-	num_dump_evaluations_indented/6,
+	% dump_evaluations_indented/6,
+	num_dump_evaluations_indented/7,
 	write_list_indented/1
     ]).
 
@@ -113,6 +109,7 @@
     ]).
 
 :- use_module(skr_lib(nls_system), [
+	assert_control_value/2,
 	control_option/1,
 	control_value/2,
 	display_control_options_for_modules/2,
@@ -349,7 +346,7 @@ make_atom(String, Atom) :-
 
 
 do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream) :-
-	verify_model_settings,
+	verify_model_settings(ModelSettings),
 	verify_tagger_output_settings(TaggerOutputSettings),
 	verify_single_output_format(SingleOutputFormat),
         verify_xml_settings(XMLSettings),
@@ -367,22 +364,26 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_pruning_settings(PruningSettings),
 	verify_sldi_settings(SLDISettings),
 	verify_negex_settings(NegExSettings),
-	verify_all_results([TaggerOutputSettings, SingleOutputFormat,
+	verify_lexicon_setting(LexiconSetting),
+	verify_composite_phrases_setting(CompositePhrasesSetting),
+	verify_blanklines_setting(BlankLinesSetting),
+	verify_all_results([ModelSettings, TaggerOutputSettings, SingleOutputFormat,
 			    XMLSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
 			    SemTypeOptions, SemTypeValues, % GapSizeValues,
 			    AcrosAbbrsSettings, DerivationalVariantsSettings,
 			    TaggerServerSettings, WSDServerSettings,
-			    PruningSettings, SLDISettings, NegExSettings],
+			    PruningSettings, SLDISettings, NegExSettings,
+			    LexiconSetting, CompositePhrasesSetting,BlankLinesSetting],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, DefaultRelease).
 
-verify_model_settings :-
+verify_model_settings(Result) :-
 	( control_option(strict_model),
 	  control_option(relaxed_model) ->
-	  send_message('~n### WARNING: Both strict_model and relaxed_model have been specified.~n', []),
-	  send_message('The strict_model will be used.~n', [])
-	; true
+	  send_message('~N### MetaMap ERROR: Both strict_model and relaxed_model have been specified.~n', []),
+	  Result is 1
+	; Result is 0
 	).
 
 
@@ -505,6 +506,42 @@ verify_negex_settings(Result) :-
 	; Result is 0
 	).
 
+verify_lexicon_setting(LexiconSetting) :-
+	( \+ control_value(lexicon, c),
+	  \+ control_value(lexicon, db) ->
+	  send_message('~nERROR: --lexicon setting must be either c or db!~n', []),
+	  LexiconSetting is 1
+	; control_value(lexicon, c),
+	  control_value(lexicon, db) ->
+	  send_message('~nERROR: --lexicon setting must be either c or db!~n', []),
+	  LexiconSetting is 1
+	; LexiconSetting is 0
+	).
+
+verify_composite_phrases_setting(CompositePhrasesSetting) :-
+	( \+ control_value(composite_phrases, _) ->
+	  CompositePhrasesSetting is 0
+	; control_value(composite_phrases, Value),
+	  ( Value > 12 ->
+	  send_message('~N### WARNING: --composite_phrases (-Q) setting of ~d > maximum of 12; using 12 instead.~n',
+		       [Value]),
+	    assert_control_value(composite_phrases, 12)
+	  ; true
+	  ),
+	  CompositePhrasesSetting is 0
+	).
+
+verify_blanklines_setting(BlankLinesSetting) :-
+	control_value(blanklines, N),
+	!,
+	( N > 0 ->
+	  BlankLinesSetting is 0
+	; send_message('~nERROR: --blanklines setting must be a positive integer.~n', []),
+	  BlankLinesSetting is 1
+	).
+
+verify_blanklines_setting(0).
+
 verify_all_del(SemTypesToDel) :-
 	intersection(SemTypesToDel, [all,'ALL'], Intersection),
 	( Intersection = [_|_] ->
@@ -517,7 +554,7 @@ verify_useless_sts(add, SemTypesToAdd) :-
 	intersection(SemTypesToAdd, DefaultNegExSemTypes, Intersection),
 	( Intersection \== [] ->
 	  set_message(Intersection, PluralIndicator, Verb, Pronoun, Determiner),
-	  send_message('~n### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
+	  send_message('~N### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
 		       [PluralIndicator,Intersection,Verb,Determiner,PluralIndicator]),
 	  send_message('             Adding ~w has no effect.~n', [Pronoun])
 	; true
@@ -527,7 +564,7 @@ verify_useless_sts(del, SemTypesToAdd) :-
 	subtract(SemTypesToAdd, DefaultNegExSemTypes, LeftOvers),
 	( LeftOvers \= [] ->
 	  set_message(LeftOvers, PluralIndicator, Verb, Pronoun, Determiner),
-	  send_message('~n### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
+	  send_message('~N### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
 		       [PluralIndicator,LeftOvers,Verb,Determiner,PluralIndicator]),
 	  send_message('             Deleting ~w has no effect.~n', [Pronoun])
 
@@ -569,7 +606,7 @@ verify_semantic_type_values(0).
 verify_acros_abbrs_settings(Result) :-
 	( control_option(all_acros_abbrs),
 	  control_option(unique_acros_abbrs_only) ->
-	  send_message('~n### MtaMap ERROR: Only one of --all_acros_abbrs and ', []),
+	  send_message('~N### MetaMap ERROR: Only one of --all_acros_abbrs and ', []),
 	  send_message('--unique_acros_abbrs_only can be specified.~n', []),
 	  Result is 1
 	; Result is 0
@@ -580,7 +617,7 @@ verify_acros_abbrs_settings(Result) :-
 verify_derivational_variants_settings(Result) :-
 	( control_option(all_derivational_variants),
 	  control_option(no_derivational_variants) ->
-	  send_message('~n### MetaMap ERROR: Only one of --all_derivational_variants and ', []),
+	  send_message('~N### MetaMap ERROR: Only one of --all_derivational_variants and ', []),
 	  send_message('--no_derivational_variants can be specified.~n', []),
 	  Result is 1
 	; Result is 0
@@ -590,7 +627,7 @@ verify_derivational_variants_settings(Result) :-
 verify_tagger_server_settings(Result) :-
 	( control_option(no_tagging),
 	  control_value(tagger, ChosenTaggerServer) ->
-	  send_message('~n### MetaMap ERROR: If no_tagging is specified, ', []),
+	  send_message('~N### MetaMap ERROR: If no_tagging is specified, ', []),
 	  send_message('a specific tagger (~s) cannot be chosen.~n', [ChosenTaggerServer]),
 	  Result is 1
 	; Result is 0
@@ -600,7 +637,7 @@ verify_tagger_server_settings(Result) :-
 verify_WSD_server_settings(Result) :-
 	( \+ control_option(word_sense_disambiguation),
 	  control_value('WSD', ChosenWSDServer) ->
-	  send_message('~n### MetaMap ERROR: If WSD is not specified, ', []),
+	  send_message('~N### MetaMap ERROR: If WSD is not specified, ', []),
 	  send_message('a specific WSD server (~s) cannot be chosen.~n', [ChosenWSDServer]),
 	  Result is 1
 	; Result is 0
@@ -615,12 +652,11 @@ verify_pruning_settings(Result) :-
 	; Result is 0
 	).			    
 
-
 % Error if both --sldi and --sldiID are specified.
 verify_sldi_settings(Result) :-
 	( control_option(sldi),
 	  control_option(sldiID) ->
-	  send_message('~n### MetaMap ERROR: Cannot specify --sldi and --sldiID.~n', []),
+	  send_message('~N### MetaMap ERROR: Cannot specify --sldi and --sldiID.~n', []),
 	  Result is 1
 	; Result is 0
 	).			    
@@ -638,17 +674,16 @@ verify_all_results(ValuesList, InputStream, OutputStream) :-
 warning_check([], _OutputOption).
 warning_check([WarningOption|RestOptions], OutputOption) :-
 	( control_option(WarningOption) ->
-	  send_message('~n### WARNING: The ~w option has no effect on ~w output.~n',
+	  send_message('~N### WARNING: The ~w option has no effect on ~w output.~n',
 		       [WarningOption,OutputOption])
 	; true
 	),
 	warning_check(RestOptions, OutputOption).
-	  
-	  
+
 fatal_error_check([], _OutputOption, Result, Result).
 fatal_error_check([FatalErrorOption|RestOptions], OutputOption, ResultIn, ResultOut) :-
 	( control_option(FatalErrorOption) ->
-	  send_message('~n### MetaMap ERROR: The ~w option cannot be used with ~w output.~n',
+	  send_message('~N### MetaMap ERROR: The ~w option cannot be used with ~w output.~n',
 		       [FatalErrorOption, OutputOption]),
 	  ResultNext is 1
 	; ResultNext is ResultIn
@@ -832,7 +867,7 @@ generate_bracketed_output(BracketedOutput, PhraseWordInfo) :-
 	  skr_begin_write('Phrase'),
 	  PhraseWordInfo=_:pwi(wdl(_,LCWordL),_,_),
 	  atom_codes_list(LCWordL,LCWordLStrings),
-	  concatenate_strings(LCWordLStrings," ",LCPhraseString),
+	  concat_strings_with_separator(LCWordLStrings, " ", LCPhraseString),
 	  ( LCPhraseString == "" ->
 	    true
 	  ; skr_write_string(LCPhraseString)
@@ -919,13 +954,16 @@ conditionally_dump_evals(Evaluations3, TotalCandidateCount,
 			 ExcludedCandidateCount, PrunedCandidateCount,
 			 RemainingCandidateCount) :-
 	( control_option(number_the_candidates) ->
-	  num_dump_evaluations_indented(Evaluations3, TotalCandidateCount,
-					ExcludedCandidateCount, PrunedCandidateCount,
-					RemainingCandidateCount, 'Candidates')
-	; dump_evaluations_indented(Evaluations3, TotalCandidateCount,
-					ExcludedCandidateCount, PrunedCandidateCount,
-					RemainingCandidateCount, 'Candidates')
-	).
+	  StartNum is 1
+	; StartNum is 0
+	),
+	num_dump_evaluations_indented(Evaluations3, TotalCandidateCount,
+				      ExcludedCandidateCount, PrunedCandidateCount,
+				      RemainingCandidateCount, StartNum, 'Candidates').
+%	; dump_evaluations_indented(Evaluations3, TotalCandidateCount,
+%				    ExcludedCandidateCount, PrunedCandidateCount,
+%				    RemainingCandidateCount, 'Candidates')
+%	).
 
 generate_mappings_output(Mappings, Evaluations, APhrases, BracketedOutput, MappingsMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
@@ -1062,134 +1100,136 @@ get_aa_term(MMOutput, AAs) :-
 	FirstMMOutput = mm_output(_ExpandedUtterance,_Citation,_ModifiedText,
 				  _Tagging,AAs,_Syntax,_MMOPhrases,_ExtractedPhrases).
 
-write_MMO_terms(PrintMMO, MMOTerms) :-
+write_MMO_terms(PrintMMO, OutputStream, MMOTerms) :-
 	( PrintMMO =:= 1,
 	  control_option(machine_output) ->
-	  write_MMO_terms_aux(MMOTerms)
+	  write_MMO_terms_aux(MMOTerms, OutputStream)
 	; true
 	).
 
-write_MMO_terms_aux([ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO]) :-
-	  write_args_MMO_term(ArgsMMO),
-	  write_AAs_MMO_term(AAsMMO),
-	  write_negex_MMO_term(NegExMMO),
-	  write_all_utterance_MMO_terms(UtteranceMMO).
+write_MMO_terms_aux([ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO], OutputStream) :-
+	  write_args_MMO_term(ArgsMMO, OutputStream),
+	  write_AAs_MMO_term(AAsMMO, OutputStream),
+	  write_negex_MMO_term(NegExMMO, OutputStream),
+	  write_all_utterance_MMO_terms(UtteranceMMO, OutputStream).
        
-write_args_MMO_term(ArgsMMO) :-
-	write_term(ArgsMMO,
+write_args_MMO_term(ArgsMMO, OutputStream) :-
+	write_term(OutputStream, ArgsMMO,
 		   [quoted(true),portrayed(true)]),
 	format('.~n', []).
 
-write_AAs_MMO_term(AAsMMO) :-
-        write_term(AAsMMO,
+write_AAs_MMO_term(AAsMMO, OutputStream) :-
+        write_term(OutputStream, AAsMMO,
 		   [quoted(true),portrayed(true)]),
 	format('.~n', []).
 
-write_negex_MMO_term(NegExMMO) :-
-	write_term(NegExMMO,
+write_negex_MMO_term(NegExMMO, OutputStream) :-
+	write_term(OutputStream, NegExMMO,
 		   [quoted(true),portrayed(true)]),
 	format('.~n', []).
 
-write_all_utterance_MMO_terms([]).
-write_all_utterance_MMO_terms([FirstMMOTerm|RestMMOTerms]) :-
-	write_one_utterance_MMO_term(FirstMMOTerm, RestMMOTerms, RemainingMMOTerms),
-	write_EOU_term,
-	write_all_utterance_MMO_terms(RemainingMMOTerms).
+write_all_utterance_MMO_terms([], _OutputStream).
+write_all_utterance_MMO_terms([FirstMMOTerm|RestMMOTerms], OutputStream) :-
+	write_one_utterance_MMO_term(FirstMMOTerm, OutputStream, RestMMOTerms, RemainingMMOTerms),
+	write_EOU_term(OutputStream),
+	write_all_utterance_MMO_terms(RemainingMMOTerms, OutputStream).
 
-write_one_utterance_MMO_term(UtteranceTerm, RestMMOTerms, RemainingMMOTerms) :-
+write_one_utterance_MMO_term(UtteranceTerm, OutputStream, RestMMOTerms, RemainingMMOTerms) :-
         % this is the one place to use portrayed(true)
 	UtteranceTerm = utterance(Label, UtteranceString, PosInfo, ReplPos),
 	% We can no longer simply do
 	% write_term(UtteranceTerm, [quoted(true),portrayed(true)])
 	% because ReplPos is a list of small integers,
 	% which would be interpreted as a print string by portray/1. Blarg.
-	format('utterance(~q,', [Label]),
-	write_term(UtteranceString, [quoted(true),portrayed(true)]),
-	format(',~w,~w).~n', [PosInfo,ReplPos]),
-	write_all_phrase_MMO_terms(RestMMOTerms, RemainingMMOTerms).
+	format(OutputStream, 'utterance(~q,', [Label]),
+	write_term(OutputStream, UtteranceString, [quoted(true),portrayed(true)]),
+	format(OutputStream, ',~w,~w).~n', [PosInfo,ReplPos]),
+	write_all_phrase_MMO_terms(RestMMOTerms, OutputStream, RemainingMMOTerms).
 
-write_all_phrase_MMO_terms([], []).
-write_all_phrase_MMO_terms([H|T], RemainingMMOTerms) :-
+write_all_phrase_MMO_terms([], _OutputStream, []).
+write_all_phrase_MMO_terms([H|T], OutputStream, RemainingMMOTerms) :-
 	( functor(H, utterance, _UtteranceArity) ->
 	  RemainingMMOTerms = [H|T]
 	; [H|T] = [PhraseMMOTerm,CandidateMMOTerm,MappingsTerm|RestMMOTerms],
-	  write_one_phrase_MMO_term(PhraseMMOTerm, CandidateMMOTerm, MappingsTerm),
-	  write_all_phrase_MMO_terms(RestMMOTerms, RemainingMMOTerms)
+	  write_one_phrase_MMO_term(PhraseMMOTerm, OutputStream, CandidateMMOTerm, MappingsTerm),
+	  write_all_phrase_MMO_terms(RestMMOTerms, OutputStream, RemainingMMOTerms)
 	).
 
-write_one_phrase_MMO_term(PhraseMMOTerm, CandidatesMMOTerm, MappingsMMOTerm) :-
-	write_phrase_MMO_component(PhraseMMOTerm),
-	write_candidates_MMO_component(CandidatesMMOTerm),
-	write_mappings_MMO_component(MappingsMMOTerm).
+write_one_phrase_MMO_term(PhraseMMOTerm, OutputStream, CandidatesMMOTerm, MappingsMMOTerm) :-
+	write_phrase_MMO_component(PhraseMMOTerm, OutputStream),
+	write_candidates_MMO_component(CandidatesMMOTerm, OutputStream),
+	write_mappings_MMO_component(MappingsMMOTerm, OutputStream).
 
-write_phrase_MMO_component(PhraseTerm) :-
+write_phrase_MMO_component(PhraseTerm, OutputStream) :-
 	PhraseTerm = phrase(PhraseString,Syntax,PosInfo,ReplPos),
 	% We can no longer simply do
 	% write_term(PhraseTerm, [quoted(true), portrayed(true)]),
 	% because ReplPos is a list of small integers,
 	% which would be interpreted as a print string by portray/1. Blarg.
-	format('phrase(', []),
-	write_term(PhraseString, [quoted(true),portrayed(true)]),
-	format(',~q,~w,~w).~n', [Syntax,PosInfo,ReplPos]).
+	format(OutputStream, 'phrase(', []),
+	write_term(OutputStream, PhraseString, [quoted(true),portrayed(true)]),
+	format(OutputStream, ',~q,~w,~w).~n', [Syntax,PosInfo,ReplPos]).
 
-write_candidates_MMO_component(CandidatesTerm) :-
+write_candidates_MMO_component(CandidatesTerm, OutputStream) :-
 	CandidatesTerm = candidates(TotalCandidateCount,
 				    ExcludedCandidateCount,PrunedCandidateCount,
 				    RemainingCandidateCount,
 				    CandidateList),
-	format('candidates(~d,~d,~d,~d,[',
+	format(OutputStream, 'candidates(~d,~d,~d,~d,[',
 	       [TotalCandidateCount,ExcludedCandidateCount,
 		PrunedCandidateCount,RemainingCandidateCount]),
 	% If the candidate list is empty, do nothing!
 	( CandidateList = [H|T] ->
-	  write_MMO_candidate_list(T, H)
+	  write_MMO_candidate_list(T, OutputStream, H)
 	; true
 	),
 	% write_term(CandidatesTerm, [quoted(true)]),
 	format(']).~n', []).
 
-write_MMO_candidate_list([], LastCandidateTerm) :- write_MMO_candidate_term(LastCandidateTerm).
-write_MMO_candidate_list([Next|Rest], ThisCandidateTerm) :-
-	write_MMO_candidate_term(ThisCandidateTerm),
-	write(','),
-	write_MMO_candidate_list(Rest, Next).	
+write_MMO_candidate_list([], OutputStream, LastCandidateTerm) :-
+	write_MMO_candidate_term(LastCandidateTerm, OutputStream).
+write_MMO_candidate_list([Next|Rest], OutputStream, ThisCandidateTerm) :-
+	write_MMO_candidate_term(ThisCandidateTerm, OutputStream),
+	write(OutputStream, ','),
+	write_MMO_candidate_list(Rest, OutputStream, Next).	
 
 % Simply hide the LSComponents and TargetLSComponent terms
-write_MMO_candidate_term(CandidateTerm) :-
+write_MMO_candidate_term(CandidateTerm, OutputStream) :-
 	candidate_term(NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
 		       MatchMap,_LSComponents,_TargetLSComponent,InvolvesHead,
 		       IsOvermatch,UniqueSources,PosInfo,Status,Negated,CandidateTerm),
-	format('ev(~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q)',
+	format(OutputStream, 'ev(~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q,~q)',
 	       [NegValue,CUI,MetaTerm,MetaConcept,MetaWords,SemTypes,
 		MatchMap,InvolvesHead,IsOvermatch,UniqueSources,PosInfo,Status,Negated]).
 
-write_mappings_MMO_component(MappingsTerm) :-
+write_mappings_MMO_component(MappingsTerm, OutputStream) :-
 	MappingsTerm = mappings(MappingsList),
-	format('mappings([', []),
+	format(OutputStream, 'mappings([', []),
 	% MappingsTerm = mappings([map(-1000,[ev('C0018787')]),map(-1000,[ev('C1281570')])]))
 	% do not use portrayed(true)
 	( MappingsList = [H|T] ->
-	  write_MMO_mappings_list(T, H)
+	  write_MMO_mappings_list(T, OutputStream, H)
 	; true
 	),
 	% write_term(MappingsTerm, [quoted(true)]),
-	format(']).~n', []).
+	format(OutputStream, ']).~n', []).
 
-write_MMO_mappings_list([], LastMappingTerm) :- write_MMO_mapping_term(LastMappingTerm).
-write_MMO_mappings_list([Next|Rest], ThisMappingTerm) :-
-	write_MMO_mapping_term(ThisMappingTerm),
-	write(','),
-	write_MMO_mappings_list(Rest, Next).	
+write_MMO_mappings_list([], OutputStream, LastMappingTerm) :-
+	write_MMO_mapping_term(LastMappingTerm, OutputStream).
+write_MMO_mappings_list([Next|Rest], OutputStream, ThisMappingTerm) :-
+	write_MMO_mapping_term(ThisMappingTerm, OutputStream),
+	write(OutputStream, ','),
+	write_MMO_mappings_list(Rest, OutputStream, Next).	
 
-write_MMO_mapping_term(map(NegValue,CandidateList)) :-
-	format('map(~d,[', [NegValue]),
+write_MMO_mapping_term(map(NegValue,CandidateList), OutputStream) :-
+	format(OutputStream, 'map(~d,[', [NegValue]),
 	CandidateList = [H|T],
-	write_MMO_candidate_list(T, H),
-	format('])', []).
+	write_MMO_candidate_list(T, OutputStream, H),
+	format(OutputStream, '])', []).
 
-write_EOU_term :-
-	write_term('EOU',[quoted(true)]),
-	format('.~n', []).
+write_EOU_term(OutputStream) :-
+	write_term(OutputStream, 'EOU',[quoted(true)]),
+	format(OutputStream, '.~n', []).
 
 
 output_tagging(BracketedOutput, HRTagStrings, FullTagList) :-
@@ -1476,13 +1516,13 @@ get_candidate_feature(negated, Candidate, Negated) :-
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,Negated, Candidate).
 fatal_error(Message, Args) :-
-	format(user_output, '~n### MetaMap ERROR: ', []),
+	format(user_output, '~N### MetaMap ERROR: ', []),
 	format(user_output, Message, Args),
 	ttyflush,
 	current_output(OutputStream),
 	% don't duplicate message if the default output stream is user_output!
 	( \+ stream_property(OutputStream, alias(user_output)) ->
-	  format(OutputStream, '~n### MetaMap ERROR: ', []),
+	  format(OutputStream, '~N### MetaMap ERROR: ', []),
 	  format(OutputStream, Message, Args),
 	  flush_output(OutputStream)
 	; true

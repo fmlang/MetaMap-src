@@ -34,6 +34,7 @@
 
 
 :- module(skr_fe, [
+	dg/0,
 	% must be exported for SemRep
 	form_expanded_sentences/3,
 	% must be exported for SemRep
@@ -44,7 +45,7 @@
 	% called by MetaMap API -- do not change signature!
 	initialize_skr/4,
 	% called by MetaMap API -- do not change signature!
-	postprocess_sentences/10,
+	postprocess_sentences/11,
 	% called by MetaMap API -- do not change signature!
 	process_text/9
    ]).
@@ -65,7 +66,7 @@
 
 :- use_module(metamap(metamap_parsing), [
 	collapse_syntactic_analysis/2,
-	generate_syntactic_analysis_plus/5
+	generate_syntactic_analysis_plus/4
    ]).
 
 :- use_module(mmi(mmi), [
@@ -114,7 +115,7 @@
 	token_template/5,
 	token_template/6,
 	usage/0,
-        write_MMO_terms/2,
+        write_MMO_terms/3,
         write_raw_token_lists/2,
         write_sentences/2
    ]).
@@ -122,7 +123,7 @@
 :- use_module(skr(skr_xml), [
 	conditionally_print_xml_header/2,
 	conditionally_print_xml_footer/3,
-	generate_and_print_xml/1,
+	generate_and_print_xml/2,
 	xml_header_footer_print_setting/3
    ]).
 
@@ -154,7 +155,7 @@
 	interpret_args/4,
 	interpret_options/4,
 	parse_command_line/1,
-	% reset_control_options/1,
+	reset_control_options/1,
 	set_control_values/2,
 	toggle_control_options/1,
 	update_command_line/5
@@ -215,19 +216,21 @@ go/0 is the executive predicate for the SKR Front End.
 go/0 uses go/1 with HaltFlag set to halt.
 go/1 parses the command line and calls go/2 which controls the processing.  */
 
+dg :- debug, go.
+
 go :- go(halt).
 
 go(HaltOption) :-
 	parse_command_line(CLTerm),
 	go(HaltOption, CLTerm).
 
-go(HaltOption, command_line(Options0,Args0)) :-
-	% reset_control_options(metamap),
-	update_command_line(Options0, Args0, metamap, Options, Args),
+go(HaltOption, command_line(OptionsIn, ArgsIn)) :-
+	reset_control_options(metamap),
+	update_command_line(OptionsIn, ArgsIn, metamap, OptionsOut, ArgsOut),
 	get_program_name(ProgramName),
 	default_release(Release),
 	close_all_streams,
-	( initialize_skr(Options, Args, InterpretedArgs, IOptions) ->
+	( initialize_skr(OptionsOut, ArgsOut, InterpretedArgs, IOptions) ->
 	    get_UDAs(UDAList),
           ( skr_fe(InterpretedArgs, ProgramName, UDAList, Release, IOptions) ->
 	    true
@@ -282,7 +285,7 @@ skr_fe(InterpretedArgs, ProgramName, UDAList, DefaultRelease, IOptions) :-
 	get_output_stream(OutputStream),
 	conditionally_print_xml_header(PrintSetting, OutputStream),
 	get_server_streams(ServerStreams),
-	% ServerStreams = LexiconServerStream-TaggerServerStream-WSDServerStream,
+	% ServerStreams = TaggerServerStream-WSDServerStream,
 	( InputStream = user_input,
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
@@ -321,6 +324,7 @@ batch_skr/6 controls batch processing.  It gets input and output
 file names from InterpretedArgs and redirects I/O to them.
 Meta concepts are computed for each noun phrase in the input.  */
 
+
 batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 	  UDAList, ServerStreams, TagOption, TagMode, IOptions, InputStream) :-
 	get_from_iargs(infile,  name,   InterpretedArgs, InputFile),
@@ -349,10 +353,10 @@ If TagOption is 'tag', then tagging is done. */
 process_all(ProgramName, DefaultRelease, InputStream, OutputStream, UDAList,
 	    ServerStreams, TagOption, InterpretedArgs, IOptions) :-
 	do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream),
-	process_all_1(UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions).
+	process_all_1(OutputStream, UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions).
 
 
-process_all_1(UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions) :-
+process_all_1(OutputStream, UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions) :-
 	get_skr_text(StringsUTF8, TextID),
 	convert_all_utf8_to_ascii(StringsUTF8, 0, TempExtraChars, Strings0),
 	append(TempExtraChars, ExtraChars),
@@ -364,9 +368,9 @@ process_all_1(UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions) :-
 	  process_text(TrimmedStrings, TextID, ExtraChars, TagOption, ServerStreams,
 		       ExpRawTokenList, AAs, UDAList, MMResults),
 	  output_should_be_bracketed(BracketedOutput),
- 	  postprocess_text(TrimmedStrings, BracketedOutput, InterpretedArgs,
+ 	  postprocess_text(OutputStream, TrimmedStrings, BracketedOutput, InterpretedArgs,
 			   IOptions, ExpRawTokenList, AAs, MMResults),
-	  process_all_1(UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions)
+	  process_all_1(OutputStream, UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions)
 	; true
 	),
 	!.
@@ -558,7 +562,7 @@ process_text_aux([ExpandedUtterance|Rest],
 			 ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 			 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
 
-postprocess_text(Lines0, BracketedOutput, InterpretedArgs,
+postprocess_text(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 		 IOptions,  ExpRawTokenList, AAs, MMResults) :-
 	% If the phrases_only debug option is set, don't do postprocessing,
 	% because we've already computed and displayed the phrase lengths,
@@ -566,13 +570,13 @@ postprocess_text(Lines0, BracketedOutput, InterpretedArgs,
 	( ( control_option(aas_only)
 	  ; control_option(phrases_only) ) ->
 	  true
-	; postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
+	; postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 			     IOptions,  ExpRawTokenList, AAs, MMResults) ->
 	  true
 	; fatal_error('postprocess_text/2 failed for~n~p~n', [Lines0])
 	).
 
-postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
+postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 		   IOptions, ExpRawTokenList, AAs, MMResults) :-
 	% Decompose input
 	MMResults = mm_results(Lines0, _TagOption, _ModifiedLines, _InputType,
@@ -580,16 +584,18 @@ postprocess_text_1(Lines0, BracketedOutput, InterpretedArgs,
 
 	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
 	generate_negex_output(NegationTerms),
-	postprocess_sentences(OrigUtterances, NegationTerms, InterpretedArgs, IOptions, AAs,
-			      Sentences, BracketedOutput, DisambMMOutput, 1, AllMMO),
+	% current_output(OutputStream),
+	% format(user_output, '~n### Current output is ~q', [OutputStream]),	
+	postprocess_sentences(OutputStream, OrigUtterances, NegationTerms, InterpretedArgs,
+			      IOptions, AAs, Sentences, BracketedOutput, DisambMMOutput, 1, AllMMO),
 	% All the XML output for the current citation is handled here
-	generate_and_print_xml(AllMMO),
+	generate_and_print_xml(AllMMO, OutputStream),
 	do_MMI_processing(OrigUtterances, BracketedOutput, AAs, DisambMMOutput),
 	do_formal_tagger_output.
 
 %%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
 % PrintMMO is 1 for printing MMO (as MetaMap does), and 0 for not print MMO (as the Java API does).
-postprocess_sentences(OrigUtterances, NegExList, IArgs, IOptions, AAs,
+postprocess_sentences(OutputStream, OrigUtterances, NegExList, IArgs, IOptions, AAs,
 		      Sentences, BracketedOutput, DisambMMOutput, PrintMMO, AllMMO) :-
 	AllMMO = HeaderMMO,
 	HeaderMMORest = UtteranceMMO,
@@ -597,12 +603,12 @@ postprocess_sentences(OrigUtterances, NegExList, IArgs, IOptions, AAs,
 			       HeaderMMO, HeaderMMORest),
 	postprocess_sentences_1(OrigUtterances, Sentences, NegExList,
 				BracketedOutput, 1, AAs, DisambMMOutput, UtteranceMMO, []),
-	write_MMO_terms(PrintMMO, AllMMO).
+	write_MMO_terms(PrintMMO, OutputStream, AllMMO).
 
-postprocess_sentences_1([], _Sentences, _NegExList, _BracketedOutput, _N, _AAs, [], MMO, MMO).
+postprocess_sentences_1([], _Sentences, _NegExList,
+			_BracketedOutput, _N, _AAs, [], MMO, MMO).
 postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences, NegExList,
-			BracketedOutput, N, AAs, [MMOutput|RestMMOutput],
-			MMOIn, MMOOut) :-
+			BracketedOutput, N, AAs, [MMOutput|RestMMOutput], MMOIn, MMOOut) :-
 	% Decompose input
 	OrigUtterance = utterance(Label, TextString, StartPos/Length, ReplPos),
 	MMOutput = mm_output(_ExpandedUtterance, _Citation, _ModifiedText, Tagging,
@@ -922,7 +928,7 @@ set_utterance_text(Text0, UtteranceText) :-
 
 do_syntax_processing(TagOption, ServerStreams, UtteranceText, FullTagList, TagList,
 		     HRTagStrings, Definitions, SyntAnalysis0) :-
-	ServerStreams = LexiconServerStream-TaggerServerStream-_WSDServerStream,
+	ServerStreams = TaggerServerStream-_WSDServerStream,
 	( TagOption == tag ->
 	  tag_text(UtteranceText, TaggerServerStream, FullTagList, TagList, HRTagStrings),
 	  % If tag_text succeeded, cut out the choice point
@@ -932,8 +938,7 @@ do_syntax_processing(TagOption, ServerStreams, UtteranceText, FullTagList, TagLi
 	  TagList = [],
 	  HRTagStrings = []
 	),
-	generate_syntactic_analysis_plus(UtteranceText, LexiconServerStream,
-					 TagList, SyntAnalysis0, Definitions).
+	generate_syntactic_analysis_plus(UtteranceText, TagList, SyntAnalysis0, Definitions).
 
 conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis) :-
 	( control_option(term_processing) ->

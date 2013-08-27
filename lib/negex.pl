@@ -79,7 +79,6 @@
 	delete/3,
 	delete/4,
 	last/2,
-	remove_dups/2,
 	select/3,
 	subseq1/2
    ]).
@@ -220,7 +219,7 @@ token_negex(RawTokenList, DisambiguatedMMOPhrases,
  	remove_nonuseful_tokens(RawTokenList, UsefulTokenList),
  	extract_atoms_from_tokenlist(UsefulTokenList, AtomList),
  	get_negation_phrase_list(AtomList, NegationPhraseList0),
-	remove_dups(NegationPhraseList0, NegationPhraseList),
+	sort(NegationPhraseList0, NegationPhraseList),
 	generate_negation_terms_1(NegationPhraseList, DisambiguatedMMOPhrases,
 				  UtteranceMaxDist, ConceptMaxDist,
 				  UsefulTokenList, ConsolidatedNegationTerms).
@@ -468,7 +467,7 @@ replace_phrasemaps_with_empty_mappings([PhraseMap|PhraseMaps], FinalPhraseMaps) 
 list_concepts_for_triggers(Triggers,ConceptTokensPhraseMaps,PhraseMaps) :-
 	list_concepts_for_triggers_aux(Triggers,ConceptTokensPhraseMaps,PhraseMaps0),
 	flatten(PhraseMaps0,PhraseMaps1),
-	remove_dups(PhraseMaps1, PhraseMaps).
+	sort(PhraseMaps1, PhraseMaps).
 
 list_concepts_for_triggers_aux([],_,[]).
 list_concepts_for_triggers_aux([Trigger|Triggers],ConceptTokensPhraseMaps,[PhraseMap|PhraseMaps]) :-
@@ -739,7 +738,7 @@ are_negationterms_before_target([NegationTerm|NegationTermList], TargetPos) :-
 			       _Type, _TriggerPhraseText, TriggerPosInfo,
 			       _Concept, _CUI, _ConceptPosInfo),
 
-	TriggerPosInfo = [TermPos/_],
+	TriggerPosInfo = [TermPos/_|_],
 	( TermPos < TargetPos ->
 	  true
 	; are_negationterms_before_target(NegationTermList, TargetPos)
@@ -749,7 +748,7 @@ are_negationterms_after_target([NegationTerm|NegationTermList], TargetPos) :-
 	orig_negation_template(NegationTerm,
 			       _Type, _TriggerText, TriggerPosInfo,
 			       _ConceptName, _CUI, _ConceptPosInfo),
-	TriggerPosInfo = [TermPos/_],
+	TriggerPosInfo = [TermPos/_|_],
 	( TermPos > TargetPos ->
 	  true
 	; are_negationterms_after_target(NegationTermList, TargetPos)
@@ -761,8 +760,9 @@ list_negation_pairs_before_target([NegationTerm|NegationTermList], TargetPos,
 	orig_negation_template(NegationTerm,
 			       _Type, _TriggerText, TriggerPosInfo,
 			       _ConceptName, _CUI, ConceptPosInfo),
-	TriggerPosInfo = [TriggerStartPos/_],
-	ConceptPosInfo = [ConceptStartPos/_],
+	% PosInfo can consist of several StartPos/Length terms
+	TriggerPosInfo = [TriggerStartPos/_|_],
+	ConceptPosInfo = [ConceptStartPos/_|_],
 	( TriggerStartPos < TargetPos,
 	  ConceptStartPos < TargetPos ->
 	  FilteredNegationTerms = [NegationTerm|RestFilteredNegationTerms]
@@ -776,8 +776,9 @@ list_negation_pairs_after_target([NegationTerm|NegationTermList], TargetPos,
 	orig_negation_template(NegationTerm,
 			       _Type, _TriggerText, TriggerPosInfo,
 			       _ConceptName, _CUI, ConceptPosInfo),
-	TriggerPosInfo = [TriggerStartPos/_],
-	ConceptPosInfo = [ConceptStartPos/_],
+	% PosInfo can consist of several StartPos/Length terms
+	TriggerPosInfo = [TriggerStartPos/_|_],
+	ConceptPosInfo = [ConceptStartPos/_|_],
 	( TriggerStartPos > TargetPos,
 	  ConceptStartPos > TargetPos ->
 	  FilteredNegationTerms = [NegationTerm|RestFilteredNegationTerms]
@@ -891,7 +892,7 @@ charpos_to_tokenindex([Token|TokenList], NegationTerm, CharPosInfo, Start, Token
 	Token = tok(_,_,NString,AbsPosInfo,RelPosInfo),
 	AbsPosInfo = pos(AbsTokenStart,_),
 	RelPosInfo = pos(RelTokenStart,_),
-	CharPosInfo = [CharStart/_],
+	CharPosInfo = [CharStart/_|_],
 	( AbsTokenStart >= CharStart ->
 	  TokenIndex = Start
 	; RelTokenStart >= CharStart ->

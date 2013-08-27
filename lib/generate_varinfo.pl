@@ -38,25 +38,27 @@
 % ----- Module declaration and exported predicates
 
 :- module(generate_varinfo, [
-	generate_variant_info/3
+	generate_variant_info/2
    ]).
 
-
 % ----- Imported predicates
+
+:- use_module(lexicon(lex_access), [
+	get_im_varlist_for_all_forms/2
+  ]).
 
 :- use_module(skr(skr_utilities), [
 	fatal_error/2
   ]).
 
-:- use_module(lexicon(lex_access), [
-	get_variants_for_form/3,
-	get_varlist/3
+:- use_module(skr_lib(ctypes), [
+        is_alnum/1
   ]).
 
 :- use_module(skr_lib(nls_system), [
         control_option/1,
         control_value/2
-   ]).
+  ]).
 
 :- use_module(skr_lib(sicstus_utils), [
 	lower/2,
@@ -64,39 +66,59 @@
 	string_size/2
   ]).
 
+:- use_module(library(lists), [
+	append/2
+  ]).
+
 
 % ******************************* GENERATE_VARIANT_INFO *******************************
 
-generate_variant_info([], _LexiconServerStream, []).
-generate_variant_info([LexiconOrOther:List|RestDefinitions], LexiconServerStream, Variants) :-
-	generate_variant_info_1(LexiconOrOther, LexiconServerStream, List, RestDefinitions, Variants).
+generate_variant_info([], []).
+generate_variant_info([LexiconOrOther:List|RestDefinitions], Variants) :-
+	generate_variant_info_1(LexiconOrOther, List, RestDefinitions, Variants).
 
-generate_variant_info_1(unknown, LexiconServerStream, UnkList, RestDefinitions, [ThisItem|NewGap]) :-
+generate_variant_info_1(unknown, UnkList, RestDefinitions, [ThisItem|NewGap]) :-
 	!,
 	get_lex_item(UnkList, inputmatch, InpMatch),
 	InpMatch = [ThisItem],
-	generate_variant_info(RestDefinitions, LexiconServerStream, NewGap).
-generate_variant_info_1(lexicon, LexiconServerStream,
-			[lexmatch:[LexMatch], InputMatch|_],
+	generate_variant_info(RestDefinitions, NewGap).
+generate_variant_info_1(lexicon, [lexmatch:[LexMatch],
+				  inputmatch:InputMatch,
+				  Records|_],
 			RestDefinitions, [LexMatch:ThisVarInfo|NewGap]) :-
 	!,
-	lower(LexMatch, LexMatchLC),
-	get_varlist(LexMatchLC, LexiconServerStream, VarInfo),
-	get_this_variant(VarInfo, LexMatch, ThisVarInfo, VariantTail),
+	get_all_base_forms_from_lexical_records(Records, AllBaseForms),
+	% get_im_varlist(LexMatchLC, VarInfo),
+	get_im_varlist_for_all_forms(AllBaseForms, VarInfo0),
+	append(VarInfo0, VarInfo1),
+	sort(VarInfo1, VarInfo),
+	( VarInfo = [FirstVar|_] ->
+	  FirstVar = _Token:[StopGap|_]
+	; StopGap = []
+	),
+	VariantFound is 0,
+	get_this_variant(VarInfo, VariantFound, StopGap,
+			 LexMatch, InputMatch, ThisVarInfo, VariantTail),
+	% If ThisVarInfo is still uninstantiated, we have a problem!
+	
 	% format(user_output, 'ThisVarInfo: ~q~n', [ThisVarInfo]),	
 	% append(ThisVarInfo, [InputMatch], ThisVarInfoAndInputMatch),   % Lan needs InputMatch
-	VariantTail = [InputMatch], 
-	generate_variant_info(RestDefinitions, LexiconServerStream, NewGap).
+	VariantTail = [inputmatch:InputMatch], 
+	generate_variant_info(RestDefinitions, NewGap).
 
 % This is for shapes, punctuation, and perhaps other stuff
-generate_variant_info_1(Other, LexiconServerStream, OtherList,
+generate_variant_info_1(Other, OtherList,
 			RestDefinitions, [Other:OtherList|NewGap]) :-
-	generate_variant_info(RestDefinitions, LexiconServerStream, NewGap).
+	generate_variant_info(RestDefinitions, NewGap).
+
+
+get_all_base_forms_from_lexical_records(records:[lexrec:[base:[CitationForm],
+							 spelling_variants:SpVars|_]|_],
+					[CitationForm|SpVars]).
 
 % ----- GET_LEX_ITEM
 
-get_lex_item([Item:ItemInfo|_More], Item, ItemInfo) :-
-	!.
+get_lex_item([Item:ItemInfo|_More], Item, ItemInfo) :- !.
 get_lex_item([_Other|More], Item, ItemInfo) :-
 	get_lex_item(More, Item, ItemInfo).
 
@@ -104,24 +126,68 @@ get_lex_item([_Other|More], Item, ItemInfo) :-
 % LexKeys other than forms of *be* and *have* have the format: Entry:VarList
 % LexKeys for forms of *be* have the format: 'VarForm;Agr':VarList
 
-get_this_variant([], _ThisWord, ThisVarInfo, ThisVarInfo).
-get_this_variant([LexKey:[ThisList]|MoreVariants], ThisWord, [ThisList|Rest], Tail) :-
-	% I believe this predicate is useless
-	% get_actual_lex_key(LexKey, ActualLexKey, _AgrInfo),
-	ActualLexKey = LexKey,
-	lower(ActualLexKey, LowerLexKey),
-	% ThisWord can end in "'s"
-	lower_apostrophe_s(ThisWord, LowerLexKey),
-	!,
-	% format(user_output, 'ThisList: ~q~n', [ThisList]),
-	get_this_variant(MoreVariants, ThisWord, Rest, Tail).
-get_this_variant([_Other|MoreVariants], ThisWord, ThisVarInfo, Rest) :-
-	get_this_variant(MoreVariants, ThisWord, ThisVarInfo, Rest).
+get_this_variant([], _VariantFound, _StopGap,
+		 LexMatch, _InputMatch, [unknown:[base]|VarInfo], VarInfo) :-
+	format(user_output, '### WARNING: "~w" has no i-variants!~n', [LexMatch]).
+get_this_variant([H|T], VariantFound, StopGap,
+		 LexMatch, InputMatch, ThisVarInfo, VariantTail) :-	
+	get_this_variant_1([H|T], VariantFound, StopGap,
+			   LexMatch, InputMatch, ThisVarInfo, VariantTail).
 
-
-lower_apostrophe_s(ThisWord, LowerLexKey) :-
-	( lower(ThisWord, LowerLexKey) ->
+get_this_variant_1([], VariantFound, StopGap,
+		   LexMatch, InputMatch, [StopGap|ThisVarInfo], ThisVarInfo) :-
+	( VariantFound =:= 0 ->
+	  format(user_output,
+		 '### WARNING: Mismatch in LexMatch "~w" and InputMatch ~w ~n',
+		 [LexMatch,InputMatch])
+	; true
+	).
+get_this_variant_1([LexKey:[ThisList]|MoreVariants], _VariantFoundIn,
+		   StopGap, LexMatch, InputMatch, [ThisList|Rest], Tail) :-
+	lower(LexKey, LowerLexKey),
+	% LexMatch can end in "'s"
+	( lower_apostrophe_s(LexMatch, LowerLexKey) ->
 	  true
-	; midstring(ThisWord, ThisWordWithoutApostropheS, '''s', 0, _Length, 2),
-	  lower(ThisWordWithoutApostropheS, LowerLexKey)
+	; lower_apostrophe_s(LowerLexKey, LexMatch) ->
+	  true
+	; lower(LexMatch, LexMatchLC),
+	  atom_codes(LexMatchLC, LexMatchCodes),
+	  atom_codes(LowerLexKey, LowerLexKeyCodes),
+	  same_alnums(LexMatchCodes, LowerLexKeyCodes)
+	),
+        !,
+	VariantFound is 1,
+	% format(user_output, 'ThisList: ~q~n', [ThisList]),
+	get_this_variant_1(MoreVariants, VariantFound,
+			   StopGap,  LexMatch, InputMatch, Rest, Tail).
+get_this_variant_1([_Other|MoreVariants], VariantFound,
+		   StopGap, LexMatch, InputMatch, ThisVarInfo, Rest) :-
+	get_this_variant_1(MoreVariants, VariantFound,
+			   StopGap, LexMatch, InputMatch, ThisVarInfo, Rest).
+
+% Either list can run out first,
+% as long as what's left over in the other list doesn't begin with an alnum.
+same_alnums([], []).
+same_alnums([H1|T1], [H2|T2]) :-
+	( H1 == H2 ->
+	  same_alnums(T1, T2)
+	; \+ is_alnum(H1) ->
+	  same_alnums(T1, [H2|T2])
+	; \+ is_alnum(H2) ->
+	  same_alnums([H1|T1], T2)
+	).
+same_alnums([H|T], []) :- \+ contains_alnum([H|T]).
+same_alnums([], [H|T]) :- \+ contains_alnum([H|T]).
+
+contains_alnum([H|T]) :-
+	( is_alnum(H) ->
+	  true
+	; contains_alnum(T)
+	).
+
+lower_apostrophe_s(LexMatch, LowerLexKey) :-
+	( lower(LexMatch, LowerLexKey) ->
+	  true
+	; midstring(LexMatch, '''s', LexMatchWithoutApostropheS, _Before, 2, _After),
+	  lower(LexMatchWithoutApostropheS, LowerLexKey)
 	).

@@ -27,6 +27,7 @@
 *
 ***************************************************************************/
 
+
 % File:	    metamap_evaluation.pl
 % Module:   MetaMap
 % Author:   Lan
@@ -49,13 +50,17 @@
 
 :- use_module(metamap(metamap_utilities), [
 	candidate_term/16,
-	extract_unique_sources/2,
+	% extract_unique_sources/2,
 	positions_overlap/2
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
 	linearize_components/2
     ]).
+
+:- use_module(skr(skr_xml), [
+    	xml_output_format/1
+   ]).
 
 :- use_module(skr(skr_utilities), [
     	compute_sum/3,
@@ -66,7 +71,9 @@
 
 :- use_module(skr_db(db_access), [
 	db_get_concept_cui/2,
-	db_get_cui_sourceinfo/2
+	% db_get_cui_sourceinfo/2,
+	% db_get_cui_sts/2,
+	db_get_cui_sources_and_semtypes/3
     ]).
 
 :- use_module(skr_lib(nls_avl), [
@@ -181,7 +188,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			PhraseTokens, RawTokensOut, AAs,
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
-	debug_evaluate_candidate_list_1(DebugFlags, MetaCanonical,MetaString, MetaConcept),
+	debug_evaluate_candidate_list_1(DebugFlags, MetaCanonical, MetaString, MetaConcept),
 	% avl_size(CCsIn, CCsInSize),
 	% format(user_output,'~N### CCsIn Length: ~w~n', [CCsInSize]),
 	avl_fetch(MetaCanonical, CCsIn, SavedValues),
@@ -210,13 +217,14 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	% \+ control_option(allow_duplicate_concept_names),
 	% format(user_output, '~n### USC ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
 	!,
-	% format(user_output, '~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
+	% format(user_output, '### IN: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
 	( compute_one_evaluation(MetaCanonical, DebugFlags, Label, UtteranceText,
 				 MetaString, MetaConcept,
 				 Variants, TokenPhraseWords, PhraseTokenLength,
 				 RawTokensOut, AAs,
 				 InputmatchPhraseWords,
 				 TokenHeadWords, PhraseTokens, Evaluation) ->
+	  % format(user_output, '### OUT: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
 	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]),
 	  debug_evaluate_candidate_list_3(DebugFlags, Evaluation),
 	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
@@ -285,12 +293,12 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	debug_compute_one_evaluation_2(DebugFlags, MetaTerm),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
-	db_get_cui_sourceinfo(CUI, Sources),
-	extract_unique_sources(Sources, UniqueSources),
+	% new call!
+	db_get_cui_sources_and_semtypes(CUI, Sources, SemTypes),
         compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
-	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, _SemTypes,
+	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-		       IsOvermatch, UniqueSources, PosInfo, _Status, _Negated, Evaluation),
+		       IsOvermatch, Sources, PosInfo, _Status, _Negated, Evaluation),
 	
 	% format(user_output, 'EV:~q:~n', [Evaluation]),
 	% format(user_output, '~N~q:~q:~q~n', [MetaTerm,MetaWords,TokenPhraseWords]),
@@ -298,6 +306,40 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	Evaluation \== [],
 	% get the positional info corresponding to this MatchMap
 	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo).
+
+%%% get_sources_and_semtypes(CUI, Sources, SemTypes) :-
+%%% 	( control_option(srcst) ->
+%%% 	  db_get_cui_sources_and_semtypes(CUI, Sources, SemTypes)
+%%% 	; maybe_db_get_cui_sourceinfo(CUI, Sources1),
+%%% 	  extract_unique_sources(Sources1, Sources),
+%%% 	  db_get_cui_sts(CUI, SemTypes)
+%%% 	).		
+%%% 
+%%% maybe_db_get_cui_sourceinfo(CUI, SourceInfo) :-
+%%% 	( \+ control_option(sources),
+%%% 	  \+ control_option(restrict_to_sources),
+%%% 	  \+ control_option(exclude_sources),
+%%% 	  \+ control_option(machine_output),
+%%% 	  \+ xml_output_format(_) ->
+%%% 	  SourceInfo = []
+%%% 	; db_get_cui_sourceinfo(CUI, SourceInfo)
+%%% 	).	
+%%% 
+%%% test_new(CUI, N, _Runtime) :-
+%%% 	statistics(runtime, _Discard),
+%%% 	between(1, N, _I),
+%%% 	   db_get_cui_sources_and_semtypes(CUI, _Sources, _SemTypes),
+%%% 	fail.
+%%% test_new(_CUI, _N, Runtime) :- statistics(runtime, [_,Runtime]).
+%%% 
+%%% test_orig(CUI, N, _Runtime) :-
+%%% 	statistics(runtime, _Discard),
+%%% 	between(1, N, _I),
+%%% 	   db_get_cui_sourceinfo(CUI, Sources1),
+%%% 	   extract_unique_sources(Sources1, _Sources),
+%%% 	   db_get_cui_sts(CUI, _SemTypes),
+%%% 	fail.
+%%% test_orig(_CUI, _N, Runtime) :- statistics(runtime, [_,Runtime]).
 
 compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent) :-
 	extract_components(MatchMap, PhraseComponents, _MetaComponents),
@@ -450,13 +492,14 @@ matching_token(mc, MatchingPhraseWordAtom,
 matching_token(lc, MatchingPhraseWordAtom,
                tok(Type, _TokenString, LCTokenString, _Pos1, _Pos2)) :-
         atom_codes(MatchingPhraseWordAtom, MatchingPhraseWordCodes),
-	% apostrophe-s token should match the token w/o the apostrophe-s
-	( Type = xx ->
-	  ( append(MatchingPhraseWordCodes, [39,0's], LCTokenString) % 39 is apostrophe
-	  ; MatchingPhraseWordCodes = LCTokenString
-	  )
-	; MatchingPhraseWordCodes = LCTokenString
-	).	  
+        % apostrophe-s token should match the token w/o the apostrophe-s
+        ( Type = xx ->
+          ( append(MatchingPhraseWordCodes, [39,0's], LCTokenString) -> % 39 is apostrophe
+	    true
+	  ; MatchingPhraseWordAtom = 's'
+          )
+        ; MatchingPhraseWordCodes = LCTokenString
+        ).        
 
 compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords) :-
 	extract_components(MatchMap, _PhraseComponents, MetaComponents),
@@ -577,7 +620,7 @@ compute_phrase_match_aux([First|Rest], Label, UtteranceText, AllMetaWords, Token
             InvolvesHeadOut = InvolvesHeadIn
 	  ; length(RestVariantWords, NVariantWords),
 	    End is NMeta + NVariantWords,
-            Variant = v(_Word,_Categories,VarLevel,_,_,_),
+            Variant = v(_Word,VarLevel,_Categories,_,_,_),
             MatchMapInOut = [[GeneratorPosition,[NMeta,End],VarLevel] | MatchMapIn],
 	    NewNMeta is NMeta + NVariantWords + 1,
             append(RestVariantWords, NewRest, Rest),
@@ -704,11 +747,17 @@ a list of values in reverse order.  get_one_from_avl/3 returns one Value,
 returning the next on backtracking.  PhraseComponents is used to reorder
 the values preferring those which do not intersect PhraseComponents.  */
 
+% 07/22/2013: FML changed the structure of the v/4 term
+% from v(Word, Categories, VarLevel, History, Roots, NFR)
+% to   v(Word, VarLevel, Categories, History, Roots, NFR)
+% throughout all the MetaMap (and mm_variants) code
+% in order to allow sorting v/4 terms to capture
+% the lower (and preferable) VarLevel field.
+
 get_one_from_avl(Key,PhraseComponents,AVL,Value) :-
-    avl_fetch(Key,AVL,RevValues),
-    rev(RevValues,Values0),
-    % Values0 = RevValues,
-    reorder_by_phrase_components(Values0,PhraseComponents,Values),
+    avl_fetch(Key,AVL,AVLValues),
+    reorder_by_phrase_components(AVLValues,PhraseComponents,Values0),
+    sort(Values0,Values),
     % ( member(X, Values), write('VARIANT':X), nl, fail ; nl),
     member(Value,Values).
 

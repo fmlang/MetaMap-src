@@ -35,13 +35,13 @@
 	shapes/3
     ]).
 
-:- use_module(lexicon(lexical),[
-    is_integer_string/1
-    ]).
-
 :- use_module(skr_lib(ctypes), [
        	to_lower/2
    ]).
+
+:- use_module(skr_lib(nls_strings), [
+    is_integer_string/1
+    ]).
 
 :- use_module(skr_lib(sicstus_utils), [
        	lower/2

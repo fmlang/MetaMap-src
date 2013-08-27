@@ -47,6 +47,7 @@
     ]).
 
 :- use_module(skr(skr_utilities), [
+	debug_call/2,
 	debug_message/3
     ]).
 
@@ -95,7 +96,9 @@ get_filtered_uscs_for_word(Table, Word, DebugFlags, FilterWordStrings,
 	debug_message(db, '~N### db_get_mwi_word_data DONE~n', []),
 	debug_message(db, '~N### Calling filter_uscs for ~q|~q~n', [Word,FilterWordStrings]),
 	filter_uscs(Table, USCs0, FilterWordStrings, USCs),
-	debug_message(db, '~N### filter_uscs DONE~n', []).
+	debug_call(db, length(USCs0, USCs0Length)),
+	debug_call(db, length(USCs,  USCsLength)),
+	debug_message(db, '~N### filter_uscs DONE (~w --> ~w)~n', [USCs0Length, USCsLength]).
 
 make_avl_key_1(Word, Table, AVLKey) :-
 	concat_atom([Word,'-',Table], AVLKey).

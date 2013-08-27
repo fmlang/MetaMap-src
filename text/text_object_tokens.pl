@@ -65,10 +65,6 @@
 	control_option/1
     ]).
 
-:- use_module(lexicon(lexical),[
-	lowercase_list/2
-    ]).
-
 :- use_module(skr_lib(ctypes),[
 	is_alnum/1,
 	is_alpha/1,
@@ -83,7 +79,8 @@
     ]).
 
 :- use_module(skr_lib(sicstus_utils),[
-	lower/2
+	lower/2,
+	lowercase_list/2
     ]).
 
 :- use_module(library(lists),[

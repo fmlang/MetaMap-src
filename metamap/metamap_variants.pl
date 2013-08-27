@@ -35,22 +35,22 @@
 
 :- module(metamap_variants,[
 	initialize_metamap_variants/1,
-	compute_variant_generators/4,
-	augment_GVCs_with_variants/2,
+	compute_variant_generators/3,
+	augment_GVCs_with_variants/1,
 	gather_variants/4,
 	write_all_variants/4
     ]).
 
 
 :- use_module(lexicon(lex_access),[
-	get_base_forms_for_form_with_cats/4,
+	get_base_forms_for_form_with_cats/3,
 	% is_a_base_form/2,
 	is_a_base_form_with_categories/2,
-	% is_a_form/2,
-	get_variants_for_citation_form/3,
-	get_variants_for_form/3,
-	get_categories_for_form/3,
-	get_spellings_and_inflections_for_form/5
+	is_a_form/1,
+	% get_variants_for_form/2,
+	get_im_varlist/2,
+	get_categories_for_form/2,
+	get_spellings_and_inflections_for_form/4
     ]).
 
 
@@ -72,7 +72,7 @@
    ]).
 
 :- use_module(morph(qp_morph), [
-	dm_variants/4
+	dm_variants/3
     ]).
 
 :- use_module(skr(skr_utilities), [
@@ -80,11 +80,6 @@
 	fatal_error/2,
 	split_word/3
    ]).
-
-% :- use_module(skr(testlvg),[
-% 	lexAccess_get_base_forms_for_form/3,
-% 	lexAccess_get_base_forms_for_form_with_cats/4
-%    ]).
 
 :- use_module(skr_db(db_access), [
 	db_get_synonyms/2,
@@ -105,7 +100,8 @@
     ]).
 
 :- use_module(skr_lib(sicstus_utils),[
-	lower/2
+	lower/2,
+	lowercase_list/2
     ]).
 
 :- use_module(library(avl),[
@@ -120,10 +116,6 @@
 :- use_module(skr_lib(nls_strings),[
 	concatenate_items_to_atom/2,
 	safe_number_codes/2
-    ]).
-
-:- use_module(lexicon(lexical),[
-	lowercase_list/2
     ]).
 
 :- use_module(library(codesio),[
@@ -198,76 +190,72 @@ compute_variant_generators/3
 xxx
 Each VGenerator is an incomplete gvc (Generator/Variants/Candidates) term of
 the form
-    gvc(v(Word,Categories,VarLevel,History,_,_),_,_)
+    gvc(v(Word,VarLevel,Categories,History,_,_),_,_)
 */
 
-compute_variant_generators(PhraseWords, DupPhraseWords, LexiconServerStream, GVCs) :-
+compute_variant_generators(PhraseWords, DupPhraseWords, GVCs) :-
 	( PhraseWords = DupPhraseWords ->
-	  compute_variant_generators_1(PhraseWords, LexiconServerStream, GVCs)
-	; compute_variant_generators_1(PhraseWords, LexiconServerStream, PhraseWordsGVCs),
-	  compute_variant_generators_1(DupPhraseWords, LexiconServerStream, DupPhraseWordsGVCs),
+	  compute_variant_generators_1(PhraseWords, GVCs)
+	; compute_variant_generators_1(PhraseWords, PhraseWordsGVCs),
+	  compute_variant_generators_1(DupPhraseWords, DupPhraseWordsGVCs),
 	  append(PhraseWordsGVCs, DupPhraseWordsGVCs, GVCs)
 	).
 
-compute_variant_generators_1(Words, LexiconServerStream, GVCs) :-
-	compute_variant_generators_2(Words, LexiconServerStream,  GVCs0),
+compute_variant_generators_1(Words, GVCs) :-
+	compute_variant_generators_2(Words,  GVCs0),
 	% remove duplicates keeping first occurrence
 	rev(GVCs0, GVCs1),
 	% Vgenerators0 could have duplicates if a word
 	% occurs in the phrase more than once!
 	list_to_set(GVCs1, GVCs2),
 	rev(GVCs2, GVCs),
-	augment_generators_with_roots(GVCs, LexiconServerStream).
+	augment_generators_with_roots(GVCs).
 
-compute_variant_generators_2([], __LexiconServerStream, []).
-compute_variant_generators_2([First|Rest], LexiconServerStream, GVCs) :-
- 	( is_a_number(First) ->
-	  GVCs = [gvc(v(First,[],0,[],_,_),_,_)|GVCsRest]
-	; rev(Rest, RevRest),
-	  compute_variant_generators_3(RevRest, First, LexiconServerStream, GVCsFirst),
-	  append(GVCsFirst, GVCsRest, GVCs)
-	),
-	compute_variant_generators_2(Rest, LexiconServerStream, GVCsRest).
+compute_variant_generators_2([], []).
+compute_variant_generators_2([First|Rest], GVCs) :-
+	rev(Rest, RevRest),
+	compute_variant_generators_3(RevRest, First, GVCsFirst),
+	append(GVCsFirst, GVCsRest, GVCs),
+	compute_variant_generators_2(Rest, GVCsRest).
 
-compute_variant_generators_3([], Word, LexiconServerStream, GVCs) :-
-	compute_variant_generators_for_word(Word, LexiconServerStream, GVCs).
-compute_variant_generators_3([H|T], Word, LexiconServerStream, GVCs) :-
- 	\+ is_a_number(H),
+compute_variant_generators_3([], Word, GVCs) :-
+	compute_variant_generators_for_word(Word, GVCs).
+compute_variant_generators_3([H|T], Word, GVCs) :-
 	RevRest = [H|T],
 	rev(RevRest, Rest),
 	concatenate_text([Word|Rest], ' ', MultiWord),
 	% IS_A_FORM
-	% is_a_form(MultiWord, LexiconServerStream),
-	% !,
-	compute_variant_generators_for_word(MultiWord, LexiconServerStream, FirstGVCs),
+	is_a_form(MultiWord),
+	!,
+	compute_variant_generators_for_word(MultiWord, FirstGVCs),
 	% FirstGVCs = [FirstGVC|_],
-	% FirstGVC \= gvc(v(_,[],0,[],_,_),_,_),
+	% FirstGVC \= gvc(v(_,0,[],[],_,_),_,_),
 	append(FirstGVCs, RestGVCs, GVCs),
 	RevRest = [_|RevRestRest],
-	compute_variant_generators_3(RevRestRest, Word, LexiconServerStream, RestGVCs).
-compute_variant_generators_3([_|RevRestRest], Word, LexiconServerStream, GVCs) :-
-	compute_variant_generators_3(RevRestRest, Word, LexiconServerStream, GVCs).
+	compute_variant_generators_3(RevRestRest, Word, RestGVCs).
+compute_variant_generators_3([_|RevRestRest], Word, GVCs) :-
+	compute_variant_generators_3(RevRestRest, Word, GVCs).
 
 is_a_number(Atom) :-
 	atom_codes(Atom, Codes),
 	safe_number_codes(_Number, Codes).
 
-compute_variant_generators_for_word(Word, LexiconServerStream, VariantGenerators) :-
-	get_categories_for_form(Word, LexiconServerStream, LexicalCategories),
+compute_variant_generators_for_word(Word, VariantGenerators) :-
+	get_categories_for_form(Word, LexicalCategories),
 	% LexicalCategories \== [],
         create_generators(LexicalCategories, Word, VariantGenerators).
 
-%%% get_categories_for_word(Word, LexiconServerStream, Categories) :-
+%%% get_categories_for_word(Word, Categories) :-
 %%% 	( % IS_A_FORM
-%%% 	  is_a_form(Word, LexiconServerStream) ->
-%%% 	  get_categories_for_form(Word, LexiconServerStream, Categories)
+%%% 	  is_a_form(Word) ->
+%%% 	  get_categories_for_form(Word, Categories)
 %%% 	; Categories = []
 %%% 	).
 
 % create_generators(LexicalCategories, Word, VariantGenerators)
 create_generators([], Word, VariantGenerators) :-
-        VariantGenerators = [gvc(v(Word,[],0,"",_,_),_,_)].
- create_generators([H|T], Word, VariantGenerators) :-
+        VariantGenerators = [gvc(v(Word,0,[],"",_,_),_,_)].
+create_generators([H|T], Word, VariantGenerators) :-
         split_generator([H|T], Word, 0, [], _Roots, _NFR, VariantGenerators).
         
 % VarLevel, History, Roots, and NFR all come in as anonymous variables,
@@ -275,7 +263,7 @@ create_generators([], Word, VariantGenerators) :-
 
 split_generator([], _Word, _VarLevel, _History, _Roots, _NFR, []).
 split_generator([First|Rest], Word, VarLevel, History, Roots, NFR,
-                [gvc(v(Word,[First],VarLevel,History,Roots,NFR),_,_)|SplitRest]) :-
+                [gvc(v(Word,VarLevel,[First],History,Roots,NFR),_,_)|SplitRest]) :-
         split_generator(Rest, Word, VarLevel, History, Roots, NFR, SplitRest).
 
 
@@ -284,7 +272,7 @@ split_generator([First|Rest], Word, VarLevel, History, Roots, NFR,
 
 % split_generator([], _Word, _VarLevel, _History, _Roots, _NFR, []).
 % split_generator([First|Rest], Word, VarLevel, History, Roots, NFR,
-%                 [gvc(v(Word,[First],VarLevel,History,Roots,NFR),_,_)|SplitRest]) :-
+%                 [gvc(v(Word,VarLevel, [First],History,Roots,NFR),_,_)|SplitRest]) :-
 % 	split_generator(Rest, Word, VarLevel, History, Roots, NFR, SplitRest).
 
 /* augment_GVCs_with_variants(?GVCs)
@@ -293,10 +281,10 @@ split_generator([First|Rest], Word, VarLevel, History, Roots, NFR,
 augment_GVCs_with_variants/1 instantiates the variant argument of each gvc/3
 term in GVCs with a list of variant (v/5) terms.  */
 
-augment_GVCs_with_variants(GVCs, LexiconServerStream) :-
+augment_GVCs_with_variants(GVCs) :-
 	( generation_mode(dynamic) ->
-	  augment_GVCs_with_variants_aux(GVCs, LexiconServerStream, dynamic)
-	; augment_GVCs_with_variants_aux(GVCs, LexiconServerStream, static)
+	  augment_GVCs_with_variants_aux(GVCs, dynamic)
+	; augment_GVCs_with_variants_aux(GVCs, static)
 	).
 
 %augment_GVCs_with_variants_quietly(GVCs) :-
@@ -310,7 +298,8 @@ augment_GVCs_with_variants(GVCs, LexiconServerStream) :-
 % In static variant generation, do not generate variants for words that
 % (1) have a lexical category that is invariant, or
 % (2) are only one or two characters long.
-% Words that have no lexical category should still be looked up in the vars tables,
+% Words that have no lexical category will have the third arg as [];
+% these should still be looked up in the vars tables,
 % because those tables contain derivational variants of Metathesaurus words not in the lexicon.
 % This strategy allows us to map, e.g., "chytrum" to "chytra" (C1486396),
 % even though neither of those tokens is in the lexicon.
@@ -330,25 +319,25 @@ no_variants_word(static, Word, [Category]) :-
 	  WordLength =< 2
 	).
 
-augment_GVCs_with_variants_aux([], _LexiconServerStream, _GenerationMode).
+augment_GVCs_with_variants_aux([], __GenerationMode).
 % Words of invariant category have no variants but themselves.
-augment_GVCs_with_variants_aux([GVC|Rest], LexiconServerStream, GenerationMode) :-
+augment_GVCs_with_variants_aux([GVC|Rest], GenerationMode) :-
 	GVC = gvc(Generator,Variants,_Candidates),
-	Generator = v(Word,CategoryList,_,_,_,_),
+	Generator = v(Word,_,CategoryList,_,_,_),
 	( no_variants_word(GenerationMode, Word, CategoryList) ->
 	  Variants = [Generator],
-	  augment_variant_with_roots(Generator, LexiconServerStream), % necessary?
-	  augment_GVCs_with_variants_aux(Rest, LexiconServerStream, GenerationMode)
-	; augment_GVCs_with_variants_mode(GenerationMode, LexiconServerStream, [GVC|Rest])
+	  augment_variant_with_roots(Generator), % necessary?
+	  augment_GVCs_with_variants_aux(Rest, GenerationMode)
+	; augment_GVCs_with_variants_mode(GenerationMode, [GVC|Rest])
 	).
 
-augment_GVCs_with_variants_mode(static, LexiconServerStream, [gvc(G,Vs,Cs)|Rest]) :-
-	G = v(Generator,Categories,_,_,_,_),
+augment_GVCs_with_variants_mode(static, [gvc(G,Vs,Cs)|Rest]) :-
+	G = v(Generator,_,Categories,_,_,_),
 	% db_get_variants/3 takes as second argument either
 	% a category (e.g., noun, verb, etc.), or [] (i.e., all categories)
 	db_get_variants(Generator, Categories, Vs0),
 	( Vs0 == [] ->
-	  augment_GVCs_with_variants_mode(dynamic, LexiconServerStream, [gvc(G,Vs,Cs)])
+	  augment_GVCs_with_variants_mode(dynamic, [gvc(G,Vs,Cs)])
 	; Vs = Vs0
 	),
 	%    ((control_option(variants), QuietMode==non_quiet) ->
@@ -358,69 +347,71 @@ augment_GVCs_with_variants_mode(static, LexiconServerStream, [gvc(G,Vs,Cs)|Rest]
 	%        format('~n',[])
 	%    ;   true
 	%    ),
-	augment_GVCs_with_variants_aux(Rest, LexiconServerStream, static).
+	augment_GVCs_with_variants_aux(Rest, static).
 
-augment_GVCs_with_variants_mode(dynamic, LexiconServerStream, [gvc(G,Vs,_Cs)|Rest]) :-
+augment_GVCs_with_variants_mode(dynamic, [gvc(G,Vs,_Cs)|Rest]) :-
 	% augment the generator with acronyms, abbreviations and synonyms
 	% temp
 	G = v(Generator,_,_,_,_,_),
 
-	compute_acros_abbrs(G, LexiconServerStream, GAAs),
+	compute_acros_abbrs(G, GAAs),
 	announce_variants(Generator, 'GAAs', GAAs),
 
-	compute_syns(G, LexiconServerStream, GSs),
+	compute_syns(G, GSs),
 	announce_variants(Generator, 'GSs', GSs),
 
 	% compute same-part, inflectional and derivational variants of G
-	get_spid_variants(G, yes, LexiconServerStream, GSPs, GIs, GDs),
+	get_spid_variants(G, yes, GSPs, GIs, GDs),
 	announce_variants(Generator, 'GSPs', GSPs),
 	announce_variants(Generator, 'GIs', GIs),
 	announce_variants(Generator, 'GDs', GDs),
 
 	% compute same-part, inflectional and derivational variants of AAs and Ss
-	get_all_spid_variants(GAAs, no, LexiconServerStream, GAASPs, GAAIs, GAADs),
+	get_all_spid_variants(GAAs, no, GAASPs, GAAIs, GAADs),
 	announce_variants(Generator, 'GAASPs', GAASPs),
 	announce_variants(Generator, 'GAAIs', GAAIs),
 	announce_variants(Generator, 'GAADs', GAADs),
 
-	get_all_spid_variants(GSs, no, LexiconServerStream, GSSPs, GSIs, GSDs),
+	get_all_spid_variants(GSs, no, GSSPs, GSIs, GSDs),
 	announce_variants(Generator, 'GSSPs', GSSPs),
 	announce_variants(Generator, 'GSIs', GSIs),
 	announce_variants(Generator, 'GSDs', GSDs),
 
 	% compute synonyms of AAs and acronyms and abbreviations of Ss
-	compute_all_syns(GAAs, LexiconServerStream, GAASs),
+	compute_all_syns(GAAs, GAASs),
 	announce_variants(Generator, 'GAASs', GAASs),
 
-	compute_all_acros_abbrs(GSs, LexiconServerStream, GSAAs),
+	compute_all_acros_abbrs(GSs, GSAAs),
 	announce_variants(Generator, 'GSAAs', GSAAs),
 
 	% perform final augmentations
 	% augment all derivational variants with synonyms and then inflect
-	compute_synonyms_and_inflect(GDs, LexiconServerStream, GDSIs),
+	compute_synonyms_and_inflect(GDs, GDSIs),
 	announce_variants(Generator, 'GDSIs', GDSIs),
 
-	compute_synonyms_and_inflect(GAADs, LexiconServerStream, GAADSIs),
+	compute_synonyms_and_inflect(GAADs, GAADSIs),
 	announce_variants(Generator, 'GAADSIs', GAADSIs),
 
-	compute_synonyms_and_inflect(GSDs, LexiconServerStream, GSDSIs),
+	compute_synonyms_and_inflect(GSDs, GSDSIs),
 	announce_variants(Generator, 'GSDSIs', GSDSIs),
 
-	compute_all_inflections(GAASs, LexiconServerStream, GAASIs),
+	compute_all_inflections(GAASs, GAASIs),
 	announce_variants(Generator, 'GAASIs', GAASIs),
 
-	compute_all_inflections(GSAAs, LexiconServerStream, GSAAIs),
+	compute_all_inflections(GSAAs, GSAAIs),
 	announce_variants(Generator, 'GSAAIs', GSAAIs),
 
 	% merge all variants
 	append([[G],GSPs,GIs,GDs,GDSIs,GAAs,GAASPs,GAAIs,GAADs,GAADSIs,
 		GSs,GSSPs,GSIs,GSDs,GSDSIs,GAASs,GAASIs,GSAAs,GSAAIs],
 	       Vs0),
-	sort(Vs0, Vs1),
-	glean_best_variants(Vs1, Vs),
+	reverse_score_and_categories(Vs0, Vs1),
+	sort(Vs1, Vs2),
+	glean_best_variants(Vs2, Vs3),
+	reverse_score_and_categories(Vs3, Vs),
 	% temp
 	%format('~a|2.13~n',[Generator]),
-	augment_variants_with_roots(Vs, LexiconServerStream),
+	augment_variants_with_roots(Vs),
 	% temp
 	%format('~a|2.14~n',[Generator]),
 	%    ((control_option(variants), QuietMode==non_quiet) ->
@@ -429,14 +420,23 @@ augment_GVCs_with_variants_mode(dynamic, LexiconServerStream, [gvc(G,Vs,_Cs)|Res
 	%        format('~n',[]),
 	%    ;   true
 	%    ),
-	augment_GVCs_with_variants_aux(Rest, LexiconServerStream, dynamic).
+	augment_GVCs_with_variants_aux(Rest, dynamic).
+
+reverse_score_and_categories(VariantsIn, VariantsOut) :-
+	(  foreach(VariantTerm,    VariantsIn),
+	   foreach(RevVariantTerm, VariantsOut)
+	do VariantTerm    = v(Variant,Score,Categories,Path,Roots,NFR),
+	   RevVariantTerm = v(Variant,Categories,Score,Path,Roots,NFR)
+	).
+
+
 	
 announce_variants(Generator, Type, Variants) :-
 	control_value(debug, DebugFlags),
 	memberchk(variants, DebugFlags),
 	format('~w:~w~n', [Generator, Type]),
 	member(Variant, Variants),
-	Variant = v(Word,Categories,VarLevel,History,_Roots,_NFR),
+	Variant = v(Word,VarLevel,Categories,History,_Roots,_NFR),
 	format('   v(~q, ~w, ~d, "~s", _, _)~n', [Word,Categories,VarLevel,History]),
  	fail.
 announce_variants(_Generator, _Type, _Variants).
@@ -470,20 +470,20 @@ compute_acros_abbrs/2
 xxx
 */
 
-compute_all_acros_abbrs([], _LexiconServerStream, []).
-compute_all_acros_abbrs([H|T], LexiconServerStream, AAs) :-
-	compute_all_acros_abbrs_aux([H|T], LexiconServerStream, AALists),
+compute_all_acros_abbrs([], []).
+compute_all_acros_abbrs([H|T], AAs) :-
+	compute_all_acros_abbrs_aux([H|T], AALists),
 	append(AALists, AAs0),
 	sort(AAs0, AAs).
 
-compute_all_acros_abbrs_aux([], _LexiconServerStream, []).
-compute_all_acros_abbrs_aux([V|Rest], LexiconServerStream, [FirstAAList|RestAALists]) :-
-	compute_acros_abbrs(V, LexiconServerStream, FirstAAList),
-	compute_all_acros_abbrs_aux(Rest, LexiconServerStream, RestAALists).
+compute_all_acros_abbrs_aux([], []).
+compute_all_acros_abbrs_aux([V|Rest], [FirstAAList|RestAALists]) :-
+	compute_acros_abbrs(V, FirstAAList),
+	compute_all_acros_abbrs_aux(Rest, RestAALists).
 
-compute_acros_abbrs(V, LexiconServerStream, AAs) :-
-	augment_variant_with_roots(V, LexiconServerStream),
-	V = v(_Word,Categories,VarLevel,History,Roots,_NFR),
+compute_acros_abbrs(V, AAs) :-
+	augment_variant_with_roots(V),
+	V = v(_Word,VarLevel,Categories,History,Roots,_NFR),
 	get_acros_abbrs(Roots, AAPairs0),
 	filter_out_null_pairs(AAPairs0, AAPairs1),
 	( History == "" ->
@@ -497,7 +497,7 @@ compute_acros_abbrs(V, LexiconServerStream, AAs) :-
 	  convert_aa_pairs_to_variants(AAPairs, Categories, NewVarLevel, History, AAs)
 	),
 	!. % cut?
-compute_acros_abbrs(_V, _LexiconServerStream, []).
+compute_acros_abbrs(_V, []).
 
 
 /* get_acros_abbrs+Atoms, -AAPairs)
@@ -556,22 +556,22 @@ which is of the form v(Word,Categories,VarLevel,History,Roots,NFR).
 augment_generators_with_roots/1 instantiates each G in GVCs. */
 
 % This is used only in dynamic mode
-augment_variants_with_roots([], _LexiconServerStream).
-augment_variants_with_roots([First|Rest], LexiconServerStream) :-
-	augment_variant_with_roots(First, LexiconServerStream),
-	augment_variants_with_roots(Rest, LexiconServerStream).
+augment_variants_with_roots([]).
+augment_variants_with_roots([First|Rest]) :-
+	augment_variant_with_roots(First),
+	augment_variants_with_roots(Rest).
 
-augment_variant_with_roots(v(Word,Categories,_VarLevel,_History,Roots,_NFR), LexiconServerStream) :-
+augment_variant_with_roots(v(Word,_VarLevel,Categories,_History,Roots,_NFR)) :-
 	( var(Roots) ->
-	  get_bases(Word, Categories, LexiconServerStream, Roots)
+	  get_bases(Word, Categories, Roots)
 	; true
 	).
 
-augment_generators_with_roots([], _LexiconServerStream).
-augment_generators_with_roots([gvc(G,_,_)|RestGVCs], LexiconServerStream) :-
-	G =  v(_Word,_Categories,_VarLevel,_History,_Roots,_NFR),
-	augment_variant_with_roots(G, LexiconServerStream),
-	augment_generators_with_roots(RestGVCs, LexiconServerStream).
+augment_generators_with_roots([]).
+augment_generators_with_roots([gvc(G,_,_)|RestGVCs]) :-
+	G =  v(_Word,_VarLevel,_Categories,_History,_Roots,_NFR),
+	augment_variant_with_roots(G),
+	augment_generators_with_roots(RestGVCs).
 
 
 /* filter_out_null_pairs(+AAPairs, -FilteredAAPairs)
@@ -638,28 +638,28 @@ compute_syns/6
 xxx
 */
 
-compute_all_syns([], _LexiconServerStream, []).
-compute_all_syns([H|T], LexiconServerStream, Ss) :-
-	compute_all_syns_aux([H|T], LexiconServerStream, SLists),
+compute_all_syns([], []).
+compute_all_syns([H|T], Ss) :-
+	compute_all_syns_aux([H|T], SLists),
 	append(SLists, Ss0),
 	sort(Ss0, Ss).
 
-compute_all_syns_aux([], _LexiconServerStream, []).
-compute_all_syns_aux([V|Rest], LexiconServerStream, [FirstSList|RestSLists]) :-
-	compute_syns(V, LexiconServerStream, FirstSList),
-	compute_all_syns_aux(Rest, LexiconServerStream, RestSLists).
+compute_all_syns_aux([], []).
+compute_all_syns_aux([V|Rest], [FirstSList|RestSLists]) :-
+	compute_syns(V, FirstSList),
+	compute_all_syns_aux(Rest, RestSLists).
 
-compute_syns(V, LexiconServerStream, Ss) :-
-	augment_variant_with_roots(V, LexiconServerStream),
+compute_syns(V, Ss) :-
+	augment_variant_with_roots(V),
 	variant_score(synonym, SynonymLevel),
-	compute_syns_aux([V], LexiconServerStream, SynonymLevel, [V], _FilterOut, [], Ss).
+	compute_syns_aux([V], SynonymLevel, [V], _FilterOut, [], Ss).
 
-compute_syns_aux([], _LexiconServerStream, _SynonymLevel,
+compute_syns_aux([], __SynonymLevel,
 		 FilterIn, FilterIn, SynonymsIn, SynonymsIn).
-compute_syns_aux([V|Rest], LexiconServerStream, SynonymLevel,
+compute_syns_aux([V|Rest], SynonymLevel,
 		 FilterIn, FilterOut, SynonymsIn, SynonymsOut) :-
-	augment_variant_with_roots(V, LexiconServerStream),
-	V = v(Word,Categories,VarLevel,History,Roots0,_NFR),
+	augment_variant_with_roots(V),
+	V = v(Word,VarLevel,Categories,History,Roots0,_NFR),
 	( Roots0 == [] ->
 	  Roots = [Word]
 	; Roots = Roots0
@@ -672,7 +672,7 @@ compute_syns_aux([V|Rest], LexiconServerStream, SynonymLevel,
 	append(SynonymsIn, Synonyms1, SynonymsInOut),
 	append(FilterInOut0, Synonyms1, FilterInOut),
 	append(Synonyms1, Rest, NewRest),
-	compute_syns_aux(NewRest, LexiconServerStream, SynonymLevel,
+	compute_syns_aux(NewRest, SynonymLevel,
 			 FilterInOut, FilterOut, SynonymsInOut, SynonymsOut).
 
 
@@ -709,12 +709,12 @@ Pairs is a list of Word-Category pairs.
 
 convert_to_variants([], _VarLevel, _History, []).
 convert_to_variants([First-Category|Rest], VarLevel, History,
-                    [v(First,[Category],VarLevel,History,_,_)|ConvertedRest]) :-
+                    [v(First,VarLevel,[Category],History,_,_)|ConvertedRest]) :-
 	convert_to_variants(Rest, VarLevel, History, ConvertedRest).
 
 convert_to_variants([], _Categories, _VarLevel, _History, []).
 convert_to_variants([First|Rest], Categories, VarLevel, History,
-                    [v(First,Categories,VarLevel,History,_,_)|ConvertedRest]) :-
+                    [v(First,VarLevel,Categories,History,_,_)|ConvertedRest]) :-
 	convert_to_variants(Rest, Categories, VarLevel, History, ConvertedRest).
 
 
@@ -739,8 +739,8 @@ filter_by_var_level_aux([], _V, [], keep).
 filter_by_var_level_aux([First|Rest], V, [NewFirst|Rest], nokeep) :-
 	% if the new variation is better than a filter variation,
 	% modify the filter list and discard the new variation
-	V = v(Word,Categories,VarLevel,History,VRoots,NFR),
-	First = v(Word,Categories,FilterVarLevel,_FirstHistory,FirstRoots,_FirstNFR),
+	V = v(Word,VarLevel,Categories,History,VRoots,NFR),
+	First = v(Word,FilterVarLevel,Categories,_FirstHistory,FirstRoots,_FirstNFR),
 	VarLevel < FilterVarLevel,
 	( \+var(FirstRoots) ->
 	   Roots = FirstRoots
@@ -748,48 +748,47 @@ filter_by_var_level_aux([First|Rest], V, [NewFirst|Rest], nokeep) :-
 	  Roots = VRoots
 	; true
 	),
-	NewFirst = v(Word,Categories,VarLevel,History,Roots,NFR),
+	NewFirst = v(Word,VarLevel,Categories,History,Roots,NFR),
 	!.
 filter_by_var_level_aux([First|Rest], V, [NewFirst|Rest], nokeep) :-
 	% if the new variation is not better than a filter variation,
 	% discard the new one
 	V = v(Word,_,_,_,VRoots,_),
-	First = v(Word,Categories,VarLevel,History,_,NFR),
+	First = v(Word,VarLevel,Categories,History,_,NFR),
 	( var(VRoots) ->
 	  NewFirst = First
-	; NewFirst = v(Word,Categories,VarLevel,History,VRoots,NFR)
+	; NewFirst = v(Word,VarLevel,Categories,History,VRoots,NFR)
 	),
 	!.
 filter_by_var_level_aux([First|Rest], V, [First|FilteredRest], Keep) :-
 	% otherwise, continue to search for a matching filter variation
 	filter_by_var_level_aux(Rest, V, FilteredRest, Keep).
 
-get_all_spid_variants([], _SPFlag, _LexiconServerStream, [], [], []).
-get_all_spid_variants([First|Rest], SPFlag, LexiconServerStream,
+get_all_spid_variants([], _SPFlag, [], [], []).
+get_all_spid_variants([First|Rest], SPFlag,
 		      SPVariants, IVariants, DVariants) :-
-	get_spid_variants(First, SPFlag, LexiconServerStream,
+	get_spid_variants(First, SPFlag,
 			  FirstSPVariants, FirstIVariants, FirstDVariants),
 	append(FirstSPVariants, RestSPVariants, SPVariants),
 	append(FirstIVariants, RestIVariants, IVariants),
 	append(FirstDVariants, RestDVariants, DVariants),
-	get_all_spid_variants(Rest,SPFlag,LexiconServerStream,
-			      RestSPVariants, RestIVariants, RestDVariants).
+	get_all_spid_variants(Rest,SPFlag, RestSPVariants, RestIVariants, RestDVariants).
 
-%%% verify_base_form_and_history(History, LexiconServerStream, Word) :-
+%%% verify_base_form_and_history(History, Word) :-
 %%% 	( History == [] ->
 %%% 	  true
-%%% 	; is_a_base_form(Word, LexiconServerStream)
+%%% 	; is_a_base_form(Word)
 %%% 	).
 
-get_spid_variants(V, _SPFlag, LexiconServerStream, SPVariants, IVariants, DVariants) :-
+get_spid_variants(V, _SPFlag, SPVariants, IVariants, DVariants) :-
 	variant_score(inflection, InflectionLevel),
 	variant_score(spelling,   SpellingLevel),
 	variant_score(derivation, DerivationLevel),
-	V = v(Word,Categories,VarLevel,History,_Roots,_NFR),
+	V = v(Word,VarLevel,Categories,History,_Roots,_NFR),
 	% format(user_output, 'GSV: ~w/~w/~w~n', [Word,VarLevel,History]), ttyflush,
 	% compute the sp_variants, i_variants, and d_variants
-	( % verify_base_form_and_history(History, LexiconServerStream, Word),
-	  get_spellings_and_inflections_for_form(Word, Categories, LexiconServerStream,
+	( % verify_base_form_and_history(History, Word),
+	  get_spellings_and_inflections_for_form(Word, Categories,
 						 SPVariantAtoms0, IVariantAtoms0) ->
 	  ord_subtract(IVariantAtoms0, SPVariantAtoms0, IVariantAtoms1),
 	  lowercase_list(SPVariantAtoms0, SPVariantAtoms1),
@@ -802,7 +801,7 @@ get_spid_variants(V, _SPFlag, LexiconServerStream, SPVariants, IVariants, DVaria
           % compute the d_variants
           % do not compute derivational variants for AAs (expansions are allowed)
 	  get_d_variants(Word, History, SPVariantAtoms2, IVariantAtoms, Categories,
-			 LexiconServerStream, VarLevel, History, DerivationLevel, DVariants)
+			 VarLevel, History, DerivationLevel, DVariants)
 	; SPVariants = [],
 	  IVariants = [],
 	  DVariants = []
@@ -825,11 +824,10 @@ get_i_variants(IVariantAtoms,  Categories, VarLevel, History, InflectionLevel, I
 	  ).
 
 get_d_variants(Word, History, SPVariantAtoms2, IVariantAtoms, Categories,
-	       LexiconServerStream, VarLevel, History, DerivationLevel, DVariants) :-
+	       VarLevel, History, DerivationLevel, DVariants) :-
           ( ( aao(Word) ; History=[0'a|_] ) -> %' Fake out Emacs!
 	     DVariants = []
 	  ; get_all_derivational_variants(SPVariantAtoms2, IVariantAtoms, Categories,
-					  LexiconServerStream,
 					  VarLevel, History, DerivationLevel, DVariants)
 	  ).
 
@@ -843,16 +841,15 @@ variants of any of the words in SPVariantAtoms filtering on IVariantAtoms.
 */
 
 get_all_derivational_variants(SPVariantAtoms, IVariantAtoms, Categories,
-			      LexiconServerStream,
                               VarLevel, History, DerivationLevel, DVariants) :-
-	get_initial_base_forms(SPVariantAtoms, Categories, LexiconServerStream, RootTerms0),
+	get_initial_base_forms(SPVariantAtoms, Categories, RootTerms0),
 	filter_by_categories(RootTerms0, Categories, RootTerms1), % redundant now?
 	convert_terms_to_variants(RootTerms1, VarLevel, History, Vs),
 	extract_atoms_from_terms(RootTerms1, RootAtoms),
 	append([RootAtoms,SPVariantAtoms,IVariantAtoms], FilterAtoms0),
 	sort(FilterAtoms0, FilterAtoms),
 	generate_derivational_root_forms(Vs, FilterAtoms, DerivationLevel,
-					 LexiconServerStream, [], DVariants0),
+					 [], DVariants0),
 	sort(DVariants0, DVariants).
 
 /* get_initial_base_forms(+SPVariantAtoms, +Categories, -RootTerms)
@@ -864,22 +861,22 @@ The elements of RootTerms are of the form Form:[cat:[Category]]
 xxx
 */
 
-get_initial_base_forms(SPVariantAtoms, Categories, LexiconServerStream, RootTerms) :-
-	get_initial_base_forms_5(SPVariantAtoms, Categories, LexiconServerStream, RootTerms0, []),
+get_initial_base_forms(SPVariantAtoms, Categories, RootTerms) :-
+	get_initial_base_forms_5(SPVariantAtoms, Categories, RootTerms0, []),
 	% lowercase_terms(RootTerms0, RootTerms1),
 	sort(RootTerms0, RootTerms).
 
 % NEED difference lists at higher level too!
 
-get_initial_base_forms_5([], _Categories, _LexiconServerStream, RootTermsIn, RootTermsIn).
-get_initial_base_forms_5([SPVariantAtom|Rest], Categories, LexiconServerStream,
+get_initial_base_forms_5([], _Categories, RootTermsIn, RootTermsIn).
+get_initial_base_forms_5([SPVariantAtom|Rest], Categories,
 			 RootTermsIn, RootTermsOut) :-
 	% Find the bases for the sp-variants
-	get_bases(SPVariantAtom, Categories, LexiconServerStream, BaseAtoms),
-	% generate_root_forms_from_bases_OLD(BaseAtoms, LexiconServerStream, RootTerms0),
+	get_bases(SPVariantAtom, Categories, BaseAtoms),
+	% generate_root_forms_from_bases_OLD(BaseAtoms, RootTerms0),
 	generate_root_forms_from_bases(BaseAtoms, Categories, RootTermsIn, RootTermsNext),
 	% append(RootTerms1, RootTermsIn, RootTermsInOut),
-	get_initial_base_forms_5(Rest, Categories, LexiconServerStream, RootTermsNext, RootTermsOut).
+	get_initial_base_forms_5(Rest, Categories, RootTermsNext, RootTermsOut).
 
 generate_root_forms_from_bases([], _Categories, RootTerms, RootTerms).
 generate_root_forms_from_bases([BaseAtom|RestBaseAtoms], Categories,
@@ -894,9 +891,8 @@ generate_root_forms_from_bases_1([Category|RestCategories], BaseAtom, RootTermsI
 	generate_root_forms_from_bases_1(RestCategories, BaseAtom, RootTermsNext, RootTermsOut).
 
 % A base form is either a citation form or a spelling variant of a citation form.
-get_bases(WordAtom, Categories, LexiconServerStream, Bases) :-
-	( get_base_forms_for_form_with_cats(WordAtom, Categories,
-					    LexiconServerStream, Bases0) ->
+get_bases(WordAtom, Categories, Bases) :-
+	( get_base_forms_for_form_with_cats(WordAtom, Categories, Bases0) ->
 	  lowercase_list(Bases0, Bases1),
 	  sort(Bases1, Bases)
 	; Bases = []
@@ -908,15 +904,15 @@ get_bases(WordAtom, Categories, LexiconServerStream, Bases) :-
 %%% generate_root_forms_from_bases/2
 %%% */
 %%% 
-%%% generate_root_forms_from_bases_OLD([], _LexiconServerStream, []).
-%%% generate_root_forms_from_bases_OLD([First|Rest], LexiconServerStream, RootTerms) :-
-%%% 	generate_root_forms_from_base(First, LexiconServerStream, FirstRootTerms),
+%%% generate_root_forms_from_bases_OLD([], []).
+%%% generate_root_forms_from_bases_OLD([First|Rest], RootTerms) :-
+%%% 	generate_root_forms_from_base(First, FirstRootTerms),
 %%% 	append(FirstRootTerms, RestRootTerms, RootTerms),
-%%% 	generate_root_forms_from_bases_OLD(Rest, LexiconServerStream, RestRootTerms).
+%%% 	generate_root_forms_from_bases_OLD(Rest, RestRootTerms).
 %%% 
 %%% 
-%%% generate_root_forms_from_base(BaseAtom, LexiconServerStream, RootTerms) :-
-%%% 	( get_variants_for_citation_form(BaseAtom, LexiconServerStream, VariantList) ->
+%%% generate_root_forms_from_base(BaseAtom, RootTerms) :-
+%%% 	( get_variants_for_citation_form(BaseAtom, VariantList) ->
 %%% 	  extract_root_forms_from_variants(VariantList, RootTerms)
 %%% 	; RootTerms = []
 %%% 	).
@@ -972,12 +968,12 @@ filter_by_categories([First|Rest],Categories,Result) :-
 /* convert_terms_to_variants(+Terms, +VarLevel, +History, -Variants)
 
 convert_terms_to_variants/4 converts terms of the form Form:[cat:Categories]
-to variants of the form v(Form,Categories,VarLevel,History,_,_).
+to variants of the form v(Form,VarLevel,Categories,History,_,_).
 */
 
 convert_terms_to_variants([],_VarLevel,_History,[]).
 convert_terms_to_variants([Form:[cat:Categories]|Rest],VarLevel,History,
-                         [v(Form,Categories,VarLevel,History,_,_)
+                         [v(Form,VarLevel,Categories,History,_,_)
                           |ConvertedRest]) :-
     convert_terms_to_variants(Rest,VarLevel,History,ConvertedRest).
 
@@ -1000,13 +996,14 @@ extract_atoms_from_terms([Form:_Info|Rest],
 generate_derivational_root_forms/5
 */
 
-generate_derivational_root_forms([], _, _, _LexiconServerStream, VsIn,VsIn).
+generate_derivational_root_forms([], _, _, VsIn,VsIn).
 generate_derivational_root_forms([FirstV|RestVs], FilterAtoms, DerivationLevel,
-                                 LexiconServerStream, VsIn,VsOut) :-
-	FirstV = v(Form,Categories,VarLevel,History,_Roots,_NFR),
-	get_dm_variant_terms(Form:[cat:Categories], LexiconServerStream, NewVTerms0),
+                                 VsIn,VsOut) :-
+	FirstV = v(Form,VarLevel,Categories,History,_Roots,_NFR),
+	get_dm_variant_terms(Form:[cat:Categories], NewVTerms0),
+	% format(user_output, ' ## ~w:~w~n', [Form,NewVTerms0]),
 	filter_terms_by_atoms(NewVTerms0, FilterAtoms, NewVTerms1),
-	% format('gdrfc: ~a ~p -> ~p~n',[Form,Categories,NewVTerms1]),
+	% show_single_derivations(Form, NewVTerms1),	
 	filter_derivational_terms(NewVTerms1, Form, NewVTerms),
 	NewVarLevel is VarLevel + DerivationLevel,
 	NewHistory = [0'd|History],
@@ -1016,22 +1013,28 @@ generate_derivational_root_forms([FirstV|RestVs], FilterAtoms, DerivationLevel,
 	append(FilterAtoms, NewVAtoms, NewFilterAtoms),
 	append(VsIn, NewVs, VsInOut),
 	generate_derivational_root_forms(NewGVs, NewFilterAtoms, DerivationLevel,
-					 LexiconServerStream, VsInOut, VsOut).
+					 VsInOut, VsOut).
 
-get_dm_variant_terms([], _LexiconServerStream, []).
-get_dm_variant_terms(Form:[cat:Categories], LexiconServerStream, DVariantTerms) :-
-	get_dm_variants(Form, Categories, LexiconServerStream, DVariantTerms0),
-	% The Java version of get_dm_variants has been modified to return only base forms,
+show_single_derivations(Form, Derivations) :-
+	member(D:_, Derivations),
+	format(user_output, '~q -> ~q~n',[Form,D]),
+	fail.
+show_single_derivations(_Form, _Derivations).
+
+get_dm_variant_terms([], []).
+get_dm_variant_terms(Form:[cat:Categories], DVariantTerms) :-
+	get_dm_variants(Form, Categories, DVariantTerms0),
+	% The db version of get_dm_variants has been modified to return only base forms,
 	% so there's no reason to filter out non-base forms using
-	% filter_root_forms_to_base_with_categories/3 in the Java code ONLY!!
+	% filter_root_forms_to_base_with_categories/3 in the db version.
 	filter_root_forms_to_base_with_categories(DVariantTerms0, DVariantTerms1),
 	( \+ control_option(all_derivational_variants) ->
 	  filter_an_variants(DVariantTerms1, Categories, DVariantTerms)
 	; DVariantTerms = DVariantTerms1
 	).
 
-get_dm_variants(WordAtom, Categories, LexiconServerStream, VariantTerms) :-
-	( dm_variants(WordAtom, Categories, LexiconServerStream, VariantTerms) ->
+get_dm_variants(WordAtom, Categories, VariantTerms) :-
+	( dm_variants(WordAtom, Categories, VariantTerms) ->
 	  true
 	  % filter_out_null_terms(VariantTerms0, VariantTerms)
 	; VariantTerms = []
@@ -1106,7 +1109,7 @@ NOT MEMBER
 filter_terms_by_atoms([], _Atoms, []).
 filter_terms_by_atoms([First|Rest], Atoms, Result) :-
 	First = Form:_Info,
-	( memberchk(Form,Atoms) ->
+	( memberchk(Form, Atoms) ->
 	  Result = FilteredRest
 	; Result = [First|FilteredRest]
 	),
@@ -1168,19 +1171,19 @@ compute_synonyms_and_inflect_aux/2
 xxx
 */
 
-compute_synonyms_and_inflect([], _LexiconServerStream, []).
-compute_synonyms_and_inflect([H|T], LexiconServerStream, SIVs) :-
+compute_synonyms_and_inflect([], []).
+compute_synonyms_and_inflect([H|T], SIVs) :-
 	variant_score(inflection, InflectionLevel),
-	compute_synonyms_and_inflect_aux([H|T], LexiconServerStream, InflectionLevel, SIVLists),
+	compute_synonyms_and_inflect_aux([H|T], InflectionLevel, SIVLists),
 	append(SIVLists, SIVs).
 
-compute_synonyms_and_inflect_aux([], _LexiconServerStream, _InflectionLevel, []).
-compute_synonyms_and_inflect_aux([V|Rest], LexiconServerStream, InflectionLevel, [SIVs|RestSIVs]) :-
-	get_synonyms_for_variant(V, LexiconServerStream, SVs0),
+compute_synonyms_and_inflect_aux([], __InflectionLevel, []).
+compute_synonyms_and_inflect_aux([V|Rest], InflectionLevel, [SIVs|RestSIVs]) :-
+	get_synonyms_for_variant(V, SVs0),
 	SVs = [V|SVs0],
-	compute_all_inflections(SVs, LexiconServerStream, InflectionLevel, SIVs0),
+	compute_all_inflections(SVs, InflectionLevel, SIVs0),
 	append(SVs0, SIVs0, SIVs),
-	compute_synonyms_and_inflect_aux(Rest, LexiconServerStream, InflectionLevel, RestSIVs).
+	compute_synonyms_and_inflect_aux(Rest, InflectionLevel, RestSIVs).
 
 /* get_synonyms_for_variant(+V, -VSynonyms)
    get_synonyms_for_variant(+V, +SynonymLevel, +FilterIn, -FilterOut,
@@ -1191,17 +1194,17 @@ get_synonyms_for_variant/6
 xxx
 */
 
-get_synonyms_for_variant(V, LexiconServerStream, VSynonyms) :-
+get_synonyms_for_variant(V, VSynonyms) :-
 	variant_score(synonym, SynonymLevel),
-	get_synonyms_for_variant([V], LexiconServerStream, SynonymLevel,
+	get_synonyms_for_variant([V], SynonymLevel,
 				 [V], _FilterOut, [],VSynonyms).
 
-get_synonyms_for_variant([], _LexiconServerStream, _SynonymLevel,
+get_synonyms_for_variant([], __SynonymLevel,
 			 FilterIn, FilterIn, SynonymsIn, SynonymsIn).
-get_synonyms_for_variant([V|Rest], LexiconServerStream, SynonymLevel,
+get_synonyms_for_variant([V|Rest], SynonymLevel,
 			 FilterIn, FilterOut, SynonymsIn, SynonymsOut) :-
-	augment_variant_with_roots(V, LexiconServerStream),
-	V = v(Atom,Categories, VarLevel, History, Roots0, _NFR),
+	augment_variant_with_roots(V),
+	V = v(Atom, VarLevel, Categories, History, Roots0, _NFR),
 	( Roots0 == [] ->
 	  Roots = [Atom]
 	; Roots = Roots0
@@ -1214,7 +1217,7 @@ get_synonyms_for_variant([V|Rest], LexiconServerStream, SynonymLevel,
 	append(SynonymsIn, Synonyms1, SynonymsInOut),
 	append(FilterInOut0, Synonyms1, FilterInOut),
 	append(Synonyms1, Rest, NewRest),
-	get_synonyms_for_variant(NewRest, LexiconServerStream, SynonymLevel,
+	get_synonyms_for_variant(NewRest, SynonymLevel,
 				 FilterInOut, FilterOut, SynonymsInOut, SynonymsOut).
 
 
@@ -1226,26 +1229,26 @@ compute_all_inflections/3
 xxx
 */
 
-compute_all_inflections([], _LexiconServerStream, []).
-compute_all_inflections([H|T], LexiconServerStream, IVs) :-
+compute_all_inflections([], []).
+compute_all_inflections([H|T], IVs) :-
 	variant_score(inflection, InflectionLevel),
-	compute_all_inflections([H|T], LexiconServerStream, InflectionLevel, IVs).
+	compute_all_inflections([H|T], InflectionLevel, IVs).
 
-compute_all_inflections([], _LexiconServerStream, _InflectionLevel, []).
-compute_all_inflections([V|Rest], LexiconServerStream, InflectionLevel, IVs) :-
-	inflect_variant(V, LexiconServerStream, IAtoms),
-	V = v(_Atom,Categories,VarLevel,History,_Roots,_NFR),
+compute_all_inflections([], __InflectionLevel, []).
+compute_all_inflections([V|Rest], InflectionLevel, IVs) :-
+	inflect_variant(V, IAtoms),
+	V = v(_Atom,VarLevel,Categories,History,_Roots,_NFR),
 	NewVarLevel is VarLevel + InflectionLevel,
 	NewHistory = [0'i|History],
 	convert_to_variants(IAtoms, Categories, NewVarLevel, NewHistory, IVs0),
 	append(IVs0, RestIVs, IVs),
-	compute_all_inflections(Rest, LexiconServerStream, InflectionLevel, RestIVs).
+	compute_all_inflections(Rest, InflectionLevel, RestIVs).
 
 %% dump version
 %compute_all_inflections([],_InflectionLevel,[]).
 %compute_all_inflections([V|Rest],InflectionLevel,IVs) :-
 %    inflect_variant(V,IAtoms),
-%    V=v(Atom,Categories,VarLevel,History,_Roots,_NFR),
+%    V=v(Atom,VarLevel,Categories,History,_Roots,_NFR),
 %    format('*|6.0|compute_all_inflections|~p|~p|~p~n',
 %	   [Atom,Categories,IAtoms]),
 %    NewVarLevel is VarLevel + InflectionLevel,
@@ -1261,9 +1264,9 @@ inflect_variant/2
 xxx
 */
 
-inflect_variant(v(Word,Categories,_VarLevel,_History,_Roots,_NFR),
-		LexiconServerStream, InflectedWords) :-
-	( get_variants_for_form(Word, LexiconServerStream, VariantTerms0) ->
+inflect_variant(v(Word,_VarLevel,Categories,_History,_Roots,_NFR),
+		InflectedWords) :-
+	( get_im_varlist(Word, VariantTerms0) ->
 	  translate_variant_terms(VariantTerms0, VariantTerms1),
 	  filter_forms_by_categories(VariantTerms1, Categories, VariantTerms2),
 	  extract_atoms_from_terms(VariantTerms2, InflectedWords0),
@@ -1274,7 +1277,7 @@ inflect_variant(v(Word,Categories,_VarLevel,_History,_Roots,_NFR),
 	).
 
 %% dump version
-%inflect_variant(v(Word,Categories,_VarLevel,_History,_Roots,_NFR),
+%inflect_variant(v(Word,_VarLevel,Categories,_History,_Roots,_NFR),
 %                InflectedWords) :-
 %    (get_variants_for_form(Word,VariantTerms0) ->
 %	format('*|6.1|get_variants_for_form|~p|~p~n',[Word,VariantTerms0]),
@@ -1301,8 +1304,8 @@ glean_best_variants([H|T], BestVariants) :-
 glean_best_variants_1([], Singleton, [Singleton]).
 glean_best_variants_1([V2|Rest], V1, GleanedVs) :-
 	% enforce category
-	% V1 = v(Word,_,VarLevel1,_,_,_),
-	% V2 = v(Word,_,VarLevel2,_,_,_),
+	% V1 = v(Word,VarLevel1,_,_,_,_),
+	% V2 = v(Word,VarLevel2,_,_,_,_),
 	V1 = v(Word,Categories,VarLevel1,_,_,_),
 	V2 = v(Word,Categories,VarLevel2,_,_,_),
 	!,
@@ -1349,7 +1352,7 @@ gather_variants_GVC([],_PhraseWords, _PhraseWordsLength, _HeadPosition,
 		    _PositionAVL, VAVLIn, VAVLIn).
 gather_variants_GVC([gvc(Generator,Variants,_)|Rest], PhraseWords, PhraseWordsLength,
 		    HeadPosition, PositionAVLIn, VAVLIn, VAVLOut) :-
-	Generator = v(GeneratorWord,_LexCats,_,_,_,NFR),
+	Generator = v(GeneratorWord,_VarLevel,_LexCats,_,_,NFR),
 	% format(user_output, 'GVC: ~q-~q~n', [GeneratorWord,LexCats]),
 	tokenize_text_mm_lc(GeneratorWord, GeneratorWordList),
 	cached_compute_all_subsequence_positions(GeneratorWord, GeneratorWordList,
@@ -1554,7 +1557,7 @@ write_all_variants/1 writes the variants (Vs) in GVCs. */
 
 write_all_variants([], _NumDigits, Count, Count).
 write_all_variants([gvc(G,Vs,_Cs)|Rest], NumDigits, CountIn, CountOut) :-
-	G = v(Generator,Categories,_,_,_,_),
+	G = v(Generator,_,Categories,_,_,_),
 	with_output_to_codes(format('~p', [Categories]), StringCats),
 	concatenate_items_to_atom([Generator," ",StringCats], GeneratorLabel),
 	dump_variants_labelled(GeneratorLabel, Vs, NumDigits, CountIn, VariantsCount),
