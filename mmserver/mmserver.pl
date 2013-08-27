@@ -151,7 +151,15 @@ set_options(OptionString) :-
     %% determined.
     assert(control_value(lexicon,c)),
     % end Temporary code 
-    set_control_values(IOptionsFinal,IArgs).
+    set_control_values(IOptionsFinal,IArgs),
+    %%
+    %% If the user asks for WSD then get server stream for WSD server
+    %% and add it to the blackboard.
+    %% 
+    ( control_option(word_sense_disambiguation) ->
+	get_server_streams(TaggerServerStream-WSDServerStream),
+	AllServerStreams = TaggerServerStream-WSDServerStream,
+	bb_put(all_server_streams, AllServerStreams)).
 
 unset_options(OptionString) :-
     append(OptionString, ".", OptionStringWithPeriod),
