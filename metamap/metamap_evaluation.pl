@@ -755,9 +755,10 @@ the values preferring those which do not intersect PhraseComponents.  */
 % the lower (and preferable) VarLevel field.
 
 get_one_from_avl(Key,PhraseComponents,AVL,Value) :-
-    avl_fetch(Key,AVL,AVLValues),
-    reorder_by_phrase_components(AVLValues,PhraseComponents,Values0),
-    sort(Values0,Values),
+    avl_fetch(Key,AVL,RevValues),
+    rev(RevValues, Values0),
+    reorder_by_phrase_components(Values0,PhraseComponents,Values),
+    % sort(Values1,Values),
     % ( member(X, Values), write('VARIANT':X), nl, fail ; nl),
     member(Value,Values).
 

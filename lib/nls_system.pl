@@ -265,6 +265,8 @@ is_control_option(metamap,  '', prompt, no,
 
 % Bypass lexical lookup
 is_control_option(metamap,  '', 'no_lex',		 	no, none).
+% show lexical definitions
+is_control_option(metamap,  '', 'show_lex',		 	no, none).
 
 		   
 

@@ -88,8 +88,7 @@
 
 generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions) :-
 	tokenize_string(ListOfAscii, Words0),
-	% re_attach_apostrophe_s_syntax(Words0, TagList, Words1),
-	Words1 = Words0,
+	re_attach_apostrophe_s_syntax(Words0, TagList, Words1),
 	retokenize(Words1, Words),
 	assemble_definitions(Words, TagList, Definitions0),
 	remove_null_atom_defns(Definitions0, Definitions),

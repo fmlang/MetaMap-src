@@ -754,17 +754,17 @@ get_variants_from_db(Concept, Category, Variants) :-
 	ensure_string(VarTable, VarTableString),
 	( control_option(allcats) ->
 	  % select var, vcat, dist, hist, roots from varsan where word=\'haemophilic\'
-	  form_simple_query("var, vcat, dist, hist, roots",
+	  form_simple_query("dist, var, vcat, hist, roots",
 			      VarTableString, "word", Concept, Query)
 	; ensure_atom(Category, CategoryAtom),
 	  % select var, vcat, dist, hist, roots from varsan
 	  %     where word=\'haemophilic\' and wcat=\'noun\'
-	  form_complex_query("var, vcat, dist, hist, roots",
+	  form_complex_query("dist, var, vcat, hist, roots",
 			     VarTableString, "word", Concept, "wcat", CategoryAtom, Query)
 	),
 	run_query(Query, Variants0, 1),
-	% format('~nget_variants_aux:~nquery = ~p~nresult = ~p~n',[Query,Variants0]),
 	sort(Variants0, Variants1),
+	% format('~nget_variants_aux:~nquery = ~p~nresult = ~p~n',[Query,Variants0]),
 	% format('~nafter sort~n', []),
 	convert_to_variant_terms(Variants1, Variants).
 
@@ -773,7 +773,7 @@ convert_to_variant_terms([], []).
 % convert_to_variant_terms([[]|Rest],ConvertedRest) :-
 %    !,
 %    convert_to_variant_terms(Rest,ConvertedRest).
-convert_to_variant_terms([[Var,VCat0,Distance,Hist0,Roots]|Rest],
+convert_to_variant_terms([[Distance,Var,VCat0,Hist0,Roots]|Rest],
                          [v(Var,DistInteger,VCat,Hist,Roots,_)|ConvertedRest]) :-
 	ensure_atom(Distance, DistAtom),
 	atom_codes(DistAtom, DistCodes),
@@ -1011,6 +1011,7 @@ db_get_lex_record(EUI, LexRec) :-
 	form_simple_query("lexrec", "lex_rec", "EUI", EUI, Query),
 	run_query(Query, [[LexRec]], 1).
 
+% This predicate is used only in dynamic variant generation.
 db_get_lex_im_varlist(BaseForm, VarList) :-
 	form_simple_query("infl_variant, infl_lexcat, infl_feature", "im_vars", "citation_form",
 			   BaseForm, Query),
