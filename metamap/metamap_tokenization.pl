@@ -185,7 +185,7 @@ get_non_null_lexmatch(SubItems, LexMatch) :-
 make_list(LexMatch, TextList) :-
 	( atom(LexMatch) ->
 	  TextList = [LexMatch]
-	; TextList=LexMatch
+	; TextList = LexMatch
 	).
 
 /* 
@@ -828,8 +828,7 @@ tokenize_fields_utterly([First|Rest], [TokFirst|TokRest]) :-
 tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 	concat_strings_with_separator(Lines, " ", FieldText),
 	tokenize_text_utterly(FieldText, TokField0),
-	TokField  = TokField0,
-	% re_attach_apostrophe_s_tokens(TokField0, TokField),
+	re_attach_apostrophe_s_tokens(TokField0, TokField),
 	!.
 
 % form_decimal_numbers([], []).

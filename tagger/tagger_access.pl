@@ -140,9 +140,7 @@ tag_text_with_options(Input, TaggerServerStream, ModeOption, PrologOption, Tagge
 	call_tagger(Options, TaggerServerStream, QueryAtom, TaggedTextList0),
 	TaggedTextList0 \== '',
 	TaggedTextList0 \== end_of_file,
-	% postprocess_apostrophe_s(TaggedTextList0, TaggedTextList),
-	TaggedTextList = TaggedTextList0,
-	% TaggedTextList = TaggedTextList0,
+	postprocess_apostrophe_s(TaggedTextList0, TaggedTextList),
 	!.
 tag_text_with_options(Input, _, _, _Tagger, []) :-
 	format('tagger_access:tag_text_with_options/4 failed for ~p~n', [Input]).
