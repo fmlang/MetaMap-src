@@ -76,7 +76,7 @@ DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_A}
 
 LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
 
-SPLFR_BASIC_FLAGS =  --vv --keep
+SPLFR_BASIC_FLAGS =  --vv --keep ${SPCONFIG}
 SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
 SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}

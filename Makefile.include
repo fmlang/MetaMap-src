@@ -122,5 +122,5 @@ export LINK_FILES=$(SKR_DEBUG)/debug.o \
            $(BERKELEY_LIB_DYNAMIC) \
            $(XDR_STATIC_LIB)
 
-export CONF=--conf BDBLIB=$(BERKELEY_LIB_DYNAMIC) --conf BDB_PATH=$(BERKELEY)
+export CONF=--conf BDBLIB=$(BERKELEY_LIB_DYNAMIC) --conf BDB_PATH=$(BERKELEY) $(SPCONFIG)
 

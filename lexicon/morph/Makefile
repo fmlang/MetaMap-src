@@ -74,7 +74,7 @@ MORPH_SO_OBJ = c_morph.o util.o
 FACTS=dm_translated_facts
 RULES=lm_translated_rules dm_translated_rules
 
-SPLFR_BASIC_FLAGS =  --vv --keep ${SOLDFLAGS}
+SPLFR_BASIC_FLAGS =  --vv --keep ${SOLDFLAGS} ${SPCONFIG}
 SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
 SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC="${CC}" $(addprefix --cflag=, $(CFLAGS))

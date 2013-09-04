@@ -78,7 +78,7 @@ SPLD = spld
 
 INCLUDES = -I$(SKR_LEXICON)/include -I$(SKR_DEBUG)/include
 
-SPLFR_BASIC_FLAGS =  --vv --keep
+SPLFR_BASIC_FLAGS =  --vv --keep $(SPCONFIG)
 SPLFR_DYNAMIC_FLAGS = $(SPLFR_BASIC_FLAGS) --moveable
 SPLFR_STATIC_FLAGS = $(SPLFR_BASIC_FLAGS) --static
 SPLFR = splfr --conf CC="$(CC)" --cflag="$(INCLUDES)" $(addprefix --cflag=, $(CFLAGS))
