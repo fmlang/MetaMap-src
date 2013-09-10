@@ -80,7 +80,7 @@ ifeq '$(O_SYSTEM)' "Linux"
 else
   ifeq '$(O_SYSTEM)' "Darwin"
     RANLIB = ranlib
-    export DEFAULT_CFLAGS = -g -O -m32 -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -I/usr/include/malloc -D__DEBUG
+    export DEFAULT_CFLAGS = -g -O -m32 -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -I/usr/include/malloc -D__DEBUG -mmacosx-version-min=10.5
     export SOFLAGS = -m32 -bundle
     export SOLDFLAGS = -m32 -bundle
     export LINKFLAGS = -m32 -bundle
