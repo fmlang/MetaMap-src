@@ -36,7 +36,9 @@
     ]).
 
 :- use_module(skr_lib(nls_strings),[
-	trim_whitespace_right/2
+	trim_whitespace_right/2,
+	split_string/4,
+	split_string_completely/3
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -54,12 +56,9 @@
 	interpret_args/4
     ]).
 
-:- use_module(skr_lib(nls_strings), [
-	split_string_completely/3
-    ]).
-
 :- use_module(skr_lib(server_choice), [
-	get_server_streams/1
+	get_server_streams/1,
+	get_server_stream/2
    ]).
 
 :- use_module(text(text_objects), [
@@ -111,7 +110,6 @@ main :-
 %% Event listener callbacks
 server_started_listener :-
     get_server_property(port(Port)),
-%    format(user_error, 'port:~w\n', [Port]),
     format(user_error, 'port:~w~n', [Port]), % [PD]
     flush_output(user_error).
 
@@ -155,11 +153,17 @@ set_options(OptionString) :-
     %%
     %% If the user asks for WSD then get server stream for WSD server
     %% and add it to the blackboard.
-    %% 
+    %%
+    %%
     ( control_option(word_sense_disambiguation) ->
-	get_server_streams(TaggerServerStream-WSDServerStream),
-	AllServerStreams = TaggerServerStream-WSDServerStream,
-	bb_put(all_server_streams, AllServerStreams)).
+	%% first check to see if WSD socket is already open; skip if so.
+	bb_get(all_server_streams, StoredAllServerStreams),
+	StoredAllServerStreams=StoredTaggerServerStream-StoredWSDServerStream,
+	( StoredWSDServerStream == '' ->
+	    get_server_stream('WSD',WSDServerStream),
+	    AllServerStreams = StoredTaggerServerStream-WSDServerStream,
+	    bb_put(all_server_streams, AllServerStreams))).
+
 
 unset_options(OptionString) :-
     append(OptionString, ".", OptionStringWithPeriod),
@@ -178,8 +182,17 @@ unset_options(OptionString) :-
     subtract_from_control_options(IOptions),
     %% Temporary code for use until a final lex access method is
     %% determined.
-    assert(control_value(lexicon,c)).
-    %% end Temporary code 
+    assert(control_value(lexicon,c)),
+    %% end Temporary code
+
+    %% if WSD is turned off
+    ( \+ control_option(word_sense_disambiguation) ->
+    	bb_get(all_server_streams, StoredAllServerStreams),
+    	StoredAllServerStreams=StoredTaggerServerStream-StoredWSDServerStream,
+    	( StoredWSDServerStream \= '' ->
+    	    close(StoredWSDServerStream),
+    	    AllServerStreams = StoredTaggerServerStream-'',
+    	    bb_put(all_server_streams, AllServerStreams))).
 
 control_option_as_iopt(iopt(X,Value)) :-
 	nls_system:control_value(X,Value).
