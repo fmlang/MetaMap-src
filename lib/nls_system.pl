@@ -143,8 +143,8 @@ is_control_option(metamap, 'L', lexicon_year, 	 		no,
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
 is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
-is_control_option(metamap, 'Q', composite_phrases, 		no,
-                  aspec(composite_phrases, mandatory, integer, no, '4',
+is_control_option(metamap, 'Q', composite_phrases, 		yes,
+                  aspec(composite_phrases, mandatory, integer, yes, 4,
                         'Max number of prepositional phrases to glom on')).
 is_control_option(metamap, 'R', restrict_to_sources, no,
                   aspec(restrict_to_sources, mandatory, list, none, no_default,
@@ -1560,9 +1560,14 @@ assert_control_option(Option) :-
 	).
 
 assert_control_value(Option, Value) :-
-	( control_value(Option, Value) ->
+	% don't assert streams, because for "--UDA UDAfile",
+	% we want the control value to be "UDAfile" and not the stream.
+	( current_stream(_, _, Value) ->
 	  true
-	; % retractall(control_value(Option, _V)),
+%	( control_value(Option, Value) ->
+%	  true
+%	; % retractall(control_value(Option, _V)),
+	; retractall(control_value(Option, _V)),
 	  assert(control_value(Option, Value))
 	).
 

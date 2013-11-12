@@ -106,6 +106,7 @@
     ]).
 
 :- use_module(text(text_object_util), [
+	aa_tok/1,
 	aadef_tok/1,
 	alpha_type/1,
 	an_tok/1,
@@ -512,7 +513,7 @@ find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
 	% polyriboinosinic acid-polyribocytidylic acid [poly(I.C] was compared as a ...".
 	% In that text, we do NOT want "poly(I.C" recognized as a parenthetical expression.
 
-	brackets(LBracketTokenChar, ClosingSubExprBracketChar),
+	brackets([LBracketTokenChar], [ClosingSubExprBracketChar]),
 	!,
 	construct_parenthetical_token(RevSubBExpr, NewLevel, BETok, _SubBExpr),
 	% do not allow this subbracketing to be "undone", i.e. fail rather than
@@ -1991,6 +1992,7 @@ match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
 	  MatchingTokens = [Token|RestMatchingTokens],
 	  match_initial_to_char(1, NextDepth, AALength, RestTokens, Char, " ",
 				RestMatchingTokens, LeftOverTokens)
+	  % Allow skipping over non-matching tokens to allow e.g., "Department of Defense (DoD)".
 	; Depth < AALength,
 	  Tokens = [Token|RestTokens],
 	  Token = tok(_,_,LCText,_),
@@ -2542,8 +2544,8 @@ store_aa(AATokens, ExpansionTokens0, AAsIn, AAsOut) :-
 	% trim_ws_tokens(AATokens0, AATokens),
 	% Trim only the definition; internal whitespace is needed later (I think).
 	% Calling trim_ws_tokens results in the creation of bad tokens like "beta1".
-	% trim_ws_tokens(ExpansionTokens0, ExpansionTokens1),
-        ExpansionTokens1 = ExpansionTokens0,
+	trim_ws_tokens(ExpansionTokens0, ExpansionTokens1),
+        % ExpansionTokens1 = ExpansionTokens0,
 	% This call handles AAs like "Transforming growth factor-beta (TGF-)"
 	% which show up later as "TGF-2". We don't want the token "beta2" to be created!
 	add_hyphen_to_expansion(AATokens, ExpansionTokens1, ExpansionTokens),
@@ -2553,21 +2555,39 @@ store_aa(AATokens, ExpansionTokens0, AAsIn, AAsOut) :-
 	add_to_avl_once(AATokens, ExpansionTokens, AAsIn, AAsOut).
 
 add_hyphen_to_expansion(AATokens, ExpansionTokensIn, ExpansionTokensOut) :-
-	% Do the AA tokens end with a hyphen?
-	( append(_AATokensPrefix, [LastAAToken], AATokens),
-	  token_template(LastAAToken, pn, HyphenString, HyphenString, _PosInfo),
-	  hyphen_punc(HyphenString) ->
-	  append(_ExpansionTokensInPrefix, [LastExpansionToken], ExpansionTokensIn),
-	  % deconstruct the last AA token
-	  token_template(LastExpansionToken, _TokenType,
+	% Do the AA tokens end with a hyphen? E.g.,
+	% "Hydrosulfide (HS-) coordination in iron porphyrinates." (PMID 20038134).
+	( last(AATokens, LastAAToken),
+	  token_template(LastAAToken, pn, HyphenString1, HyphenString1, _PosInfo1),
+	  hyphen_punc(HyphenString1) ->
+	  last(ExpansionTokensIn, LastExpansionToken),
+	  % deconstruct the last AA Expansion token
+	  token_template(LastExpansionToken, _LastTokenType,
 			 _LastExpansionTokenString, _LastExpansionTokenLCString,
-			 pos(_StartPos,EndPos)),
-	  EndPosPlusOne is EndPos + 1,
+			 pos(_LastStartPos,LastEndPos)),
+	  LastEndPosPlus1 is LastEndPos + 1,
 	  % create a new hyphen token
-	  token_template(NewHyphenToken, pn,
-			 HyphenString, HyphenString,
-			 pos(EndPos, EndPosPlusOne)),
-	  append(ExpansionTokensIn, [NewHyphenToken], ExpansionTokensOut)		
+	  token_template(NewHyphenToken1, pn,
+			 HyphenString1, HyphenString1,
+			 pos(LastEndPos, LastEndPosPlus1)),
+	  append(ExpansionTokensIn, [NewHyphenToken1], ExpansionTokensOut)
+	  % Do the AA tokens begin with a hyphen? E.g.,
+	  % "Delta-5 polyunsaturated fatty acids (-5 PUFA)" (PMID 20001760).
+	; AATokens = [FirstAAToken|_],
+	  token_template(FirstAAToken, pn, HyphenString2, HyphenString2, _PosInfo2),
+	  hyphen_punc(HyphenString2) ->
+	  ExpansionTokensIn = [FirstExpansionToken|_],
+	  % deconstruct the first AA Expansion token
+	  token_template(FirstExpansionToken, _FirstTokenType,
+			 _FirstExpansionTokenString, _FirstExpansionTokenLCString,
+			 pos(FirstStartPos,FirstEndPos)),
+%	  FirstStartPosMinus1 is FirstStartPos - 1,
+	  % create a new hyphen token
+	  token_template(NewHyphenToken2, pn,
+			 HyphenString2, HyphenString2,
+			 pos(FirstStartPos, FirstEndPos)),
+%			 pos(FirstStartPosMinus1, FirstStartPos)),
+	  ExpansionTokensOut = [NewHyphenToken2|ExpansionTokensIn]
 	; ExpansionTokensOut = ExpansionTokensIn
 	).
 
@@ -3137,33 +3157,54 @@ annotate_with_aas([AA|Rest], SentencesIn, SentencesOut) :-
 	annotate_with_one_aa(AA, SentencesIn, SentencesInOut),
 	annotate_with_aas(Rest, SentencesInOut, SentencesOut).
 
-annotate_with_one_aa(AA-[Def],SentencesIn,SentencesOut) :-
-    compute_token_position(Def,DefPos),
-    insert_aa_def(SentencesIn,DefPos,Def,AA,DefToken,SentencesInOut),
-    insert_all_aa(SentencesInOut,AA,DefToken,SentencesOut).
+annotate_with_one_aa(AA-[Def], SentencesIn, SentencesOut) :-
+	compute_token_position(Def, DefPos),
+	insert_aa_def(SentencesIn, DefPos, Def, AA, DefToken, SentencesInOut),
+	PreviousAATokens = [],
+	insert_all_aa(SentencesInOut, PreviousAATokens, AA, DefToken, SentencesOut).
 
-insert_aa_def([],DefPos,Def,AA,NewToken,[NewToken]) :-
-    NewToken=tok(aadef,Def,AA,DefPos).
-insert_aa_def([First|Rest],DefPos,Def,AA,NewToken,SentencesOut) :-
-    First=tok(_,_,_,FirstPos),
-    position_ge(FirstPos,DefPos),
-    !,
-    NewToken=tok(aadef,Def,AA,DefPos),
-    SentencesOut=[NewToken,First|Rest].
-insert_aa_def([First|Rest],DefPos,Def,AA,NewToken,[First|ModifiedRest]) :-
-    insert_aa_def(Rest,DefPos,Def,AA,NewToken,ModifiedRest).
+insert_aa_def([], DefPos, Def, AA, NewToken, [NewToken]) :-
+	NewToken = tok(aadef,Def,AA,DefPos).
+insert_aa_def([First|Rest], DefPos, Def, AA, NewToken, SentencesOut) :-
+	First = tok(_,_,_,FirstPos),
+	position_ge(FirstPos, DefPos),
+	!,
+	NewToken = tok(aadef,Def,AA,DefPos),
+	SentencesOut = [NewToken,First|Rest].
+insert_aa_def([First|Rest], DefPos, Def, AA, NewToken, [First|ModifiedRest]) :-
+    insert_aa_def(Rest, DefPos, Def, AA, NewToken, ModifiedRest).
 
-insert_all_aa([],_,_,[]).
-insert_all_aa([First|Rest],AA,DefToken,SentencesOut) :-
-    match_tokens_ignore_ws_ho(AA,[First|Rest],Match,_),
-    !,
-    compute_token_position(Match,MatchPos),
-    NewToken=tok(aa,Match,[DefToken],MatchPos),
-    SentencesOut=[NewToken,First|ModifiedRest],
-    insert_all_aa(Rest,AA,DefToken,ModifiedRest).
-insert_all_aa([First|Rest],AA,DefToken,[First|ModifiedRest]) :-
-    insert_all_aa(Rest,AA,DefToken,ModifiedRest).
+% We need to accumulate aa tokens as they're encountered,
+% in order to ensure that no matching token Match has already participated
+% in the expansion of an AA. This strategy handles cases such as PMID 22114065, which includes
+% (1) liquid chromatography-mass spectrometry (LC-MS),
+% (2) mass spectrometry (MS/MS), and
+% (3) LC-MS/MS.
+% After "LC-MS" is expanded using AA (1),
+% we don't want "MS" to be re-used in the expansion of AA (2).
 
+insert_all_aa([], _PreviousAATokens, _AA, _DefToken, []).
+% If we see an aa token, add it to PreviousAATokens, and add it to SentencesOut as well.
+insert_all_aa([FirstToken|RestTokens], PreviousAATokens, AA, DefToken, [FirstToken|SentencesOut]) :-
+	aa_tok(FirstToken),
+	!,
+	insert_all_aa(RestTokens, [FirstToken|PreviousAATokens], AA, DefToken, SentencesOut).
+insert_all_aa([FirstToken|RestTokens], PreviousAATokens, AA, DefToken, SentencesOut) :-
+	\+ already_expanded_token(FirstToken, PreviousAATokens),
+	match_tokens_ignore_ws_ho(AA, [FirstToken|RestTokens], Match, _),
+	compute_token_position(Match, MatchPos),
+	!,
+	NewToken = tok(aa, Match, [DefToken], MatchPos),
+	SentencesOut = [NewToken,FirstToken|ModifiedRestTokens],
+	insert_all_aa(RestTokens, PreviousAATokens, AA, DefToken, ModifiedRestTokens).
+insert_all_aa([FirstToken|RestTokens], PreviousAATokens, AA, DefToken, [FirstToken|ModifiedRestTokens]) :-
+	insert_all_aa(RestTokens, PreviousAATokens, AA, DefToken, ModifiedRestTokens).
+
+already_expanded_token(TestToken, PreviousAATokens) :-
+	member(AA, PreviousAATokens),
+	AA = tok(aa, AADefnTokens),
+	memberchk(TestToken, AADefnTokens),
+	!.
 
 % Test if the two token lists are identical other than the PosInfo fields.
 % This predicate is only for 4-argument tokens, e.g.,
@@ -3178,9 +3219,6 @@ match_tokens_ignore_posinfo([H1|T1], [H2|T2]) :-
 	TokenString1   == TokenString2,
 	LCTokenString1 == LCTokenString2,
 	match_tokens_ignore_posinfo(T1, T2).
-       
-	
-
 
 /* match_tokens_ignore_ws_ho(+Pattern, +Tokens, -Match, -RestTokens)
 

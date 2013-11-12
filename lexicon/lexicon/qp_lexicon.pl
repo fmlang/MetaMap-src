@@ -59,6 +59,7 @@
         lex_init/2,
 	default_lexicon_file/1,
 	default_index_file/1,
+	normalize_token/2,
 	reformat_list/2,
 	remove_zero_EUI/2
     ]).
@@ -89,8 +90,7 @@
    ]).
 
 :- use_module(metamap(metamap_tokenization), [
-	tokenize_text/2,
-	tokenize_text_utterly/2
+	tokenize_text/2
    ]).
 
 :- use_module(skr(skr_utilities), [
@@ -453,36 +453,51 @@ lex_form_ci_recs_input_6(Input, Recs, Remaining, TagList, Lexicon, Index) :-
 % (3) Don't look any further (i.e., don't recurse on a longer prefix),
 % but just retrieve the lexmatches corresponding to the EUIs.
 
-next_longest_prefix(ModTokenList, CurrPrefixLength, InputTokenList,
+next_longest_prefix(CurrPrefixLength, InputTokenList,
                     LexicalEntryList, InputMatch, LexMatch, InputTokensRemaining) :-
-        length(ModTokenList, ModTokenListLength),
+	% length(ModTokenList, ModTokenListLength),
+	length(InputTokenList, InputTokenListLength),
         NextPrefixLength is CurrPrefixLength + 1,
-        NextPrefixLength =< ModTokenListLength,
+        NextPrefixLength =< InputTokenListLength,
         longest_prefix(InputTokenList, NextPrefixLength, LexicalEntryList,
                        InputMatch, LexMatch, InputTokensRemaining).
 
 longest_prefix(InputTokenList, CurrPrefixLength, LexicalEntryList,
 	       InputMatch, LexMatch, RemainingInputTokens) :-
-	lc_and_remove_punct_tokens(InputTokenList, ModTokenList),
-        % Identify the first CurrPrefixLength elements of ModTokenList
-	prefix_length(ModTokenList, CurrPrefixList, CurrPrefixLength),
+	normalize_all_tokens(InputTokenList, NormInputTokenList),
+	remove_punct_tokens(NormInputTokenList, ModInputTokenList),
+        % Identify the first CurrPrefixLength elements of ModInputTokenList
+	prefix_length(ModInputTokenList, CurrPrefixList, CurrPrefixLength),
 	last(CurrPrefixList, LastElement),
-	% stop right here if we have something like
-	% the first two tokens in [has, '', been] (because of retokenize/2)!	
+	% Fail if we have something like the first two tokens in
+	% [has, '', been] (because of retokenize/2)!	
 	LastElement \== '',
 	concat_atom(CurrPrefixList, ' ', PrefixAtom),
-	% redundant
-	% lower(PrefixAtom, PrefixAtomLC),
 	db_get_lex_prefix_EUIs(PrefixAtom, EUIList),
+	% What is this for?!
+	% EUIList \== ['0'],
+	( get_lexical_entry_list(EUIList, CurrPrefixLength,
+				 InputTokenList, NormInputTokenList,
+				 LexicalEntryList, InputMatch, LexMatch, RemainingInputTokens) ->
+	  true
+	; EUIList = [FirstEUI|_],
+	  FirstEUI \== '0' ->
+	  send_message('### WARNING: longest_prefix failed on ~w~n!!', [InputTokenList]),
+	  fail
+	).
+
+get_lexical_entry_list(EUIList, CurrPrefixLength,
+		       InputTokenList, NormInputTokenList,
+		       LexicalEntryList, InputMatch, LexMatch, RemainingInputTokens) :-
 	  % If the EUIList is ['0'], the input prefix is a prefix of a lexical item,
-	  % BUT NOT a lexical item itself, so look for a longer prefix.
+	  % BUT NOT a itself a lexical item, so look for a longer prefix.
 	( EUIList == ['0'] ->
-	  next_longest_prefix(ModTokenList, CurrPrefixLength, InputTokenList,
+	  next_longest_prefix(CurrPrefixLength, InputTokenList,
 			      LexicalEntryList, InputMatch, LexMatch, RemainingInputTokens)
 	  % If the EUIList is ['0'|_], the input prefix is a prefix of a lexical item,
 	  % AND a lexical item itself, so look for a longer prefix.
 	; EUIList = ['0', _|_],
-	  next_longest_prefix(ModTokenList, CurrPrefixLength, InputTokenList,
+	  next_longest_prefix(CurrPrefixLength, InputTokenList,
 			      LexicalEntryList, InputMatch, LexMatch, RemainingInputTokens),
 	  !
 	  % There could still be a '0' at the head of the list, e.g., for
@@ -492,26 +507,28 @@ longest_prefix(InputTokenList, CurrPrefixLength, LexicalEntryList,
 	  % So remove a '0' if if it's there.
 	; remove_zero_EUI(EUIList, RealEUIList),
 	  db_get_lex_record_list(RealEUIList, LexicalEntryList),
-	  % get_all_lexmatches(LexicalEntryList, PrefixAtom, InputTokenList, [], LexMatches),
-	  % get_all_lexmatches needs to return also InputMatch tokenlist!
-	  remove_null_atoms(InputTokenList, InputTokenListNoNulls),
-	  get_all_lexmatches(LexicalEntryList, PrefixAtom, InputTokenListNoNulls, [], LexMatches),
-	  % must take into account if lexmatch is exact, lower, or punct
+	  remove_null_atoms(NormInputTokenList, InputTokenListNoNulls),
+	  get_all_lexmatches(LexicalEntryList, InputTokenListNoNulls, [], LexMatches),
 	  sort(LexMatches, SortedLexMatches),
-	  choose_best_lexmatch(SortedLexMatches,
-			       _NegMatchingCount-_MatchScore-LexMatchTokens-RemainingInputTokens),
+	  % choose_best_lexmatch(SortedLexMatches,
+	  %		       NegMatchingCount-_MatchScore-LexMatchTokens-_RestInputTokens),
+	  member(NegMatchingCount-_MatchScore-LexMatchTokens-_RestInputTokens, SortedLexMatches),
+	  length(InputTokenList, InputTokenListLength),
+	  length(LexMatchTokens, LexMatchTokensLength),
+	  LexMatchTokensLength =< InputTokenListLength ->
+
+	  MatchingCount is -NegMatchingCount,
 	  % Still necessary?
 	  % remove_final_blank(LexMatchTokens0, LexMatchTokens),
-	  % This call to append/3 instantiates InputMatch
-	  % append(InputMatch, RemainingInputTokens, InputTokenListNoNulls),
-	  remove_null_atoms(ModTokenList, ModTokenListNoNulls),
-	  append(InputMatch, RemainingInputTokens, ModTokenListNoNulls),
+	  skip_n_tokens(MatchingCount, InputTokenList, InputMatch0, RemainingInputTokens),
+	  % append(InputMatch0, RemainingInputTokens, InputTokenListNoNulls),
+	  remove_null_atoms(InputMatch0, InputMatch),
 	  % Still necessary?
 	  % move_apostrophe_s_to_inputmatch(InputMatch0, RemainingInputTokens0,
 	  %				  InputMatch, RemainingInputTokens),
 	  % MatchingCount is -1 * NegMatchingCount,
 	  % prefix_length(InputTokenList, InputMatch, MatchingCount),
-	  % prefix_length(ModTokenList, InputMatch, MatchingCount),
+	  % prefix_length(ModCurrPrefixList, InputMatch, MatchingCount),
 	  % InputMatch           = ['P','.','(','R']
 	  % InputTokenList       = ['P','.','(','R',')','System']
 	  % We want InputTokensRemaining to be ['System'],
@@ -644,22 +661,17 @@ insert_white_space_between_alnums([NextToken|RestTokens], FirstToken, [FirstToke
 	),
 	insert_white_space_between_alnums(RestTokens, NextToken, RestNewTokens).
 
-% no space after: hyphen
-% yes space after: period, comma
 
+% choose_best_lexmatch([FirstLexMatch|_RestLexMatches], FirstLexMatch).
 
-choose_best_lexmatch([FirstLexMatch|_RestLexMatches], FirstLexMatch).
-
-get_all_lexmatches([], _PrefixAtom, _InputTokenList, LexMatchesList, LexMatches) :-
+get_all_lexmatches([], _NormalizedInputTokenList, LexMatchesList, LexMatches) :-
 	% Do this with difference lists!
 	append(LexMatchesList, LexMatches0),
 	sort(LexMatches0, LexMatches).
-get_all_lexmatches([LexicalEntry|RestLexicalEntries], PrefixAtom,
-		   InputTokenList, LexMatchesIn, LexMatchesOut) :-
-	get_lexmatches_for_one_entry(LexicalEntry, PrefixAtom,
-				     InputTokenList, LexMatchesIn, LexMatchesNext),
-	get_all_lexmatches(RestLexicalEntries, PrefixAtom,
-			   InputTokenList, LexMatchesNext, LexMatchesOut).
+get_all_lexmatches([LexicalEntry|RestLexicalEntries],
+		   NormalizedInputTokenList, LexMatchesIn, LexMatchesOut) :-
+	get_lexmatches_for_one_entry(LexicalEntry, NormalizedInputTokenList, LexMatchesIn, LexMatchesNext),
+	get_all_lexmatches(RestLexicalEntries, NormalizedInputTokenList, LexMatchesNext, LexMatchesOut).
 
 get_variant_strings(RestEntry, VariantStrings) :-
 	RestEntry = [entries:[entry:List]|_],
@@ -694,6 +706,14 @@ remove_null_atoms([H|T], Choices) :-
 	),
 	remove_null_atoms(T, RestChoices).
 
+get_all_im_variants_only(LexVariantsIn, LexVariantsOut) :-
+	(  foreach(LVsIn,  LexVariantsIn),
+	   foreach(LVsOut, LexVariantsOut0)
+	do get_im_variants_only(LVsIn, LVsOut)
+	),
+	append(LexVariantsOut0, LexVariantsOut).	
+	   
+
 get_im_variants_only(CitationForm, InflectionalVariants) :-
 	lower(CitationForm, CitationFormLC),
 	db_get_lex_im_varlist(CitationFormLC, InflectionalVariants0),
@@ -702,40 +722,62 @@ get_im_variants_only(CitationForm, InflectionalVariants) :-
 	do VariantData = [Variant|_]
 	).
 
-normalize_all_lex_variants(AllLexVariants, AllNormalizedLexVariants) :-
-	(  foreach(LexVariant, AllLexVariants),
-	   foreach(TokenizedLexVariantAtoms, AllNormalizedLexVariants0)
-	do atom_codes(LexVariant, LexVariantString),
-	   normalize_lex_string(LexVariantString, NormalizedLexVariantString),
-	   tokenize_text(NormalizedLexVariantString, TokenizedLexVariantString),
-	   atom_codes_list(TokenizedLexVariantAtoms, TokenizedLexVariantString)
-	),
-	sort(AllNormalizedLexVariants0, AllNormalizedLexVariants).
+normalize_all_tokens(AllTokens, AllNormalizedTokens) :-
+	(  foreach(Token, AllTokens),
+	   foreach(NormalizedTokenAtom, AllNormalizedTokens)
+	do normalize_token(Token, NormalizedTokenAtom)
+	   % tokenize_text(NormalizedTokenString, TokenizedTokenString),
+	   % atom_codes_list(TokenizedTokenAtoms, TokenizedTokenString)
+	).
+
+normalize_token(TokenAtom, NormalizedTokenAtom) :-
+        atom_codes(TokenAtom, TokenString),
+        ( TokenString = [Char],
+          is_punct(Char) ->
+          NormalizedTokenAtom = TokenAtom
+        ; normalize_lex_string(TokenString, NormalizedTokenString),
+          atom_codes(NormalizedTokenAtom, NormalizedTokenString)
+        ).
 
 % LexicalEntry is of the form
 % lexrec:[base:['LDLC'],spelling_variants:['LDL-C']|_]
-get_lexmatches_for_one_entry(LexicalEntry, _PrefixAtom,
-			     InputTokenList, LexMatchesIn, LexMatchesNext) :-
-	normalize_input_token_list(InputTokenList, NormalizedInputTokenList),
+get_lexmatches_for_one_entry(LexicalEntry, NormalizedInputTokenList, LexMatchesIn, LexMatchesNext) :-
 	LexicalEntry = lexrec:[base:[CitationForm],spelling_variants:SpellingVariants|RestEntry],
+	% Inflect the citation form
 	get_im_variants_only(CitationForm, InflectionalVariants),
-	% This handles contractions ("aren't", "didn't", etc.)
+	% Extract contractions ("aren't", "didn't", etc.), auxes and modals:
+	% "can", "dare", "do", "have", "may", "must", "ought", "shall", "will", and "need".
 	get_variant_strings(RestEntry, VariantStrings),
+	% Extract irregular morphology
 	get_irregs(RestEntry, Irregs),
 	append([SpellingVariants,InflectionalVariants,VariantStrings,Irregs], AllLexVariants0),
 	sort([CitationForm|AllLexVariants0], AllLexVariants1),
-	remove_null_atoms(AllLexVariants1, AllLexVariants),
-	normalize_all_lex_variants(AllLexVariants, AllNormalizedLexVariants),
-	(  foreach(TokenizedLexFormAtoms, AllNormalizedLexVariants),
+	remove_null_atoms(AllLexVariants1, AllLexVariants2),
+	get_all_im_variants_only(AllLexVariants2, AllLexVariants3),
+	sort(AllLexVariants3, AllLexVariants4),
+	normalize_all_tokens(AllLexVariants4, AllNormalizedLexVariants),
+	append(AllLexVariants4, AllNormalizedLexVariants, AllLexVariants5),
+	sort(AllLexVariants5, AllLexVariants),
+	tokenize_all(AllLexVariants, AllTokenizedLexVariants),
+	% AllNormalizedLexVariants = AllLexVariants,
+	(  foreach(TokenizedLexFormAtoms, AllTokenizedLexVariants),
 	   foreach(MatchingTokenCount-MatchScore-MatchingTokens-RemainingInputTokens,
 		   AllTokenizedForms),
 	   param(NormalizedInputTokenList)
-	do count_matching_tokens(TokenizedLexFormAtoms, NormalizedInputTokenList,
-				 0, MatchingTokenCount,
-				 0, MatchScore,
-				 MatchingTokens, RemainingInputTokens)
+	do count_matching_input_tokens(TokenizedLexFormAtoms, NormalizedInputTokenList,
+				     0, MatchingTokenCount,
+				     0, MatchScore,
+				     MatchingTokens, RemainingInputTokens)
 	),
 	LexMatchesNext = [AllTokenizedForms|LexMatchesIn].
+
+tokenize_all(LexVariants, TokenizedLexVariants) :-
+	(  foreach(LV,  LexVariants),
+	   foreach(TLV, TokenizedLexVariants)
+	do atom_codes(LV, LVCodes),
+	   tokenize_string(LVCodes, TLV0),
+	   append(TLV0, TLV)
+	).
 
 % ### also need to generate all variants of each lex item and original input!
 
@@ -747,79 +789,70 @@ get_lexmatches_for_one_entry(LexicalEntry, _PrefixAtom,
 % (5) collapse multiple blanks to just onef
 % (6) remove any leading and trailing blanks 
 
-normalize_input_token_list(InputTokenList, NormalizedInputTokenList) :-
-	concat_atoms_intelligently(InputTokenList, InputAtom),
-	atom_codes(InputAtom, InputString),
-	normalize_lex_string(InputString, NormalizedInputString),
-	tokenize_text(NormalizedInputString, NormalizedInputTokenStrings),
-	atom_codes_list(NormalizedInputTokenList, NormalizedInputTokenStrings).
-
 normalize_lex_string(LexFormString, NormalizedLexFormString) :-
 	lower(LexFormString, LexFormString1),
 	remove_unwanted_substrings(LexFormString1, LexFormString2),
-	( append(Prefix, "'s", LexFormString2) ->
-	  LexFormString3 = Prefix
-	; LexFormString3 = LexFormString2
-	),
-	change_punct_to_blanks(LexFormString3, LexFormString4),
+%	( append(Prefix, "'s", LexFormString2) ->
+%	  LexFormString3 = Prefix
+%	; LexFormString3 = LexFormString2
+%	),
+	LexFormString3 = LexFormString2,
+	change_puncts_to_blanks(LexFormString3, LexFormString4),
 	trim_and_compress_whitespace(LexFormString4, LexFormString5),
 	NormalizedLexFormString = LexFormString5.
 
 remove_unwanted_substrings(LexFormStringIn, LexFormStringOut) :-
-	( change1(Old, New),
-	  append([Before,Old,After], LexFormStringIn) ->
-	  append([Before,New,After], LexFormString1),
+	( unwanted_string(Unwanted),
+	  append([Before,Unwanted,After], LexFormStringIn) ->
+	  append([Before,After], LexFormString1),
 	  remove_unwanted_substrings(LexFormString1, LexFormStringOut)
 	; LexFormStringOut = LexFormStringIn
 	).
 
-change1("(ies)", "").
-change1("(es)", "").
-change1("(s)",  "").
-change1("'s ",  " ").
+unwanted_string("(ies)").
+unwanted_string("(es)").
+unwanted_string("(s)").
+unwanted_string("'s").
 
-change2("  ", " ").
-
-change_punct_to_blanks([], []).
-change_punct_to_blanks([H1|T1], [H2|T2]) :-
+change_puncts_to_blanks([], []).
+change_puncts_to_blanks([H1|T1], [H2|T2]) :-
 	( is_punct(H1) ->
 	  H2 = 0'    % there is a blank space after the "'"!
 	; H2 = H1
 	),
-	change_punct_to_blanks(T1, T2).
+	change_puncts_to_blanks(T1, T2).
 	
 
-count_matching_tokens([], InputTokenList,
-		      MatchingTokenCount, MatchingTokenCount,
-		      MatchScore, MatchScore,
-		      [], InputTokenList).
-count_matching_tokens([FirstLexToken|_RestLexTokens],
-		      [],
-		      MatchingTokenCountIn, MatchingTokenCountOut,
-		      MatchScoreIn, MatchScoreOut,
-		      MatchingTokenList, LeftOverInputTokens) :-
+count_matching_input_tokens([], InputTokenList,
+			  MatchingTokenCount, MatchingTokenCount,
+			  MatchScore, MatchScore,
+			  [], InputTokenList).
+count_matching_input_tokens([FirstLexToken|_RestLexTokens], [],
+			  MatchingTokenCountIn, MatchingTokenCountOut,
+			  MatchScoreIn, MatchScoreOut,
+			  MatchingTokenList, LeftOverInputTokens) :-
 	punct_token(FirstLexToken, _),
 	MatchingTokenCountOut is MatchingTokenCountIn + 1,
 	MatchScoreOut is MatchScoreIn + 1,
 	MatchingTokenList = [FirstLexToken],
 	LeftOverInputTokens = [].	
-count_matching_tokens([FirstLexToken|RestLexTokens],
-		      [FirstInputToken|RestInputTokens],
-		      MatchingTokenCountIn, MatchingTokenCountOut,
-		      MatchScoreIn, MatchScoreOut,
-		      MatchingTokenList, LeftOverInputTokens) :-
+count_matching_input_tokens([FirstLexToken|RestLexTokens],
+			  [FirstInputToken|RestInputTokens],
+			  MatchingTokenCountIn, MatchingTokenCountOut,
+			  MatchScoreIn, MatchScoreOut,
+			  MatchingTokenList, LeftOverInputTokens) :-
 
 	( token_match([FirstLexToken|RestLexTokens], [FirstInputToken|RestInputTokens],
 		      RemainingLexTokens, RemainingInputTokens,
-		      AdditionalInputTokenCount, ThisMatchScore, MatchingTokens),
+		      AdditionalInputTokenCount, ThisMatchScore, MatchingLexTokens),
 	  % update_matching_token_list(MatchingTokens, MatchingTokenList, RestMatchingTokenList),
-	  append(MatchingTokens, RestMatchingTokenList, MatchingTokenList),
+	  append(MatchingLexTokens, RestMatchingTokenList, MatchingTokenList),
 	  update_match_type(MatchScoreIn, ThisMatchScore, MatchScoreNext),
 	  MatchingTokenCountNext is MatchingTokenCountIn - AdditionalInputTokenCount,
-	  count_matching_tokens(RemainingLexTokens, RemainingInputTokens,
-				MatchingTokenCountNext, MatchingTokenCountOut,
-				MatchScoreNext, MatchScoreOut,
-				RestMatchingTokenList, LeftOverInputTokens) ->
+	  count_matching_input_tokens(RemainingLexTokens, RemainingInputTokens,
+				    MatchingTokenCountNext, MatchingTokenCountOut,
+				    MatchScoreNext, MatchScoreOut,
+				    RestMatchingTokenList, LeftOverInputTokens) ->
 	  true
 	; MatchingTokenCountOut is MatchingTokenCountIn,
 	  MatchingTokenList = [],
@@ -854,21 +887,26 @@ update_matching_token_list(MatchingToken, MatchingTokenList, RestMatchingTokenLi
 % Case (1):  exact match: score = -2
 % Case (2):   case match: score = -1
 % Case (3):  both punctuation, but different punctuation: score = 0
-% Case (4):  LexToken list begins with apostrophe-s-space
-%                                   or apostrophe-s: score 0
+% Case (4):  LexToken list begins with apostrophe-s: score 0
 %            If the input token list is      [alzheimer, disease],
-%               the   lex token list will be ['Alzheimer','\'',s,' ',disease].
+%               the   lex token list will be ['Alzheimer','\'',s,disease].
 %            If the input token list is      ['Pick', cells],
-%               the   lex token list will be ['Pick','\'',s,' ',cell].
+%               the   lex token list will be ['Pick','\'',s,cell].
 %            If the input token list is      ['Fuchs',       dystrophy],
-%               the   lex token list will be ['Fuchs', '\'', ' ', dystrophy].
+%               the   lex token list will be ['Fuchs', '\'', dystrophy].
 % Case (5):  InputToken list begins with apostrophe-s: score 0
 %            In this example, the 4th and 5th input tokens are relevant
 %            If the input token list is      ['Kayser', -, 'Fleischer', '\'', s, ring],
-%               the   lex token list will be ['Kayser' ,-, 'Fleischer',  ' ',    ring].
-% Case (6):  LexToken is punct and InputToken is alnum: score = 1
+%               the   lex token list will be ['Kayser' ,-, 'Fleischer',          ring].
+% Case (6):  LexToken is punct and InputToken is not: score = 1
 %            If the input token list is      [non,      iron],
 %               the   lex token list will be [non,   -, iron].
+% Case (9):  InputToken is punct, LexToken is not.
+%             If the input token list is      [serum, beta, '(',' 2',' )', -, microglobulin],
+%                the   lex token list will be [serum, beta,       '2',        microglobulin],
+
+% Cases (7) and (8) are no longer necessary,
+% because I no longer use tokenize_text_utterly, which added blank tokens:
 % Case (7):  LexToken is ' ', InputToken is punct: score = 0
 %            In this example, the 2nd tokens are relevant.
 %            If the input token list is      [heart,   -, attack],
@@ -878,9 +916,8 @@ update_matching_token_list(MatchingToken, MatchingTokenList, RestMatchingTokenLi
 %	     which creates whitespace tokens: score = -2
 %            If the input token list is      [heart,      attack],
 %               the   lex token list will be [heart, ' ', attack].
-% Case (9):  InputToken is punct, LexToken is not.
-%             If the input token list is      [serum,      beta, '(',' 2',' )', -, microglobulin],
-%                the   lex token list will be [serum, ' ', beta, ' ', '2', ' ', microglobulin],
+% Cases (10), (11) and (12) are no longer necessary,
+% because I now generate the inflectional variants of the citation form!
 % Case (10): InputToken and LexToken are variants.
 %            If the input token list is      [hearts],
 %               the   lex token list will be [heart]
@@ -896,16 +933,45 @@ update_matching_token_list(MatchingToken, MatchingTokenList, RestMatchingTokenLi
 
 token_match([FirstLexToken|RestLexTokens], [FirstInputToken|RestInputTokens],
 	    RemainingLexTokens, RemainingInputTokens,
-	    AdditionalInputTokenCount, MatchScore, MatchingTokens) :-
- 	FirstLexToken == FirstInputToken,
- 	RemainingLexTokens = RestLexTokens,
- 	RemainingInputTokens = RestInputTokens,
- 	AdditionalInputTokenCount is 1,
- 	MatchingTokens = [FirstLexToken],
- 	MatchScore is -2.
+	    AdditionalInputTokenCount, MatchScore, MatchingLexTokens) :-
+ 	( FirstLexToken == FirstInputToken,
+%	  atom_codes(FirstLexToken, [FirstLexTokenCode|_]),
+%	  \+ is_punct(FirstLexTokenCode) ->
+	  RemainingLexTokens = RestLexTokens,
+	  RemainingInputTokens = RestInputTokens,
+	  AdditionalInputTokenCount is 1,
+	  MatchingLexTokens = [FirstLexToken],
+	  MatchScore is -2
+	; lower(FirstInputToken, FirstInputTokenLC),
+	  lower(FirstLexToken, FirstLexTokenLC),
+ 	  FirstLexTokenLC == FirstInputTokenLC ->
+ 	  RemainingLexTokens = RestLexTokens,
+ 	  RemainingInputTokens = RestInputTokens,
+ 	  AdditionalInputTokenCount is 1,
+ 	  MatchingLexTokens = [FirstLexToken],
+ 	  MatchScore is -1
+	; punct_token(FirstLexToken, _),
+ 	  punct_token(FirstInputToken, _) ->
+ 	  RemainingLexTokens = RestLexTokens,
+ 	  RemainingInputTokens = RestInputTokens,
+	  MatchingLexTokens = [FirstLexToken],
+ 	  AdditionalInputTokenCount is 1,
+ 	  MatchScore is 0
+	; punct_token(FirstLexToken, _) ->
+ 	  RemainingLexTokens = RestLexTokens,
+	  RemainingInputTokens = [FirstInputToken|RestInputTokens],
+	  MatchingLexTokens = [FirstLexToken],
+ 	  AdditionalInputTokenCount is 0,
+ 	  MatchScore is 1
+	; punct_token(FirstInputToken, _) ->
+	  RemainingLexTokens = [FirstLexToken|RestLexTokens],
+	  RemainingInputTokens = RestInputTokens,
+	  MatchingLexTokens = [],
+ 	  AdditionalInputTokenCount is 1,
+ 	  MatchScore is 1
+	).
+	  
 
-%	lower(FirstInputToken, FirstInputTokenLC),
-%	lower(FirstLexToken, FirstLexTokenLC),
 %	  % ## Case (1): Exact match; score is -2
 % 	( FirstLexToken == FirstInputToken ->
 % 	  RemainingLexTokens = RestLexTokens,
@@ -1065,19 +1131,18 @@ common_prefix([H1|T1], [H2|T2], Shared, LeftOver) :-
 
 % If the first argument (InputTokenList) begins with an apostrophe, remove it;
 % moreover, if the next token is an "s", remove it too!
-lc_and_remove_punct_tokens([], []).
-lc_and_remove_punct_tokens([H|RestIn], NonPunctTokens) :-
-	( H == '''' ->
-	  remove_next_s(RestIn, RestNext),
-	  NonPunctTokens = RestOut
-	; punct_token(H, _) ->
+remove_punct_tokens([], []).
+remove_punct_tokens([H|RestIn], NonPunctTokens) :-
+%	( H == '''' ->
+%	  remove_next_s(RestIn, RestNext),
+%	  NonPunctTokens = RestOut
+	( punct_token(H, _) ->
 	  NonPunctTokens = RestOut,
 	  RestNext = RestIn
-	; lower(H, LowerH),
-	  NonPunctTokens = [LowerH|RestOut],
+	; NonPunctTokens = [H|RestOut],
 	  RestNext = RestIn
 	),
-	lc_and_remove_punct_tokens(RestNext, RestOut).
+	remove_punct_tokens(RestNext, RestOut).
 
 remove_next_s([], []).
 remove_next_s([H|T], Out) :-

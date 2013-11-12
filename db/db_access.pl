@@ -68,8 +68,11 @@
 	db_get_lex_record_list/2,
 	db_get_lex_dm_variants_no_cat/2,
 	db_get_lex_dm_variants_with_cat/3,
-	db_get_lex_im_varlist/2
-    ]).
+	db_get_lex_im_varlist/2,
+	exec_init_dbs/1,
+	form_simple_query/5,
+	run_query/3		      
+   ]).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
