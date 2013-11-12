@@ -36,7 +36,9 @@
     ]).
 
 :- use_module(skr_lib(nls_strings),[
-	trim_whitespace_right/2
+	trim_whitespace_right/2,
+	split_string/4,
+	split_string_completely/3
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -54,12 +56,9 @@
 	interpret_args/4
     ]).
 
-:- use_module(skr_lib(nls_strings), [
-	split_string_completely/3
-    ]).
-
 :- use_module(skr_lib(server_choice), [
-	get_server_streams/1
+	get_server_streams/1,
+	get_server_stream/2
    ]).
 
 :- use_module(text(text_objects), [
@@ -85,6 +84,7 @@ main :-
     format(user_error, 'Server options: ~q~N', [ServerOptions]),
     register_query(get_options(AllOptions), get_options(AllOptions)),
     register_query(process_string(Input,Output), process_string(Input,Output)),
+    register_query(process_request(Request,Response), process_request(Request,Response)),
     register_query(reset_options, reset_options),
     register_query(set_options(Options), set_options(Options)),
     register_query(unset_options(Options), unset_options(Options)),
@@ -111,7 +111,6 @@ main :-
 %% Event listener callbacks
 server_started_listener :-
     get_server_property(port(Port)),
-%    format(user_error, 'port:~w\n', [Port]),
     format(user_error, 'port:~w~n', [Port]), % [PD]
     flush_output(user_error).
 
@@ -155,11 +154,18 @@ set_options(OptionString) :-
     %%
     %% If the user asks for WSD then get server stream for WSD server
     %% and add it to the blackboard.
-    %% 
+    %%
+    %%
     ( control_option(word_sense_disambiguation) ->
-	get_server_streams(TaggerServerStream-WSDServerStream),
-	AllServerStreams = TaggerServerStream-WSDServerStream,
-	bb_put(all_server_streams, AllServerStreams)).
+	%% first check to see if WSD socket is already open; skip if so.
+	bb_get(all_server_streams, StoredAllServerStreams),
+	StoredAllServerStreams=StoredTaggerServerStream-StoredWSDServerStream,
+	( StoredWSDServerStream == '' ->
+	    get_server_stream('WSD',WSDServerStream),
+	    AllServerStreams = StoredTaggerServerStream-WSDServerStream,
+	    bb_put(all_server_streams, AllServerStreams) ;
+	    true) ;
+	true).
 
 unset_options(OptionString) :-
     append(OptionString, ".", OptionStringWithPeriod),
@@ -179,7 +185,7 @@ unset_options(OptionString) :-
     %% Temporary code for use until a final lex access method is
     %% determined.
     assert(control_value(lexicon,c)).
-    %% end Temporary code 
+    %% end Temporary code
 
 control_option_as_iopt(iopt(X,Value)) :-
 	nls_system:control_value(X,Value).
@@ -194,6 +200,7 @@ reset_options :-
 	%% Temporary code for use until a final lex access method is
 	%% determined.  This will need re-factoring to remove
 	%% references to lexicon.
+	set_control_options,
  	IOptions=[iopt(lexicon,c),iopt(machine_output,none)],
  	add_to_control_options(IOptions),
 	assert(control_value(lexicon,c)).
@@ -231,6 +238,19 @@ process_string(Input,Output) :-
 	output_should_be_bracketed(BracketedOutput),
 	postprocess_text_mmserver(Strings, BracketedOutput, InterpretedArgs,
 		 IOptionsFinal,  ExpRawTokenList, AAs, MMResults, Output).
+
+process_request(Request,Response) :-
+	split_string(Request,"|",Options,Input),
+	set_options(Options),
+	process_string(Input,Response),
+	bb_get(all_server_streams, StoredAllServerStreams),
+    	StoredAllServerStreams=StoredTaggerServerStream-StoredWSDServerStream,
+    	( StoredWSDServerStream \= '' ->
+    	    close(StoredWSDServerStream),
+    	    AllServerStreams = StoredTaggerServerStream-'',
+	    bb_put(all_server_streams, AllServerStreams) ;
+	    true ),
+	unset_options(Options).
 
 remove_final_CRLF(TrimmedInput0, TrimmedInput) :-
 	( append(AllButLast, [Last], TrimmedInput0),
