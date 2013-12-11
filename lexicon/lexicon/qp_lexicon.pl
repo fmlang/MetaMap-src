@@ -760,16 +760,25 @@ get_lexmatches_for_one_entry(LexicalEntry, NormalizedInputTokenList, LexMatchesI
 	sort(AllLexVariants5, AllLexVariants),
 	tokenize_all(AllLexVariants, AllTokenizedLexVariants),
 	% AllNormalizedLexVariants = AllLexVariants,
+	count_all_matching_input_tokens(AllTokenizedLexVariants,
+					NormalizedInputTokenList,
+					AllTokenizedForms),
+	LexMatchesNext = [AllTokenizedForms|LexMatchesIn].
+
+
+count_all_matching_input_tokens(AllTokenizedLexVariants,
+				NormalizedInputTokenList,
+				AllTokenizedForms) :-
 	(  foreach(TokenizedLexFormAtoms, AllTokenizedLexVariants),
 	   foreach(MatchingTokenCount-MatchScore-MatchingTokens-RemainingInputTokens,
 		   AllTokenizedForms),
 	   param(NormalizedInputTokenList)
 	do count_matching_input_tokens(TokenizedLexFormAtoms, NormalizedInputTokenList,
-				     0, MatchingTokenCount,
-				     0, MatchScore,
-				     MatchingTokens, RemainingInputTokens)
-	),
-	LexMatchesNext = [AllTokenizedForms|LexMatchesIn].
+				       0, MatchingTokenCount,
+				       0, MatchScore,
+				       MatchingTokens, RemainingInputTokens)
+	).
+
 
 tokenize_all(LexVariants, TokenizedLexVariants) :-
 	(  foreach(LV,  LexVariants),
