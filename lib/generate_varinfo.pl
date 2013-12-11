@@ -47,6 +47,10 @@
 	get_im_varlist_for_all_forms/2
   ]).
 
+:- use_module(lexicon(qp_lexicon), [
+	normalize_token/2
+  ]).
+
 :- use_module(skr(skr_utilities), [
 	fatal_error/2
   ]).
@@ -84,10 +88,12 @@ generate_variant_info_1(unknown, UnkList, RestDefinitions, [ThisItem|NewGap]) :-
 	generate_variant_info(RestDefinitions, NewGap).
 generate_variant_info_1(lexicon, [lexmatch:[LexMatch],
 				  inputmatch:InputMatch,
-				  Records|_],
+				  records:Records|_],
 			RestDefinitions, [LexMatch:ThisVarInfo|NewGap]) :-
 	!,
-	get_all_base_forms_from_lexical_records(Records, AllBaseForms),
+	get_all_base_forms_from_lexical_records(Records, AllBaseForms0),
+	append(AllBaseForms0, AllBaseForms1),
+	sort(AllBaseForms1, AllBaseForms),
 	% get_im_varlist(LexMatchLC, VarInfo),
 	get_im_varlist_for_all_forms(AllBaseForms, VarInfo0),
 	append(VarInfo0, VarInfo1),
@@ -112,9 +118,12 @@ generate_variant_info_1(Other, OtherList,
 	generate_variant_info(RestDefinitions, NewGap).
 
 
-get_all_base_forms_from_lexical_records(records:[lexrec:[base:[CitationForm],
-							 spelling_variants:SpVars|_]|_],
-					[CitationForm|SpVars]).
+get_all_base_forms_from_lexical_records([], []).
+get_all_base_forms_from_lexical_records([lexrec:[base:[CitationForm],
+						 spelling_variants:SpVars|_]|RestLexRecs],
+					[[CitationForm|SpVars]|RestBaseForms]) :-
+	get_all_base_forms_from_lexical_records(RestLexRecs, RestBaseForms).
+				       
 
 % ----- GET_LEX_ITEM
 
@@ -134,9 +143,12 @@ get_this_variant([H|T], VariantFound, StopGap,
 	get_this_variant_1([H|T], VariantFound, StopGap,
 			   LexMatch, InputMatch, ThisVarInfo, VariantTail).
 
+foo.
+
 get_this_variant_1([], VariantFound, StopGap,
 		   LexMatch, InputMatch, [StopGap|ThisVarInfo], ThisVarInfo) :-
 	( VariantFound =:= 0 ->
+	  foo,
 	  format(user_output,
 		 '### WARNING: Mismatch in LexMatch "~w" and InputMatch ~w ~n',
 		 [LexMatch,InputMatch])
@@ -146,9 +158,14 @@ get_this_variant_1([LexKey:[ThisList]|MoreVariants], _VariantFoundIn,
 		   StopGap, LexMatch, InputMatch, [ThisList|Rest], Tail) :-
 	lower(LexKey, LowerLexKey),
 	% LexMatch can end in "'s"
-	( lower_apostrophe_s(LexMatch, LowerLexKey) ->
-	  true
-	; lower_apostrophe_s(LowerLexKey, LexMatch) ->
+%	( lower_apostrophe_s(LexMatch, LowerLexKey) ->
+%	  true
+%	; lower_apostrophe_s(LowerLexKey, LexMatch) ->
+%	  true
+	% The normalization is necessary for e.g., "St George's Respiratory Questionnaire"
+	( normalize_token(LexMatch, NormalizedLexMatch),
+	  normalize_token(LexKey,   NormalizedLexKey),
+	  NormalizedLexMatch == NormalizedLexKey ->
 	  true
 	; lower(LexMatch, LexMatchLC),
 	  atom_codes(LexMatchLC, LexMatchCodes),
@@ -185,9 +202,9 @@ contains_alnum([H|T]) :-
 	; contains_alnum(T)
 	).
 
-lower_apostrophe_s(LexMatch, LowerLexKey) :-
-	( lower(LexMatch, LowerLexKey) ->
-	  true
-	; midstring(LexMatch, '''s', LexMatchWithoutApostropheS, _Before, 2, _After),
-	  lower(LexMatchWithoutApostropheS, LowerLexKey)
-	).
+% lower_apostrophe_s(LexMatch, LowerLexKey) :-
+% 	( lower(LexMatch, LowerLexKey) ->
+% 	  true
+% 	; midstring(LexMatch, '''s', LexMatchWithoutApostropheS, _Before, _Length, _After),
+% 	  lower(LexMatchWithoutApostropheS, LowerLexKey)
+% 	).

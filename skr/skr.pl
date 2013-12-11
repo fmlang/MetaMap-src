@@ -307,6 +307,10 @@ skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
 	% current_output(OutputStream),
 	% format(user_output, '~n### Current output after WSD is ~q', [OutputStream]).
 
+% sco(Tag) :-
+% 	(control_option(O), format(user_output, '~wOPTION:~w~n', [Tag,O]), nl, fail; true),
+% 	nl(user_output).
+
 skr_phrases_1([], _InputLabel,
 	      _AllUtteranceText, _AAs, _UDAs, _CitationTextAtom,
 	      WordDataCache, USCCache, WordDataCache, USCCache,
@@ -318,8 +322,9 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	      RawTokensIn, RawTokensOut,
 	      [FirstMMOPhrase|RestMMOPhrases],
 	      [Phrases|RestPhrases]) :-
+	% NumGlommedPhrases is the number of prep phrases glommed onto the first phrase
 	get_composite_phrases([PhraseIn|OrigRestPhrasesIn], CompositePhrase,
-			      RestCompositePhrases, CompositeOptions),
+			      NumGlommedPhrases, RestCompositePhrases, CompositeOptions),
 	% Merge consecutive phrases spanned by an AA
 	% The original composite phrases are the list
 	% [CompositePhrase|RestCompositePhrases];
@@ -327,8 +332,16 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	% [MergedPhrase|RestMergedPhrases]
 	merge_aa_phrases(RestCompositePhrases, CompositePhrase, AAs, UDAs,
 			 MergedPhrase, RestMergedPhrases, MergeOptions),
+	get_inputmatch_atoms_from_phrase(MergedPhrase, InputMatchMergedPhraseWords),
+	length(InputMatchMergedPhraseWords, Length),
+	( NumGlommedPhrases > 0 ->
+	  Length < 15
+	; true
+	),	    
+	!,
 	append(CompositeOptions, MergeOptions, AllAddedOptions0),
 	sort(AllAddedOptions0, AllAddedOptions),
+	add_to_control_options(AllAddedOptions),
 	% AllUtteranceText is never used in skr_phrase; it's there only for gap analysis,
 	% which is no longer used!!
 	% format(user_output, 'Phrase ~w:~n', [MergedPhrase]),
@@ -360,8 +373,7 @@ merge_aa_phrases([NextPhrase|RestPhrases], FirstPhrase, AAs, UDAs,
 					  PhrasesToMerge, RemainingPhrases) ->
 	  merge_aa_phrases_1(PhrasesToMerge, MergedPhrase),
 	  RestMergedPhrases = RemainingPhrases,
-	  MergedOptions = [term_processing],            % -z
-	  add_to_control_options(MergedOptions)
+	  MergedOptions = [term_processing]            % -z
 	; MergedPhrase = FirstPhrase,
 	  RestMergedPhrases = [NextPhrase|RestPhrases],
 	  MergedOptions = []
@@ -653,6 +665,7 @@ get_phrase_info(Phrase, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAto
 		PhraseTokens, RawTokensOut, PhraseStartPos, PhraseLength,
 		OrigPhraseTextAtom, ReplacementPositions) :-
 	get_inputmatch_atoms_from_phrase(Phrase, InputMatchPhraseWords0),
+	% format(user_output, 'Phrase: ~w~n', [Phrase]),
 	% re_attach_apostrophe_s_to_prev_word(InputMatchPhraseWords0,
 	% 				    _TagList,
 	% 				    InputMatchPhraseWords),
@@ -663,6 +676,10 @@ get_phrase_info(Phrase, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAto
 
 	% need to modify phrase tokens to discard field, label, and sn tokens
 	get_phrase_tokens(InputMatchPhraseWords, RawTokensIn, PhraseTokens, RawTokensOut),
+	% skr_utilities:write_token_list(RawTokensIn, 0, 1),
+	% format(user_output, '---> ~w~n~n', [InputMatchPhraseWords]),
+	% skr_utilities:write_token_list(RawTokensOut, 0, 1),
+	% format(user_output, '########################~n', []),
 	get_phrase_startpos_and_length(PhraseTokens, PhraseStartPos, PhraseLength0),
 	subchars(CitationTextAtom, PhraseTextStringWithCRs0, PhraseStartPos, PhraseLength0),
 	add_AA_suffix(PhraseTextStringWithCRs0, AAs, PhraseTokens, PhraseLength0,
@@ -3619,36 +3636,50 @@ get_inputmatch_lists_from_phrase([FirstPhraseComponent|RestPhraseComponents],
 	get_inputmatch_lists_from_phrase(RestPhraseComponents, RestInputMatchLists).
 		
 get_composite_phrases([PhraseIn|RestPhrasesIn], CompositePhrase,
-		      RestCompositePhrasesIn, CompositeOptions) :-
-	control_value(composite_phrases, MaxPrepPhrases),
-	MaxPrepPhrases > 0,
-	begins_with_composite_phrase([PhraseIn|RestPhrasesIn], MaxPrepPhrases,
+		      ActualPrepPhraseCount, RestCompositePhrasesIn, CompositeOptions) :-
+	control_value(composite_phrases, MaxPrepPhraseCount),
+	MaxPrepPhraseCount > 0,
+	begins_with_composite_phrase([PhraseIn|RestPhrasesIn], MaxPrepPhraseCount,
+				     ActualPrepPhraseCount,
 				     CompositePhrase0, RestCompositePhrasesIn),
-	!,
 	collapse_syntactic_analysis(CompositePhrase0, CompositePhrase),
 	% append(CompositePhrase1, CompositePhrase),
 	CompositeOptions = [term_processing,               % -z
-			    ignore_word_order],            % -i
-	% add composite options
-	add_to_control_options(CompositeOptions).
-get_composite_phrases([PhraseIn|RestPhrases], PhraseIn, RestPhrases, []).
+			    ignore_word_order].            % -i
+get_composite_phrases([PhraseIn|RestPhrases], PhraseIn, 0, RestPhrases, []).
 
 /* begins_with_composite_phrase(+Phrases, -CompositePhrase, -Rest)
 
 begins_with_composite_phrase/3 determines if Phrases begins with a CompositePhrase,
 and returns it and the Rest of the phrases. A composite phrases is
- *  a phrase (non-prepositional and not ending with punctuation)
- *  followed by a prepositional phrase
+ *  a phrase (non-prepositional and not ending with punctuation): First
+ *  followed by a prepositional phrase: Second
  *  followed by a prepositional phrase introduced by "of". */
 
-begins_with_composite_phrase([First,Second|Rest], MaxPrepPhrases,
-			     [First,Second|RestComposite], NewRest) :-
+begins_with_composite_phrase([First,Second|Rest], MaxPrepPhraseCount,
+			     ActualPrepPhraseCount, [First,Second|RestComposite], NewRest) :-
 	\+ is_prep_phrase(First),
 	\+ ends_with_punc(First),
 	is_prep_phrase(Second),
+	% !,
+	% MaxPrepPhraseCount is the total number of prepositional phrases
+	% that can be glommed onto the initial phrase;
+%	NegMaxPrepPhraseCount is -1 * MaxPrepPhraseCount,
+%	between(NegMaxPrepPhraseCount, 0, TempNegMaxPrepPhraseCount),
+%	TempMaxPrepPhraseCount is -1 * TempNegMaxPrepPhraseCount,
+	InitPrepPhraseCount is 1,
+	initial_of_phrases(Rest, MaxPrepPhraseCount, InitPrepPhraseCount,
+			   ActualPrepPhraseCount0, _RestComposite0, _NewRest0),
 	!,
-	MaxOFPhrases is MaxPrepPhrases - 1,
-	initial_of_phrases(Rest, MaxOFPhrases, RestComposite, NewRest).
+	% This looks ugly, but it prevents needless backtracking.
+	% ActualPrepPhraseCount0 is the max # of prep phrases found,
+	% so instead of backtracking from -4 (or whatever the limit is) to 0,
+	% just backtrack from ActualPrepPhraseCount0 to 0.
+	NegActualPrepPhraseCount is -1 * ActualPrepPhraseCount0,
+	between(NegActualPrepPhraseCount, 0, TempNegActualPrepPhraseCount),
+	TempActualPrepPhraseCount is -1 * TempNegActualPrepPhraseCount,
+	initial_of_phrases(Rest, TempActualPrepPhraseCount, InitPrepPhraseCount,
+			   ActualPrepPhraseCount, RestComposite, NewRest).
 
 %%%%% begins_with_composite_phrase([First,Second|Rest],
 %%%%% 			     [First,Second|RestComposite],
@@ -3667,14 +3698,21 @@ ends_with_punc(PhraseItems) :-
 	get_phrase_item_name(LastPhraseItem, punc),
 	!.
 
-initial_of_phrases([], _Count, [], []) :- !.
-initial_of_phrases([First|Rest], CountIn, [First|RestOf], NewRest) :-
-	CountIn > 0,
+initial_of_phrases([], _MaxPrepPhraseCount,
+		   ActualPrepPhraseCount, ActualPrepPhraseCount, [], []).
+initial_of_phrases([First|Rest],
+		   MaxPrepPhraseCountIn, ActualPrepPhraseCountIn, ActualPrepPhraseCountOut,
+		   [First|RestOf], NewRest) :-
+	MaxPrepPhraseCountIn > 0,
 	is_of_phrase(First),
 	!,
-	CountNext is CountIn - 1,	
-	initial_of_phrases(Rest, CountNext, RestOf, NewRest).
-initial_of_phrases(Phrases, _Count, [], Phrases).
+	MaxPrepPhraseCountNext is MaxPrepPhraseCountIn - 1,
+	ActualPrepPhraseCountNext is ActualPrepPhraseCountIn + 1,
+	initial_of_phrases(Rest, MaxPrepPhraseCountNext,
+			   ActualPrepPhraseCountNext, ActualPrepPhraseCountOut,
+			   RestOf, NewRest).
+initial_of_phrases([H|T], _MaxPrepPhraseCount,
+		   ActualPrepPhraseCount, ActualPrepPhraseCount, [], [H|T]).
 
 is_of_phrase([PhraseItem|_]) :-
 	get_phrase_item_name(PhraseItem, prep),

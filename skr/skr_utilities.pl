@@ -534,9 +534,9 @@ verify_composite_phrases_setting(CompositePhrasesSetting) :-
 verify_blanklines_setting(BlankLinesSetting) :-
 	control_value(blanklines, N),
 	!,
-	( N > 0 ->
+	( N >= 0 ->
 	  BlankLinesSetting is 0
-	; send_message('~nERROR: --blanklines setting must be a positive integer.~n', []),
+	; send_message('~nERROR: --blanklines setting must be a nonnegative integer.~n', []),
 	  BlankLinesSetting is 1
 	).
 

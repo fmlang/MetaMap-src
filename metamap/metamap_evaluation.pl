@@ -65,6 +65,7 @@
 :- use_module(skr(skr_utilities), [
     	compute_sum/3,
     	debug_message/3,
+    	debug_call/2,
 	fatal_error/2,
 	split_word/3
     ]).
@@ -164,9 +165,10 @@ evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, 
 	% length(EvaluationsIn, EvaluationsInLength),
 	% format(user_output, '~n### Appending Length ~w~n', [EvaluationsInLength]),
 	append(EvaluationsIn, Evaluations, EvaluationsOut),
-	% length(Candidates, CandidatesLength),
-	% format(user_output, '~n### Evaluating Generator ~q; Candidate List Length ~w~n',
-	%      [Generator, CandidatesLength]),
+	debug_call(candidates, length(Candidates, CandidatesLength)),
+	debug_message(candidates,
+		      '~n### Evaluating Generator ~q; potential candidate list length ~w',
+		      [Generator, CandidatesLength]),
 	evaluate_candidate_list(Candidates, DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength,
 				TokenHeadWords, PhraseTokens, RawTokensOut,
@@ -494,7 +496,10 @@ matching_token(lc, MatchingPhraseWordAtom,
         atom_codes(MatchingPhraseWordAtom, MatchingPhraseWordCodes),
         % apostrophe-s token should match the token w/o the apostrophe-s
         ( Type = xx ->
-          ( append(MatchingPhraseWordCodes, [39,0's], LCTokenString) -> % 39 is apostrophe
+	    % This match is for synthetic tokens like "omega3"
+          ( MatchingPhraseWordCodes = LCTokenString ->
+	    true
+	  ; append(MatchingPhraseWordCodes, [39,0's], LCTokenString) -> % 39 is apostrophe
 	    true
 	  ; MatchingPhraseWordAtom = 's'
           )
@@ -789,7 +794,6 @@ split_by_phrase_components([Value|Rest],PhraseComponents,
 /* compute_connected_components(+MatchMap, -MatchCCs)
 
 compute_connected_components/2
-xxx
 */
 
 compute_connected_components(MatchMap, [PhraseCCs,MetaCCs]) :-
@@ -801,7 +805,6 @@ compute_connected_components(MatchMap, [PhraseCCs,MetaCCs]) :-
 /* extract_components(+MatchMap, -PhraseComponents, -MetaComponents)
 
 extract_components/3
-xxx
 */
 
 extract_components([], [], []).
@@ -814,7 +817,6 @@ extract_components([[PhraseComponent,MetaComponent|_]|Rest],
 /* connect_components(+Components, -CCs)
 
 connect_components/2
-xxx
 */
 
 connect_components(Components, CCs) :-
@@ -825,7 +827,6 @@ connect_components(Components, CCs) :-
 /* merge_contiguous_components(+Components, -MergedComponents)
 
 merge_contiguous_components/2
-xxx
 */
 
 merge_contiguous_components([], []).
@@ -841,7 +842,6 @@ merge_contiguous_components([First|Rest], [First|MergedRest]) :-
 /* extract_ccs(+Components, -CCs)
 
 extract_ccs/2
-xxx
 */
 
 extract_ccs([], []).
@@ -853,7 +853,6 @@ extract_ccs([[Begin,End]|Rest], [Size|ExtractedRest]) :-
 /* component_intersects_components(+Component, +Components)
 
 component_intersects_components/2
-xxx
 */
 
 component_intersects_components([First|Rest], Component) :-
@@ -866,7 +865,6 @@ component_intersects_components([First|Rest], Component) :-
                        +ExtraMetaWords, +Variants, +InvolvesHead, -Value)
 
 compute_match_value/8
-xxx
 */
 
 compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
@@ -899,7 +897,6 @@ compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
 /* compute_centrality_value(+InvolvesHead, -CenValue)
 
 compute_centrality_value/2
-xxx
 */
 
 compute_centrality_value(yes, 1.0).
@@ -909,7 +906,6 @@ compute_centrality_value(no,  0.0).
 /* compute_variation_value(+MatchMap, -VarValue)
 
 compute_variation_value/4
-xxx
 */
 
 compute_variation_value(MatchMap, VarValue) :-
@@ -924,7 +920,6 @@ compute_variation_value(MatchMap, VarValue) :-
 /* extract_variation_values(+MatchMap, -Values)
 
 extract_variation_values/2
-xxx
 */
 
 extract_variation_values([], []).
@@ -936,7 +931,6 @@ extract_variation_values([[_,_,VarLevel]|Rest], [VariationValue|ExtractedRest]) 
 /* convert_variation_level_to_value(+VarLevel, -VariationValue)
 
 convert_variation_level_to_value/2
-xxx
 */
 
 % Normal computation
@@ -952,7 +946,6 @@ convert_variation_level_to_value(VarLevel, VariationValue) :-
 /* compute_coverage_value(+MatchMap, +NTokenPhraseWords, +NMetaWords, -CovValue)
 
 compute_coverage_value/4
-xxx
 */
 
 compute_coverage_value(MatchMap, NTokenPhraseWords, NMetaWords, CovValue) :-
@@ -970,7 +963,6 @@ compute_coverage_value(MatchMap, NTokenPhraseWords, NMetaWords, CovValue) :-
 
 compute_bounds/3
 compute_bounds/5
-xxx
 */
 
 compute_bounds([], 0, -1).
@@ -994,7 +986,6 @@ compute_bounds([[Begin,End]|Rest], LBIn, LBOut, UBIn, UBOut) :-
                                  -CovValue)
 
 compute_strict_coverage_value/4
-xxx
 */
 
 % temp eval
@@ -1017,7 +1008,6 @@ xxx
 /* compute_cohesiveness_value(+MatchCCs, +NTokenPhraseWords, +NMetaWords, -CohValue)
 
 compute_cohesiveness_value/4
-xxx
 */
 
 compute_cohesiveness_value([PhraseCCs,PhraseCCs], NTokenPhraseWords, NMetaWords, CohValue) :-
@@ -1045,7 +1035,6 @@ compute_cohesiveness_value([PhraseCCs,MetaCCs], NTokenPhraseWords, NMetaWords, C
 /* compute_involvement_value(+PhraseCForms, +MetaCForms, -InvValue)
 
 compute_involvement_value/3
-xxx
 */
 
 % temp eval
@@ -1100,7 +1089,6 @@ filter_by_variants([_First|Rest], Variants, FilteredRest) :-
 /* compute_squares(+Values, -ValuesSquared)
 
 compute_squares/2
-xxx
 */
 
 compute_squares([], []).
@@ -1112,7 +1100,6 @@ compute_squares([First|Rest], [FirstSquared|RestSquared]) :-
 /* combine_values(+CenValue, +VarValue, +CovValue, +CohValue, -Value)
 
 combine_values/5
-xxx
 */
 
 
@@ -1131,7 +1118,7 @@ combine_values(CenValue, VarValue, CovValue, CohValue, Value) :-
 
 debug_evaluate_candidate_list_1(DebugFlags, MetaCanonical,MetaString,MetaConcept) :-
 	( memberchk(3, DebugFlags) ->
-	  format('::~p  ~p  ~p::', [MetaCanonical,MetaString,MetaConcept])
+	  format('::~p|~p|~p::', [MetaCanonical,MetaString,MetaConcept])
 	; true
 	).
 
