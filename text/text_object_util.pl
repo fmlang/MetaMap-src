@@ -40,6 +40,7 @@
 	alpha_type/1,
 	an_tok/1,
 	an_pn_tok/1,
+	an_pn_xx_tok/1,
 	an_type/1,
 	annotation_type/1,
 	at_an_tok/1,
@@ -100,6 +101,8 @@ an_type(an).
 an_type(nu).
 
 pn_type(pn).
+
+xx_type(xx).
 
 field_or_label_type(field).
 field_or_label_type(label).
@@ -179,6 +182,16 @@ uc_tok(tok(uc,_,_,_)).
 an_tok(tok(Type,_,_,_)) :- an_type(Type).
 % The arity-5 tok is needed here for merge_sentences_aux/5 in text_objects.pl
 an_tok(tok(Type,_,_,_,_)) :- an_type(Type).
+
+
+an_pn_xx_tok(tok(Type,_,_,_)) :-
+	( an_type(Type) ->
+	  true
+	; pn_type(Type) ->
+	  true
+	; xx_type(Type)
+	).	
+
 
 
 an_pn_tok(tok(Type,_,_,_)) :-

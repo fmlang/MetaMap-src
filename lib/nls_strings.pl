@@ -1353,8 +1353,11 @@ trim_whitespace_both(String, TrimmedString, NumLeftBlanksTrimmed, NumRightBlanks
 trim_and_compress_whitespace([], []).
 trim_and_compress_whitespace([H|T], Compressed) :-
 	trim_whitespace_both([H|T], Trimmed),
-	Trimmed = [TrimmedH|TrimmedT],
-	trim_and_compress_whitespace_1(TrimmedT, TrimmedH, Compressed).
+	( Trimmed == [] ->
+	  Compressed = []
+	; Trimmed = [TrimmedH|TrimmedT],
+	  trim_and_compress_whitespace_1(TrimmedT, TrimmedH, Compressed)
+	).
 
 trim_and_compress_whitespace_1([], H, [H]).
 trim_and_compress_whitespace_1([Next|Rest], First, Trimmed) :-
