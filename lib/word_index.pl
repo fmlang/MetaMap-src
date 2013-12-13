@@ -95,7 +95,11 @@ get_filtered_uscs_for_word(Table, Word, DebugFlags, FilterWordStrings,
 	),
 	debug_message(db, '~N### db_get_mwi_word_data DONE~n', []),
 	debug_message(db, '~N### Calling filter_uscs for ~q|~q~n', [Word,FilterWordStrings]),
-	filter_uscs(Table, USCs0, FilterWordStrings, USCs),
+	( memberchk(uscs, DebugFlags) ->
+	  DebugUSCs is 1
+	; DebugUSCs is 0
+	),
+	filter_uscs(Table, DebugUSCs, USCs0, FilterWordStrings, USCs),
 	debug_call(db, length(USCs0, USCs0Length)),
 	debug_call(db, length(USCs,  USCsLength)),
 	debug_message(db, '~N### filter_uscs DONE (~w --> ~w)~n', [USCs0Length, USCsLength]).
@@ -103,14 +107,14 @@ get_filtered_uscs_for_word(Table, Word, DebugFlags, FilterWordStrings,
 make_avl_key_1(Word, Table, AVLKey) :-
 	concat_atom([Word,'-',Table], AVLKey).
 
-filter_uscs(Table, USCs0, FilterWordStrings, USCs) :-
+filter_uscs(Table, DebugUSCs, USCs0, FilterWordStrings, USCs) :-
 	( Table == all_words ->
-	  filter_uscs_subseq(USCs0, FilterWordStrings, USCs)
-	; filter_uscs_init_subseq(USCs0, FilterWordStrings, USCs)
+	  filter_uscs_subseq(USCs0, DebugUSCs, FilterWordStrings, USCs)
+	; filter_uscs_init_subseq(USCs0, DebugUSCs, FilterWordStrings, USCs)
 	).
 
-filter_uscs_subseq([], _, []).
-filter_uscs_subseq([usc(UIString,S,C)|Rest], FilterWordStrings,
+filter_uscs_subseq([], _DebugUSCs, _FilterWordStrings, []).
+filter_uscs_subseq([usc(UIString,S,C)|Rest], DebugUSCs, FilterWordStrings,
 		   [usc(UIStringTokens,S,C)|FilteredRest]) :-   % why tokens?
 	%%% temp fix for proliferated "other <n>" strings
 	% UIString\=='other',
@@ -118,12 +122,15 @@ filter_uscs_subseq([usc(UIString,S,C)|Rest], FilterWordStrings,
 	tokenize_text_mm(UIString, UIStringTokens),
 	sublist(UIStringTokens, FilterWordStrings),
 	!,
-	filter_uscs_subseq(Rest, FilterWordStrings, FilteredRest).
-filter_uscs_subseq([_First|Rest], FilterWordStrings, FilteredRest) :-
-	filter_uscs_subseq(Rest, FilterWordStrings, FilteredRest).
+	maybe_announce_USC(DebugUSCs, 1, UIString, S, C),
+	filter_uscs_subseq(Rest, DebugUSCs, FilterWordStrings, FilteredRest).
+filter_uscs_subseq([First|Rest], DebugUSCs, FilterWordStrings, FilteredRest) :-
+	First = usc(UIString, S, C),
+	maybe_announce_USC(DebugUSCs, 0, UIString, S, C),
+	filter_uscs_subseq(Rest, DebugUSCs, FilterWordStrings, FilteredRest).
 
-filter_uscs_init_subseq([], _, []).
-filter_uscs_init_subseq([usc(UIString,S,C)|Rest], FilterWordStrings,
+filter_uscs_init_subseq([], _DebugUSCs, _FilterWordStrings, []).
+filter_uscs_init_subseq([usc(UIString,S,C)|Rest], DebugUSCs, FilterWordStrings,
 			[usc(UIStringTokens,S,C)|FilteredRest]) :- % why tokens?
 	%%% temp fix for proliferated "other <n>" strings
 	% UIString\=='other',
@@ -131,6 +138,15 @@ filter_uscs_init_subseq([usc(UIString,S,C)|Rest], FilterWordStrings,
 	tokenize_text_mm(UIString, UIStringTokens),
 	prefix(UIStringTokens, FilterWordStrings),
 	!,
-	filter_uscs_init_subseq(Rest, FilterWordStrings, FilteredRest).
-filter_uscs_init_subseq([_First|Rest], FilterWordStrings, FilteredRest) :-
-	filter_uscs_init_subseq(Rest, FilterWordStrings, FilteredRest).
+	maybe_announce_USC(DebugUSCs, 1, FilterWordStrings, UIString, S, C),
+	filter_uscs_init_subseq(Rest, DebugUSCs, FilterWordStrings, FilteredRest).
+filter_uscs_init_subseq([First|Rest], DebugUSCs, FilterWordStrings, FilteredRest) :-
+	First = usc(UIString, S, C),
+	maybe_announce_USC(DebugUSCs, 0, FilterWordStrings, UIString, S, C),
+	filter_uscs_init_subseq(Rest, DebugUSCs, FilterWordStrings, FilteredRest).
+
+maybe_announce_USC(DebugUSCs, Result, FilterWordStrings, UIString, S, C) :-
+	( DebugUSCs =:= 1 ->
+	  format('~w|~w|~w|~w|~w~n', [Result,FilterWordStrings,UIString,S,C])
+	; true
+	).

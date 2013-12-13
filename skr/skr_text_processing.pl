@@ -299,7 +299,14 @@ medline_field_separator_char(0'.).
 medline_PMID_field_name(pmid).
 medline_PMID_field_name(ui).
 
-medline_title_field_name(ti).
+% See
+% http://www.nlm.nih.gov/bsd/mms/medlineelements.html
+% for the various "TI" fields.
+medline_title_field_name(ti).     % Title
+medline_title_field_name(bti).    % Book Title
+medline_title_field_name(cti).    % Collection Title
+medline_title_field_name(vti).    % Volume Title
+
 
 is_smart_fielded([First,_|_]) :-
 	append(".", _, First).

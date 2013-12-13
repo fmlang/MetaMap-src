@@ -51,7 +51,7 @@
 	model_location/5
     ]).
 
-:- use_module(skr_lib(semtype_translation_2013AA), [
+:- use_module(skr_lib(semtype_translation_2013AB), [
 	is_abbrev_semtype/1
     ]).
 
