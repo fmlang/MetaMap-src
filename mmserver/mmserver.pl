@@ -200,7 +200,7 @@ reset_options :-
 	%% Temporary code for use until a final lex access method is
 	%% determined.  This will need re-factoring to remove
 	%% references to lexicon.
-	set_control_options,
+	%% set_control_options(),
  	IOptions=[iopt(lexicon,c),iopt(machine_output,none)],
  	add_to_control_options(IOptions),
 	assert(control_value(lexicon,c)).
