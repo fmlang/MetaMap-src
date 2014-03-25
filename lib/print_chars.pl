@@ -41,6 +41,11 @@
 	portray_chars/1
    ]).
 
+:- use_module(metamap(metamap_tokenization), [
+	local_ascii/1,
+	local_print/1
+   ]).
+
 :- use_module(skr_lib(addportray), [
 	add_portray/1
    ]).
@@ -90,11 +95,16 @@ portray_chars(Chars) :-
 'portray chars'('$VAR'(N)) :-
 	put_code(0'|), write('$VAR'(N)).
 'portray chars'([Char|Chars]) :-
+	% FML 03/24/2013: The only chars that will catch the first branch are
+	% 9, 10, 11, 12, 13, and 31 (ctypes:(is_graph(C); is_space(C)), C < " ").
 	(   Char < " " ->		% we should have to_cntrl/2
 	    Caps is Char+64,		% in library(ctypes); as yet
 	    put_code(0'^), put_code(Caps)	% we don't, so not EBCDICy.
 	;   Char =:= 0'" ->		% " is written doubled
 	    put_code(0'"), put_code(0'")
+	    % FML 03/20/2014: double backslashes!
+	;   Char =:= 0'\\ ->		% " is written doubled
+	    put_code(0'\\), put_code(0'\\)
 	;   put_code(Char)
 	),
 	'portray chars'(Chars).
