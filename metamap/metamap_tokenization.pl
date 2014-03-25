@@ -55,6 +55,17 @@
 	is_ws_word/1,
 	linearize_phrase/4,
 	linearize_components/2,
+	local_alnum/1,
+	local_alpha/1,
+	local_ascii/1,
+	local_digit/1,
+	local_lower/1,
+	local_print/1,
+	local_punct/1,
+	local_upper/1,
+	local_to_lower/2,
+	local_to_upper/2,
+	local_ws/1,
 	new_phrase_item/3,
 	no_combine_pronoun/1,
 	parse_phrase_word_info/3,
@@ -74,9 +85,13 @@
 	transparent_tag/1
     ]).
 
-:- use_module(skr_lib(ctypes),[
-	ctypes_bits/2
+:- use_module(lexicon(qp_lookup),[
+	punct_token/2
     ]).
+
+% :- use_module(skr_lib(ctypes),[
+% 	ctypes_bits/2
+%     ]).
 
 :- use_module(skr_lib(nls_lists),[
 	first_n_or_less/3
@@ -85,10 +100,6 @@
 :- use_module(skr_lib(nls_strings),[
 	atom_codes_list/2
     ]).
-
-:- use_module(skr_lib(nls_system),[
-	control_option/1
-   ]).
 
 :- use_module(skr_lib(nls_text),[
 	is_all_graphic_text/1
@@ -161,20 +172,60 @@ add_tokens_to_phrases([First|Rest], [ModifiedFirst|ModifiedRest]) :-
 
 add_tokens_to_one_phrase([], []).
 add_tokens_to_one_phrase([First|Rest], [TokenizedFirst|TokenizedRest]) :-
-    add_tokens_to_phrase_item(First, TokenizedFirst),
-    add_tokens_to_one_phrase(Rest, TokenizedRest).
+	% add_lc_inputmatch_tokens_to_phrase_item(First, TokenizedFirst),
+	add_tokens_to_phrase_item(First, TokenizedFirst),
+	add_tokens_to_one_phrase(Rest, TokenizedRest).
 
+add_lc_inputmatch_tokens_to_phrase_item(Item, ItemWithTokens) :-
+	get_phrase_item_subitems(Item, SubItems),
+	get_subitems_feature(SubItems, inputmatch, TextList),
+	lowercase_list(TextList, TextListLC),
+	set_phrase_item_feature(Item, tokens, TextListLC, ItemWithTokens).
+	
+% Existing version
+% add_tokens_to_phrase_item(Item, TokenizedItem) :-
+%         get_phrase_item_subitems(Item, SubItems),
+%         ( get_non_null_lexmatch(SubItems, LexMatch) ->
+%           make_list(LexMatch, TextList)
+%         ; get_subitems_feature(SubItems,inputmatch,TextList)
+%         ),
+%         tokenize_all_text_mm_lc(TextList, TokenLists),
+%         append(TokenLists, Tokens),
+%         set_phrase_item_feature(Item, tokens, Tokens, TokenizedItem),
+%         !.
+% add_tokens_to_phrase_item(Item, Item).
+
+% New version
 add_tokens_to_phrase_item(Item, TokenizedItem) :-
 	get_phrase_item_subitems(Item, SubItems),
-	( get_non_null_lexmatch(SubItems, LexMatch) ->
-	  make_list(LexMatch, TextList)
-	; get_subitems_feature(SubItems,inputmatch,TextList)
-	),
-	tokenize_all_text_mm_lc(TextList, TokenLists),
-	append(TokenLists, Tokens),
-	set_phrase_item_feature(Item, tokens, Tokens, TokenizedItem),
+	get_subitems_feature(SubItems, inputmatch, InputMatch),
+	lowercase_list(InputMatch, InputMatchLC),
+	remove_punct_tokens(InputMatchLC, InputMatchLCNoPunct),
+	undo_possessives(InputMatchLCNoPunct, InputMatchLCNoPunctNoPoss),
+	set_phrase_item_feature(Item, tokens, InputMatchLCNoPunctNoPoss, TokenizedItem),
 	!.
 add_tokens_to_phrase_item(Item, Item).
+
+
+remove_punct_tokens([], []).
+remove_punct_tokens([H|T], InputMatchLCNoPunct) :-
+	( punct_token(H, _) ->
+	  InputMatchLCNoPunct = InputMatchLCNoPunctRest
+	; InputMatchLCNoPunct = [H|InputMatchLCNoPunctRest]
+	),
+	remove_punct_tokens(T, InputMatchLCNoPunctRest).
+
+undo_possessives([], []).
+undo_possessives([H|T], [HNoPoss|TNoPoss]) :-
+	undo_one_possessive(H, HNoPoss),
+	undo_possessives(T, TNoPoss).
+
+undo_one_possessive(Token, TokenNoPoss) :-
+	atom_codes(Token, TokenCodes),
+	( append(TokenNoPossCodes, [0''', 0's], TokenCodes) ->
+	  atom_codes(TokenNoPoss, TokenNoPossCodes)
+	; TokenNoPoss = Token
+	).
 
 
 get_non_null_lexmatch(SubItems, LexMatch) :-
@@ -539,7 +590,6 @@ linearize_phrase_item/5
 linearize_components/2
 linearize_component/2
 linearize_component/3
-xxx
 */
 
 linearize_phrase([], [], [], []).
@@ -724,8 +774,7 @@ ttm_token(T) --> [Char], {local_alnum(Char)}, !, ttm_token(S), {T=[Char|S]}
 
 tokenize_text_mm/2 transforms Text (atom/string) into a list of tokens TokText
 similar to the wordind regime used in tokenize_text_more/2. The difference
-is that tokenize_text_mm/2 respects possessives ("'s" at the end of a
-word).
+is that tokenize_text_mm/2 respects possessives ("'s" at the end of a word).
 tokenize_text_mm_lc/2 lowercases the result of tokenize_text_mm/2.
 tokenize_all_.../2 tokenizes a list of text into a SINGLE list of tokens. */
 
@@ -747,9 +796,10 @@ from the results of tokenize_text_utterly/2. */
 
 remove_possessives_and_nonwords([], []).
 remove_possessives_and_nonwords([NonWord|Rest], FilteredRest) :-
-	\+ is_ws_word(NonWord),
+	% \+ is_ws_word(NonWord),
+	is_punct_or_ws(NonWord),
 	!,
-	remove_possessives_and_nonwords(Rest,FilteredRest).
+	remove_possessives_and_nonwords(Rest, FilteredRest).
 % singular possessives
 remove_possessives_and_nonwords([Word,"'","s"], [Word]) :- !.
 remove_possessives_and_nonwords([Word,"'","s",WhiteSpace|Rest], [Word|FilteredRest]) :-
@@ -774,6 +824,12 @@ remove_possessives_and_nonwords([First|Rest], [First|FilteredRest]) :-
 % 	is_alnum(AlNum),
 % 	is_ws_word(Rest).
 
+is_punct_or_ws([Char]) :-
+	( local_punct(Char) ->
+	  true
+	; local_ws(Char)
+	).
+
 % MATS
 is_ws_word([]).
 is_ws_word([AlNum|Rest]) :-
@@ -790,7 +846,7 @@ ends_with_s(Word) :-
 
 % MATS
 is_ws([Char]) :-
-	local_space(Char).
+	local_ws(Char).
 
 tokenize_all_text_mm_lc([], []).
 tokenize_all_text_mm_lc([First|Rest], [TokenizedFirst|TokenizedRest]) :-
@@ -871,7 +927,7 @@ re_attach_apostrophe_s_tokens(TokenizedFieldIn, TokenizedFieldOut) :-
 	tokenized_field_in_out(TailTokenizedFieldIn, TokenAfterS, RestTokenizedFieldIn),
 	% if the apostrophe-s appears as "'s'", as in, e.g.,
 	% "more typical 's'-shaped VCs" (PMID 20444214), do not re-attach!
-	TokenAfterS \== [0'''],
+	% TokenAfterS \== [0'''],
 	!,
 	TokenizedFieldOut = [StringWithApostropheS|RestTokenizedFieldOut],
 	append([OrigString, "'", "s"], StringWithApostropheS),
@@ -886,7 +942,8 @@ re_attach_apostrophe_s_tokens([H|Rest], [H|NewRest]) :-
 % That's true of any token ending in a non-alnum char, "he", "she", and "it".
 no_reattach_string(OrigString) :-
 	( last(OrigString, LastChar),
-	  \+ local_alnum(LastChar)
+	  \+ local_alnum(LastChar) ->
+	  true
 	; atom_codes(Atom, OrigString),
 	  no_combine_pronoun(Atom)
 	).
@@ -895,6 +952,14 @@ no_combine_pronoun(he).
 no_combine_pronoun(she).
 no_combine_pronoun(it).
 
+tokenize_text_utterly(Text, TokenizedText) :-
+	( atom(Text) ->
+	  atom_codes(Text, String),
+	  ttu_string(String, TokenizedString, []),
+	  atom_codes_list(TokenizedText, TokenizedString)
+	; ttu_string(Text, TokenizedText, [])
+	),
+	!.
 
 % ORIG
 % tokenize_text_utterly(Text,TokText) :-
@@ -907,19 +972,19 @@ no_combine_pronoun(it).
 % 	!.
 
 % MATS
-tokenize_text_utterly(Text, TokenizedText) :-
-	tokenize_text_utterly_1(Text, TokenizedText0),
-	TokenizedText = TokenizedText0.
-	% form_decimal_numbers(TokenizedText0, TokenizedText).
+% tokenize_text_utterly(Text, TokenizedText) :-
+% 	tokenize_text_utterly_1(Text, TokenizedText0),
+% 	TokenizedText = TokenizedText0.
+% 	% form_decimal_numbers(TokenizedText0, TokenizedText).
 
-tokenize_text_utterly_1(Text,TokText) :-
-	( atom(Text) ->
-	  atom_codes(Text,String),
-	  ttu_string(TokString,String,[]),
-	  atom_codes_list(TokText,TokString)
-	; ttu_string(TokText,Text,[])
-	),
-	!.
+% tokenize_text_utterly_1(Text,TokText) :-
+% 	( atom(Text) ->
+% 	  atom_codes(Text,String),
+% 	  ttu_string(TokString,String,[]),
+% 	  atom_codes_list(TokText,TokString)
+% 	; ttu_string(TokText,Text,[])
+% 	),
+% 	!.
 
 /*  TOKENIZE TEXT UTTERLY GRAMMAR  */
 
@@ -937,19 +1002,39 @@ tokenize_text_utterly_1(Text,TokText) :-
 % 	; { TS= [] }
 % 	).
 
-% MATS
-ttu_string(TS) -->
-	[Char],
-	{ local_alnum(Char) }, !,
-	{ TS=[[Char|S]|R] },
-	ttu_token(S),
-	ttu_string(R).
-ttu_string(TS) -->
-	[Char], !,
-	{ TS = [[Char]|S] },
-	ttu_string(S).
-ttu_string([]) --> [].
+% No-DCG version to allow folding ttu_token2/3 into ttu_token/3
+ttu_string([], Remainder, Remainder).
+ttu_string([Char|RestStringIn], TokenizedString, Remainder) :-
+	( local_alnum(Char) ->
+	  TokenizedString = [[Char|RestToken]|RemainingTokens],
+	  ttu_token(RestStringIn, RestToken, RestStringOut)
+	; TokenizedString = [[Char]|RemainingTokens],
+	  RestStringOut = RestStringIn
+	),
+	ttu_string(RestStringOut, RemainingTokens, Remainder).
 
+ttu_token([], [], []).
+ttu_token([Char|RestString], RestTokenIn, RestTokenOut) :-
+	( local_alnum(Char) ->
+	  RestTokenIn = [Char|RestTokenNext],
+	  ttu_token(RestString, RestTokenNext, RestTokenOut)
+	; RestTokenIn = [],
+	  RestTokenOut = [Char|RestString]
+	).
+
+% MATS
+% ttu_string(TS) -->
+% 	[Char],
+% 	{ local_alnum(Char) }, !,
+% 	{ TS=[[Char|S]|R] },
+% 	ttu_token(S),
+% 	ttu_string(R).
+% ttu_string(TS) -->
+% 	[Char], !,
+% 	{ TS = [[Char]|S] },
+% 	ttu_string(S).
+% ttu_string([]) --> [].
+ 
 % ORIG
 % ttu_token(T) -->
 % 	( [Char],
@@ -969,91 +1054,21 @@ ttu_string([]) --> [].
 % ttu_token([]) --> [].
 
 % MATS 2
-ttu_token(T, S0, S) :-
-	ttu_token2(S0, T, S).
-
-ttu_token2([], [], []).
-ttu_token2([Char|S0], T, S) :-
-	ctypes_bits(Char, Bits),
-	% succeeds if Char is alnum
-	Mask is Bits /\ 3840,
-	(   Mask =\= 0 ->
-	    T = [Char|R],
-	    ttu_token2(S0, R, S)
-	;   T = [],
-	    S = [Char|S0]
-	).
-
-local_space( 9).
-local_space(10).
-local_space(11).
-local_space(12).
-local_space(13).
-local_space(31).
-local_space(32).
-
-local_alnum(48).  % 0
-local_alnum(49).  % 1
-local_alnum(50).  % 2
-local_alnum(51).  % 3
-local_alnum(52).  % 4
-local_alnum(53).  % 5
-local_alnum(54).  % 6
-local_alnum(55).  % 7
-local_alnum(56).  % 8
-local_alnum(57).  % 9
-local_alnum(65).  % A
-local_alnum(66).  % B
-local_alnum(67).  % C
-local_alnum(68).  % D
-local_alnum(69).  % E
-local_alnum(70).  % F
-local_alnum(71).  % G
-local_alnum(72).  % H
-local_alnum(73).  % I
-local_alnum(74).  % J
-local_alnum(75).  % K
-local_alnum(76).  % L
-local_alnum(77).  % M
-local_alnum(78).  % N
-local_alnum(79).  % O
-local_alnum(80).  % P
-local_alnum(81).  % Q
-local_alnum(82).  % R
-local_alnum(83).  % S
-local_alnum(84).  % T
-local_alnum(85).  % U
-local_alnum(86).  % V
-local_alnum(87).  % W
-local_alnum(88).  % X
-local_alnum(89).  % Y
-local_alnum(90).  % Z
-local_alnum(97).  % a
-local_alnum(98).  % b
-local_alnum(99).  % c
-local_alnum(100). % d
-local_alnum(101). % e
-local_alnum(102). % f
-local_alnum(103). % g
-local_alnum(104). % h
-local_alnum(105). % i
-local_alnum(106). % j
-local_alnum(107). % k
-local_alnum(108). % l
-local_alnum(109). % m
-local_alnum(110). % n
-local_alnum(111). % o
-local_alnum(112). % p
-local_alnum(113). % q
-local_alnum(114). % r
-local_alnum(115). % s
-local_alnum(116). % t
-local_alnum(117). % u
-local_alnum(118). % v
-local_alnum(119). % w
-local_alnum(120). % x
-local_alnum(121). % y
-local_alnum(122). % z
+% ttu_token(T, S0, S) :-
+% 	ttu_token2(S0, T, S).
+% 
+% ttu_token2([], [], []).
+% ttu_token2([Char|S0], T, S) :-
+%	ctypes_bits(Char, Bits),
+%	% succeeds if Char is alnum
+%	Mask is Bits /\ 3840,
+%	(   Mask =\= 0 ->
+% 	(   local_alnum(Char) ->
+% 	    T = [Char|R],
+% 	    ttu_token2(S0, R, S)
+% 	;   T = [],
+% 	    S = [Char|S0]
+% 	).
 
 /* ************************************************************************
    ************************************************************************
@@ -1084,7 +1099,6 @@ get_subitem_name/2
 get_subitem_value/2
 set_phrase_item_feature/4
 set_subitems_feature/4
-xxx
 */
 
 get_phrase_item_feature(PhraseItem, Feature, FeatureValue) :-
@@ -1217,3 +1231,1060 @@ remove_field_and_label_tokens([Token|RestTokens], TokensOut) :-
 	; TokensOut = [Token|RestTokensOut]
 	),
 	remove_field_and_label_tokens(RestTokens, RestTokensOut).
+
+local_ws( 9).
+local_ws(10).
+local_ws(11).
+local_ws(12).
+local_ws(13).
+local_ws(31).
+local_ws(32).
+
+local_digit(48). % 0
+local_digit(49). % 1
+local_digit(50). % 2
+local_digit(51). % 3
+local_digit(52). % 4
+local_digit(53). % 5
+local_digit(54). % 6
+local_digit(55). % 7
+local_digit(56). % 8
+local_digit(57). % 9
+
+local_punct(33).  % !
+local_punct(34).  % "
+local_punct(35).  % #
+local_punct(36).  % $
+local_punct(37).  %  %
+local_punct(38).  % &
+local_punct(39).  % '
+local_punct(40).  % (
+local_punct(41).  % )
+local_punct(42).  % *
+local_punct(43).  % +
+local_punct(44).  % ,
+local_punct(45).  % -
+local_punct(46).  % .
+local_punct(47).  % /
+local_punct(58).  % % 
+local_punct(59).  % ;
+local_punct(60).  % <
+local_punct(61).  % =
+local_punct(62).  % >
+local_punct(63).  % ?
+local_punct(64).  % @
+local_punct(91).  % [
+local_punct(92).  % \
+local_punct(93).  % ]
+local_punct(94).  % ^
+local_punct(95).  % _
+local_punct(96).  % `
+local_punct(123). % {
+local_punct(124). % |
+local_punct(125). % }
+local_punct(126). %  ~
+
+local_alnum(48).  % 0
+local_alnum(49).  % 1
+local_alnum(50).  % 2
+local_alnum(51).  % 3
+local_alnum(52).  % 4
+local_alnum(53).  % 5
+local_alnum(54).  % 6
+local_alnum(55).  % 7
+local_alnum(56).  % 8
+local_alnum(57).  % 9
+local_alnum(65).  % A
+local_alnum(66).  % B
+local_alnum(67).  % C
+local_alnum(68).  % D
+local_alnum(69).  % E
+local_alnum(70).  % F
+local_alnum(71).  % G
+local_alnum(72).  % H
+local_alnum(73).  % I
+local_alnum(74).  % J
+local_alnum(75).  % K
+local_alnum(76).  % L
+local_alnum(77).  % M
+local_alnum(78).  % N
+local_alnum(79).  % O
+local_alnum(80).  % P
+local_alnum(81).  % Q
+local_alnum(82).  % R
+local_alnum(83).  % S
+local_alnum(84).  % T
+local_alnum(85).  % U
+local_alnum(86).  % V
+local_alnum(87).  % W
+local_alnum(88).  % X
+local_alnum(89).  % Y
+local_alnum(90).  % Z
+local_alnum(97).  % a
+local_alnum(98).  % b
+local_alnum(99).  % c
+local_alnum(100). % d
+local_alnum(101). % e
+local_alnum(102). % f
+local_alnum(103). % g
+local_alnum(104). % h
+local_alnum(105). % i
+local_alnum(106). % j
+local_alnum(107). % k
+local_alnum(108). % l
+local_alnum(109). % m
+local_alnum(110). % n
+local_alnum(111). % o
+local_alnum(112). % p
+local_alnum(113). % q
+local_alnum(114). % r
+local_alnum(115). % s
+local_alnum(116). % t
+local_alnum(117). % u
+local_alnum(118). % v
+local_alnum(119). % w
+local_alnum(120). % x
+local_alnum(121). % y
+local_alnum(122). % z
+
+
+local_alpha(65).  % A
+local_alpha(66).  % B
+local_alpha(67).  % C
+local_alpha(68).  % D
+local_alpha(69).  % E
+local_alpha(70).  % F
+local_alpha(71).  % G
+local_alpha(72).  % H
+local_alpha(73).  % I
+local_alpha(74).  % J
+local_alpha(75).  % K
+local_alpha(76).  % L
+local_alpha(77).  % M
+local_alpha(78).  % N
+local_alpha(79).  % O
+local_alpha(80).  % P
+local_alpha(81).  % Q
+local_alpha(82).  % R
+local_alpha(83).  % S
+local_alpha(84).  % T
+local_alpha(85).  % U
+local_alpha(86).  % V
+local_alpha(87).  % W
+local_alpha(88).  % X
+local_alpha(89).  % Y
+local_alpha(90).  % Z
+local_alpha(97).  % a
+local_alpha(98).  % b
+local_alpha(99).  % c
+local_alpha(100). % d
+local_alpha(101). % e
+local_alpha(102). % f
+local_alpha(103). % g
+local_alpha(104). % h
+local_alpha(105). % i
+local_alpha(106). % j
+local_alpha(107). % k
+local_alpha(108). % l
+local_alpha(109). % m
+local_alpha(110). % n
+local_alpha(111). % o
+local_alpha(112). % p
+local_alpha(113). % q
+local_alpha(114). % r
+local_alpha(115). % s
+local_alpha(116). % t
+local_alpha(117). % u
+local_alpha(118). % v
+local_alpha(119). % w
+local_alpha(120). % x
+local_alpha(121). % y
+local_alpha(122). % z
+
+local_upper(65).  % A
+local_upper(66).  % B
+local_upper(67).  % C
+local_upper(68).  % D
+local_upper(69).  % E
+local_upper(70).  % F
+local_upper(71).  % G
+local_upper(72).  % H
+local_upper(73).  % I
+local_upper(74).  % J
+local_upper(75).  % K
+local_upper(76).  % L
+local_upper(77).  % M
+local_upper(78).  % N
+local_upper(79).  % O
+local_upper(80).  % P
+local_upper(81).  % Q
+local_upper(82).  % R
+local_upper(83).  % S
+local_upper(84).  % T
+local_upper(85).  % U
+local_upper(86).  % V
+local_upper(87).  % W
+local_upper(88).  % X
+local_upper(89).  % Y
+local_upper(90).  % Z
+
+local_lower(97).  % a
+local_lower(98).  % b
+local_lower(99).  % c
+local_lower(100). % d
+local_lower(101). % e
+local_lower(102). % f
+local_lower(103). % g
+local_lower(104). % h
+local_lower(105). % i
+local_lower(106). % j
+local_lower(107). % k
+local_lower(108). % l
+local_lower(109). % m
+local_lower(110). % n
+local_lower(111). % o
+local_lower(112). % p
+local_lower(113). % q
+local_lower(114). % r
+local_lower(115). % s
+local_lower(116). % t
+local_lower(117). % u
+local_lower(118). % v
+local_lower(119). % w
+local_lower(120). % x
+local_lower(121). % y
+local_lower(122). % z
+
+local_ascii(0).
+local_ascii(1).
+local_ascii(2).
+local_ascii(3).
+local_ascii(4).
+local_ascii(5).
+local_ascii(6).
+local_ascii(7).
+local_ascii(8).
+local_ascii(9).
+local_ascii(10).
+local_ascii(11).
+local_ascii(12).
+local_ascii(13).
+local_ascii(14).
+local_ascii(15).
+local_ascii(16).
+local_ascii(17).
+local_ascii(18).
+local_ascii(19).
+local_ascii(20).
+local_ascii(21).
+local_ascii(22).
+local_ascii(23).
+local_ascii(24).
+local_ascii(25).
+local_ascii(26).
+local_ascii(27).
+local_ascii(28).
+local_ascii(29).
+local_ascii(30).
+local_ascii(31).
+local_ascii(32).
+local_ascii(33).
+local_ascii(34).
+local_ascii(35).
+local_ascii(36).
+local_ascii(37).
+local_ascii(38).
+local_ascii(39).
+local_ascii(40).
+local_ascii(41).
+local_ascii(42).
+local_ascii(43).
+local_ascii(44).
+local_ascii(45).
+local_ascii(46).
+local_ascii(47).
+local_ascii(48).
+local_ascii(49).
+local_ascii(50).
+local_ascii(51).
+local_ascii(52).
+local_ascii(53).
+local_ascii(54).
+local_ascii(55).
+local_ascii(56).
+local_ascii(57).
+local_ascii(58).
+local_ascii(59).
+local_ascii(60).
+local_ascii(61).
+local_ascii(62).
+local_ascii(63).
+local_ascii(64).
+local_ascii(65).
+local_ascii(66).
+local_ascii(67).
+local_ascii(68).
+local_ascii(69).
+local_ascii(70).
+local_ascii(71).
+local_ascii(72).
+local_ascii(73).
+local_ascii(74).
+local_ascii(75).
+local_ascii(76).
+local_ascii(77).
+local_ascii(78).
+local_ascii(79).
+local_ascii(80).
+local_ascii(81).
+local_ascii(82).
+local_ascii(83).
+local_ascii(84).
+local_ascii(85).
+local_ascii(86).
+local_ascii(87).
+local_ascii(88).
+local_ascii(89).
+local_ascii(90).
+local_ascii(91).
+local_ascii(92).
+local_ascii(93).
+local_ascii(94).
+local_ascii(95).
+local_ascii(96).
+local_ascii(97).
+local_ascii(98).
+local_ascii(99).
+local_ascii(100).
+local_ascii(101).
+local_ascii(102).
+local_ascii(103).
+local_ascii(104).
+local_ascii(105).
+local_ascii(106).
+local_ascii(107).
+local_ascii(108).
+local_ascii(109).
+local_ascii(110).
+local_ascii(111).
+local_ascii(112).
+local_ascii(113).
+local_ascii(114).
+local_ascii(115).
+local_ascii(116).
+local_ascii(117).
+local_ascii(118).
+local_ascii(119).
+local_ascii(120).
+local_ascii(121).
+local_ascii(122).
+local_ascii(123).
+local_ascii(124).
+local_ascii(125).
+local_ascii(126).
+local_ascii(127).
+
+local_print(32).
+local_print(33).
+local_print(34).
+local_print(35).
+local_print(36).
+local_print(37).
+local_print(38).
+local_print(39).
+local_print(40).
+local_print(41).
+local_print(42).
+local_print(43).
+local_print(44).
+local_print(45).
+local_print(46).
+local_print(47).
+local_print(48).
+local_print(49).
+local_print(50).
+local_print(51).
+local_print(52).
+local_print(53).
+local_print(54).
+local_print(55).
+local_print(56).
+local_print(57).
+local_print(58).
+local_print(59).
+local_print(60).
+local_print(61).
+local_print(62).
+local_print(63).
+local_print(64).
+local_print(65).
+local_print(66).
+local_print(67).
+local_print(68).
+local_print(69).
+local_print(70).
+local_print(71).
+local_print(72).
+local_print(73).
+local_print(74).
+local_print(75).
+local_print(76).
+local_print(77).
+local_print(78).
+local_print(79).
+local_print(80).
+local_print(81).
+local_print(82).
+local_print(83).
+local_print(84).
+local_print(85).
+local_print(86).
+local_print(87).
+local_print(88).
+local_print(89).
+local_print(90).
+local_print(91).
+local_print(92).
+local_print(93).
+local_print(94).
+local_print(95).
+local_print(96).
+local_print(97).
+local_print(98).
+local_print(99).
+local_print(100).
+local_print(101).
+local_print(102).
+local_print(103).
+local_print(104).
+local_print(105).
+local_print(106).
+local_print(107).
+local_print(108).
+local_print(109).
+local_print(110).
+local_print(111).
+local_print(112).
+local_print(113).
+local_print(114).
+local_print(115).
+local_print(116).
+local_print(117).
+local_print(118).
+local_print(119).
+local_print(120).
+local_print(121).
+local_print(122).
+local_print(123).
+local_print(124).
+local_print(125).
+local_print(126).
+local_print(161).
+local_print(162).
+local_print(163).
+local_print(164).
+local_print(165).
+local_print(166).
+local_print(167).
+local_print(168).
+local_print(169).
+local_print(170).
+local_print(171).
+local_print(172).
+local_print(173).
+local_print(174).
+local_print(175).
+local_print(176).
+local_print(177).
+local_print(178).
+local_print(179).
+local_print(180).
+local_print(181).
+local_print(182).
+local_print(183).
+local_print(184).
+local_print(185).
+local_print(186).
+local_print(187).
+local_print(188).
+local_print(189).
+local_print(190).
+local_print(191).
+local_print(192).
+local_print(193).
+local_print(194).
+local_print(195).
+local_print(196).
+local_print(197).
+local_print(198).
+local_print(199).
+local_print(200).
+local_print(201).
+local_print(202).
+local_print(203).
+local_print(204).
+local_print(205).
+local_print(206).
+local_print(207).
+local_print(208).
+local_print(209).
+local_print(210).
+local_print(211).
+local_print(212).
+local_print(213).
+local_print(214).
+local_print(215).
+local_print(216).
+local_print(217).
+local_print(218).
+local_print(219).
+local_print(220).
+local_print(221).
+local_print(222).
+local_print(223).
+local_print(224).
+local_print(225).
+local_print(226).
+local_print(227).
+local_print(228).
+local_print(229).
+local_print(230).
+local_print(231).
+local_print(232).
+local_print(233).
+local_print(234).
+local_print(235).
+local_print(236).
+local_print(237).
+local_print(238).
+local_print(239).
+local_print(240).
+local_print(241).
+local_print(242).
+local_print(243).
+local_print(244).
+local_print(245).
+local_print(246).
+local_print(247).
+local_print(248).
+local_print(249).
+local_print(250).
+local_print(251).
+local_print(252).
+local_print(253).
+local_print(254).
+local_print(255).
+
+local_to_lower(0,0).
+local_to_lower(1,1).
+local_to_lower(2,2).
+local_to_lower(3,3).
+local_to_lower(4,4).
+local_to_lower(5,5).
+local_to_lower(6,6).
+local_to_lower(7,7).
+local_to_lower(8,8).
+local_to_lower(9,9).
+local_to_lower(10,10).
+local_to_lower(11,11).
+local_to_lower(12,12).
+local_to_lower(13,13).
+local_to_lower(14,14).
+local_to_lower(15,15).
+local_to_lower(16,16).
+local_to_lower(17,17).
+local_to_lower(18,18).
+local_to_lower(19,19).
+local_to_lower(20,20).
+local_to_lower(21,21).
+local_to_lower(22,22).
+local_to_lower(23,23).
+local_to_lower(24,24).
+local_to_lower(25,25).
+local_to_lower(26,26).
+local_to_lower(27,27).
+local_to_lower(28,28).
+local_to_lower(29,29).
+local_to_lower(30,30).
+local_to_lower(31,31).
+local_to_lower(32,32).
+local_to_lower(33,33).
+local_to_lower(34,34).
+local_to_lower(35,35).
+local_to_lower(36,36).
+local_to_lower(37,37).
+local_to_lower(38,38).
+local_to_lower(39,39).
+local_to_lower(40,40).
+local_to_lower(41,41).
+local_to_lower(42,42).
+local_to_lower(43,43).
+local_to_lower(44,44).
+local_to_lower(45,45).
+local_to_lower(46,46).
+local_to_lower(47,47).
+local_to_lower(48,48).
+local_to_lower(49,49).
+local_to_lower(50,50).
+local_to_lower(51,51).
+local_to_lower(52,52).
+local_to_lower(53,53).
+local_to_lower(54,54).
+local_to_lower(55,55).
+local_to_lower(56,56).
+local_to_lower(57,57).
+local_to_lower(58,58).
+local_to_lower(59,59).
+local_to_lower(60,60).
+local_to_lower(61,61).
+local_to_lower(62,62).
+local_to_lower(63,63).
+local_to_lower(64,64).
+local_to_lower(65,97).
+local_to_lower(66,98).
+local_to_lower(67,99).
+local_to_lower(68,100).
+local_to_lower(69,101).
+local_to_lower(70,102).
+local_to_lower(71,103).
+local_to_lower(72,104).
+local_to_lower(73,105).
+local_to_lower(74,106).
+local_to_lower(75,107).
+local_to_lower(76,108).
+local_to_lower(77,109).
+local_to_lower(78,110).
+local_to_lower(79,111).
+local_to_lower(80,112).
+local_to_lower(81,113).
+local_to_lower(82,114).
+local_to_lower(83,115).
+local_to_lower(84,116).
+local_to_lower(85,117).
+local_to_lower(86,118).
+local_to_lower(87,119).
+local_to_lower(88,120).
+local_to_lower(89,121).
+local_to_lower(90,122).
+local_to_lower(91,91).
+local_to_lower(92,92).
+local_to_lower(93,93).
+local_to_lower(94,94).
+local_to_lower(95,95).
+local_to_lower(96,96).
+local_to_lower(97,97).
+local_to_lower(98,98).
+local_to_lower(99,99).
+local_to_lower(100,100).
+local_to_lower(101,101).
+local_to_lower(102,102).
+local_to_lower(103,103).
+local_to_lower(104,104).
+local_to_lower(105,105).
+local_to_lower(106,106).
+local_to_lower(107,107).
+local_to_lower(108,108).
+local_to_lower(109,109).
+local_to_lower(110,110).
+local_to_lower(111,111).
+local_to_lower(112,112).
+local_to_lower(113,113).
+local_to_lower(114,114).
+local_to_lower(115,115).
+local_to_lower(116,116).
+local_to_lower(117,117).
+local_to_lower(118,118).
+local_to_lower(119,119).
+local_to_lower(120,120).
+local_to_lower(121,121).
+local_to_lower(122,122).
+local_to_lower(123,123).
+local_to_lower(124,124).
+local_to_lower(125,125).
+local_to_lower(126,126).
+local_to_lower(127,127).
+local_to_lower(128,128).
+local_to_lower(129,129).
+local_to_lower(130,130).
+local_to_lower(131,131).
+local_to_lower(132,132).
+local_to_lower(133,133).
+local_to_lower(134,134).
+local_to_lower(135,135).
+local_to_lower(136,136).
+local_to_lower(137,137).
+local_to_lower(138,138).
+local_to_lower(139,139).
+local_to_lower(140,140).
+local_to_lower(141,141).
+local_to_lower(142,142).
+local_to_lower(143,143).
+local_to_lower(144,144).
+local_to_lower(145,145).
+local_to_lower(146,146).
+local_to_lower(147,147).
+local_to_lower(148,148).
+local_to_lower(149,149).
+local_to_lower(150,150).
+local_to_lower(151,151).
+local_to_lower(152,152).
+local_to_lower(153,153).
+local_to_lower(154,154).
+local_to_lower(155,155).
+local_to_lower(156,156).
+local_to_lower(157,157).
+local_to_lower(158,158).
+local_to_lower(159,159).
+local_to_lower(160,160).
+local_to_lower(161,161).
+local_to_lower(162,162).
+local_to_lower(163,163).
+local_to_lower(164,164).
+local_to_lower(165,165).
+local_to_lower(166,166).
+local_to_lower(167,167).
+local_to_lower(168,168).
+local_to_lower(169,169).
+local_to_lower(170,170).
+local_to_lower(171,171).
+local_to_lower(172,172).
+local_to_lower(173,173).
+local_to_lower(174,174).
+local_to_lower(175,175).
+local_to_lower(176,176).
+local_to_lower(177,177).
+local_to_lower(178,178).
+local_to_lower(179,179).
+local_to_lower(180,180).
+local_to_lower(181,181).
+local_to_lower(182,182).
+local_to_lower(183,183).
+local_to_lower(184,184).
+local_to_lower(185,185).
+local_to_lower(186,186).
+local_to_lower(187,187).
+local_to_lower(188,188).
+local_to_lower(189,189).
+local_to_lower(190,190).
+local_to_lower(191,191).
+local_to_lower(192,224).
+local_to_lower(193,225).
+local_to_lower(194,226).
+local_to_lower(195,227).
+local_to_lower(196,228).
+local_to_lower(197,229).
+local_to_lower(198,230).
+local_to_lower(199,231).
+local_to_lower(200,232).
+local_to_lower(201,233).
+local_to_lower(202,234).
+local_to_lower(203,235).
+local_to_lower(204,236).
+local_to_lower(205,237).
+local_to_lower(206,238).
+local_to_lower(207,239).
+local_to_lower(208,240).
+local_to_lower(209,241).
+local_to_lower(210,242).
+local_to_lower(211,243).
+local_to_lower(212,244).
+local_to_lower(213,245).
+local_to_lower(214,246).
+local_to_lower(215,247).
+local_to_lower(216,248).
+local_to_lower(217,249).
+local_to_lower(218,250).
+local_to_lower(219,251).
+local_to_lower(220,252).
+local_to_lower(221,253).
+local_to_lower(222,254).
+local_to_lower(223,223).
+local_to_lower(224,224).
+local_to_lower(225,225).
+local_to_lower(226,226).
+local_to_lower(227,227).
+local_to_lower(228,228).
+local_to_lower(229,229).
+local_to_lower(230,230).
+local_to_lower(231,231).
+local_to_lower(232,232).
+local_to_lower(233,233).
+local_to_lower(234,234).
+local_to_lower(235,235).
+local_to_lower(236,236).
+local_to_lower(237,237).
+local_to_lower(238,238).
+local_to_lower(239,239).
+local_to_lower(240,240).
+local_to_lower(241,241).
+local_to_lower(242,242).
+local_to_lower(243,243).
+local_to_lower(244,244).
+local_to_lower(245,245).
+local_to_lower(246,246).
+local_to_lower(247,247).
+local_to_lower(248,248).
+local_to_lower(249,249).
+local_to_lower(250,250).
+local_to_lower(251,251).
+local_to_lower(252,252).
+local_to_lower(253,253).
+local_to_lower(254,254).
+local_to_lower(255,255).
+
+local_to_upper(0,0).
+local_to_upper(1,1).
+local_to_upper(2,2).
+local_to_upper(3,3).
+local_to_upper(4,4).
+local_to_upper(5,5).
+local_to_upper(6,6).
+local_to_upper(7,7).
+local_to_upper(8,8).
+local_to_upper(9,9).
+local_to_upper(10,10).
+local_to_upper(11,11).
+local_to_upper(12,12).
+local_to_upper(13,13).
+local_to_upper(14,14).
+local_to_upper(15,15).
+local_to_upper(16,16).
+local_to_upper(17,17).
+local_to_upper(18,18).
+local_to_upper(19,19).
+local_to_upper(20,20).
+local_to_upper(21,21).
+local_to_upper(22,22).
+local_to_upper(23,23).
+local_to_upper(24,24).
+local_to_upper(25,25).
+local_to_upper(26,26).
+local_to_upper(27,27).
+local_to_upper(28,28).
+local_to_upper(29,29).
+local_to_upper(30,30).
+local_to_upper(31,31).
+local_to_upper(32,32).
+local_to_upper(33,33).
+local_to_upper(34,34).
+local_to_upper(35,35).
+local_to_upper(36,36).
+local_to_upper(37,37).
+local_to_upper(38,38).
+local_to_upper(39,39).
+local_to_upper(40,40).
+local_to_upper(41,41).
+local_to_upper(42,42).
+local_to_upper(43,43).
+local_to_upper(44,44).
+local_to_upper(45,45).
+local_to_upper(46,46).
+local_to_upper(47,47).
+local_to_upper(48,48).
+local_to_upper(49,49).
+local_to_upper(50,50).
+local_to_upper(51,51).
+local_to_upper(52,52).
+local_to_upper(53,53).
+local_to_upper(54,54).
+local_to_upper(55,55).
+local_to_upper(56,56).
+local_to_upper(57,57).
+local_to_upper(58,58).
+local_to_upper(59,59).
+local_to_upper(60,60).
+local_to_upper(61,61).
+local_to_upper(62,62).
+local_to_upper(63,63).
+local_to_upper(64,64).
+local_to_upper(65,65).
+local_to_upper(66,66).
+local_to_upper(67,67).
+local_to_upper(68,68).
+local_to_upper(69,69).
+local_to_upper(70,70).
+local_to_upper(71,71).
+local_to_upper(72,72).
+local_to_upper(73,73).
+local_to_upper(74,74).
+local_to_upper(75,75).
+local_to_upper(76,76).
+local_to_upper(77,77).
+local_to_upper(78,78).
+local_to_upper(79,79).
+local_to_upper(80,80).
+local_to_upper(81,81).
+local_to_upper(82,82).
+local_to_upper(83,83).
+local_to_upper(84,84).
+local_to_upper(85,85).
+local_to_upper(86,86).
+local_to_upper(87,87).
+local_to_upper(88,88).
+local_to_upper(89,89).
+local_to_upper(90,90).
+local_to_upper(91,91).
+local_to_upper(92,92).
+local_to_upper(93,93).
+local_to_upper(94,94).
+local_to_upper(95,95).
+local_to_upper(96,96).
+local_to_upper(97,65).
+local_to_upper(98,66).
+local_to_upper(99,67).
+local_to_upper(100,68).
+local_to_upper(101,69).
+local_to_upper(102,70).
+local_to_upper(103,71).
+local_to_upper(104,72).
+local_to_upper(105,73).
+local_to_upper(106,74).
+local_to_upper(107,75).
+local_to_upper(108,76).
+local_to_upper(109,77).
+local_to_upper(110,78).
+local_to_upper(111,79).
+local_to_upper(112,80).
+local_to_upper(113,81).
+local_to_upper(114,82).
+local_to_upper(115,83).
+local_to_upper(116,84).
+local_to_upper(117,85).
+local_to_upper(118,86).
+local_to_upper(119,87).
+local_to_upper(120,88).
+local_to_upper(121,89).
+local_to_upper(122,90).
+local_to_upper(123,123).
+local_to_upper(124,124).
+local_to_upper(125,125).
+local_to_upper(126,126).
+local_to_upper(127,127).
+local_to_upper(128,128).
+local_to_upper(129,129).
+local_to_upper(130,130).
+local_to_upper(131,131).
+local_to_upper(132,132).
+local_to_upper(133,133).
+local_to_upper(134,134).
+local_to_upper(135,135).
+local_to_upper(136,136).
+local_to_upper(137,137).
+local_to_upper(138,138).
+local_to_upper(139,139).
+local_to_upper(140,140).
+local_to_upper(141,141).
+local_to_upper(142,142).
+local_to_upper(143,143).
+local_to_upper(144,144).
+local_to_upper(145,145).
+local_to_upper(146,146).
+local_to_upper(147,147).
+local_to_upper(148,148).
+local_to_upper(149,149).
+local_to_upper(150,150).
+local_to_upper(151,151).
+local_to_upper(152,152).
+local_to_upper(153,153).
+local_to_upper(154,154).
+local_to_upper(155,155).
+local_to_upper(156,156).
+local_to_upper(157,157).
+local_to_upper(158,158).
+local_to_upper(159,159).
+local_to_upper(160,160).
+local_to_upper(161,161).
+local_to_upper(162,162).
+local_to_upper(163,163).
+local_to_upper(164,164).
+local_to_upper(165,165).
+local_to_upper(166,166).
+local_to_upper(167,167).
+local_to_upper(168,168).
+local_to_upper(169,169).
+local_to_upper(170,170).
+local_to_upper(171,171).
+local_to_upper(172,172).
+local_to_upper(173,173).
+local_to_upper(174,174).
+local_to_upper(175,175).
+local_to_upper(176,176).
+local_to_upper(177,177).
+local_to_upper(178,178).
+local_to_upper(179,179).
+local_to_upper(180,180).
+local_to_upper(181,181).
+local_to_upper(182,182).
+local_to_upper(183,183).
+local_to_upper(184,184).
+local_to_upper(185,185).
+local_to_upper(186,186).
+local_to_upper(187,187).
+local_to_upper(188,188).
+local_to_upper(189,189).
+local_to_upper(190,190).
+local_to_upper(191,191).
+local_to_upper(192,192).
+local_to_upper(193,193).
+local_to_upper(194,194).
+local_to_upper(195,195).
+local_to_upper(196,196).
+local_to_upper(197,197).
+local_to_upper(198,198).
+local_to_upper(199,199).
+local_to_upper(200,200).
+local_to_upper(201,201).
+local_to_upper(202,202).
+local_to_upper(203,203).
+local_to_upper(204,204).
+local_to_upper(205,205).
+local_to_upper(206,206).
+local_to_upper(207,207).
+local_to_upper(208,208).
+local_to_upper(209,209).
+local_to_upper(210,210).
+local_to_upper(211,211).
+local_to_upper(212,212).
+local_to_upper(213,213).
+local_to_upper(214,214).
+local_to_upper(215,215).
+local_to_upper(216,216).
+local_to_upper(217,217).
+local_to_upper(218,218).
+local_to_upper(219,219).
+local_to_upper(220,220).
+local_to_upper(221,221).
+local_to_upper(222,222).
+local_to_upper(223,223).
+local_to_upper(224,192).
+local_to_upper(225,193).
+local_to_upper(226,194).
+local_to_upper(227,195).
+local_to_upper(228,196).
+local_to_upper(229,197).
+local_to_upper(230,198).
+local_to_upper(231,199).
+local_to_upper(232,200).
+local_to_upper(233,201).
+local_to_upper(234,202).
+local_to_upper(235,203).
+local_to_upper(236,204).
+local_to_upper(237,205).
+local_to_upper(238,206).
+local_to_upper(239,207).
+local_to_upper(240,208).
+local_to_upper(241,209).
+local_to_upper(242,210).
+local_to_upper(243,211).
+local_to_upper(244,212).
+local_to_upper(245,213).
+local_to_upper(246,214).
+local_to_upper(247,215).
+local_to_upper(248,216).
+local_to_upper(249,217).
+local_to_upper(250,218).
+local_to_upper(251,219).
+local_to_upper(252,220).
+local_to_upper(253,221).
+local_to_upper(254,222).
+local_to_upper(255,255).
