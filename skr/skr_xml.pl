@@ -826,6 +826,7 @@ whitespace_control_code(74). % J
 whitespace_control_code(75). % K
 whitespace_control_code(76). % L
 whitespace_control_code(77). % M
+whitespace_control_code(95). % _
 
 generate_one_xml_AA_term(Acronym, Expansion, CountTerm, MMOCUIList, XMLAA) :-
 	% With MM2014, delete convert_AA_count_term and use the next line instead:
