@@ -70,6 +70,7 @@
    ]).
 
 :- use_module(skr(skr_utilities), [
+	fatal_error/2,
 	replace_blanks_with_crs/4,
 	verify_xml_format/2
    ]).
@@ -106,8 +107,13 @@ generate_and_print_xml(AllMMO, OutputStream) :-
 	  XMLChars1 = XMLChars,
 	  print_xml_output(OutputStream, XMLChars1)
 	; true
-	).
-
+	),
+	!.
+generate_and_print_xml(AllMMO, _OutputStream) :-
+	AllMMO = [_ArgsMMO,_AAsMMO,_NegExMMO|UtteranceMMO],
+	UtteranceMMO = [utterance(UttID,_UttString,_UttPosInfo,_UttReplPos)|_],
+	fatal_error('Could not generate XML for MMO containing utterance labeled ~q~n.', [UttID]).
+			
 generate_xml_MMO_term(XMLArgTerm, XMLAATerm, XMLNegExTerm, XMLUtterancesTerm, MMOXML) :-
 	  create_xml_element('MMO',
 			     [],
@@ -726,6 +732,7 @@ generate_xml_utterance_data(UtteranceLabel,
 	atom_codes(UtteranceLabel, LabelString),
 	split_string_completely(LabelString, ".", LabelStringComponents),
 	append(PMIDComponents, [UtteranceTypeString,UtteranceNumberString], LabelStringComponents),
+	!,
 	interleave_string(PMIDComponents, ".", PMIDStringList),
 	append(PMIDStringList, PMIDString),
 	number_codes(UtteranceStartPos, StartPosString),
@@ -769,12 +776,61 @@ generate_xml_AA_term(AAsMMO, XMLAATerm) :-
 
 
 generate_xml_AA_list([], []).
-generate_xml_AA_list([Acronym*Expansion*CountList*CUIList|RestAATerms], [XMLAA|RestXMLAAs]) :-
-	generate_one_xml_AA_term(Acronym, Expansion, CountList, CUIList, XMLAA),
+generate_xml_AA_list([Acronym*Expansion*CountTerm*CUIList|RestAATerms], [XMLAA|RestXMLAAs]) :-
+	generate_one_xml_AA_term(Acronym, Expansion, CountTerm, CUIList, XMLAA),
 	generate_xml_AA_list(RestAATerms, RestXMLAAs).
 
-generate_one_xml_AA_term(Acronym, Expansion, CountList, MMOCUIList, XMLAA) :-
-	CountList = [AATokenNum, AALen, AAExpTokenNum, AAExpLen],
+
+% Beginning with MM2014, the CountTerm is of the form A-B-C-C, and not [A,B,C,D]
+% in order to prevent skr_utilities:write_AAs_MMO_term from possibly printing the list
+% as control characters: [9,10,11,12,13] will print as "^I^J^K^L^M".
+
+% This clause will handle the AA count term of the form (A,B,C,D),
+% which will be created by MetaMap14.
+convert_AA_count_term((AATokenNum,AALen,AAExpTokenNum,AAExpLen), A, B, C, D) :-
+	convert_AA_count_term([AATokenNum,AALen,AAExpTokenNum,AAExpLen], A, B, C, D).
+% This clause handles MetaMap13 AA count terms that are well behaved,
+% i.e., that do not contain "^I", "^J", "^K", "^L", or "^M".
+% This clause should be commented out for MM14.
+convert_AA_count_term([AATokenNum,AALen,AAExpTokenNum,AAExpLen], A, B, C, D) :-
+	!,
+	integer(AATokenNum),
+	integer(AALen),
+	integer(AAExpTokenNum),
+	integer(AAExpLen),
+	A = AATokenNum,
+	B = AALen,
+	C = AAExpTokenNum,
+	D = AAExpLen.
+% This is the case that handles count terms like "^I^J^K^L";
+% it succeeds only if [H|T] is converted to a 4-element list.
+% This clause should be commented out for MM14.
+convert_AA_count_term([H|T], AATokenNum, AALen, AAExpTokenNum, AAExpLen) :-
+	convert_AA_count_term_1([H|T], [AATokenNum,AALen,AAExpTokenNum,AAExpLen]).
+
+convert_AA_count_term_1([], []).
+convert_AA_count_term_1([H|T], [H1|T1]) :-
+	% The printed representation of "^I", "^J", "^K", "^L", or "^M" is in the CountTerm!
+	( H == 0'^ ->
+	  T = [NextCode|RestCodes],
+	  whitespace_control_code(NextCode),
+	  H1 is NextCode - 64,
+	  RemainingCodes = RestCodes
+	; H1 = H,
+	  RemainingCodes = T
+	),
+	convert_AA_count_term_1(RemainingCodes, T1).
+
+whitespace_control_code(73). % I
+whitespace_control_code(74). % J
+whitespace_control_code(75). % K
+whitespace_control_code(76). % L
+whitespace_control_code(77). % M
+
+generate_one_xml_AA_term(Acronym, Expansion, CountTerm, MMOCUIList, XMLAA) :-
+	% With MM2014, delete convert_AA_count_term and use the next line instead:
+	% CountTerm = (AATokenNum,AALen,AAExpTokenNum,AAExpLen),
+	convert_AA_count_term(CountTerm, AATokenNum, AALen, AAExpTokenNum, AAExpLen),
 	length(MMOCUIList, CUILengthAtom),
 	number_codes(CUILengthAtom, AACUICount),
 	number_codes(AATokenNum, AATokenNumString),
