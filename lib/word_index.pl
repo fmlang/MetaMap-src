@@ -122,11 +122,11 @@ filter_uscs_subseq([usc(UIString,S,C)|Rest], DebugUSCs, FilterWordStrings,
 	tokenize_text_mm(UIString, UIStringTokens),
 	sublist(UIStringTokens, FilterWordStrings),
 	!,
-	maybe_announce_USC(DebugUSCs, 1, UIString, S, C),
+	maybe_announce_USC(DebugUSCs, 1, FilterWordStrings, UIString, S, C),
 	filter_uscs_subseq(Rest, DebugUSCs, FilterWordStrings, FilteredRest).
 filter_uscs_subseq([First|Rest], DebugUSCs, FilterWordStrings, FilteredRest) :-
 	First = usc(UIString, S, C),
-	maybe_announce_USC(DebugUSCs, 0, UIString, S, C),
+	maybe_announce_USC(DebugUSCs, 0, FilterWordStrings, UIString, S, C),
 	filter_uscs_subseq(Rest, DebugUSCs, FilterWordStrings, FilteredRest).
 
 filter_uscs_init_subseq([], _DebugUSCs, _FilterWordStrings, []).
