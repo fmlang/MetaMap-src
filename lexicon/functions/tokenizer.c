@@ -99,7 +99,7 @@ static void tok(
 	    if (boundary == 1)
 		*t++ = LEX_TOKEN_SEPARATOR;
 	    boundary = 0;
-	    *t++ = ((isupper((int)*sp) && flag == LEX_LOWER_TOKENIZE) ? tolower((int)*sp) : *sp);
+	    *t++ = (char)((isupper((int)*sp) && (flag == LEX_LOWER_TOKENIZE)) ? tolower((int)*sp) : *sp);
 	    sp++;
 	}
     }
