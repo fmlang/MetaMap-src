@@ -130,7 +130,7 @@ is_control_option(metamap, '@', 'WSD_SERVER', no,
 is_control_option(metamap, 'A', strict_model, 			no, none).
 % is_control_option(metamap, 'B', moderate_model, 		no, none).
 is_control_option(metamap, 'C', relaxed_model, 			no, none).
-is_control_option(metamap, 'D', all_derivational_variants,      no, none).  	% MetaMap default
+is_control_option(metamap, 'D', all_derivational_variants,      no, none).
 is_control_option(metamap, 'E', indicate_citation_end,   	no, none).
 is_control_option(metamap, 'F', formal_tagger_output, 		no, none).
 is_control_option(metamap, 'G', sources,                 	no, none).
@@ -148,7 +148,7 @@ is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
 is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
 is_control_option(metamap, 'Q', composite_phrases, 		yes,
                   aspec(composite_phrases, mandatory, integer, yes, 4,
-                        'Max number of prepositional phrases to glom on')).
+                        'Max number of prepositional phrases to glom on')).	% MetaMap default
 is_control_option(metamap, 'R', restrict_to_sources, no,
                   aspec(restrict_to_sources, mandatory, list, none, no_default,
                         'List of sources to use for output')).
@@ -168,9 +168,9 @@ is_control_option(metamap, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
                         'Release of MetaMap data to use')).
 
-is_control_option(metamap,   a, all_acros_abbrs,	        no, none).	% MetaMap default
-is_control_option(metamap,   b, compute_all_mappings,    	no, none).  	% MetaMap default
-is_control_option(metamap,   c, hide_candidates,	        no, none).	% MetaMap default
+is_control_option(metamap,   a, all_acros_abbrs,	        no, none).
+is_control_option(metamap,   b, compute_all_mappings,    	no, none).
+is_control_option(metamap,   c, show_candidates,	        no, none).
 is_control_option(metamap,   d, no_derivational_variants,	no, none).
 is_control_option(metamap,   e, exclude_sources, 		no,
                   aspec(exclude_sources, mandatory, list, none, no_default,
@@ -183,17 +183,17 @@ is_control_option(metamap,   j, dump_aas,                	no, none).
 is_control_option(metamap,   k, exclude_sts, no,
                   aspec(exclude_sts, mandatory, list, none, no_default,
                         'List of semantic types to exclude for output')).
-is_control_option(metamap,   l, allow_large_n,		        no, none).	% MetaMap default
-is_control_option(metamap,   m, hide_mappings,	         	no, none).    	% MetaMap default
+is_control_option(metamap,   l, allow_large_n,		        no, none).
+is_control_option(metamap,   m, hide_mappings,	         	no, none).
 is_control_option(metamap,   n, number_the_candidates, 	      	no, none).
 is_control_option(metamap,   o, allow_overmatches, 		no, none).
 is_control_option(metamap,   q, machine_output, 		no, none).
-is_control_option(metamap,   p, hide_plain_syntax,	        no, none).  	% MetaMap default
+is_control_option(metamap,   p, hide_plain_syntax,	        no, none).
 is_control_option(metamap,   r, threshold, no,
                   aspec(threshold, mandatory, integer, none, no_default,
                         'Threshold for displaying candidates')).
-is_control_option(metamap,   s, hide_semantic_types,	 	no, none).   	% MetaMap default
-is_control_option(metamap,   t, no_tagging,		        no, none).	% MetaMap default
+is_control_option(metamap,   s, hide_semantic_types,	 	no, none).
+is_control_option(metamap,   t, no_tagging,		        no, none).
 is_control_option(metamap,   u, unique_acros_abbrs_only, 	no, none).
 is_control_option(metamap,   v, variants, 			no, none).
 is_control_option(metamap,   x, syntax, 			no, none).

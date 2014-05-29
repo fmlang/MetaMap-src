@@ -231,7 +231,8 @@ generate_one_xml_phrase(MMOPhraseTerm, MMOCandidatesTerm, MMOMappingsTerm, XMLPh
 	generate_xml_phrase_length(PhraseLength, XMLPhraseLength),
 	% generate_xml_replacement_pos(ReplPos, XMLReplPos),
 	CandidatesTag = 'Candidates',
-	generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+	GenerateCandidates is 0,
+	generate_xml_phrase_candidates_term(GenerateCandidates, TotalCandidateCount, CandidatesTag,
 					    ExcludedCandidateCount, PrunedCandidateCount,
 					    RemainingCandidateCount, MMOCandidatesList,
 					    XMLCandidatesTerm),
@@ -253,7 +254,7 @@ generate_candidate_count_attribute(CandidateCount, CountType, CandidateCountAttr
 % e.g., <Candidates Count="1">,
 % but the ExcludedCount and PrunedCount tags otherwise,
 % e.g., <Candidates Count="2" ExcludedCount="0" PrunedCount="0">.
-generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+generate_xml_phrase_candidates_term(GenerateCandidates, TotalCandidateCount, CandidatesTag,
 				    ExcludedCandidateCount, PrunedCandidateCount,
 				    RemainingCandidateCount, MMOCandidatesList,
 				    XMLCandidatesTerm) :-
@@ -265,7 +266,7 @@ generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
 					   PrunedCandidateCountAttribute),
 	generate_candidate_count_attribute(RemainingCandidateCount, 'Remaining',
 					   RemainingCandidateCountAttribute),
-	generate_xml_candidates_list(MMOCandidatesList, XMLCandidatesList),
+	generate_xml_candidates_list(GenerateCandidates, MMOCandidatesList, XMLCandidatesList),
 	append([TotalCandidateCountAttribute,ExcludedCandidateCountAttribute,
 		PrunedCandidateCountAttribute,RemainingCandidateCountAttribute],
 	       CountAttributeList),
@@ -274,11 +275,20 @@ generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
 			   XMLCandidatesList,
 			   XMLCandidatesTerm).
 
-generate_xml_candidates_list([], []).
-generate_xml_candidates_list([FirstMMOCandidate|RestMMOCandidates],
+generate_xml_candidates_list(GenerateCandidates, MMOCandidatesList, XMLCandidatesList) :-
+	( control_option(show_candidates) ->
+	  generate_xml_candidates_list_aux(MMOCandidatesList, XMLCandidatesList)
+	; GenerateCandidates =:= 1 ->
+	  generate_xml_candidates_list_aux(MMOCandidatesList, XMLCandidatesList)
+	; XMLCandidatesList = []
+	).
+
+
+generate_xml_candidates_list_aux([], []).
+generate_xml_candidates_list_aux([FirstMMOCandidate|RestMMOCandidates],
 			     [FirstXMLCandidate|RestXMLCandidates]) :-
 	generate_one_xml_candidate(FirstMMOCandidate, FirstXMLCandidate),
-	generate_xml_candidates_list(RestMMOCandidates, RestXMLCandidates).
+	generate_xml_candidates_list_aux(RestMMOCandidates, RestXMLCandidates).
 
 generate_one_xml_candidate(MMOCandidate, XMLCandidate) :-
 	candidate_term(NegValue, CUI, CandidateMatched, PreferredName, MatchedWords,
@@ -573,7 +583,8 @@ generate_one_xml_mapping(MMOMapping, XMLMapping) :-
 	% e.g., <Candidates Count="2" ExcludedCount="0" PrunedCount="0">
 
 	CandidatesTag = 'MappingCandidates',
-	generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+	GenerateCandidates is 1,
+	generate_xml_phrase_candidates_term(GenerateCandidates, TotalCandidateCount, CandidatesTag,
 					    ExcludedCandidateCount, PrunedCandidateCount,
 					    RemainingCandidateCount, CandidatesList,
 					    XMLCandidatesTerm),

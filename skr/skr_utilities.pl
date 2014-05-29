@@ -411,7 +411,7 @@ verify_xml_settings(Result) :-
 	xml_output_format(XMLFormat),
 	!,
 	warning_check([syntax, show_cuis, negex, sources, dump_aas], XMLFormat),
-	fatal_error_check([hide_plain_syntax, hide_candidates, number_the_candidates,
+	fatal_error_check([hide_plain_syntax, number_the_candidates,
 			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
 			  XMLFormat, 0, Result).
 verify_xml_settings(0).
@@ -420,7 +420,7 @@ verify_MMO_settings(Result) :-
 	control_option(machine_output),
 	!,
 	warning_check([syntax, show_cuis, negex, sources, dump_aas], machine_output),
-	fatal_error_check([hide_plain_syntax, hide_candidates, number_the_candidates,
+	fatal_error_check([hide_plain_syntax, number_the_candidates,
 			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
 			  machine_output, 0, Result).
 verify_MMO_settings(0).
@@ -429,7 +429,7 @@ verify_mmi_settings(Result) :-
 	control_option(fielded_mmi_output),
 	!,
 	warning_check([show_cuis,negex], fielded_mmi_output),
-	fatal_error_check([tagger_output, hide_plain_syntax, hide_candidates,
+	fatal_error_check([tagger_output, hide_plain_syntax, display_candidates,
 			   number_the_candidates, hide_semantic_types,
 			   show_preferrred_names_only, hide_mappings, sources],
 			  fielded_mmi_output, 0, Result).
@@ -919,7 +919,7 @@ generate_candidates_output(Evaluations3, TotalCandidateCount,
 	  CandidatesMMO = candidates(TotalCandidateCount,
 				     ExcludedCandidateCount,PrunedCandidateCount,
 				     RemainingCandidateCount,Evaluations3)
-	; \+ control_option(hide_candidates),
+	; control_option(show_candidates),
 	  Evaluations3 \== [] ->
 	  conditionally_skr_begin_write(BracketedOutput, 'Candidates'),
 	  conditionally_dump_evals(Evaluations3, TotalCandidateCount,
@@ -1193,7 +1193,8 @@ write_candidates_MMO_component(CandidatesTerm, OutputStream) :-
 	       [TotalCandidateCount,ExcludedCandidateCount,
 		PrunedCandidateCount,RemainingCandidateCount]),
 	% If the candidate list is empty, do nothing!
-	( CandidateList = [H|T] ->
+	( CandidateList = [H|T],
+	  control_option(show_candidates) ->
 	  write_MMO_candidate_list(T, OutputStream, H)
 	; true
 	),
@@ -1409,14 +1410,17 @@ check_generate_utterance_output_control_options_1 :-
 	; xml_output_format(_XMLFormat)
 	).
 
-% This predicate succeeds and causes
+% If this predicate succeeds it causes
 %           format('~NProcessing ~a: ~s~n',[Label,Text0])
-% to be called UNLESS hide_plain_syntax, hide_candidates, and hide_mappings are on
-% AND both syntax and variants are off.
+% e.g.,
+% Processing 12087422.ti.1: Toxicology and carcinogenesis studies . . .
+% to be called, which we want to happen
+% UNLESS hide_plain_syntax and hide_mappings are on
+% AND    show_candidates, syntax and variants are off.
 check_generate_utterance_output_control_options_2 :-
 	( \+ control_option(hide_plain_syntax) -> true
-	; \+ control_option(hide_candidates)   -> true
 	; \+ control_option(hide_mappings)     -> true
+	; control_option(show_candidates)      -> true
 	; control_option(syntax)               -> true
 	; control_option(variants)
 	).

@@ -3849,15 +3849,15 @@ check_generate_initial_evaluations_1_control_options_1 :-
 	\+ control_option(all_derivational_variants),
 	\+ control_option(all_acros_abbrs).
 
-% This predicate succeeds UNLESS hide_candidates and hide_mappings are both on.
+% This predicate succeeds UNLESS show_candidates is off and hide_mappings is on.
 % The checks for fielded_mmi_output, machine_output, and XML are redundant,
-% because it is an error to have any of those three on if either
-% hide_candidates or hide_mappings is on.
-% The only way this predicate can fail is if both hide_candidates and hide_mappings are set,
+% because it is an error to have any of those three on if hide_mappings is on.
+% The only way this predicate can fail is if hide_mappings is on and
+% show_candidates is not set,
 % in which case there is no reason to generate candidates!
 
 check_generate_initial_evaluations_1_control_options_2 :-
-	( \+ control_option(hide_candidates) -> true
+	( control_option(show_candidates)    -> true
 	; \+ control_option(hide_mappings)   -> true
 	; control_option(fielded_mmi_output) -> true
 	; control_option(machine_output)     -> true
