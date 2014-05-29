@@ -46,10 +46,16 @@
 	shapes/3
    ]).
 
-:- use_module(skr_lib(ctypes), [
-	is_alpha/1,
-	is_punct/1
+% :- use_module(skr_lib(ctypes), [
+% 	is_alpha/1,
+% 	is_punct/1
+%    ]).
+
+:- use_module(metamap(metamap_tokenization), [
+	local_alpha/1,
+	local_punct/1
    ]).
+
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1
@@ -93,10 +99,9 @@ assembledefns_aux([], _PrevToken, [], _TagList, _Lexicon, _Index, []).
 %%% from lexicon
 assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList,
 		  Lexicon, Index, [Recs|MoreRecs]) :-
-	\+ control_option(no_lex),
 	atom_codes(Token, Codes),
 	Codes = [FirstChar|_],
-	\+ is_punct(FirstChar),
+	\+ local_punct(FirstChar),
      	lex_form_ci_recs_input_6([Token|MoreTokens], Recs, Remaining, TagList, Lexicon, Index),
 	!,
 	assembledefns_aux(Remaining, Token, Rest, TagList, Lexicon, Index, MoreRecs).
@@ -127,7 +132,7 @@ assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList, Lexicon, In
 %%% punctuation records
 punct_token(Token, punctuation:[lexmatch:[Token], inputmatch:[Token], records:[punct:PunctName]]) :-
 	atom_codes(Token, [C]),
-	is_punct(C),
+	local_punct(C),
 	punct_name(Token, PunctName).
 
 % punct_token('.', punctuation:[lexmatch:['.'], inputmatch:['.'], records:[punct:[period]]]).

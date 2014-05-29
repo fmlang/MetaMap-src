@@ -34,18 +34,19 @@
 
 
 :- module(skr_fe, [
-	dg/0,
 	% must be exported for SemRep
 	form_expanded_sentences/3,
 	% must be exported for SemRep
 	form_original_sentences/7,
+	fg/0,
 	go/0,
 	go/1,
 	go/2,
+	gt/0,
 	% called by MetaMap API -- do not change signature!
 	initialize_skr/4,
 	% called by MetaMap API -- do not change signature!
-	postprocess_sentences/11,
+	postprocess_sentences/10,
 	% called by MetaMap API -- do not change signature!
 	process_text/9
    ]).
@@ -75,7 +76,7 @@
 
 :- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/16,
+	skr_phrases/17,
 	stop_skr/0
    ]).
 
@@ -102,7 +103,7 @@
 	generate_bracketed_output/2,
 	generate_candidates_output/7,
 	generate_EOT_output/1,
-	generate_header_output/6,
+	% generate_header_output/6,
 	generate_mappings_output/5,
 	generate_phrase_output/7,
 	generate_utterance_output/6,
@@ -115,7 +116,7 @@
 	token_template/5,
 	token_template/6,
 	usage/0,
-        write_MMO_terms/3,
+        generate_MMO_terms/8,
         write_raw_token_lists/2,
         write_sentences/2
    ]).
@@ -143,7 +144,7 @@
 	normalized_syntactic_uninvert_string/2,
 	split_atom_completely/3,
 	trim_whitespace/2,
-	trim_whitespace_left/3,
+	trim_whitespace_left_count/3,
 	trim_whitespace_left/2,
 	trim_whitespace_right/2
    ]).
@@ -216,7 +217,10 @@ go/0 is the executive predicate for the SKR Front End.
 go/0 uses go/1 with HaltFlag set to halt.
 go/1 parses the command line and calls go/2 which controls the processing.  */
 
-dg :- debug, go.
+% This should be called dgt/0 "Debug, Go True", but "fg" is much easier to type!
+fg :- debug, gt.
+
+gt :- go(true).
 
 go :- go(halt).
 
@@ -238,8 +242,8 @@ go(HaltOption, command_line(OptionsIn, ArgsIn)) :-
 	  )
 	; usage
 	),
-	stop_skr,
 	( HaltOption == halt ->
+	  stop_skr,
 	  halt
 	; true
 	).
@@ -300,8 +304,7 @@ skr_fe(InterpretedArgs, ProgramName, UDAList, DefaultRelease, IOptions) :-
 	% only if MetaMap is in batch mode, because otherwise (in interactive use)
 	% the user will have control-C-ed the program or exited it altogether.
 	conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream),
-	generate_EOT_output(OutputStream),
-	close_all_streams.
+	generate_EOT_output(OutputStream).
 
 get_output_stream(OutputStream) :-
 	( current_stream(_File, write, OutputStream) ->
@@ -421,7 +424,7 @@ in Sentences in case the original text is preferred. */
 %	process_any_new_options(Lines),
 %	!.
 
-% MMResults is created by process text, and is one term of the form
+% MMResults is created by process_text, and is one term of the form
 % mm_results(Lines0, TagOption, ModifiedLines, InputType,
 %            Sentences, CoordSentences, OrigUtterances, MMOutput),
 % 
@@ -450,7 +453,7 @@ process_text(Text, TextID, ExtraChars, TagOption, ServerStreams,
 	).
 
 process_text_1(Lines0, TextID, ExtraChars, TagOption, ServerStreams,
-	       ExpRawTokenList, AAs, UDAList, MMResults) :-
+	       ExpRawTokenList, AAs, UDAListIn, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
@@ -458,7 +461,7 @@ process_text_1(Lines0, TextID, ExtraChars, TagOption, ServerStreams,
 	% CoordSentences includes the positional information for the original text
 	% format(user_output, 'Processing PMID ~w~n', [PMID]),
 	extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFields,
-			  Sentences, CoordSentences, AAs, UDAList, UDAs, Lines),
+			  Sentences, CoordSentences, AAs, UDAListIn, UDAs, Lines),
 	% need to update Lines
 	% fail,
 	% RawTokenList is the copy of Sentences that includes an extra pos(_,_) term
@@ -553,7 +556,7 @@ process_text_aux([ExpandedUtterance|Rest],
 			     HRTagStrings, Definitions, SyntAnalysis0),
 	conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-		    AAs, UDAs, SyntAnalysis,
+		    AAs, UDAs, SyntAnalysis, TagList,
 		    WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
 		    ServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 		    DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases),
@@ -586,24 +589,28 @@ postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 	generate_negex_output(NegationTerms),
 	% current_output(OutputStream),
 	% format(user_output, '~n### Current output is ~q', [OutputStream]),	
-	postprocess_sentences(OutputStream, OrigUtterances, NegationTerms, InterpretedArgs,
-			      IOptions, AAs, Sentences, BracketedOutput, DisambMMOutput, 1, AllMMO),
+	postprocess_sentences(OutputStream, OrigUtterances, NegationTerms,
+			      InterpretedArgs, IOptions, AAs, Sentences,
+			      BracketedOutput, DisambMMOutput, AllMMO),
 	% All the XML output for the current citation is handled here
 	generate_and_print_xml(AllMMO, OutputStream),
 	do_MMI_processing(OrigUtterances, BracketedOutput, AAs, DisambMMOutput),
 	do_formal_tagger_output.
 
-%%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
+% DO NOT MODIFY post_process_sentences/11 without checking with the maintainer of the MetaMap API.
 % PrintMMO is 1 for printing MMO (as MetaMap does), and 0 for not print MMO (as the Java API does).
 postprocess_sentences(OutputStream, OrigUtterances, NegExList, IArgs, IOptions, AAs,
-		      Sentences, BracketedOutput, DisambMMOutput, PrintMMO, AllMMO) :-
-	AllMMO = HeaderMMO,
-	HeaderMMORest = UtteranceMMO,
-	generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
-			       HeaderMMO, HeaderMMORest),
+		      Sentences, BracketedOutput, DisambMMOutput, AllMMO) :-
+	% HeaderMMO = [ArgsMMO,AAsMMO,NegExMMO|HeaderMMORest],
+	% HeaderMMORest is the (as yet) uninstantiated tail of HeaderMMO
 	postprocess_sentences_1(OrigUtterances, Sentences, NegExList,
 				BracketedOutput, 1, AAs, DisambMMOutput, UtteranceMMO, []),
-	write_MMO_terms(PrintMMO, OutputStream, AllMMO).
+	AllMMO = HeaderMMO,
+	HeaderMMORest = UtteranceMMO,
+% 	generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
+% 			       HeaderMMO, HeaderMMORest),
+	generate_MMO_terms(IArgs, IOptions, NegExList, DisambMMOutput,
+			   HeaderMMO, HeaderMMORest, OutputStream, AllMMO).
 
 postprocess_sentences_1([], _Sentences, _NegExList,
 			_BracketedOutput, _N, _AAs, [], MMO, MMO).
@@ -883,7 +890,7 @@ form_expanded_sentences_aux([Token|Rest],
 			    [utterance(PrevLabel,_OrigText,StartPos/Length,ReplPos)
 			        |RestOrigUtterances],
 			    PrevLabel, RevTexts,
-                           [utterance(PrevLabel,Text,StartPos/Length,ReplPos)
+			    [utterance(PrevLabel,Text,StartPos/Length,ReplPos)
 			        |RestExpandedSentences]) :-
 	token_template(Token, label, NextLabel, _LCNextLabel, _PosInfo1, _PosInfo2),
 	!,
@@ -955,13 +962,13 @@ convert_non_text_fields_to_blanks(InputType, InputStringWithBlanks,
 	),
 	append(TextFieldsOnly, TextFieldsOnlyString0),
 	trim_whitespace_right(TextFieldsOnlyString0, TextFieldsOnlyString),
-	trim_whitespace_left(TextFieldsOnlyString, TrimmedTextFieldsOnlyString, NumBlanksTrimmed).
+	trim_whitespace_left_count(TextFieldsOnlyString, TrimmedTextFieldsOnlyString, NumBlanksTrimmed).
 
 
 % "cntfb" == "Convert Non-Text Fields to Blanks"
 cntfb([], [], [], []).
 cntfb([FirstChar|RestChars], TextFieldsIn, NonTextFieldsIn, [ConvertedField|RestConvertedFields]) :-
-	convert_one_field_to_blanks([FirstChar|RestChars],TextFieldsIn, NonTextFieldsIn,
+	convert_one_field_to_blanks([FirstChar|RestChars], TextFieldsIn, NonTextFieldsIn,
 				    TextFieldsNext, NonTextFieldsNext, ConvertedField, CharsNext),
 	cntfb(CharsNext, TextFieldsNext, NonTextFieldsNext, RestConvertedFields).
 	
@@ -989,9 +996,13 @@ convert_one_field_to_blanks(CharsIn,
 	).
 
 get_field_components([], [], [], []).
-get_field_components([[FirstField,FirstFieldLines]|RestFields],
-		     FirstField, FirstFieldLines, RestFields).
-	
+get_field_components([[FirstField|RestFirstField]|RestFields],
+		     FirstField, FirstFieldLines, RestFields) :-
+	( RestFirstField \== [] ->
+	  RestFirstField = [FirstFieldLines]
+	; FirstFieldLines = []
+	).
+
 convert_text_field(TextField, TextFieldLines, CharsIn, ConvertedField, CharsNext) :-
 	trim_field_name_prefix(TextField, CharsIn, TextFieldLength, NumBlanksTrimmed, CharsNext3),
 	form_one_string(TextFieldLines, " ", PaddedTextFieldLines0),
@@ -1022,12 +1033,12 @@ trim_field_name_prefix(Field, CharsIn, FieldLength, NumBlanksTrimmed, CharsNext3
 	% determine the length of the text field
 	length(Field, FieldLength),
 	% trim off any whitespace immediately after the text field
-	trim_whitespace_left(CharsNext0, CharsNext1, NumBlanksTrimmed1),
+	trim_whitespace_left_count(CharsNext0, CharsNext1, NumBlanksTrimmed1),
 	% trim off the hyphen after the blanks
 	CharsNext1 = [FirstChar|CharsNext2],
 	medline_field_separator_char(FirstChar),
 	% trim off any whitespace immediately after the hyphen
-	trim_whitespace_left(CharsNext2, CharsNext3, NumBlanksTrimmed2),
+	trim_whitespace_left_count(CharsNext2, CharsNext3, NumBlanksTrimmed2),
 	% The "+1" is for the hyphen
 	NumBlanksTrimmed is NumBlanksTrimmed1 + NumBlanksTrimmed2 + 1.
 
@@ -1040,7 +1051,14 @@ convert_non_text_field(NonTextField, NonTextFieldLines, CharsIn, ConvertedField,
 	% length(NonTextFieldLines, NonTextFieldLinesLength),
 
 	form_one_string(NonTextFieldLines, " ", PaddedNonTextFieldLines0),
-	append(PaddedNonTextFieldLines0, " ", PaddedNonTextFieldLines),
+	% This is an ad-hoc hack to handle empty "AU" lines such as
+	% AU  - Niven CF Jr
+	% AU  - 
+	% LA  - eng
+	% from
+	% PMID- 16561135
+	% as of 02/24/2014
+	append_blank_if_nonnull(PaddedNonTextFieldLines0, PaddedNonTextFieldLines),
 	length(PaddedNonTextFieldLines, PNTFLength),
 	NumBlanks is NonTextFieldLength + NumBlanksTrimmed + PNTFLength,
 	length(BlanksList, NumBlanks),
@@ -1049,6 +1067,10 @@ convert_non_text_field(NonTextField, NonTextFieldLines, CharsIn, ConvertedField,
 	ConvertedField = BlanksList,
 	walk_off_field_lines(NonTextFieldLines, CharsNext3, CharsNext).
 	% format(user_output, 'AFTER >~s<:>~s<~n', [NonTextField,CharsNext]).
+
+append_blank_if_nonnull([], []).
+append_blank_if_nonnull([H|T], PaddedNonTextFieldLines) :-
+	append([H|T], " ", PaddedNonTextFieldLines).
 
 walk_off_field_lines([], Chars, Chars).
 walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-

@@ -124,6 +124,8 @@ compute_negex(RawTokenList, Lines, DisambMMOutput, NegationTerms) :-
 do_negex :-
 	( control_option(negex) ->
 	  true
+	; control_option(fielded_mmi_output) ->
+	  true
 	; control_value(negex_st_add, _) ->
 	  true
 	; control_value(negex_st_del, _) ->
@@ -133,6 +135,7 @@ do_negex :-
 
 compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) :-
 	( \+ control_option(machine_output),
+	  \+ control_option(fielded_mmi_output),
 	  \+ xml_output_format(_XMLFormat),
 	  \+ do_negex ->
 	  NegationTerms = []
@@ -142,6 +145,8 @@ compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) :-
 	  environ('NEGEX_CONCEPT_MAX_DIST',   ConceptMaxDistAtom),
 	  atom_codes(ConceptMaxDistAtom,      ConceptMaxDistChars),
 	  number_codes(ConceptMaxDistNum ,    ConceptMaxDistChars),
+	  % Split the token list for the entire utterance into a list of lists of tokens;
+	  % each sub-list contains all the tokens for a single utterance.
 	  split_token_list(RawTokenList, ListOfTokenLists),
 	  negex_aux(ListOfTokenLists, DisambMMOutput,
 		    UtteranceMaxDistNum, ConceptMaxDistNum, NegationTerms0),
@@ -163,6 +168,7 @@ negex_aux([RawTokenList|ListOfTokenLists], [MMOutput|MMOutputList],
 generate_negex_output(NegationTerms) :-
 	( do_negex,
 	  \+ control_option(machine_output),
+	  \+ control_option(fielded_mmi_output),
 	  \+ xml_output_format(_XMLFormat) ->
 	   format('~nNEGATIONS:~n', []),
 	   generate_all_negex_output(NegationTerms),
@@ -216,8 +222,10 @@ write_list_elements([H|T], Datum) :-
 % first attempt -- mostly exploration with using token based 
 token_negex(RawTokenList, DisambiguatedMMOPhrases,
 	    UtteranceMaxDist, ConceptMaxDist, ConsolidatedNegationTerms) :-
+	% Remove field, label, pn, sn, pe, and ws tokens.
  	remove_nonuseful_tokens(RawTokenList, UsefulTokenList),
  	extract_atoms_from_tokenlist(UsefulTokenList, AtomList),
+	% [ [nega, [not]] ... ]
  	get_negation_phrase_list(AtomList, NegationPhraseList0),
 	sort(NegationPhraseList0, NegationPhraseList),
 	generate_negation_terms_1(NegationPhraseList, DisambiguatedMMOPhrases,
@@ -230,8 +238,14 @@ generate_negation_terms_1([H|T], DisambiguatedMMOPhrases,
 			  UtteranceMaxDist, ConceptMaxDist,
 			  UsefulTokenList, NegationTerms) :-
 	NegationPhraseList = [H|T],
+	% TriggerList = [trigger(nega,[tok(lc,"not","not",pos(83,86),pos(83,3))])]
 	get_triggerlist(UsefulTokenList, NegationPhraseList, TriggerList0),
+	% PhraseMaps0 is a list of lists of the form [PhraseObject,Mappings];
+	% PhraseObject is phrase(PhraseAtom, Syntax, StartPos/Length, ReplPos), and
+	% Mappings is a list of the mappings generated from that phrase.
 	list_phrases_with_mappings(DisambiguatedMMOPhrases, PhraseMaps0),
+	% Keep only [PhraseObject,Mappings] lists in which
+	% PhraseObject is head or verb, and Mappings is nonempty.
 	keep_useful_phrasemaps(PhraseMaps0, PhraseMaps),
 	generate_negation_terms_2(PhraseMaps, UsefulTokenList,
 				  UtteranceMaxDist, ConceptMaxDist,
@@ -420,17 +434,19 @@ get_negation_phrase_list(Target, ResultList) :-
 list_phrases_with_mappings([],[]).   
 list_phrases_with_mappings([DisambiguatedMMOPhrase|DisambiguatedMMOPhraseList],
 			   [PhraseMap|PhraseMaps]) :-
-	DisambiguatedMMOPhrase = phrase(PhraseObject,_candidates,Mappings,_pwi,_gvcs,_ev0,_aphrases),
-	list_phrases_with_mappings(DisambiguatedMMOPhraseList,PhraseMaps),
-	PhraseMap = [PhraseObject,Mappings].
+	DisambiguatedMMOPhrase =
+	          phrase(PhraseObject,_Candidates,Mappings,_PWI,_GVCs,_EV0,_APhrases),
+	PhraseMap = [PhraseObject,Mappings],
+	list_phrases_with_mappings(DisambiguatedMMOPhraseList,PhraseMaps).
+
 
 % map concepts of head and verb phrases, ignore the others
 keep_useful_phrasemaps(PhraseMaps, FinalPhraseMaps) :-
-	replace_phrasemaps_with_empty_mappings(PhraseMaps, FinalPhraseMaps0),
-	replace_nonuseful_phrasemaps(FinalPhraseMaps0, FinalPhraseMaps).
+	delete_phrasemaps_with_empty_mappings(PhraseMaps, FinalPhraseMaps0),
+	delete_nonuseful_phrasemaps(FinalPhraseMaps0, FinalPhraseMaps).
 
-mincoman_get_pos_tag([],[]).
-mincoman_get_pos_tag([MincomanElement|MincomanElements],Tag) :-
+mincoman_get_pos_tag([], []).
+mincoman_get_pos_tag([MincomanElement|MincomanElements], Tag) :-
 	( ( MincomanElement = head(_)
 	  ; MincomanElement = verb(_) ) ->
 	    Tag = MincomanElement
@@ -441,24 +457,24 @@ phrase_get_pos_tag(Phrase,Tag) :-
 	Phrase = phrase(_LowerPhraseText,Mincoman,_PosPair,_),
 	mincoman_get_pos_tag(Mincoman,Tag).
 
-replace_nonuseful_phrasemaps([], []).
-replace_nonuseful_phrasemaps([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
+delete_nonuseful_phrasemaps([], []).
+delete_nonuseful_phrasemaps([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
 	PhraseMap = [Phrase,_Mappings],
 	phrase_get_pos_tag(Phrase, Tag),
 	( ( Tag=head(_);  Tag=verb(_) ) ->
 	    FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
 	  ; FinalPhraseMaps = RestFinalPhraseMaps
 	),
-	replace_nonuseful_phrasemaps(PhraseMaps, RestFinalPhraseMaps).
+	delete_nonuseful_phrasemaps(PhraseMaps, RestFinalPhraseMaps).
 
-replace_phrasemaps_with_empty_mappings([], []).
-replace_phrasemaps_with_empty_mappings([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
+delete_phrasemaps_with_empty_mappings([], []).
+delete_phrasemaps_with_empty_mappings([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
 	PhraseMap = [_Phrase,Mappings],
 	( Mappings = mappings([]) ->
 	  FinalPhraseMaps = RestFinalPhraseMaps
 	; FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
 	),
-	replace_phrasemaps_with_empty_mappings(PhraseMaps, RestFinalPhraseMaps).
+	delete_phrasemaps_with_empty_mappings(PhraseMaps, RestFinalPhraseMaps).
 
 %
 % List concepts that have positions before or after trigger, based on
@@ -886,7 +902,7 @@ term_wordlength(Term, WordLength) :-
 % This error prevents TokenIndex from being returned uninstantiated,
 % which should never happen!
 charpos_to_tokenindex([], NegationTerm, CharPosInfo, _, _) :-
-	fatal_error('NegEx negation "~p" not beyond char pos ~w.~n~n',
+	fatal_error('NegEx negation "~p" beyond char pos ~w.~n~n',
 		    [NegationTerm,CharPosInfo]).
 charpos_to_tokenindex([Token|TokenList], NegationTerm, CharPosInfo, Start, TokenIndex) :-
 	Token = tok(_,_,NString,AbsPosInfo,RelPosInfo),

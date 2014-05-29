@@ -46,6 +46,7 @@
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
+	local_ws/1,
 	tokenize_text_utterly/2
     ]).
 
@@ -57,10 +58,9 @@
 	skr_write_string/1
     ]).
 
-:- use_module(skr_lib(ctypes), [
-	is_lower/1,
-	is_white/1
-    ]).
+% :- use_module(skr_lib(ctypes), [
+% 	is_white/1
+%     ]).
 
 :- use_module(skr_lib(nls_io), [
 	fget_line/2,
@@ -92,7 +92,7 @@
     ]).
 
 :- use_module(text(text_objects), [
-	find_and_coordinate_sentences/8
+	find_and_coordinate_sentences/9
     ]).
 
 :- use_module(text(utf8_to_ascii), [
@@ -232,11 +232,11 @@ glom_whitespace_fields([NextField|RestFields], FirstField, GlommedFields) :-
 
 whitespace_only_field([]).
 whitespace_only_field([FirstChar|RestChars]) :-
-	is_white(FirstChar),
+	local_ws(FirstChar),
 	whitespace_only_field(RestChars).
 
 extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFields,
-		  Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL, Lines) :-
+		  Sentences, CoordinatedSentences, AAs, UDAListIn, UDA_AVL, Lines) :-
 	Lines0 = [FirstLine|RestLines],
 	% This is for Steven Bedrick's --blanklines idea
 	glom_whitespace_fields(RestLines, FirstLine, Lines00),
@@ -245,21 +245,21 @@ extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFiel
 	( medline_citation(Lines2) ->
 	  extract_coord_sents_from_citation(Lines2, ExtraChars, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
-					    AAs, UDAList, UDA_AVL),
+					    AAs, UDAListIn, UDAListOut, UDA_AVL),
 	  InputType = citation
 	; is_smart_fielded(Lines2) ->
 	  extract_coord_sents_from_smart(Lines2, ExtraChars, TextFields, NonTextFields,
 					 Sentences, CoordinatedSentences,
-					 AAs, UDAList, UDA_AVL),
+					 AAs, UDAListIn, UDAListOut, UDA_AVL),
 	  InputType = smart,
 	  NonTextFields = []
 	; form_dummy_citation(Lines2, TextID, CitationLines),
 	  extract_coord_sents_from_citation(CitationLines, ExtraChars, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
-					    AAs, UDAList, UDA_AVL),
+					    AAs, UDAListIn, UDAListOut, UDA_AVL),
 	  InputType = simple
 	),
-	update_strings_with_UDAs(UDAList, Lines2, Lines),
+	update_strings_with_UDAs(UDAListOut, Lines2, Lines),
 	!.
 
 % To be recognized as a MEDLINE citation, a list of strings must be such that
@@ -350,8 +350,10 @@ set_text_id_and_field_type(TempTextID, TextID, FieldType) :-
    				     -Sentences, -CoordinatedSentences, AAs)
 */
 
-extract_coord_sents_from_citation(CitationLines, ExtraChars, TextFields, NonTextFields,
-				  Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL) :-
+extract_coord_sents_from_citation(CitationLines, ExtraChars,
+				  TextFields, NonTextFields,
+				  Sentences, CoordinatedSentences,
+				  AAs, UDAListIn, UDAListOut, UDA_AVL) :-
     extract_all_fields(CitationLines, CitationFields),
     (   member([FieldIDString,Field], CitationFields),
 	lower_chars(FieldIDString, LowerFieldIDString),
@@ -360,8 +362,10 @@ extract_coord_sents_from_citation(CitationLines, ExtraChars, TextFields, NonText
         extract_ui(Field, UI)
     ;   UI="00000000"
     ),
-    extract_coord_sents_from_fields(UI, ExtraChars, CitationFields, TextFields, NonTextFields,
-				    Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL),
+    extract_coord_sents_from_fields(UI, ExtraChars, CitationFields,
+				    TextFields, NonTextFields,
+				    Sentences, CoordinatedSentences,
+				    AAs, UDAListIn, UDAListOut, UDA_AVL),
     !.
 
 %%% /* extract_utterances_from_sgml(+CitationLines, -Utterances)
@@ -570,7 +574,7 @@ f_separator(S) -->
 
 % Cleaned-up DCG version
 f_blanks(B) -->
-	( [Char], { is_white(Char) } ->
+	( [Char], { local_ws(Char) } ->
 	  f_blanks(C), { B = [32|C] }
 	; { B = [] }
 	).
@@ -813,14 +817,16 @@ medline_field('VI',
 	      'Volume', 'Journal volume').
 
 extract_coord_sents_from_smart(SmartLines, ExtraChars, TextFields, NonTextFields,
-			       Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL) :-
+			       Sentences, CoordinatedSentences,
+			       AAs, UDAListIn, UDAListOut, UDA_AVL) :-
     extract_all_smart_fields(SmartLines,CitationFields),
     (select_field("UI",CitationFields,UIField) ->
         extract_ui(UIField,UI)
     ;   UI="00000000"
     ),
-    extract_coord_sents_from_fields(UI, ExtraChars, CitationFields, TextFields, NonTextFields,
-				    Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL),
+    extract_coord_sents_from_fields(UI, ExtraChars, CitationFields, TextFields,
+				    NonTextFields, Sentences, CoordinatedSentences,
+				    AAs, UDAListIn, UDAListOut, UDA_AVL),
     !.
 
 /* extract_all_smart_fields(+SmartLines, -CitationFields)
@@ -906,15 +912,15 @@ extract_ui(Field, UI) :-
 	; UI  = "00000000"
 	).
 
-extract_coord_sents_from_fields(UI, ExtraChars, Fields, TextFields, NonTextFields,
-				Sentences, CoordinatedSentences, AAs, UDAList, UDA_AVL) :-
+extract_coord_sents_from_fields(UI, ExtraChars, Fields, TextFields, NonTextFields, Sentences,
+				CoordinatedSentences, AAs, UDAListIn, UDAListOut, UDA_AVL) :-
 	extract_text_fields(Fields, TextFields0, NonTextFields),
 	padding_string(Padding),
 	unpad_fields(TextFields0, Padding, TextFields1),
 	right_trim_last_string(TextFields1, TextFields2),
 	find_and_coordinate_sentences(UI, ExtraChars, TextFields2, Sentences, CoordinatedSentences,
-				      AAs, UDAList, UDA_AVL),
-	update_text_fields_with_UDAs(UDAList, TextFields0, TextFields).
+				      AAs, UDAListIn, UDAListOut, UDA_AVL),
+	update_text_fields_with_UDAs(UDAListOut, TextFields0, TextFields).
 
 right_trim_last_string([], []).
 right_trim_last_string([H|T], TextFieldsOut) :-

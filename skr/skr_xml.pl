@@ -231,7 +231,8 @@ generate_one_xml_phrase(MMOPhraseTerm, MMOCandidatesTerm, MMOMappingsTerm, XMLPh
 	generate_xml_phrase_length(PhraseLength, XMLPhraseLength),
 	% generate_xml_replacement_pos(ReplPos, XMLReplPos),
 	CandidatesTag = 'Candidates',
-	generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+	GenerateCandidates is 0,
+	generate_xml_phrase_candidates_term(GenerateCandidates, TotalCandidateCount, CandidatesTag,
 					    ExcludedCandidateCount, PrunedCandidateCount,
 					    RemainingCandidateCount, MMOCandidatesList,
 					    XMLCandidatesTerm),
@@ -253,7 +254,7 @@ generate_candidate_count_attribute(CandidateCount, CountType, CandidateCountAttr
 % e.g., <Candidates Count="1">,
 % but the ExcludedCount and PrunedCount tags otherwise,
 % e.g., <Candidates Count="2" ExcludedCount="0" PrunedCount="0">.
-generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+generate_xml_phrase_candidates_term(GenerateCandidates, TotalCandidateCount, CandidatesTag,
 				    ExcludedCandidateCount, PrunedCandidateCount,
 				    RemainingCandidateCount, MMOCandidatesList,
 				    XMLCandidatesTerm) :-
@@ -265,7 +266,7 @@ generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
 					   PrunedCandidateCountAttribute),
 	generate_candidate_count_attribute(RemainingCandidateCount, 'Remaining',
 					   RemainingCandidateCountAttribute),
-	generate_xml_candidates_list(MMOCandidatesList, XMLCandidatesList),
+	generate_xml_candidates_list(GenerateCandidates, MMOCandidatesList, XMLCandidatesList),
 	append([TotalCandidateCountAttribute,ExcludedCandidateCountAttribute,
 		PrunedCandidateCountAttribute,RemainingCandidateCountAttribute],
 	       CountAttributeList),
@@ -274,11 +275,20 @@ generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
 			   XMLCandidatesList,
 			   XMLCandidatesTerm).
 
-generate_xml_candidates_list([], []).
-generate_xml_candidates_list([FirstMMOCandidate|RestMMOCandidates],
+generate_xml_candidates_list(GenerateCandidates, MMOCandidatesList, XMLCandidatesList) :-
+	( control_option(show_candidates) ->
+	  generate_xml_candidates_list_aux(MMOCandidatesList, XMLCandidatesList)
+	; GenerateCandidates =:= 1 ->
+	  generate_xml_candidates_list_aux(MMOCandidatesList, XMLCandidatesList)
+	; XMLCandidatesList = []
+	).
+
+
+generate_xml_candidates_list_aux([], []).
+generate_xml_candidates_list_aux([FirstMMOCandidate|RestMMOCandidates],
 			     [FirstXMLCandidate|RestXMLCandidates]) :-
 	generate_one_xml_candidate(FirstMMOCandidate, FirstXMLCandidate),
-	generate_xml_candidates_list(RestMMOCandidates, RestXMLCandidates).
+	generate_xml_candidates_list_aux(RestMMOCandidates, RestXMLCandidates).
 
 generate_one_xml_candidate(MMOCandidate, XMLCandidate) :-
 	candidate_term(NegValue, CUI, CandidateMatched, PreferredName, MatchedWords,
@@ -573,7 +583,8 @@ generate_one_xml_mapping(MMOMapping, XMLMapping) :-
 	% e.g., <Candidates Count="2" ExcludedCount="0" PrunedCount="0">
 
 	CandidatesTag = 'MappingCandidates',
-	generate_xml_phrase_candidates_term(TotalCandidateCount, CandidatesTag,
+	GenerateCandidates is 1,
+	generate_xml_phrase_candidates_term(GenerateCandidates, TotalCandidateCount, CandidatesTag,
 					    ExcludedCandidateCount, PrunedCandidateCount,
 					    RemainingCandidateCount, CandidatesList,
 					    XMLCandidatesTerm),
@@ -781,57 +792,57 @@ generate_xml_AA_list([Acronym*Expansion*CountTerm*CUIList|RestAATerms], [XMLAA|R
 	generate_xml_AA_list(RestAATerms, RestXMLAAs).
 
 
-% Beginning with MM2014, the CountTerm is of the form A-B-C-C, and not [A,B,C,D]
-% in order to prevent skr_utilities:write_AAs_MMO_term from possibly printing the list
-% as control characters: [9,10,11,12,13] will print as "^I^J^K^L^M".
-
-% This clause will handle the AA count term of the form (A,B,C,D),
-% which will be created by MetaMap14.
-convert_AA_count_term((AATokenNum,AALen,AAExpTokenNum,AAExpLen), A, B, C, D) :-
-	convert_AA_count_term([AATokenNum,AALen,AAExpTokenNum,AAExpLen], A, B, C, D).
-% This clause handles MetaMap13 AA count terms that are well behaved,
-% i.e., that do not contain "^I", "^J", "^K", "^L", or "^M".
-% This clause should be commented out for MM14.
-convert_AA_count_term([AATokenNum,AALen,AAExpTokenNum,AAExpLen], A, B, C, D) :-
-	!,
-	integer(AATokenNum),
-	integer(AALen),
-	integer(AAExpTokenNum),
-	integer(AAExpLen),
-	A = AATokenNum,
-	B = AALen,
-	C = AAExpTokenNum,
-	D = AAExpLen.
-% This is the case that handles count terms like "^I^J^K^L";
-% it succeeds only if [H|T] is converted to a 4-element list.
-% This clause should be commented out for MM14.
-convert_AA_count_term([H|T], AATokenNum, AALen, AAExpTokenNum, AAExpLen) :-
-	convert_AA_count_term_1([H|T], [AATokenNum,AALen,AAExpTokenNum,AAExpLen]).
-
-convert_AA_count_term_1([], []).
-convert_AA_count_term_1([H|T], [H1|T1]) :-
-	% The printed representation of "^I", "^J", "^K", "^L", or "^M" is in the CountTerm!
-	( H == 0'^ ->
-	  T = [NextCode|RestCodes],
-	  whitespace_control_code(NextCode),
-	  H1 is NextCode - 64,
-	  RemainingCodes = RestCodes
-	; H1 = H,
-	  RemainingCodes = T
-	),
-	convert_AA_count_term_1(RemainingCodes, T1).
-
-whitespace_control_code(73). % I
-whitespace_control_code(74). % J
-whitespace_control_code(75). % K
-whitespace_control_code(76). % L
-whitespace_control_code(77). % M
-whitespace_control_code(95). % _
+%%% % Beginning with MM2014, the CountTerm is of the form (A,B,C,D), and not [A,B,C,D]
+%%% % in order to prevent skr_utilities:write_AAs_MMO_term from possibly printing the list
+%%% % as control characters: [9,10,11,12,13] will print as "^I^J^K^L^M".
+%%% 
+%%% % This clause will handle the AA count term of the form (A,B,C,D),
+%%% % which will be created by MetaMap14.
+%%% convert_AA_count_term((AATokenNum,AALen,AAExpTokenNum,AAExpLen), A, B, C, D) :-
+%%% 	convert_AA_count_term([AATokenNum,AALen,AAExpTokenNum,AAExpLen], A, B, C, D).
+%%% % This clause handles MetaMap13 AA count terms that are well behaved,
+%%% % i.e., that do not contain "^I", "^J", "^K", "^L", or "^M".
+%%% % This clause should be commented out for MM14.
+%%% convert_AA_count_term([AATokenNum,AALen,AAExpTokenNum,AAExpLen], A, B, C, D) :-
+%%% 	!,
+%%% 	integer(AATokenNum),
+%%% 	integer(AALen),
+%%% 	integer(AAExpTokenNum),
+%%% 	integer(AAExpLen),
+%%% 	A = AATokenNum,
+%%% 	B = AALen,
+%%% 	C = AAExpTokenNum,
+%%% 	D = AAExpLen.
+%%% % This is the case that handles count terms like "^I^J^K^L";
+%%% % it succeeds only if [H|T] is converted to a 4-element list.
+%%% % This clause should be commented out for MM14.
+%%% convert_AA_count_term([H|T], AATokenNum, AALen, AAExpTokenNum, AAExpLen) :-
+%%% 	convert_AA_count_term_1([H|T], [AATokenNum,AALen,AAExpTokenNum,AAExpLen]).
+%%% 
+%%% convert_AA_count_term_1([], []).
+%%% convert_AA_count_term_1([H|T], [H1|T1]) :-
+%%% 	% The printed representation of "^I", "^J", "^K", "^L", or "^M" is in the CountTerm!
+%%% 	( H == 0'^ ->
+%%% 	  T = [NextCode|RestCodes],
+%%% 	  whitespace_control_code(NextCode),
+%%% 	  H1 is NextCode - 64,
+%%% 	  RemainingCodes = RestCodes
+%%% 	; H1 = H,
+%%% 	  RemainingCodes = T
+%%% 	),
+%%% 	convert_AA_count_term_1(RemainingCodes, T1).
+%%% 
+%%% whitespace_control_code(73). % I
+%%% whitespace_control_code(74). % J
+%%% whitespace_control_code(75). % K
+%%% whitespace_control_code(76). % L
+%%% whitespace_control_code(77). % M
+%%% whitespace_control_code(95). % _
 
 generate_one_xml_AA_term(Acronym, Expansion, CountTerm, MMOCUIList, XMLAA) :-
 	% With MM2014, delete convert_AA_count_term and use the next line instead:
-	% CountTerm = (AATokenNum,AALen,AAExpTokenNum,AAExpLen),
-	convert_AA_count_term(CountTerm, AATokenNum, AALen, AAExpTokenNum, AAExpLen),
+	CountTerm = (AATokenNum,AALen,AAExpTokenNum,AAExpLen),
+	% convert_AA_count_term(CountTerm, AATokenNum, AALen, AAExpTokenNum, AAExpLen),
 	length(MMOCUIList, CUILengthAtom),
 	number_codes(CUILengthAtom, AACUICount),
 	number_codes(AATokenNum, AATokenNumString),

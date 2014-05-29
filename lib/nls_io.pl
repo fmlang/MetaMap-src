@@ -42,14 +42,14 @@
     	get_line/2
     ]).
 
-:- use_module(skr_lib(ctypes),[
-	is_ascii/1,
-	is_space/1
+:- use_module(metamap(metamap_tokenization), [
+	local_ascii/1,
+	local_ws/1
     ]).
 
-:- use_module(skr_lib(nls_system),[
-	control_value/2
-    ]).
+% :- use_module(skr_lib(ctypes),[
+% 	is_ascii/1
+%     ]).
 
 :- use_module(skr(skr_utilities),[
 	fatal_error/2
@@ -81,7 +81,8 @@ fget_non_ws_only_line(Stream, Line) :-
 is_ws_only([]).
 is_ws_only([Code|Rest]) :-
 	% tab, lf, vt, ff, cr and space
-	is_space(Code),
+	% is_space(Code),
+	local_ws(Code),
 	is_ws_only(Rest).
 
 %%% /* fget_all_non_null_lines(+Stream, -Lines)
@@ -176,7 +177,7 @@ terminator_code(-1).
 
 halt_if_non_ASCII(Codes) :-
 	( member(C, Codes),
-	  \+ is_ascii(C) ->
+	  \+ local_ascii(C) ->
 	  get_non_ASCII_codes(Codes, NonASCIICodes),
 	  length(NonASCIICodes, NonASCIILength),
 	  get_plural_marker(NonASCIILength, Plural),
@@ -193,7 +194,7 @@ halt_if_non_ASCII(Codes) :-
 get_non_ASCII_codes(Codes, NonASCIICodes) :-
 	(  foreach(C, Codes),
 	   fromto(NonASCIICodes, S0, S, [])
-	do ( \+ is_ascii(C) ->
+	do ( \+ local_ascii(C) ->
 	     S0 = [C|S]
 	   ; S0 = S
 	   )

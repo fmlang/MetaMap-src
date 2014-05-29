@@ -33,16 +33,17 @@
 % Purpose:  MetaMap variant generation
 
 
-:- module(metamap_variants,[
+:- module(metamap_variants, [
 	initialize_metamap_variants/1,
 	compute_variant_generators/3,
 	augment_GVCs_with_variants/1,
 	gather_variants/4,
+	variant_score/2,
 	write_all_variants/4
     ]).
 
 
-:- use_module(lexicon(lex_access),[
+:- use_module(lexicon(lex_access), [
 	get_base_forms_for_form_with_cats/3,
 	% is_a_base_form/2,
 	is_a_base_form_with_categories/2,
@@ -58,11 +59,11 @@
 	aao/1
    ]).
 
-:- use_module(metamap(metamap_tokenization),[
+:- use_module(metamap(metamap_tokenization), [
 	tokenize_text_mm_lc/2
     ]).
 
-:- use_module(metamap(metamap_utilities),[
+:- use_module(metamap(metamap_utilities), [
 	positions_overlap/2,
 	dump_variants_labelled/5
     ]).
@@ -83,7 +84,7 @@
 
 :- use_module(skr_db(db_access), [
 	db_get_synonyms/2,
-	db_get_synonyms/3,
+	db_get_synonyms_with_cat/3,
 	db_get_all_acros_abbrs/2,
 	db_get_unique_acros_abbrs/2,
 	db_get_variants/3
@@ -94,45 +95,49 @@
 	add_to_avl_once/4
    ]).
 
-:- use_module(skr_lib(nls_system),[
+:- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
     ]).
 
-:- use_module(skr_lib(sicstus_utils),[
+:- use_module(skr_lib(sicstus_utils), [
 	lower/2,
 	lowercase_list/2
     ]).
 
-:- use_module(library(avl),[
-	empty_avl/1,
-	avl_fetch/3
-    ]).
-
-:- use_module(skr_lib(nls_text),[
+:- use_module(skr_lib(nls_text), [
 	concatenate_text/3
     ]).
 
-:- use_module(skr_lib(nls_strings),[
+:- use_module(skr_lib(nls_strings), [
 	concatenate_items_to_atom/2,
 	safe_number_codes/2
     ]).
 
-:- use_module(library(codesio),[
+% :- use_module(skr_lib(subsyn_variants), [
+% 	subsyn_variant/2
+%     ]).
+
+:- use_module(library(avl), [
+	empty_avl/1,
+	avl_fetch/3
+    ]).
+
+:- use_module(library(codesio), [
 	with_output_to_codes/2
     ]).
 
-:- use_module(library(lists),[
+:- use_module(library(lists), [
 	append/2,
 	last/2,
 	rev/2
     ]).
 
-:- use_module(library(ordsets),[
+:- use_module(library(ordsets), [
 	ord_subtract/3
     ]).
 
-:- use_module(library(sets),[
+:- use_module(library(sets), [
 	intersection/3,
 	list_to_set/2
     ]).
@@ -187,13 +192,16 @@ compute_variant_generators/2
 compute_variant_generators_aux/2
 compute_variant_generators/3
 
-xxx
 Each VGenerator is an incomplete gvc (Generator/Variants/Candidates) term of
 the form
     gvc(v(Word,VarLevel,Categories,History,_,_),_,_)
 */
 
 compute_variant_generators(PhraseWords, DupPhraseWords, GVCs) :-
+	% ( control_option(subsyn) ->
+	%   CheckForm is 0
+	% ; CheckForm is 1
+	% ),
 	( PhraseWords = DupPhraseWords ->
 	  compute_variant_generators_1(PhraseWords, GVCs)
 	; compute_variant_generators_1(PhraseWords, PhraseWordsGVCs),
@@ -224,8 +232,8 @@ compute_variant_generators_3([H|T], Word, GVCs) :-
 	RevRest = [H|T],
 	rev(RevRest, Rest),
 	concatenate_text([Word|Rest], ' ', MultiWord),
-	% IS_A_FORM
 	is_a_form(MultiWord),
+	% maybe_check_is_a_form(MultiWord),
 	!,
 	compute_variant_generators_for_word(MultiWord, FirstGVCs),
 	% FirstGVCs = [FirstGVC|_],
@@ -235,6 +243,9 @@ compute_variant_generators_3([H|T], Word, GVCs) :-
 	compute_variant_generators_3(RevRestRest, Word, RestGVCs).
 compute_variant_generators_3([_|RevRestRest], Word, GVCs) :-
 	compute_variant_generators_3(RevRestRest, Word, GVCs).
+
+% maybe_check_is_a_form(1, Word) :- is_a_form(Word).
+% maybe_check_is_a_form(0, Word) :- subsyn_variant(Word, _), !.
 
 is_a_number(Atom) :-
 	atom_codes(Atom, Codes),
@@ -467,7 +478,6 @@ is_invariant_category(pron).
 compute_all_acros_abbrs/2
 compute_all_acros_abbrs_aux/2
 compute_acros_abbrs/2
-xxx
 */
 
 compute_all_acros_abbrs([], []).
@@ -505,7 +515,6 @@ compute_acros_abbrs(_V, []).
 
 get_acros_abbrs/2
 get_acros_abbrs_aux/2
-xxx
 */
 
 get_acros_abbrs(Atoms, AAPairs) :-
@@ -526,7 +535,6 @@ get_acros_abbrs_aux([First|Rest], AAPairs) :-
 /* convert_aa_pairs(+AAQuads, -AAPairs)
 
 convert_aa_pairs/2
-xxx
 */
 
 convert_aa_pairs([],[]).
@@ -539,7 +547,6 @@ convert_aa_pairs([LCTerm:TermType|Rest],
 /* translate_aa_type(?TermType, ?TermTypeChar)
 
 translate_aa_type/2
-xxx
 */
 
 translate_aa_type(a, 0'a).
@@ -577,7 +584,6 @@ augment_generators_with_roots([gvc(G,_,_)|RestGVCs]) :-
 /* filter_out_null_pairs(+AAPairs, -FilteredAAPairs)
 
 filter_out_null_pairs/2
-xxx
 */
 
 filter_out_null_pairs([],[]).
@@ -592,7 +598,6 @@ filter_out_null_pairs([First|Rest],Result) :-
 /* filter_out_expansions(+AAPairs, -FilteredAAPairs)
 
 filter_out_expansions/2
-xxx
 */
 
 filter_out_expansions([],[]).
@@ -609,7 +614,6 @@ filter_out_expansions([First|Rest],Result) :-
 
 convert_aa_pairs_to_variants/5
 convert_aa_pair_to_variant/5
-xxx
 */
 
 convert_aa_pairs_to_variants([],_Categories,_VarLevel,_History,[]).
@@ -635,7 +639,6 @@ compute_all_syns/2
 compute_all_syns_aux/2
 compute_syns/2
 compute_syns/6
-xxx
 */
 
 compute_all_syns([], []).
@@ -681,21 +684,20 @@ compute_syns_aux([V|Rest], SynonymLevel,
 
 get_synonym_pairs/3
 get_synonym_pairs_aux/3
-xxx
 */
 
-get_synonym_pairs(Atoms,Categories,Synonyms) :-
-    get_synonym_pairs_aux(Atoms,Categories,Synonyms0),
-    sort(Synonyms0,Synonyms).
+get_synonym_pairs(Atoms, Categories, Synonyms) :-
+	get_synonym_pairs_aux(Atoms, Categories, Synonyms0),
+	sort(Synonyms0, Synonyms).
 
-get_synonym_pairs_aux([],_,[]).
-get_synonym_pairs_aux([First|Rest],Categories,Synonyms) :-
-    (Categories=[Category] ->
-	db_get_synonyms(First,Category,FirstSynonyms)
-    ;   db_get_synonyms(First,FirstSynonyms)
-    ),
-    append(FirstSynonyms,RestSynonyms,Synonyms),
-    get_synonym_pairs_aux(Rest,Categories,RestSynonyms).
+get_synonym_pairs_aux([], _, []).
+get_synonym_pairs_aux([First|Rest], Categories, Synonyms) :-
+	( Categories = [Category] ->
+	  db_get_synonyms_with_cat(First, Category, FirstSynonyms)
+	; db_get_synonyms(First, FirstSynonyms)
+	),
+	append(FirstSynonyms, RestSynonyms, Synonyms),
+	get_synonym_pairs_aux(Rest, Categories, RestSynonyms).
 
 
 /* convert_to_variants(+Pairs, +VarLevel, +History, -Variants)
@@ -703,7 +705,6 @@ get_synonym_pairs_aux([First|Rest],Categories,Synonyms) :-
 
 convert_to_variants/4
 convert_to_variants/5
-xxx
 Pairs is a list of Word-Category pairs.
 */
 
@@ -723,7 +724,6 @@ convert_to_variants([First|Rest], Categories, VarLevel, History,
 
 filter_by_var_level/4
 filter_by_var_level_aux/4
-xxx
 */
 % cuts?
 filter_by_var_level([], [], FilterIn, FilterIn).
@@ -858,7 +858,6 @@ get_all_derivational_variants(SPVariantAtoms, IVariantAtoms, Categories,
 
 get_initial_base_forms/3
 The elements of RootTerms are of the form Form:[cat:[Category]]
-xxx
 */
 
 get_initial_base_forms(SPVariantAtoms, Categories, RootTerms) :-
@@ -950,7 +949,6 @@ get_bases(WordAtom, Categories, Bases) :-
 /* filter_by_categories(+RootTerms, +Categories, -FilteredRootTerms)
 
 filter_by_categories/2
-xxx
 */
 
 filter_by_categories(RootTerms,[],RootTerms) :-
@@ -981,7 +979,6 @@ convert_terms_to_variants([Form:[cat:Categories]|Rest],VarLevel,History,
 /* extract_atoms_from_terms(+Terms, -Atoms)
 
 extract_atoms_from_terms/2
-xxx
 */
 
 extract_atoms_from_terms([],[]).
@@ -1102,7 +1099,6 @@ filter_an_variants_aux([_|Rest], VariantCategories, FilteredRest) :-
 /* filter_terms_by_atoms(+Terms, +Atoms, -FilteredTerms)
 
 filter_terms_by_atoms/3
-xxx
 NOT MEMBER
 */
 
@@ -1135,7 +1131,6 @@ filter_derivational_terms([First|Rest], Form, [First|FilteredRest]) :-
 /* translate_variant_terms(+VariantTerms, -Variants)
 
 translate_variant_terms/2
-xxx
 */
 
 translate_variant_terms([], []).
@@ -1147,7 +1142,6 @@ translate_variant_terms([Form:[Category:_]|Rest],
 /* filter_forms_by_categories(+Terms, +Categories, -FilterTerms)
 
 filter_forms_by_categories/3
-xxx
 */
 
 filter_forms_by_categories(X,[],X) :-
@@ -1168,7 +1162,6 @@ filter_forms_by_categories([Form:[cat:FormCategories]|Rest],Categories,
 
 compute_synonyms_and_inflect/2
 compute_synonyms_and_inflect_aux/2
-xxx
 */
 
 compute_synonyms_and_inflect([], []).
@@ -1191,7 +1184,6 @@ compute_synonyms_and_inflect_aux([V|Rest], InflectionLevel, [SIVs|RestSIVs]) :-
 
 get_synonyms_for_variant/2
 get_synonyms_for_variant/6
-xxx
 */
 
 get_synonyms_for_variant(V, VSynonyms) :-
@@ -1226,7 +1218,6 @@ get_synonyms_for_variant([V|Rest], SynonymLevel,
 
 compute_all_inflections/2
 compute_all_inflections/3
-xxx
 */
 
 compute_all_inflections([], []).
@@ -1261,7 +1252,6 @@ compute_all_inflections([V|Rest], InflectionLevel, IVs) :-
 /* inflect_variant(+V, -InflectedWords)
 
 inflect_variant/2
-xxx
 */
 
 inflect_variant(v(Word,_VarLevel,Categories,_History,_Roots,_NFR),
@@ -1294,7 +1284,6 @@ inflect_variant(v(Word,_VarLevel,Categories,_History,_Roots,_NFR),
 /* glean_best_variants(+SortedVs, -GleanedVs)
 
 glean_best_variants/2
-xxx
 */
 
 glean_best_variants([], []).
@@ -1360,6 +1349,7 @@ gather_variants_GVC([gvc(Generator,Variants,_)|Rest], PhraseWords, PhraseWordsLe
 						 PositionAVLIn, PositionAVLOut),
 	GeneratorPositions = [[FirstI|_]|_],
 	% instantiate NFR ("number from right") here!
+	% NFR is the position of the word in the variant token list counting from the right.
 	NFR is PhraseWordsLength + 1 - FirstI,
 	% format(user_output, '~d:~w~n', [NFR,GeneratorWordList]),
 	gather_variants_pos(GeneratorPositions, PhraseWords, HeadPosition,
@@ -1386,7 +1376,8 @@ gather_variants_var([Variant|RestVariants], NFR, Generator,
 	% instantiate NFR!
 	Variant = v(Word,_,_,_,_,NFR),
 	tokenize_text_mm_lc(Word, Words),
-	VInfo = vinfo(Generator,GeneratorPosition,GeneratorInvolvesHead,Variant,Words),
+	last(Words, LastWord),
+	VInfo = vinfo(Generator,GeneratorPosition,GeneratorInvolvesHead,Variant,Words,LastWord),
 	( Words = [FirstWord|_] ->
 	  % format(user_output, '      VAR: ~q:~q~n', [FirstWord,VInfo]),
 	  add_to_avl(FirstWord, VInfo, VAVLIn, VAVLInOut)
@@ -1542,7 +1533,6 @@ all_pairs_1([H|T], X, DesiredLength, AllPairs, Tail) :-
                             -GeneratorInvolvesHead)
 
 compute_head_involvement/3
-xxx
 */
 
 compute_head_involvement(GeneratorPosition, HeadPosition, GeneratorInvolvesHead) :-

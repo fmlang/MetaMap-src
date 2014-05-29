@@ -65,7 +65,7 @@
 	get_all_candidate_features/3
     ]).
 
-:- use_module(skr_lib(semtype_translation_2013AB), [
+:- use_module(skr_lib(semtype_translation_2014AA), [
 	expand_semtypes/2
     ]).
 
@@ -103,7 +103,6 @@
 /* positions_overlap(+Position1, +Position2)
 
 positions_overlap/2
-xxx
 */
 
 positions_overlap([Begin1,End1], [Begin2,End2]) :-
@@ -127,7 +126,6 @@ positions_overlap([Begin1,End1], [Begin2,End2]) :-
 dump_aphrase_mappings/2
 dump_aphrase_mappings_aux/2
 dump_mapping/2
-xxx
 */
 
 dump_aphrase_mappings([], Label) :-
@@ -239,32 +237,35 @@ conditionally_expand_semtypes(SemTypes0) :-
 build_concept_name/4 constructs PreferredNameDisplay from PreferredName by optionally
 appending slist, the list of sources for PreferredNameDisplay. slist is appended when
 -G (--sources) is active, and it is affected by options
--R (--restrict_to_sources) and -e (--exlude_sources). */
+-R (--restrict_to_sources) and -e (--exclude_sources). */
 
+% This part is no longer relevant because Sources are now based on the String, and not the CUI
 build_concept_name_1(PreferredName, _CUI, _Sources, _SourcesAtom, PreferredName) :-
-	\+control_option(sources),
+	\+ control_option(sources),
 	!.
 build_concept_name_1(PreferredName, _CUI, OrigSources, SourcesAtom, PreferredNameDisplay) :-
-	( control_option(restrict_to_sources) ->
-	  control_value(restrict_to_sources, RestrictSources),
-	  convert_to_root_sources(RestrictSources, RestrictRootSources),
-	  extract_relevant_simple_sources(OrigSources, RestrictRootSources, NewSources)
-	; control_option(exclude_sources) ->
-	  control_value(exclude_sources, ExcludeSources),
-	  convert_to_root_sources(ExcludeSources, ExcludeRootSources),
-	  extract_nonexcluded_simple_sources(OrigSources, ExcludeRootSources, NewSources)
-	; NewSources = OrigSources
-	),
-	build_concept_name_1_aux(NewSources, PreferredName, SourcesAtom, PreferredNameDisplay),
-	!.
+%%% 	( control_option(restrict_to_sources) ->
+%%% 	  control_value(restrict_to_sources, RestrictSources),
+%%% 	  convert_to_root_sources(RestrictSources, RestrictRootSources),
+%%% 	  extract_relevant_simple_sources(OrigSources, RestrictRootSources, NewSources)
+%%% 	; control_value(exclude_sources, ExcludedSources),
+%%% 	  convert_to_root_sources(ExcludedSources, ExcludedRootSources),
+%%% 	  extract_nonexcluded_simple_sources(OrigSources, ExcludedRootSources, NewSources)
+%%% 	; NewSources = OrigSources
+%%% 	),
+	concat_atom(OrigSources, ',', SourcesAtom0),
+	concat_atom([' {', SourcesAtom0, '}'], SourcesAtom),
+	concat_atom([PreferredName, SourcesAtom], PreferredNameDisplay).
+	% build_concept_name_1_aux(OrigSources, PreferredName, SourcesAtom, PreferredNameDisplay),
+	% !.
 % should never occur
 build_concept_name_1(PreferredName, CUI, _Sources, _SourcesAtom, _PreferredNameDisplay) :-
 	fatal_error('Unable to build concept name for ~q/~q~n', [CUI,PreferredName]).
 
-build_concept_name_1_aux(Sources, PreferredName, SourcesAtom, PreferredNameDisplay) :-
-	concat_atom(Sources, ',', SourcesAtom0),
-	concat_atom([' {', SourcesAtom0, '}'], SourcesAtom),
-	concat_atom([PreferredName, SourcesAtom], PreferredNameDisplay).
+% build_concept_name_1_aux(Sources, PreferredName, SourcesAtom, PreferredNameDisplay) :-
+% 	concat_atom(Sources, ',', SourcesAtom0),
+% 	concat_atom([' {', SourcesAtom0, '}'], SourcesAtom),
+% 	concat_atom([PreferredName, SourcesAtom], PreferredNameDisplay).
 
 %%% extract_unique_sources(SourceInfo, UniqueSources) :-
 %%% 	(  foreach([_I, _Str, SRC, _TTY], SourceInfo),
@@ -435,7 +436,6 @@ num_dump_related_evaluations([FirstCandidate|RestCandidates], NIn, NOut) :-
 /* dump_variants_labelled(+Label, +Variants)
 
 dump_variants_labelled/2
-xxx
 */
 
 dump_variants_labelled(Label, Variants, MaxNumDigits, CountIn, VariantsCount) :-
@@ -551,15 +551,15 @@ write_avl_list([Key-Value|Rest]) :-
     write_avl_list(Rest).
 
 is_vinfo_list([First|_]) :-
-    functor(First,vinfo,5),
-    !.
+	First = vinfo(_Generator,_GenPos,_GenInvolvesHead,_Variant,_Words,_LastWord).
 
 write_vinfo_list([]).
-write_vinfo_list([vinfo(Generator,Position,InvolvesHead,Variant,Words)|Rest]) :-
+write_vinfo_list([vinfo(Generator,Position,InvolvesHead,Variant,Words,LastWord)|Rest]) :-
     format('  vinfo:~p~n',[Generator]),
     format('        ~p,~p~n',[Position,InvolvesHead]),
     format('        ~p~n',[Variant]),
     format('        ~p~n',[Words]),
+    format('        ~p~n',[LastWord]),
     write_vinfo_list(Rest).
 
 write_list_indented([]).
