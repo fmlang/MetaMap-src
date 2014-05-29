@@ -37,8 +37,9 @@
 	dump_all_avl/4,
 	extract_token_strings/2,
 	extract_an_lc_strings/2,
-	find_and_coordinate_sentences/8,
-        get_UDAs/1
+	find_and_coordinate_sentences/9,
+        get_UDAs/1,
+	reformat_aa_output_list/3
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -132,6 +133,7 @@
 	ne_rbracket_tok/1,
 	nu_tok/1,
 	pe_tok/1,
+	pn_tok/1,
 	punc_tok/1,
 	rbracket_tok/1,
 	sentence_punc/1,
@@ -1708,6 +1710,17 @@ proposed_AA_overlaps_prev_scope(ScopeWithParens, AAsIn) :-
 	matching_strings(TokenListSuffix, ScopeSubList),
 	!.
 
+remove_trailing_whitespace_tokens(AATokens0, AATokens) :-
+	rev(AATokens0, RevAATokens0),
+	remove_leading_whitespace_tokens(RevAATokens0, NoWSRevAATokens0),
+	rev(NoWSRevAATokens0, AATokens).
+
+remove_leading_whitespace_tokens([H|T], TokensOut) :-
+	( ws_tok(H) ->
+	  remove_leading_whitespace_tokens(T, TokensOut)
+	; TokensOut = [H|T]
+	).
+
 % Given, e.g., "heart attack (HA)":
 % * AATokens is the list of tokens in the proposed AA, e.g., ['HA'].
 %   By 'HA', I denote a term of the form tok(uc,"HA","ha",pos(14,16)).
@@ -1716,7 +1729,12 @@ proposed_AA_overlaps_prev_scope(ScopeWithParens, AAsIn) :-
 %   e.g., ['(', 'HA', ')'].
 % * RevPre is the reverse of the list of tokens preceeding the proposed AA,
 %   which is the proposed AA expansion, e.g., [' ', attack, ' ', heart].
-find_aa(AATokens, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut) :-
+find_aa(AATokensIn, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut) :-
+	% If the text contains an abomination like
+	% "intravesical prostatic protrusion (IPP )",
+	% the AATokens0 coming into to find_aa/7 will end with a ws token,
+	% which must be removed.
+	remove_trailing_whitespace_tokens(AATokensIn, AATokens),
 	% We require that the parenthesized AA be preceeded by white space.
 	% This is to block generation of acronyms in cases like
 	% Drosophila melanogaster Su(mg)
@@ -1730,15 +1748,17 @@ find_aa(AATokens, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut) 
 	% preceeding the proposed AA.
 	% Go back into RevPre until we find a token beginning with
 	% the same first letter as the first word in the proposed AA.
+
 	find_initial_scope(AATokens, AATokensLength, RevPre,
-			   TempRevScope, AlphaNumericChar, TempRestTokens),
+			   TempRevScope0, AlphaNumericChar, TempRestTokens),
 	% We may have gobbled up some ws and punc tokens
 	% that need to go back onto RestTokens;
 	% also check to make sure scope doesn't begin with a lex_stop_word.
 	% This last check has been disabled. No idea why it was there in the first place.
-	rev(TempRevScope, TempScope),
-	ensure_first_letter_match(TempScope, AlphaNumericChar),
- 	push_back_unwanted_tokens(TempScope, TempRestTokens, Scope, RestTokens),
+	rev(TempRevScope0, TempScope0),
+	ensure_first_letter_match(TempScope0, AlphaNumericChar),
+ 	push_back_unwanted_tokens(TempRevScope0, TempRestTokens, TempRevScope1, RestTokens),
+	rev(TempRevScope1, Scope),
 	% an AA expansion can't be immediately preceeded by a punc tok;
 	% E.g., in "the effect of 20K-hGH on human PRL receptor (hPRLR).",
 	% the expansion shouldn't begin with "hGH", but with "human".
@@ -1747,6 +1767,7 @@ find_aa(AATokens, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut) 
 	% ; true
 	% ),
 	Scope \== [],
+
 	\+ deconstructing_known_AA(Scope, PE_Token, AATokensWithParens, AAsIn),
 	\+ proposed_AA_overlaps_prev_scope(AATokensWithParens, AAsIn),
 	test_valid_scope(AATokens, Scope),
@@ -1788,8 +1809,19 @@ find_aa(AATokens, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut) 
 %%    parenthesized and the aa precedes it but not necessarily immediately)
 find_aa(_AATokens, _AATokensWithParens, _PE_Token,  _LastPos, _RevPre, AAsIn, AAsIn).
 
-ensure_first_letter_match(TempScope, AlphaNumericChar) :-
-	TempScope = [FirstToken|_RestTokens],
+% push_back_unwanted_tokens(Scope0, RestTokens0, Scope, RestTokens),
+push_back_ws_pn_tokens([FirstToken|RestTokens], RestTokensIn, RevScope, RestTokensOut) :-
+	( ( ws_tok(FirstToken)
+	  ; pn_tok(FirstToken) ) ->
+	  RevScope = RestRevScope,
+	  RestTokensNext = [FirstToken|RestTokensIn],
+	  push_back_ws_pn_tokens(RestTokens, RestTokensNext, RestRevScope, RestTokensOut)
+	; RevScope = [FirstToken|RestTokens],
+	  RestTokensOut = RestTokensIn
+	).
+
+ensure_first_letter_match(Scope0, AlphaNumericChar) :-
+	Scope0 = [FirstToken|_RestTokens],
 	FirstToken = tok(TokenType, _String, LCString, _PosInfo),
 	an_type(TokenType),
 	LCString = [AlphaNumericChar|_].
@@ -2481,6 +2513,7 @@ aa_match_middle_single_token([FirstScope|RestScopeIn], RestScopeIn,
 			     LBN, LBI, _, _, AATok, LCCh, 
 			     MatchOut, [match(mid,AATok,FirstScope)|MatchOut]) :-
 	FirstScope = aatok(char,_,_,LCCh,_,N,I,_),
+	!,
 	I > 1,
 	( N > LBN ->
 	  true
@@ -2786,8 +2819,8 @@ representing the expanded sentences in which the fifth argument is the position
 of the corresponding token(s) in the original Sentences (generally, a
 many-to-many relationship). */
 
-find_and_coordinate_sentences(UI, ExtraChars, Fields,
-			      Sentences, CoordinatedSentences, AAs, UDAList0, UDA_AVL) :-
+find_and_coordinate_sentences(UI, ExtraChars, Fields, Sentences, CoordinatedSentences,
+			      AAs, UDAListIn, UDAListOut, UDA_AVL) :-
 	tokenize_fields_utterly(Fields, TokenizedFields),
 	% format(user_output, 'TokenizedFields: ~p~n', [TokenizedFields]),
 	form_field_tokens(TokenizedFields, ExtraChars, FieldTokens0),
@@ -2805,14 +2838,15 @@ find_and_coordinate_sentences(UI, ExtraChars, Fields,
 	remove_aa_expansion_overlap(AAList1, AAList1, AAList2),
 	list_to_avl(AAList2, AAs),
 	order_aas(AAList2, AAList),
-	resolve_AA_conflicts(AAList, UDAList0, UDAList),
+	resolve_AA_conflicts(AAList, UDAListIn, UDAListOut),
 	% format(user_output, '~nAAs:~p~n', [AAs]),
 	% FakeAAs = node([tok(uc,"ha","ha",pos(16,18))],[[tok(lc,"heart","heart",pos(16,18)),tok(ws," "," ",pos(16,18)),tok(lc,"attack","attack",pos(16,18))]],0,empty,empty),
 	% annotate_with_aas(FakeAAs, Sentences0, Sentences1),
 	annotate_with_aas(AAList, Sentences0, Sentences1),
 	empty_avl(UDA_AVL0),
 	% UDA_AVL contains those UDAs that were actually found in the text
-	annotate_with_UDAs(Sentences1, UDA_AVL0, UDAList, UDA_AVL, Sentences2),
+	% annotate_with_UDAs(Sentences1, UDA_AVL0, UDAListOut, UDA_AVL, Sentences2),
+	annotate_with_UDAs(UDAListOut, Sentences1, UDA_AVL0, UDA_AVL, Sentences2),
 	% format(user_output, '~nSentences1:~n', []),
 	add_sentence_labels(Sentences2, UI, Sentences),
 	% format(user_output, '~nSentences:~n', []),
@@ -2956,6 +2990,7 @@ coordinate_sentences([tok(field,Field,LCField,Pos)|Rest],UI,_OldField,N,
 		     OffsetIn,OffsetOut,
 		     [tok(field,Field,LCField,FieldPos,Pos)
 		      |CoordinatedRest]) :-
+    !,
     gather_tokens_for_position(Rest,Pos,FieldTokens,NewRest),
     coordinate_sentences(FieldTokens,UI,Field,0,OffsetIn,OffsetInOut,
 			 CoordinatedFieldSentences),
@@ -2966,12 +3001,14 @@ coordinate_sentences([tok(field,Field,LCField,Pos)|Rest],UI,_OldField,N,
 coordinate_sentences([tok(label,_Label,_LCLabel,_Pos)|Rest],UI,Field,N,
 		     OffsetIn,OffsetOut,CoordinatedRest) :-
     % ignore an existing label; a new one will be created from an sn token
+    !,
     coordinate_sentences(Rest,UI,Field,N,OffsetIn,OffsetOut,CoordinatedRest).
 coordinate_sentences([tok(sn,Arg2,Arg3,Pos)|Rest],UI,Field,N,
 		     OffsetIn,OffsetOut,
 		     [tok(label,Label,LCLabel,SentencePos,Pos),
 		      tok(sn,Arg2,Arg3,SentencePos,Pos)
 		      |CoordinatedRest]) :-
+    !,	
     gather_tokens_for_position(Rest,Pos,SentenceTokens,NewRest),
     NewN is N + 1,
     coordinate_sentences(SentenceTokens,UI,Field,NewN,OffsetIn,OffsetInOut,
@@ -2983,6 +3020,7 @@ coordinate_sentences([tok(sn,Arg2,Arg3,Pos)|Rest],UI,Field,N,
 			 CoordinatedNewRest).
 coordinate_sentences([tok(aadef,_Def,_AA,Pos)|Rest], UI, Field, N,
 		     OffsetIn, OffsetOut, CoordinatedRest) :-
+	!,
 	gather_tokens_for_position(Rest, Pos, AADefTokens, NewRest0),
 	coordinate_sentences(AADefTokens, UI, Field, N,
 			     OffsetIn, OffsetInOut, CoordinatedAADefTokens),
@@ -2992,6 +3030,7 @@ coordinate_sentences([tok(aadef,_Def,_AA,Pos)|Rest], UI, Field, N,
 			     OffsetInOut, OffsetOut, CoordinatedNewRest).
 coordinate_sentences([tok(aa,_AAToks,RelatedAAToks,Pos)|Rest],UI,Field,N,
 		     OffsetIn,OffsetOut,CoordinatedRest) :-
+    !,
     gather_tokens_for_position(Rest,Pos,AATokens,NewRest),
     % use ExpandedTokens, not AATokens (unless there is a problem)
     (RelatedAAToks=[tok(aadef,ExpandedTokens,_,_)|_] ->
@@ -3123,8 +3162,13 @@ deaugment_aas([], []).
 deaugment_aas([_AAText-AA-Def|Rest], [AA-Def|DeaugmentedRest]) :-
 	deaugment_aas(Rest, DeaugmentedRest).
 
-annotate_with_UDAs([], AVL, _UDAs, AVL, []).
-annotate_with_UDAs([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedTokens) :-
+annotate_with_UDAs([], Sentences, UDA_AVL, UDA_AVL, Sentences).
+annotate_with_UDAs([H|T], Sentences1, UDA_AVL0, UDA_AVL, Sentences2) :-
+	UDAList = [H|T],
+	annotate_with_UDAs_1(Sentences1, UDA_AVL0, UDAList, UDA_AVL, Sentences2).
+
+annotate_with_UDAs_1([], AVL, _UDAs, AVL, []).
+annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedTokens) :-
 	% Don't try to expand UDAs from non-alphanumeric tokens
 	( \+ an_tok(FirstToken)	->
 	  AVLNext = AVLIn,
@@ -3144,7 +3188,7 @@ annotate_with_UDAs([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedTokens
 	; AVLNext = AVLIn,
 	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens]
 	),
-	annotate_with_UDAs(RestTokens, AVLNext, UDAs, AVLOut, RestAnnotatedTokens).
+	annotate_with_UDAs_1(RestTokens, AVLNext, UDAs, AVLOut, RestAnnotatedTokens).
 
 
 /* annotate_with_aas(+AAs, +SentencesIn, +AAList, -SentencesOut)
@@ -3246,6 +3290,7 @@ match_tokens_ignore_ws_ho_aux([tok(_,Text,_,_)|RestAATokens],
 			      [tok(Type,Text,LCText,Pos)|RestSentences],
 			      [tok(Type,Text,LCText,Pos)|RestMatch],
 			      SentencesOut) :-
+	!,
 	match_tokens_ignore_ws_ho_aux(RestAATokens, RestSentences, RestMatch, SentencesOut).
 % First Sentence token is ws, so ignore it
 match_tokens_ignore_ws_ho_aux([FirstAAToken|RestAATokens],

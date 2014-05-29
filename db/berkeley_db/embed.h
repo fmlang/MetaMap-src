@@ -53,8 +53,8 @@ struct query_struct
  
 struct config_struct
 {
-     char file_name[31];        /* formerly MAXLINE */
-     char table[31];            /* formerly MAXLINE */
+     char file_name[100];        /* formerly MAXLINE */
+     char table[100];            /* formerly MAXLINE */
      int opened;		/* Boolean TRUE/FALSE if opened already */
      int num_fields;
      char fields[MAXCOLS][21];  /* formerly 50 */

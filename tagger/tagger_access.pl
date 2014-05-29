@@ -41,6 +41,7 @@
    ]).
 
 :- use_module(metamap(metamap_tokenization), [
+	local_punct/1,
 	no_combine_pronoun/1
    ]).
 
@@ -70,9 +71,9 @@
 	ensure_number/2
    ]).
 
-:- use_module(skr_lib(ctypes), [
-	is_punct/1
-    ]).
+% :- use_module(skr_lib(ctypes), [
+% 	is_punct/1
+%     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/2,
@@ -308,7 +309,7 @@ postprocess_apostrophe_s(TaggedTextList0, TaggedTextList) :-
 	\+ no_combine_pronoun(OrigWord),
 	atom_codes(OrigWord, OrigWordCodes),
 	last(OrigWordCodes, LastCode),
-	\+ is_punct(LastCode),
+	\+ local_punct(LastCode),
 	!,
 	concat_atom([OrigWord, '''', s], Noun),
 	TaggedTextList = [[Noun,LexCat]|RestTaggedTextList],

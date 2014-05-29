@@ -82,12 +82,12 @@ interposed with InsertText (often ' ').  */
 concatenate_text([], _, '') :- !.
 concatenate_text([Text], _, Text) :- !.
 concatenate_text([First|Rest], InsertText, Text) :-
-	concatenate_text(Rest, InsertText, First, Text).
+	concatenate_text_aux(Rest, InsertText, First, Text).
 
-concatenate_text([], _, TextIn, TextIn).
-concatenate_text([First|Rest], InsertText, TextIn, TextOut) :-
+concatenate_text_aux([], _, TextIn, TextIn).
+concatenate_text_aux([First|Rest], InsertText, TextIn, TextOut) :-
 	append_text([TextIn,InsertText,First], TextInOut),
-	concatenate_text(Rest, InsertText, TextInOut, TextOut).
+	concatenate_text_aux(Rest, InsertText, TextInOut, TextOut).
 
 /* eliminate_multiple_meaning_designator(+Word, -ModifiedWord)
 

@@ -70,7 +70,7 @@
 	debug_message/3,
 	ensure_number/2,
 	fatal_error/2,
-	generate_aa_term/2
+	generate_AAs_MMO_term/2
    ]).
 
 :- use_module(skr_lib(nls_strings), [
@@ -122,7 +122,7 @@
 do_WSD(UtteranceText, InputLabel, CitationTextAtom, AAs, Tokens,
        WSDServerStream, MMOPhrases, DisambMMOPhrases, SemRepPhrasesWithWSD) :-
 	( control_option(word_sense_disambiguation) ->
-	  generate_aa_term([mm_output(utterance, citation, modifiedtext, tagging,
+	  generate_AAs_MMO_term([mm_output(utterance, citation, modifiedtext, tagging,
 				      AAs, syntax, MMOPhrases, extractedphrases)],
 			   AATerm),
 	  MMOutput = mm_output(utterance(InputLabel, UtteranceText, PosInfo, ReplPos),

@@ -35,6 +35,7 @@
 
 
 :- module(text_object_tokens,[
+	all_alnum/1,
 	compute_token_position/2,
 	extract_text/2,
 	filter_out_field_comments/2,
@@ -49,6 +50,16 @@
     ]).
 
 
+:- use_module(metamap(metamap_tokenization), [
+	local_alnum/1,
+	local_alpha/1,
+	local_digit/1,
+	local_punct/1,
+	local_lower/1,
+	local_upper/1
+
+   ]).
+					      
 :- use_module(text(text_object_io), [
 	write_warning/4
     ]).
@@ -65,14 +76,14 @@
 	control_option/1
     ]).
 
-:- use_module(skr_lib(ctypes),[
-	is_alnum/1,
-	is_alpha/1,
-	is_lower/1,
-	is_upper/1,
-	is_digit/1,
-	is_punct/1
-    ]).
+%:- use_module(skr_lib(ctypes),[
+	% is_alnum/1,
+	% is_alpha/1,
+	% is_lower/1,
+	% is_upper/1
+	% is_digit/1
+	% is_punct/1
+%    ]).
 
 :- use_module(skr_lib(nls_strings),[
 	split_string/4
@@ -335,7 +346,7 @@ set_token_type(Token, ws) :-
 %     !.
 
 set_token_type([Char], Type) :-
-	is_punct(Char),
+	local_punct(Char),
 	!,
 	Type = pn.
 set_token_type(Token, Type) :-
@@ -366,7 +377,7 @@ set_alpha_token_type(Token, Type) :-
 	; all_upper(Token) ->
 	  Type = uc
 	; ( Token = [First|Rest],
-	    is_upper(First),
+	    local_upper(First),
 	    all_lower(Rest)) ->
 	    Type = ic
 	; Type = mc
@@ -374,27 +385,27 @@ set_alpha_token_type(Token, Type) :-
 
 all_alnum([]).
 all_alnum([Char|Rest]) :-
-	is_alnum(Char),
+	local_alnum(Char),
 	all_alnum(Rest).
 
 all_alpha([]).
 all_alpha([Char|Rest]) :-
-	is_alpha(Char),
+	local_alpha(Char),
 	all_alpha(Rest).
 
 all_lower([]).
 all_lower([Char|Rest]) :-
-	is_lower(Char),
+	local_lower(Char),
 	all_lower(Rest).
 
 all_upper([]).
 all_upper([Char|Rest]) :-
-	is_upper(Char),
+	local_upper(Char),
 	all_upper(Rest).
 
 all_digit([]).
 all_digit([Char|Rest]) :-
-	is_digit(Char),
+	local_digit(Char),
 	all_digit(Rest).
 
 
@@ -430,21 +441,20 @@ split_scope/4 splits the list of Tokens into Scope and Rest where
 Scope consists of those tokens ending at the end of Position and Rest
 is the remaining tokens.  Higher-order tokens cannot end Scope.  */
 
-split_scope(Tokens,pos(_,End),Scope,Rest) :-
-    split_scope(Tokens,End,Tokens,Scope,Rest).
+split_scope(Tokens, pos(_,End), Scope, Rest) :-
+	split_scope_aux(Tokens, End, Tokens, Scope, Rest).
 
 %split_scope([],End,AllTokens,_,_) :-
 %    fatal_error('split_scope/4 failed (End=~p) for ~p~n',[End,AllTokens]),
 %    !,
 %    fail.
-split_scope([],_End,_AllTokens,[],[]) :-
-    !.
-split_scope([Token|Rest],End,_AllTokens,[Token],Rest) :-
-    Token=tok(Type,_,_,pos(_,End)),
-    \+higher_order_type(Type),
-    !.
-split_scope([First|Rest],End,AllTokens,[First|RestScope],NewRest) :-
-    split_scope(Rest,End,AllTokens,RestScope,NewRest).
+split_scope_aux([], _End, _AllTokens, [], []).
+split_scope_aux([Token|Rest], End, _AllTokens, [Token], Rest) :-
+	Token = tok(Type,_,_,pos(_,End)),
+	\+ higher_order_type(Type),
+	!.
+split_scope_aux([First|Rest], End, AllTokens, [First|RestScope], NewRest) :-
+	split_scope_aux(Rest, End, AllTokens, RestScope, NewRest).
 
 /* remove_bracketing(+Tokens, -ModifiedTokens)
 

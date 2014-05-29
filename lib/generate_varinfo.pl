@@ -51,13 +51,17 @@
 	normalize_token/2
   ]).
 
+:- use_module(metamap(metamap_tokenization), [
+	local_alnum/1
+  ]).
+
 :- use_module(skr(skr_utilities), [
 	fatal_error/2
   ]).
 
-:- use_module(skr_lib(ctypes), [
-        is_alnum/1
-  ]).
+% :- use_module(skr_lib(ctypes), [
+%         is_alnum/1
+%   ]).
 
 :- use_module(skr_lib(nls_system), [
         control_option/1,
@@ -143,12 +147,9 @@ get_this_variant([H|T], VariantFound, StopGap,
 	get_this_variant_1([H|T], VariantFound, StopGap,
 			   LexMatch, InputMatch, ThisVarInfo, VariantTail).
 
-foo.
-
 get_this_variant_1([], VariantFound, StopGap,
 		   LexMatch, InputMatch, [StopGap|ThisVarInfo], ThisVarInfo) :-
 	( VariantFound =:= 0 ->
-	  foo,
 	  format(user_output,
 		 '### WARNING: Mismatch in LexMatch "~w" and InputMatch ~w ~n',
 		 [LexMatch,InputMatch])
@@ -184,20 +185,21 @@ get_this_variant_1([_Other|MoreVariants], VariantFound,
 
 % Either list can run out first,
 % as long as what's left over in the other list doesn't begin with an alnum.
-same_alnums([], []).
+same_alnums([], []) :- !.
 same_alnums([H1|T1], [H2|T2]) :-
+	!,
 	( H1 == H2 ->
 	  same_alnums(T1, T2)
-	; \+ is_alnum(H1) ->
+	; \+ local_alnum(H1) ->
 	  same_alnums(T1, [H2|T2])
-	; \+ is_alnum(H2) ->
+	; \+ local_alnum(H2) ->
 	  same_alnums([H1|T1], T2)
 	).
-same_alnums([H|T], []) :- \+ contains_alnum([H|T]).
+same_alnums([H|T], []) :- \+ contains_alnum([H|T]), !.
 same_alnums([], [H|T]) :- \+ contains_alnum([H|T]).
 
 contains_alnum([H|T]) :-
-	( is_alnum(H) ->
+	( local_alnum(H) ->
 	  true
 	; contains_alnum(T)
 	).

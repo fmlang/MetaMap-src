@@ -33,18 +33,23 @@
 % Purpose:  Calculate positional information for tokens
 
 
-:- module(pos_info,[
+:- module(pos_info, [
 	collapse_pos_info/3,
 	create_EXP_raw_token_list/8,
 	create_UNEXP_raw_token_list/6,
 	get_next_token_state/3
     ]).
 
+:- use_module(metamap(metamap_tokenization), [
+	local_ws/1
+    ]).
+
 :- use_module(skr_lib(nls_strings),[
 	trim_whitespace_left/2,
-	trim_whitespace_left/3,
+	trim_whitespace_left_count/3,
 	trim_whitespace_left_1/4
     ]).
+
 
 :- use_module(skr(skr_text_processing),[
 	text_field/1
@@ -57,9 +62,9 @@
 	write_token_list/3
     ]).
 
-:- use_module(skr_lib(ctypes),[
-	is_space/1
-    ]).
+% :- use_module(skr_lib(ctypes),[
+% 	is_space/1
+%     ]).
 
 :- use_module(text(text_object_util),[
 	aa_tok/1,
@@ -132,7 +137,7 @@ create_UNEXP_raw_token_list([CurrentToken|RestTokens], CurrentPos, _ExtraCharsIn
   	( CurrentTokenType == 'ws' ->
  	  % NextPos is CurrentPos + NumBlanksRemoved,
 	  InputStringIn = [WhiteSpaceChar|InputStringTemp],
-	  is_space(WhiteSpaceChar),
+	  local_ws(WhiteSpaceChar),
  	  add_raw_pos_info_1(CurrentToken, CurrentPos, NewCurrentToken),
 	  % Handle blank spaces at the beginning of lines,
 	  % e.g., in MedLine citations, that do not get tokenized
@@ -267,7 +272,7 @@ handle_ws_token_type(_TokenState, _PrevToken, _ExtraCharsIn,
 		     InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 		     _ExtraCharsOut, RestNewTokens) :-
 	  InputStringIn = [WhiteSpaceChar|InputStringTemp],
-	  is_space(WhiteSpaceChar),
+	  local_ws(WhiteSpaceChar),
  	  add_raw_pos_info_1(CurrentToken, CurrentPos, NewCurrentToken),
 	  % Handle blank spaces at the beginning of lines,
 	  % e.g., in MedLine citations, that do not get tokenized
@@ -415,7 +420,11 @@ handle_special_token_type(aadef, PrevToken, _ExtraCharsIn,
 	),
 	% This hack is intended to handle text like "urinary (u-) ..."
 	remove_leading_hyphen_and_ws_tokens(AADefTokens0, AADefTokens1),
-	remove_final_hyphen_and_ws_tokens(AADefTokens1, AADefTokens),
+	% Removed this call to handle strings like
+	% "Vasoactive Intestinal Peptide - (VIP) like immunoreactive nerves"
+	% in PMID- 3891693
+	% remove_final_hyphen_and_ws_tokens(AADefTokens1, AADefTokens),
+	AADefTokens = AADefTokens1,
 	% AADefTokens = AADefTokens0,
 	create_new_tokens_and_consume_strings(AADefTokens, PrevTokenType, RestTokensIn,
 					      CurrentPos, InputStringIn,
@@ -447,7 +456,7 @@ handle_special_token_type(aadef, PrevToken, _ExtraCharsIn,
 	% sublist(InputString2, InputString3, NumCharsToConsume, _Length, 0),
 	consume_token_strings(TokensConsumed, InputString2, InputString3, 0, NumCharsConsumed),
 	NextPos3 is NextPos2 + NumCharsConsumed,
-	trim_whitespace_left(InputString3, InputStringNext, NumBlanksTrimmed3),
+	trim_whitespace_left_count(InputString3, InputStringNext, NumBlanksTrimmed3),
 	NextPos is NextPos3 + NumBlanksTrimmed3,
 	!.
 	% fail.
@@ -708,7 +717,7 @@ consume_token_chars(FirstToken, InputStringIn, InputStringNext,
 	  InputStringNext = InputStringIn,
 	  NumCharsConsumedNext is NumCharsConsumedIn	  
 	; ws_tok(FirstToken) ->
-	  trim_whitespace_left(InputStringIn, InputStringNext, NumBlanksTrimmed),
+	  trim_whitespace_left_count(InputStringIn, InputStringNext, NumBlanksTrimmed),
 	  NumCharsConsumedNext is NumCharsConsumedIn + NumBlanksTrimmed
 	; an_pn_xx_tok(FirstToken) ->
 	  token_template(FirstToken, _TokenType, TokenString, _LCTokenString, pos(StartPos,EndPos)),
@@ -864,7 +873,8 @@ remove_aa_tokens([], LastAAToken, [NextTokenIn|TempRestTokens], RestTokens) :-
 remove_aa_tokens([NextAAToken|RestAATokens], AAToken, [NextTokenIn|RestTokensIn], RestTokensOut) :-
 	( AAToken == NextTokenIn ->
 	  remove_aa_tokens(RestAATokens, NextAAToken, RestTokensIn, RestTokensNext),
-	  remove_next_whitespace_tokens(RestTokensNext, RestTokensOut)
+	  RestTokensOut = RestTokensNext
+	  % remove_next_whitespace_tokens(RestTokensNext, RestTokensOut)
 	; aa_tok(NextTokenIn) ->
 	  remove_aa_tokens([NextAAToken|RestAATokens], AAToken, RestTokensIn, RestTokensOut)
 	; ws_tok(NextTokenIn) ->
@@ -922,7 +932,7 @@ consume_aa_token_strings([], LastAAToken, InputStringIn, InputStringOut) :-
 %	NumCharsConsumed is PrefixLength + TextLength,
 %	append_length(InputStringNext, InputStringIn, NumCharsConsumed),
 %	( ws_tok(LastAAToken) ->
-%	  trim_whitespace_left(InputStringNext, InputStringOut, _NumBlanksTrimmed)
+%	  trim_whitespace_left_count(InputStringNext, InputStringOut, _NumBlanksTrimmed)
 %	; InputStringOut = InputStringNext
 %	).
 	% Can't simply append because of cases where the first token is an aa!
@@ -1367,9 +1377,9 @@ sublist_ws(CurrentTokenType, InputString, CurrentTokenText0,
 
 	  append([InputStringPrefix,CurrentTokenPrefix,RestInputString1], InputString),
 	  length(CurrentTokenPrefix, CurrentTokenPrefixLength),
-	  trim_whitespace_left(RestInputString1, RestInputString2, NumBlanks1),
+	  trim_whitespace_left_count(RestInputString1, RestInputString2, NumBlanks1),
 	  RestInputString2 = [0'''|RestInputString3],
-	  trim_whitespace_left(RestInputString3, RestInputString4, NumBlanks2),
+	  trim_whitespace_left_count(RestInputString3, RestInputString4, NumBlanks2),
 	  length(InputStringPrefix, InputStringPrefixLength),
 	  RestInputString4 = [0's|_RestInputString5],
 	  % sublist(InputString, CurrentTokenPrefix, _InputStringPrefixLength,

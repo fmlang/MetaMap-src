@@ -66,7 +66,7 @@
 	trim_whitespace/2,
 	% must be exported for mwi_utilities
 	trim_whitespace_left/2,
-	trim_whitespace_left/3,
+	trim_whitespace_left_count/3,
 	trim_whitespace_left_1/4,
 	% must be exported for SemRep
 	trim_whitespace_right/2
@@ -74,6 +74,12 @@
 
 
 :- use_module(metamap(metamap_tokenization), [
+	local_alnum/1,
+	local_alpha/1,
+	local_digit/1,
+	local_print/1,
+	local_to_lower/2,
+	local_ws/1,
 	tokenize_text_more_lc/2
     ]).
 
@@ -82,14 +88,13 @@
         fatal_error/2
    ]).
 
-:- use_module(skr_lib(ctypes), [
-	is_alpha/1,
-	is_alnum/1,
-	is_print/1,
-	is_digit/1,
-	is_white/1,
-	to_lower/2
-    ]).
+% :- use_module(skr_lib(ctypes), [
+% 	is_alnum/1,
+% 	is_print/1,
+% 	is_digit/1,
+% 	is_white/1,
+% 	to_lower/2
+%     ]).
 
 :- use_module(skr_lib(nls_text), [
 	string_uninvert/2
@@ -97,12 +102,12 @@
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_strings_with_separator/3,
+	lower/2,
 	midstring/6
     ]).
 
 :- use_module(library(lists), [
 	append/2,
-	maplist/3,
 	rev/2
     ]).
 
@@ -308,20 +313,20 @@ eliminate_nos_acros(String,String).
 % Heart valve disease nos
 % Heart/arterial murmur nos
 
-eliminate_nos_expansion(String,NormString) :-
-    maplist(to_lower,String,LCString),
-    atom_codes(Atom,String),
-    atom_codes(LCAtom,LCString),
-    eliminate_nos_expansion(LCAtom,Atom,NormAtom),
-    !,
-    atom_codes(NormAtom,NormString).
-eliminate_nos_expansion(String,String).
+eliminate_nos_expansion(String, NormString) :-
+	lower(String, LCString),
+	atom_codes(Atom, String),
+	atom_codes(LCAtom, LCString),
+	eliminate_nos_expansion_aux(LCAtom, Atom, NormAtom),
+	!,
+	atom_codes(NormAtom, NormString).
+eliminate_nos_expansion(String, String).
 
-eliminate_nos_expansion(LCAtom,Atom,NormAtom) :-
+eliminate_nos_expansion_aux(LCAtom, Atom, NormAtom) :-
     nos_expansion(NE),
-    midstring(LCAtom,NE,_,LenA,LenB,LenC),
+    midstring(LCAtom, NE, _, LenA, LenB, LenC),
     !,
-    midstring(Atom,_,NormAtom,LenA,LenB,LenC).
+    midstring(Atom, _, NormAtom, LenA, LenB, LenC).
 
 % These designations refer to the tests and filenames
 % in the 0doit5 script in the NEC_NOS directory
@@ -435,12 +440,12 @@ split_a_string([_First|Rest],String, Left, Substring, Right) :-
 %%% test_atom('Chromatography, quantitative, column (eg, gas liquid or HPLC); single analyte not elsewhere specified, single stationary and mobile phase').
 
 begins_with_alnum([Char|_]) :-
-    is_alnum(Char),
+    local_alnum(Char),
     !.
 
 ends_with_alpha(String) :-
     rev(String,[Char|_]),
-    is_alpha(Char),
+    local_alpha(Char),
     !.
 
 abgn_form([0' ,0'A,Third|_]) :-  % " ANTIBODY", " ANTIGEN", " AB", " AG"
@@ -464,7 +469,7 @@ is_integer_string/1 succeeds if String is a string of printable characters.  */
 
 is_integer_string("").
 is_integer_string([First|Rest]) :-
-	is_digit(First),
+	local_digit(First),
 	is_integer_string(Rest).
 
 /* is_print_string(+String)
@@ -477,7 +482,7 @@ is_print_string(String) :-
 is_print_string_aux([]).
 is_print_string_aux([First|Rest]) :-
 	nonvar(First),
- 	is_print(First),
+ 	local_print(First),
  	is_print_string_aux(Rest).
 
 /* uninvert_string(+String, -UninvString)
@@ -1227,7 +1232,7 @@ replace_nonprints_in_strings([First|Rest], [ModifiedFirst|ModifiedRest]) :-
 replace_nonprints([], []).
 replace_nonprints([Char|Rest], [ModifiedChar|ModifiedRest]) :-
 	( Char < 127,
-	  is_print(Char) ->
+	  local_print(Char) ->
 	  ModifiedChar = Char
 	; ModifiedChar = 32
 	),
@@ -1316,7 +1321,7 @@ value of WhichEnd (left, right, left_and_right, or all).  */
 trim_whitespace(String, TrimmedString) :-
 	trim_whitespace_both(String, TrimmedString).
 
-trim_whitespace_left(String, TrimmedString, NumBlanksTrimmed) :-
+trim_whitespace_left_count(String, TrimmedString, NumBlanksTrimmed) :-
 	trim_whitespace_left_1(String, 0, TrimmedString, NumBlanksTrimmed).
 
 trim_whitespace_left(String, TrimmedString) :-
@@ -1324,7 +1329,7 @@ trim_whitespace_left(String, TrimmedString) :-
 
 trim_whitespace_left_1([FirstChar|RestString], TempNumBlanksTrimmed,
 		       TrimmedString, NumBlanksTrimmed) :-
-	is_white(FirstChar),
+	local_ws(FirstChar),
 	!,
 	NextNumBlanksTrimmed is TempNumBlanksTrimmed + 1,
 	trim_whitespace_left_1(RestString, NextNumBlanksTrimmed, TrimmedString, NumBlanksTrimmed).
@@ -1332,22 +1337,23 @@ trim_whitespace_left_1(String, NumBlanksTrimmed, String, NumBlanksTrimmed) :-
 	!.
 
 trim_whitespace_right(String, TrimmedString) :-
-	trim_whitespace_right(String, TrimmedString, _NumBlanksTrimmed).
+	trim_whitespace_right_count(String, TrimmedString, _NumBlanksTrimmed).
 
-trim_whitespace_right(String, TrimmedString, NumBlanksTrimmed) :-
+trim_whitespace_right_count(String, TrimmedString, NumBlanksTrimmed) :-
 	rev(String, [FirstChar|RevString]),
-	is_white(FirstChar),
+	local_ws(FirstChar),
 	!,
 	trim_whitespace_left_1(RevString, 0, TrimmedRevString, NumBlanksTrimmed),
 	rev(TrimmedRevString, TrimmedString).
-trim_whitespace_right(String, String, 0) :- !.
+trim_whitespace_right_count(String, String, 0) :- !.
 
 trim_whitespace_both(String, TrimmedString) :-
-	trim_whitespace_both(String, TrimmedString, _NumLeftBlanksTrimmed, _NumRightBlanksTrimmed).
+	trim_whitespace_both_count(String, TrimmedString,
+				   _NumLeftBlanksTrimmed, _NumRightBlanksTrimmed).
 	
-trim_whitespace_both(String, TrimmedString, NumLeftBlanksTrimmed, NumRightBlanksTrimmed) :-
+trim_whitespace_both_count(String, TrimmedString, NumLeftBlanksTrimmed, NumRightBlanksTrimmed) :-
 	trim_whitespace_left_1(String, 0, String0, NumLeftBlanksTrimmed),
-	trim_whitespace_right(String0, TrimmedString, NumRightBlanksTrimmed),
+	trim_whitespace_right_count(String0, TrimmedString, NumRightBlanksTrimmed),
 	!.
 
 trim_and_compress_whitespace([], []).
@@ -1361,8 +1367,8 @@ trim_and_compress_whitespace([H|T], Compressed) :-
 
 trim_and_compress_whitespace_1([], H, [H]).
 trim_and_compress_whitespace_1([Next|Rest], First, Trimmed) :-
-	( is_white(First),
-	  is_white(Next) ->
+	( local_ws(First),
+	  local_ws(Next) ->
 	  Trimmed = RestTrimmed
 	; Trimmed = [First|RestTrimmed]
 	),

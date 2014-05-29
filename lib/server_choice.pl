@@ -71,13 +71,6 @@ get_server_streams(TaggerServerStream-WSDServerStream) :-
 
 % This code simply avoids duplicating the same code for each of the various servers.
 
-get_server_stream('LEXICON', ServerStream) :-
-	( control_value(lexicon, java) ->
-	  get_server_stream_1('LEXICON', ServerStream)
-	% ; control_value(lexicon, db) ->
-	%   get_server_stream_1('LEXICON', ServerStream)
-	; ServerStream = ''
-	).
 get_server_stream('TAGGER', ServerStream) :-
 	( control_option(no_tagging) ->
 	  ServerStream = ''

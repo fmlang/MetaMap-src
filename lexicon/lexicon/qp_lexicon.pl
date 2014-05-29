@@ -47,6 +47,7 @@
 */
 
 :- module(qp_lexicon, [
+	concat_atoms_intelligently/2,
 	lex_form_ci_recs/2,	% lexical form, case insensitive
 	lex_form_ci_cats/2,	% lexical item, case insensitive, returns cats
 	% lex_cit_ci_vars/2,	% citation form, case insensitive, returns variants
@@ -65,7 +66,7 @@
     ]).
 
 :- use_module(lexicon(lex_access), [
-	get_im_varlist/3,
+	get_im_varlist_with_cats/3,
 	get_im_varlist_for_form/3
    ]).
 
@@ -90,6 +91,7 @@
    ]).
 
 :- use_module(metamap(metamap_tokenization), [
+	local_punct/1,
 	tokenize_text/2
    ]).
 
@@ -108,11 +110,9 @@
 	default_release/1
    ]).
 
-:- use_module(skr_lib(ctypes), [
-	 is_alnum/1,
-	 is_punct/1,
-	 is_white/1
-    ]).
+% :- use_module(skr_lib(ctypes), [
+% 	 is_punct/1
+%     ]).
 
 :- use_module(skr_lib(flatten), [
 	 flatten/2
@@ -227,23 +227,30 @@ lex_init_quietly(LexiconFile, LexiconIndex) :-
 	lexicon_files(LexiconFile, LexiconIndex),
 	!.  % already initialized
 lex_init_quietly(LexiconFile, LexiconIndex) :-
-	get_lexicon_year(LexiconYear),
-	% environ('DEFAULT_LEXICON_FILE', Lexicon),
-	environ('LEXICON_DATA', LexiconDataDir),
-	concat_atom([LexiconDataDir, '/lexiconStatic', LexiconYear], LexiconFile),
-	check_valid_file_type(LexiconFile, 'Lexicon'),
-	% environ('DEFAULT_LEXICON_INDEX_FILE', Index),
-	concat_atom([LexiconFile, 'Ind'], LexiconIndex),
-	concat_atom([LexiconIndex, 'ByEui.dbx'], EuiIndexFile),
-	check_valid_file_type(EuiIndexFile, 'Lexicon Index'),
-	concat_atom([LexiconIndex, 'ByInfl.dbx'], InflIndexFile),
-	check_valid_file_type(InflIndexFile, 'Lexicon Index'),
-	retractall(default_lexicon_file(_)),
-	assert(default_lexicon_file(LexiconFile)),
-	retractall(default_index_file(_)),
-	assert(default_index_file(LexiconIndex)),
-	retractall(lexicon_files(_,_)),
-	assert(lexicon_files(LexiconFile,LexiconIndex)).
+	( control_value(lexicon, c) ->
+	  get_lexicon_year(LexiconYear),
+	  % environ('DEFAULT_LEXICON_FILE', Lexicon),
+	  environ('LEXICON_DATA', LexiconDataDir),
+	  concat_atom([LexiconDataDir, '/lexiconStatic', LexiconYear], LexiconFile),
+	  check_valid_file_type(LexiconFile, 'Lexicon'),
+	  % environ('DEFAULT_LEXICON_INDEX_FILE', Index),
+	  concat_atom([LexiconFile, 'Ind'], LexiconIndex),
+	  concat_atom([LexiconIndex, 'ByEui.dbx'], EuiIndexFile),
+	  check_valid_file_type(EuiIndexFile, 'Lexicon Index'),
+	  concat_atom([LexiconIndex, 'ByInfl.dbx'], InflIndexFile),
+	  check_valid_file_type(InflIndexFile, 'Lexicon Index'),
+	  retractall(default_lexicon_file(_)),
+	  assert(default_lexicon_file(LexiconFile)),
+	  retractall(default_index_file(_)),
+	  assert(default_index_file(LexiconIndex)),
+	  retractall(lexicon_files(_,_)),
+	  assert(lexicon_files(LexiconFile,LexiconIndex))
+	; LexiconFile = stub,
+	  LexiconIndex = stub,
+	  assert(default_lexicon_file(LexiconFile)),
+	  assert(default_index_file(LexiconIndex)),
+	  assert(lexicon_files(LexiconFile,LexiconIndex))
+	).
 
 get_lexicon_year(NormalizedLexiconYear) :-
 	default_release(DefaultRelease),
@@ -274,7 +281,8 @@ normalize_lexicon_year(LexiconYear, NormalizedLexiconYear) :-
 	).
 
 conditionally_announce_lexicon(Lexicon) :-
-	( \+ control_option(silent) ->
+	( control_value(lexicon, c),
+	  \+ control_option(silent) ->
 	  format('Accessing lexicon ~a.~n', [Lexicon])
 	; true
 	).
@@ -319,7 +327,7 @@ lex_form_ci_var_lists_5_TOGGLE(Form, Categories, Lexicon, Index, VarList) :-
 	  lex_var_lists(form, Form, VarLists0, 1, Lexicon, Index),
 	  append(VarLists0, VarList)
 	; control_value(lexicon, db) ->
-	  get_im_varlist(Form, Categories, VarList)
+	  get_im_varlist_with_cats(Form, Categories, VarList)
 	).
 
 %%% generic record retrieval predicate
@@ -651,11 +659,11 @@ insert_white_space_between_alnums(['''',Y|RestTokens], X, [X, '''', ' ' |NewToke
 insert_white_space_between_alnums([NextToken|RestTokens], FirstToken, [FirstToken|NewTokens]) :-
 	( atom_codes(FirstToken, FirstTokenCodes),
 	  FirstTokenCodes = [FirstTokenCode],
-	  is_punct(FirstTokenCode) ->
+	  local_punct(FirstTokenCode) ->
 	  NewTokens = RestNewTokens
 	; atom_codes(NextToken, NextTokenCodes),
 	  NextTokenCodes = [NextTokenCode],
-	  is_punct(NextTokenCode) ->
+	  local_punct(NextTokenCode) ->
 	  NewTokens = RestNewTokens
 	; NewTokens = [' '|RestNewTokens]
 	),
@@ -733,7 +741,7 @@ normalize_all_tokens(AllTokens, AllNormalizedTokens) :-
 normalize_token(TokenAtom, NormalizedTokenAtom) :-
         atom_codes(TokenAtom, TokenString),
         ( TokenString = [Char],
-          is_punct(Char) ->
+          local_punct(Char) ->
           NormalizedTokenAtom = TokenAtom
         ; normalize_lex_string(TokenString, NormalizedTokenString),
           atom_codes(NormalizedTokenAtom, NormalizedTokenString)
@@ -825,7 +833,7 @@ unwanted_string("'s").
 
 change_puncts_to_blanks([], []).
 change_puncts_to_blanks([H1|T1], [H2|T2]) :-
-	( is_punct(H1) ->
+	( local_punct(H1) ->
 	  H2 = 0'    % there is a blank space after the "'"!
 	; H2 = H1
 	),
@@ -840,6 +848,7 @@ count_matching_input_tokens([FirstLexToken|_RestLexTokens], [],
 			  MatchingTokenCountIn, MatchingTokenCountOut,
 			  MatchScoreIn, MatchScoreOut,
 			  MatchingTokenList, LeftOverInputTokens) :-
+	!,
 	punct_token(FirstLexToken, _),
 	MatchingTokenCountOut is MatchingTokenCountIn + 1,
 	MatchScoreOut is MatchScoreIn + 1,
@@ -943,9 +952,9 @@ update_matching_token_list(MatchingToken, MatchingTokenList, RestMatchingTokenLi
 token_match([FirstLexToken|RestLexTokens], [FirstInputToken|RestInputTokens],
 	    RemainingLexTokens, RemainingInputTokens,
 	    AdditionalInputTokenCount, MatchScore, MatchingLexTokens) :-
- 	( FirstLexToken == FirstInputToken,
+ 	( FirstLexToken == FirstInputToken ->
 %	  atom_codes(FirstLexToken, [FirstLexTokenCode|_]),
-%	  \+ is_punct(FirstLexTokenCode) ->
+%	  \+ local_punct(FirstLexTokenCode) ->
 	  RemainingLexTokens = RestLexTokens,
 	  RemainingInputTokens = RestInputTokens,
 	  AdditionalInputTokenCount is 1,
@@ -964,7 +973,7 @@ token_match([FirstLexToken|RestLexTokens], [FirstInputToken|RestInputTokens],
  	  RemainingLexTokens = RestLexTokens,
  	  RemainingInputTokens = RestInputTokens,
 	  MatchingLexTokens = [FirstLexToken],
- 	  AdditionalInputTokenCount is 1,
+ 	  AdditionalInputTokenCount is 0,
  	  MatchScore is 0
 	; punct_token(FirstLexToken, _) ->
  	  RemainingLexTokens = RestLexTokens,
@@ -1199,7 +1208,7 @@ get_best_match([FirstMatch|RestMatches], N) :-
 	Term \== 'HE''s',
 	!,
 	( findall(SomeOfs, member(match(Type, Term, SomeOfs, Length), RestMatches), MoreOfs) ->
-	 N = match(Term, [Ofs|MoreOfs], Length)
+	  N = match(Term, [Ofs|MoreOfs], Length)
 	; N = match(Term, [Ofs], Length)
 	).
 get_best_match([_|RestMatches], N) :-

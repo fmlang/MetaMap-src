@@ -37,12 +37,18 @@
 	do_MMI_processing/4
     ]).
 
+:- use_module(lexicon(qp_lexicon),[
+	concat_atoms_intelligently/2
+    ]).
+
 :- use_module(metamap(metamap_evaluation),[
 	extract_components/3,
 	merge_contiguous_components/2
     ]).
 
 :- use_module(metamap(metamap_tokenization),[
+	local_punct/1,
+	local_ws/1,
 	tokenize_text/2,
 	tokenize_text_more/2,
 	tokenize_text_utterly/2
@@ -66,7 +72,8 @@
 :- use_module(skr_lib(nls_strings),[
 	atom_codes_list/2,
 	split_string/4,
-	split_string_completely/3
+	split_string_completely/3,
+	trim_and_compress_whitespace/2
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -97,13 +104,19 @@
 	xml_output_format/1
     ]).
 
+:- use_module(text(text_object_tokens),[
+	all_alnum/1
+   ]).		     
+
 :- use_module(text(text_objects),[
 	dump_all_avl/4,
-	extract_token_strings/2
+	extract_token_strings/2,
+	reformat_aa_output_list/3
    ]).		     
 
 :- use_module(library(avl),[
-	avl_member/3
+	avl_member/3,
+	avl_to_list/2
     ]).
 
 :- use_module(library(lists),[
@@ -111,7 +124,7 @@
 	last/2,
 	max_member/2,
 	rev/2,
-	selectchk/3,
+	% selectchk/3,
 	subseq0/2,
 	sumlist/2
     ]).
@@ -199,24 +212,27 @@ process_citation(UIAtom, _MMOutput, _FieldedStream) :-
 
 % compute_mesh_in_text(ReportStream,MMOutput,TFInfo) :-
 compute_mesh_in_text(MMOutput, MaxFreqIn, TFInfo, MaxFreqOut) :-
-        get_pre_tf_in_utterances(MMOutput, PreTFInfo0),
+        get_pre_tf_in_all_utterances(MMOutput, PreTFInfo0),
 	sort(PreTFInfo0, PreTFInfo),
 	compute_mesh_in_textfields(PreTFInfo, MaxFreqIn, TFInfo0, MaxFreqOut),
 	sort(TFInfo0, TFInfo1),
 	collapse_tf(TFInfo1, TFInfo).
 
-get_pre_tf_in_utterances([], []).
-get_pre_tf_in_utterances([Utterance|Rest], PreTFInfo) :-
+get_pre_tf_in_all_utterances([], []).
+get_pre_tf_in_all_utterances([Utterance|Rest], PreTFInfo) :-
 	get_pre_tf_in_utterance(Utterance, UtterancePreTFInfo),
 	append(UtterancePreTFInfo, RestPreTFInfo, PreTFInfo),
-	get_pre_tf_in_utterances(Rest, RestPreTFInfo).
+	get_pre_tf_in_all_utterances(Rest, RestPreTFInfo).
 
 get_pre_tf_in_utterance(Utterance, PreTFInfo) :-
 	Utterance = mm_output(utterance(Label,_Text,_PosInfo,_ReplPos),
 			      CitationTextAtom,_ModifiedText,_Tagging,AAs,
 			      _Syntax,Phrases,_ExtractedPhrases),
 	determine_field_nsent(Label, Field, NSent),
-	get_pre_tf_in_phrases(Phrases, CitationTextAtom, AAs, Field, NSent, PreTFInfo).
+	avl_to_list(AAs, AAList),
+	UI = 'empty',
+	reformat_aa_output_list(AAList, UI, SortedAAList),
+	get_pre_tf_in_phrases(Phrases, CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo).
 
 determine_field_nsent(Label, Field, NSent) :-
 	atom_codes(Label, LabelString),
@@ -240,20 +256,72 @@ determine_field_nsent(Label, Field, NSent) :-
 	; NSent = 0
 	).
 
-get_pre_tf_in_phrases([], _CitationTextAtom, _AAs, _Field, _NSent, []).
-get_pre_tf_in_phrases([Phrase|Rest], CitationTextAtom, AAs, Field, NSent, PreTFInfo) :-
-	get_pre_tf_in_phrase(Phrase, CitationTextAtom, AAs, Field, NSent, PhrasePreTFInfo),
-	append(PhrasePreTFInfo, RestPreTFInfo, PreTFInfo),
-	get_pre_tf_in_phrases(Rest, CitationTextAtom, AAs, Field, NSent, RestPreTFInfo).
+%  add_breakpoint([pred(mmi:get_lexcat/6), goal(_:G), true(arg(6,G,'UNKNOWN'))]-[exit,print,ask], BID).
 
-get_pre_tf_in_phrase(Phrase, CitationTextAtom, _AAs, Field, NSent, PreTFInfo) :-
+get_pre_tf_in_phrases([], _CitationTextAtom, _SortedAAList, _Field, _NSent, []).
+get_pre_tf_in_phrases([Phrase|RestPhrases], CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo) :-
+	get_pre_tf_in_phrase(Phrase, CitationTextAtom, SortedAAList, Field, NSent, PhrasePreTFInfo),
+	append(PhrasePreTFInfo, RestPreTFInfo, PreTFInfo),
+	get_pre_tf_in_phrases(RestPhrases, CitationTextAtom, SortedAAList, Field, NSent, RestPreTFInfo).
+
+get_pre_tf_in_phrase(Phrase, CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo) :-
 	% extract the mappings component, which is a list of terms of the form
 	% map(-888,[
 	%  ev(-694,'C0025545','Metallothionein','Metallothionein',
 	%      [metallothionein],[aapp,bacs],[[[1,1],[1,1],0]],no,no,Srcs,PI)])
 	phrase_info(mappings, Phrase, mappings(AllMappings)),
+	phrase_info(phrase,   Phrase, phrase(_TextAtom,Syntax,_Pos,_ReplPos)),
+	extract_inputmatch_and_tag_pairs(Syntax, InputMatchTagPairs0),
+	sort(InputMatchTagPairs0, InputMatchTagPairs1),
+	% shouldn't be necessary any more
+	% remove_punct_pairs(InputMatchTagPairs1, InputMatchTagPairs),
+	InputMatchTagPairs = InputMatchTagPairs1,
         form_super_mapping(AllMappings, SuperMapping),
-	get_pre_tf_in_mapping(SuperMapping, CitationTextAtom, Field, NSent, PreTFInfo).
+	get_pre_tf_in_mapping(SuperMapping, InputMatchTagPairs,
+			      CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo).
+
+remove_punct_pairs([], []).
+remove_punct_pairs([Token-LexCat|RestPairs], NoPunctPairs) :-
+	( atom_codes(Token, [Code]),
+	  local_punct(Code) ->
+	  NoPunctPairs = RestNoPunctPairs
+	; NoPunctPairs = [Token-LexCat|RestNoPunctPairs]
+	),
+	remove_punct_pairs(RestPairs, RestNoPunctPairs).
+
+
+extract_inputmatch_and_tag_pairs([], []).
+extract_inputmatch_and_tag_pairs([Element|RestElements], Pairs) :-
+	arg(1, Element, Attributes),
+	( Element \= punc(_),
+	  memberchk(inputmatch(InputMatchList), Attributes),
+	  get_tag(Attributes, Tag) ->
+	  concat_atoms_intelligently(InputMatchList, InputMatchToken),
+	  tokenize_text_utterly(InputMatchToken, [First|_]),
+	  add_pairs([First,InputMatchToken|InputMatchList], Tag, Pairs, RestPairs)
+	; Pairs = RestPairs
+	),
+	extract_inputmatch_and_tag_pairs(RestElements, RestPairs).
+
+add_pairs([], _Tag, Pairs, Pairs).
+add_pairs([H|T], Tag, [LowerHNoApostropheS-Tag|RemainingPairs], RestPairs) :-
+	lower(H, LowerH),
+	remove_apostrophe_s(LowerH, LowerHNoApostropheS),
+	add_pairs(T, Tag, RemainingPairs, RestPairs).
+
+remove_apostrophe_s(LowerH, LowerHNoApostropheS) :-
+	( atom_concat(LowerHNoApostropheS, '''s', LowerH) ->
+	  true
+	; LowerHNoApostropheS = LowerH
+	).
+
+get_tag(FeatureList, Tag) :-
+	( memberchk(tag(Tag), FeatureList) ->
+	  true
+	; memberchk(features([Tag|_]), FeatureList) ->
+	  true
+	; Tag = other
+	).
 
 % Collect the ev(_) terms from all mappings.
 % Previously, this code had exluded mappings other than those with the highest
@@ -274,11 +342,11 @@ extract_evs([map(_Score,CandidateList)|RestMaps], [CandidateList|RestMappings]) 
 
 % assemble the tf0(_) term
 % A mapping is a list of candidates; each candidate is a term of the form
-% ev(NegValue,_CUI,MetaTerm,MetaConcept,_MetaWords,STs,
-%    MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
+% ev(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, STs, MatchMap,
+%    InvolvesHead, IsOvermatch, SourceInfo, PosInfo, Status, Negated),
 
 % the tf0 term is of the form
-% tf0(ConceptString,STs,TermString,Value,Text,Field,CUI,NSent,PosInfo)
+% tf0(ConceptString,STs,TermString,Value,Text,Field,CUI,NSent,PosInfo,LexCat,Negated)
 % where
 % ConceptString = stringified MetaConcept (preferred name of concept)
 % STs           = STs from ev term
@@ -289,17 +357,22 @@ extract_evs([map(_Score,CandidateList)|RestMaps], [CandidateList|RestMappings]) 
 % CUI           = CUI from ev term
 % NSent         = index of utterance in TI or AB
 % PosInfo       = PosInfo of concept
+% LexCat        = Lexical Category of concept
+% Negated       = 1/0 depending on NegEx status of concept
 
-get_pre_tf_in_mapping([], _CitationTextAtom, _Field, _NSent, []).
-get_pre_tf_in_mapping([Candidate|Rest], CitationTextAtom, Field, NSent, [TF0|RestPreTFInfo]) :-
-	get_pre_tf_in_candidate(Candidate, CitationTextAtom, Field, NSent, TF0),
-	get_pre_tf_in_mapping(Rest, CitationTextAtom, Field, NSent, RestPreTFInfo).
+get_pre_tf_in_mapping([], _Syntax, _CitationTextAtom, _SortedAAList, _Field, _NSent, []).
+get_pre_tf_in_mapping([Candidate|Rest], Syntax, CitationTextAtom,
+		      SortedAAList, Field, NSent, [TF0|RestPreTFInfo]) :-
+	get_pre_tf_in_candidate(Candidate, Syntax, CitationTextAtom, SortedAAList, Field, NSent, TF0),
+	get_pre_tf_in_mapping(Rest, Syntax, CitationTextAtom, SortedAAList, Field, NSent, RestPreTFInfo).
 
 
-get_pre_tf_in_candidate(Candidate, CitationTextAtom, Field, NSent, TF0) :-
-	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,semtypes,posinfo],
+get_pre_tf_in_candidate(Candidate, Syntax, CitationTextAtom, SortedAAList, Field, NSent, TF0) :-
+	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,
+				    metawords,semtypes,posinfo,negated],
 				   Candidate,
-				   [NegValue,CUI,MetaTerm,MetaConcept,STs,PosInfo]),
+				   [NegValue,CUI,MetaTerm,MetaConcept,
+				    MetaWords,STs,PosInfo,Negated]),
 	% Candidate = ev(NegValue,CUI,MetaTerm,MetaConcept,_MetaWords,STs,_MatchMap,
 	% 	       _InvolvesHead,_IsOvermatch,_SourceInfo,PosInfo,_Pruned),
 	Value is -NegValue,
@@ -307,18 +380,111 @@ get_pre_tf_in_candidate(Candidate, CitationTextAtom, Field, NSent, TF0) :-
 	atom_codes(MetaTerm, TermString),
 	PosInfo = [H|T],
 	collapse_pos_info(T, H, CollapsedPosInfo),
-	construct_text_atom(CollapsedPosInfo, CitationTextAtom, Text),
-	TF0 = tf0(ConceptString,STs,TermString,Value,Text,Field,CUI,NSent,CollapsedPosInfo),
+	extract_text_string(CollapsedPosInfo, CitationTextAtom, TextString),
+	get_lexcat(TextString, SortedAAList, MetaWords, Syntax, Candidate, LexCat),
+	TF0 = tf0(ConceptString,STs,TermString,Value,TextString,Field,
+		  CUI,NSent,CollapsedPosInfo,LexCat,Negated),
 	!.
-get_pre_tf_in_candidate(Candidate, _CitationTextAtom, _Field, _NSent, _TF0) :-
+get_pre_tf_in_candidate(Candidate, _Syntax, _CitationTextAtom, _SortedAAList, _Field, _NSent, _TF0) :-
 	get_candidate_feature(metaconcept, Candidate, MetaConcept),
 	% Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
 	% 	       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
 	fatal_error('get_pre_tf_in_mapping/5 failed for ~p~n', [MetaConcept]).
 
-construct_text_atom(PosInfoList, CitationTextAtom, TextString) :-
+
+remove_non_alnum_atoms([], []).
+remove_non_alnum_atoms([H|T], Tokens) :-
+	atom_codes(H, CodesH),
+	( all_alnum(CodesH) ->
+	  Tokens = [H|RestTokens]
+	; Tokens = RestTokens
+	),
+	remove_non_alnum_atoms(T, RestTokens).
+
+lc_all([], []).
+lc_all([H|T], [LowerH|LowerT]) :-
+	lower(H, LowerH),
+	lc_all(T, LowerT).
+
+
+get_AA_expansion(TextString0, SortedAAList, Expansion, TextString) :-
+	( SortedAAList \== [],
+	  UI = empty,
+	  atom_codes(TextAtom0, TextString0),
+	  tokenize_text_utterly(TextAtom0, TokenizedTextAtom0),
+	  member(Token, [TextAtom0|TokenizedTextAtom0]),
+	  memberchk(UI-Token-ExpansionTextAtom-_AATokenLength-_AATextLength-
+		   _ExpansionTokenLength-_ExpansionTextLength,
+		    SortedAAList) ->
+	  tokenize_text(ExpansionTextAtom, TokenizedExpansionTextAtom),
+	  % English is a head-final language, so try to find the lexcat of the last word
+	  rev(TokenizedExpansionTextAtom, RevTokenizedExpansionTextAtom),
+	  Expansion = [ExpansionTextAtom|RevTokenizedExpansionTextAtom],
+	  atom_codes(ExpansionTextAtom, ExpansionTextString),
+	  TextString = ExpansionTextString
+	; Expansion = [],
+	  TextString = TextString0
+	).
+
+get_lexcat(TextString0, SortedAAList, MetaWords, Syntax, Candidate, LexCat) :-
+	trim_and_compress_whitespace(TextString0, TextString1), 
+	% If TextString0 is AA, replace it with its expansion,
+	% for which there will presumably be a lexcat.
+ 	get_AA_expansion(TextString1, SortedAAList, Expansion, TextString),
+	atom_codes(TextAtom1, TextString1),
+	tokenize_text_utterly(TextAtom1, TokenizedAtom0),
+	lower(TextString, TextStringLC),
+	atom_codes(TextAtomLC, TextStringLC),
+	tokenize_text_utterly(TextAtomLC, TokenizedTextAtomLC),
+	% English is a head-final language, so try to find the lexcat of the last word
+	rev(TokenizedTextAtomLC, RevTokenizedTextAtomLC),
+	rev(MetaWords, RevMetaWords),
+	append([Expansion, TokenizedAtom0,
+		[TextAtomLC|RevTokenizedTextAtomLC], RevMetaWords], AtomWordList0),
+	lc_all(AtomWordList0, AtomWordList2),
+	remove_punct_and_ws(AtomWordList2, AtomWordList),
+	( all_lexcats(AtomWordList, Syntax, AllLexCats),
+	  sort(AllLexCats, SortedLexCats),
+	  SortedLexCats = [_Weight-LexCat|_Rest] ->
+	  true
+	; LexCat = 'UNKNOWN',
+	  fml_format(user_output, '### UNKNOWN lexcat for ~q|~q|~q~n', [AtomWordList,Candidate,Syntax])
+	).
+
+% The lower the weight, the better
+lexcat_weight(noun, 0) :- !.
+lexcat_weight(adj,  1) :- !.
+lexcat_weight(verb, 2) :- !.
+lexcat_weight(_,    3) :- !.
+
+
+all_lexcats([], _Syntax, []).
+all_lexcats([H|T], Syntax, AllLexCats) :-
+	( memberchk(H-LexCat, Syntax) ->
+	  lexcat_weight(LexCat, Weight),
+	  AllLexCats = [Weight-LexCat|RestLexCats]
+	; AllLexCats = RestLexCats
+	),
+	all_lexcats(T, Syntax, RestLexCats).
+
+
+remove_punct_and_ws([], []).
+remove_punct_and_ws([H|T], RemainingTokens) :-
+	( atom_codes(H, [Code]),
+	  ( local_punct(Code) ->
+	    true
+	  ; local_ws(Code)
+	  ) ->
+	  RemainingTokens = Rest
+	; RemainingTokens = [H|Rest]
+	),
+	remove_punct_and_ws(T, Rest).
+
+fml_format(A, B, C) :- format(A, B, C).
+
+extract_text_string(PosInfoList, CitationTextAtom, TextString) :-
 	extract_text_atoms(PosInfoList, CitationTextAtom, AtomList),
-	concat_atom(AtomList, ' ', TextAtom),
+	concat_atoms_intelligently(AtomList, TextAtom),
 	atom_codes(TextAtom, TextString).
 
 extract_text_atoms([], _CitationTextAtom, []).
@@ -336,10 +502,18 @@ compute_mesh_and_treecodes(MetaConcept, TreeCodes) :-
 	),
 	db_get_mesh_tc_relaxed(Concept, TreeCodes).
 
+tuple4(A, B, C, D,          tuple4(A,B,C,D)).
+tuple5(A, B, C, D, E,       tuple5(A,B,C,D,E)).
+tuple6(A, B, C, D, E, F,    tuple6(A,B,C,D,E,F)).
+tuple7(A, B, C, D, E, F, G, tuple7(A,B,C,D,E,F,G)).
+
+
 compute_mesh_in_textfields([], MaxFreq, [], MaxFreq).
 % Consolidate tf0/6 terms with same MetaConcept, CUI, and STs into a single tf/9 term
-compute_mesh_in_textfields([tf0(MetaConcept,STs,Term1,Value1,Text1,Field1,CUI,NSent1,PosInfo1),
-			    tf0(MetaConcept,STs,Term2,Value2,Text2,Field2,CUI,NSent2,PosInfo2)|Rest],
+compute_mesh_in_textfields([tf0(MetaConcept,STs,Term1,Value1,Text1,
+				Field1,CUI,NSent1,PosInfo1,LexCat1,Neg1),
+			    tf0(MetaConcept,STs,Term2,Value2,Text2,
+				Field2,CUI,NSent2,PosInfo2,LexCat2,Neg2)|Rest],
 			   MaxFreqIn,
 			   [tf(MetaConcept,STs,Tuples,TitleFlag,CUI,
 			       FrequencyCount,AverageValue,TreeCodes)|ComputedRest],
@@ -347,12 +521,16 @@ compute_mesh_in_textfields([tf0(MetaConcept,STs,Term1,Value1,Text1,Field1,CUI,NS
 	!,
 	accumulate_rest_fields(Rest, MetaConcept, NewRest, RestTuples,
 			       RestValues, RestFields, RestPosInfoData),
-	PosInfoData1 = Term1-Text1-Field1-NSent1-PosInfo1,
-	PosInfoData2 = Term2-Text2-Field2-NSent2-PosInfo2,
+	tuple5(Term1, Text1, Field1, NSent1, PosInfo1, PosInfoData1),
+	tuple5(Term2, Text2, Field2, NSent2, PosInfo2, PosInfoData2),
+	% PosInfoData1 = Term1-Text1-Field1-NSent1-PosInfo1,
+	% PosInfoData2 = Term2-Text2-Field2-NSent2-PosInfo2,
 	sort([PosInfoData1,PosInfoData2|RestPosInfoData], SortedPosInfoData),
 	consolidate_pos_info_data(SortedPosInfoData, ConsolidatedPosInfoData),
 	sort_pos_info_fields(ConsolidatedPosInfoData, SortedConsolidatedPosInfoData),
-	Tuples0 = [Term1-Field1-NSent1-Text1,Term2-Field2-NSent2-Text2|RestTuples],
+	tuple6(Term1, Field1, NSent1, Text1, LexCat1, Neg1, Tuple61),
+	tuple6(Term2, Field2, NSent2, Text2, LexCat2, Neg2, Tuple62),
+	Tuples0 = [Tuple61, Tuple62|RestTuples],
 	sort(Tuples0, Tuples1),
 	add_pos_info_to_tuples(Tuples1, SortedConsolidatedPosInfoData, Tuples),
 	Values = [Value1,Value2|RestValues],
@@ -365,41 +543,47 @@ compute_mesh_in_textfields([tf0(MetaConcept,STs,Term1,Value1,Text1,Field1,CUI,NS
 	set_title_flag_n(Fields, ti, TitleFlag),
 	compute_mesh_and_treecodes(MetaConcept, TreeCodes),
 	compute_mesh_in_textfields(NewRest, MaxFreqNext, ComputedRest, MaxFreqOut).
-compute_mesh_in_textfields([tf0(MetaConcept,STs,Term,Value,Text,Field,CUI,NSent,PosInfo)|Rest],
+compute_mesh_in_textfields([tf0(MetaConcept,STs,Term,Value,Text,
+				Field,CUI,NSent,PosInfo,LexCat,Neg)|Rest],
 			   MaxFreqIn,
-			   [tf(Concept,STs,[Term-Field-NSent-Text-PosInfo],
+			   [tf(Concept,STs,[Tuple7],
 			       TitleFlag,CUI,1,Value,TreeCodes)|ComputedRest],
 			   MaxFreqOut) :-
+        tuple7(Term, Field, NSent, Text, LexCat, Neg, PosInfo, Tuple7),
 	set_title_flag_1(Field, TitleFlag),
 	compute_mesh_and_treecodes(MetaConcept, TreeCodes),
 	Concept = MetaConcept,
 	compute_mesh_in_textfields(Rest, MaxFreqIn, ComputedRest, MaxFreqOut).
 
 consolidate_pos_info_data([], []).
-consolidate_pos_info_data([Term1-Text1-Field1-NSent1-PosInfo1,
-			   Term1-Text1-Field1-NSent1-PosInfo2|RestPIData],
+consolidate_pos_info_data([Tuple51,Tuple52|RestPIData],
 			  ConsolidatedPIData) :-
+		tuple5(Term1, Text1, Field1, NSent1, PosInfo1, Tuple51),
+		tuple5(Term1, Text1, Field1, NSent1, PosInfo2, Tuple52),
 		!,
 		append(PosInfo1, PosInfo2, ConsolidatedPosInfo),
-		consolidate_pos_info_data([Term1-Text1-Field1-NSent1-ConsolidatedPosInfo|RestPIData],
+		tuple5(Term1, Text1, Field1, NSent1, ConsolidatedPosInfo, ConsTuple5),
+		consolidate_pos_info_data([ConsTuple5|RestPIData],
 					 ConsolidatedPIData).
-consolidate_pos_info_data([Term-Text-Field-NSent-PosInfo|RestPIData],
-			  [Term-Text-Field-NSent-PosInfo|RestConsolidatedPIData]) :-
+consolidate_pos_info_data([Tuple5|RestPIData],
+			  [Tuple5|RestConsolidatedPIData]) :-
 	consolidate_pos_info_data(RestPIData, RestConsolidatedPIData).
 
 
 sort_pos_info_fields([], []).
-sort_pos_info_fields([Term-Text-Field-NSent-PosInfo|Rest],
-		     [Term-Text-Field-NSent-SortedPosInfo|RestSorted]) :-
+sort_pos_info_fields([Tuple5|Rest], [Tuple5Sorted|RestSorted]) :-
+	tuple5(Term, Text, Field, NSent, PosInfo, Tuple5),
 	sort(PosInfo, SortedPosInfo),
+	tuple5(Term, Text, Field, NSent, SortedPosInfo, Tuple5Sorted),
 	sort_pos_info_fields(Rest, RestSorted).
 
 add_pos_info_to_tuples([], _PosInfo, []).
-add_pos_info_to_tuples([Term-Field-NSent-Text|RestTuples],
-		      AllPosInfo,
-		      [Term-Field-NSent-Text-PosInfo|RestTuplesWithPosInfo]) :-
-	selectchk(Term-Text-Field-NSent-PosInfo, AllPosInfo, RemainingPosInfo),
-	add_pos_info_to_tuples(RestTuples, RemainingPosInfo, RestTuplesWithPosInfo).
+add_pos_info_to_tuples([Tuple6|RestTuples], AllPosInfo, [Tuple7|RestTuplesWithPosInfo]) :-
+	tuple6(Term, Field, NSent, Text, LexCat, Neg, Tuple6),
+	tuple7(Term, Field, NSent, Text, LexCat, Neg, PosInfo, Tuple7),
+	tuple5(Term, Text, Field, NSent, PosInfo, Tuple5),
+	memberchk(Tuple5, AllPosInfo),
+	add_pos_info_to_tuples(RestTuples, AllPosInfo, RestTuplesWithPosInfo).
 
 set_title_flag_1(Field, TitleFlag) :-
 	( Field == ti ->
@@ -434,13 +618,12 @@ sum_and_length([H|T], SumIn, SumOut, LengthIn, LengthOut) :-
 	sum_and_length(T, SumNext, SumOut, LengthNext, LengthOut).
 
 accumulate_rest_fields([], _MetaConcept, [], [], [], [], []).
-accumulate_rest_fields([tf0(MetaConcept,_STs,Term,Value,Text,Field,_CUI,NSent,PosInfo)|Rest],
-		       MetaConcept,
-		       NewRest,
-		       [Term-Field-NSent-Text|RestTuples],
-		       [Value|RestValues],
-		       [Field|RestFields],
-		       [Term-Text-Field-NSent-PosInfo|RestPosInfo]) :-
+accumulate_rest_fields([tf0(MetaConcept,_STs,Term,Value,Text,Field,_CUI,NSent,PosInfo,_Neg)|Rest],
+		       MetaConcept, NewRest,
+		       [Tuple4|RestTuples], [Value|RestValues],
+		       [Field|RestFields],   [Tuple5|RestPosInfo]) :-
+	tuple4(Term, Field, NSent, Text, Tuple4),
+	tuple5(Term, Text, Field, NSent, PosInfo, Tuple5),
 	!,
 	accumulate_rest_fields(Rest, MetaConcept, NewRest, RestTuples,
 			       RestValues, RestFields, RestPosInfo).
@@ -610,32 +793,120 @@ set_aatf_rank(TitleFlag, Spec, NFreq, Rank) :-
 	).
 
 dump_aatf_info_fielded([], _UIAtom, _Stream).
-dump_aatf_info_fielded([aatf(NegRank,Concept,STs,CUI,Tuples,TreeCodes)|Rest],
+dump_aatf_info_fielded([aatf(NegRank,Concept,STs,CUI,Tuples7,TreeCodes)|Rest],
 			UIAtom, Stream) :-
-	reverse_sort_tuples(Tuples, SortedTuples),
+	reverse_sort_tuples(Tuples7, SortedTuples7),
 	ScaledRank is -1000.0 * NegRank,
-	construct_fields_atom(SortedTuples, FieldsAtom),
-	extract_pos_info(SortedTuples, TuplesNoPosInfo, PosInfo),
+	construct_fields_atom(SortedTuples7, FieldsAtom),
+	% extract_pos_info(SortedTuples7, PosInfo),
 	% format(Stream,'SortedTuples: ~p~nTitleflag: ~p~n',[SortedTuples,TitleFlag]),
-	dump_output(Stream, UIAtom, ScaledRank, Concept, CUI, STs, TuplesNoPosInfo, FieldsAtom),
-	print_MMI_pos_info(PosInfo, Stream),
-	print_treecode_info(TreeCodes, Stream),
-	nl(Stream),
+	SortedTuples7 = [FirstTuple7|RestTuples7],
+	dump_output(Stream, UIAtom, ScaledRank, Concept, CUI, STs,
+		    RestTuples7, FirstTuple7, FieldsAtom, TreeCodes),
+	% convert_all_MMI_pos_info(PosInfo, PosInfoTerm),
+	% print_all_MMI_pos_info(PosInfoTerm, Stream),
 	dump_aatf_info_fielded(Rest, UIAtom, Stream).
 
-dump_output(Stream, UIAtom, ScaledRank, Concept, CUI, STs, TuplesNoPosInfo, FieldsAtom) :-
-	( \+ control_option(hide_semantic_types) ->
-	  format(Stream, '~a|MM|~2f|~s|~a|~p|~p|~a',
-	                 [UIAtom,ScaledRank,Concept,CUI,STs,TuplesNoPosInfo,FieldsAtom])
-	; format(Stream, '~a|MM|~2f|~s|~a|~p|~a',
-		 	 [UIAtom,ScaledRank,Concept,CUI,TuplesNoPosInfo,FieldsAtom])
-	).
+dump_output(Stream, UIAtom, ScaledRank, Concept, CUI, STs,
+	    RestTuples7, FirstTuple7, FieldsAtom, TreeCodes) :-
+	% convert_tuples_to_hyphen_terms(Tuples7, HyphenTerms),
+	% format(Stream, '~a|MMI|~2f|~s|~a|~p|~p|~a|',
+	%        [UIAtom,ScaledRank,Concept,CUI,STs,HyphenTerms,FieldsAtom]).
+	format(Stream, '~a|MMI|~2f|~s|~a|~p|[',
+	       [UIAtom,ScaledRank,Concept,CUI,STs]),
+	dump_tuples7(RestTuples7, FirstTuple7, Stream),
+	format(Stream, ']|~a|', [FieldsAtom]),
+	print_all_mmi_pi(RestTuples7, FirstTuple7, Stream),
+	write(Stream, '|'),
+	print_treecode_info(TreeCodes, Stream),
+	nl(Stream).
 
-extract_pos_info([], [], []).
-extract_pos_info([Term-Field-NSent-Text-PosInfo|RestTuples],
-		 [Term-Field-NSent-Text|RestTuplesNoPosInfo],
-		 [PosInfo|RestPosInfo]) :-
-	extract_pos_info(RestTuples, RestTuplesNoPosInfo, RestPosInfo).
+dump_tuples7([], LastTuple7, Stream) :-
+	dump_one_tuple7(LastTuple7, Stream).
+dump_tuples7([NextTuple7|RestTuples7], FirstTuple7, Stream) :-
+	dump_one_tuple7(FirstTuple7, Stream),
+	write(Stream, ','),
+	dump_tuples7(RestTuples7, NextTuple7, Stream).
+
+dump_one_tuple7(Tuple7, Stream) :-
+	tuple7(Term, Field, NSent, Text, LexCat, Neg, _PosInfo, Tuple7),
+	format(Stream, '~p-~p-~p-~p-~p-~p', [Term,Field,NSent,Text,LexCat,Neg]).
+	
+
+% convert_tuples_to_hyphen_terms(TuplesNoPosInfo, HyphenTerms) :-
+% 	(  foreach(Tuple7, TuplesNoPosInfo),
+% 	   foreach(Hyphen, HyphenTerms)
+% 	do
+% 	   tuple7(Term, Field, NSent, Text, LexCat, Neg, _PosInfo, Tuple7),
+% 	   Hyphen = Term-Field-NSent-Text-LexCat-Neg
+% 	).
+ 
+print_all_mmi_pi([], LastTuple7, Stream) :-
+	print_one_mmi_pi(LastTuple7, Stream).
+print_all_mmi_pi([NextTuple7|RestTuples7], FirstTuple7, Stream) :-
+	print_one_mmi_pi(FirstTuple7, Stream),
+	write(Stream, (;)),
+	print_all_mmi_pi(RestTuples7, NextTuple7, Stream).
+
+
+print_one_mmi_pi(FirstTuple7, Stream) :-
+	tuple7(_Term, _Field, _NSent, _Text, _LexCat, _Neg, PosInfo, FirstTuple7),
+	PosInfo = [FirstPosInfoPair|RestPosInfoPairs],
+	print_one_mmi_pi_aux(RestPosInfoPairs, FirstPosInfoPair, Stream).
+
+
+print_one_mmi_pi_aux([], StartPos/Length, Stream) :-
+	format(Stream, '~d:~d', [StartPos,Length]).
+print_one_mmi_pi_aux([Next|Rest], StartPos/Length, Stream) :-
+	format(Stream, '~d:~d^', [StartPos,Length]),
+	print_one_mmi_pi_aux(Rest, Next, Stream).
+	
+% print_all_MMI_pos_info((A;B), Stream) :-
+% 	print_all_MMI_pos_info(A, Stream),
+% 	write(Stream, (;)),
+% 	print_all_MMI_pos_info(B, Stream).
+% print_all_MMI_pos_info(A^B, Stream) :-
+% 	write(Stream, A),
+% 	write(Stream, ^),
+% 	print_all_MMI_pos_info(B, Stream).
+% print_all_MMI_pos_info(A:B, Stream) :-
+%  	write(Stream, A:B).
+% 
+% convert_all_MMI_pos_info(PosInfo, PosInfoTerm) :-
+% 	list_to_term(PosInfo, [(;), ^], PosInfoTerm).
+
+% Given a list of functors that are infix operators (and preferably xfy),
+% say, [(;), ^], transform a list [a,b,c,d,e] into the term a;b;c;d;e.
+% Moreover, if any of the a, b, c, d, are themselves lists,
+% convert them using the next operator in the list of functors.
+% The intended application is to transforma a list of positional information terms,
+% e.g., [ [1/2, 3/4, 5/6], [7/8, 9/10, 11/12], [13/14, 15/16, 17/18]]
+% into a term which, when printed using print_all_MMI_pos_info/2, will look like
+% 1:2 ^ 3:4 ^ 5:6 ; 7:8 ^ 9:10 ^ 11:12 ; 13:14 ^ 15:16 ^ 17:18
+% (with extra whitespace thown in in the example for clarity).
+
+% list_to_term([H|T], FunctorList, Term) :-
+% 	list_to_term_aux(T, H, FunctorList, Term).
+% list_to_term(A/B, _FunctorList, A:B).
+% 
+% list_to_term_aux([], H, [_Functor|RestFunctors], Term) :-
+% 	( RestFunctors == [] ->
+% 	  H = A/B,
+% 	  Term = A:B
+% 	; list_to_term(H, RestFunctors, Term)
+% 	).
+% list_to_term_aux([Next|Rest], H, [Functor|RestFunctors], Term) :-
+% 	functor(Term, Functor, 2),
+% 	list_to_term(H, RestFunctors, TermH),
+% 	arg(1, Term, TermH),
+% 	arg(2, Term, RestTerm),
+% 	list_to_term_aux(Rest, Next, [Functor|RestFunctors], RestTerm).
+
+% extract_pos_info([], []).
+% extract_pos_info([Tuple7|RestTuples7], [PosInfo|RestPosInfo]) :-
+% 	tuple7(_Term, _Field, _NSent, _Text, _LexCat, _Neg, PosInfo, Tuple7),
+% 	extract_pos_info(RestTuples7, RestPosInfo).
+% 
 
 print_treecode_info([], _Stream).
 print_treecode_info([FirstTreeCode|RestTreeCodes], Stream) :-
@@ -646,24 +917,6 @@ print_treecode_info([FirstTreeCode|RestTreeCodes], Stream) :-
 	  format(Stream, ';~s', [TreeCode])
 	).
 
-
-print_MMI_pos_info([], Stream) :- format(Stream, '|', []).
-print_MMI_pos_info([FirstPosInfo|RestPosInfo], Stream) :-
-	FirstPosInfo = [StartPos/Length|RestPairs],
-	format(Stream, '|~d:~d', [StartPos, Length]),
-	print_rest_MMI_info(RestPairs, Stream),
-        print_MMI_pos_info(RestPosInfo, Stream).
-
-print_rest_MMI_info([], _Stream).
-print_rest_MMI_info([StartPos/Length|T], Stream) :-
-        print_rest_MMI_info_aux(T, StartPos, Length, Stream).
-
-
-print_rest_MMI_info_aux([], StartPos, Length, Stream) :-
-        format(Stream, ',~d:~d', [StartPos, Length]).
-print_rest_MMI_info_aux([NextStartPos/NextLength|RestPosInfo], ThisStartPos, ThisLength, Stream) :-
-        format(Stream, ',~d:~d', [ThisStartPos,ThisLength]),
-        print_rest_MMI_info_aux(RestPosInfo, NextStartPos, NextLength, Stream).
 
 % We want the 4-tuple terms sorted in reverse order of appearance in the original citation,
 % i.e., all X-ab-N-Y terms before all X-ti-N-Y terms, and within all the ab and ti terms,
@@ -682,8 +935,9 @@ reverse_sort_tuples(Tuples, SortedTuples) :-
 	!. % Cut is necessary, because second call to add_keys/2 will be called with var first arg.
 	
 add_keys([], []).
-add_keys([Concept-TiOrAb-UttNum-String-PosInfo|Rest],
-	 [TiOrAb-NegUttNum-(Concept-TiOrAb-UttNum-String-PosInfo)|RestWithKeys]) :-
+add_keys([Tuple7|Rest],
+	 [TiOrAb-NegUttNum-Tuple7|RestWithKeys]) :-
+	tuple7(_Concept, TiOrAb, UttNum, _String, _LexCat, _Neg, _PosInfo, Tuple7),
 	NegUttNum is -UttNum,
 	add_keys(Rest, RestWithKeys).
 
@@ -696,7 +950,8 @@ construct_fields_atom(SortedTuples, FieldsAtom) :-
 	).
 
 extract_fields([], []).
-extract_fields([_Concept-Field-_UttNum-_String-_PosInfo|Rest], [Field|ExtractedRest]) :-
+extract_fields([Tuple7|Rest], [Field|ExtractedRest]) :-
+	tuple7(_Concept, Field, _UttNum, _String, _LexCat, _Neg, _PosInfo, Tuple7),
 	extract_fields(Rest, ExtractedRest).
 
 form_fields_atom(Fields0, FieldsAtom) :-
@@ -706,9 +961,9 @@ form_fields_atom(Fields0, FieldsAtom) :-
 	form_fields_atom_aux(Fields, FieldsAtom).
 
 form_fields_atom_aux(Fields, FieldsAtom) :-
-    atom_codes_list(Fields, FieldsStrings0),
-    concat_strings_with_separator(FieldsStrings0, ";", FieldsString),
-    atom_codes(FieldsAtom, FieldsString).
+	atom_codes_list(Fields, FieldsStrings0),
+	concat_strings_with_separator(FieldsStrings0, ";", FieldsString),
+	atom_codes(FieldsAtom, FieldsString).
 
 augment_fields([], []).
 augment_fields([Field|Rest], [N-UCField|AugmentedRest]) :-

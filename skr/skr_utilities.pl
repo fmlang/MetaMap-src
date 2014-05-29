@@ -48,11 +48,12 @@
  	ensure_number/2,
  	expand_split_word_list/2,
 	fatal_error/2,
-	generate_aa_term/2,
+	generate_AAs_MMO_term/2,
 	generate_bracketed_output/2,
 	generate_candidates_output/7,
-	generate_header_output/6,
+	% generate_header_output/6,
 	generate_mappings_output/5,
+	generate_MMO_terms/8,
 	generate_phrase_output/7,
 	generate_utterance_output/6,
 	generate_variants_output/2,
@@ -77,7 +78,6 @@
 	token_template/6,
 	usage/0,
 	verify_xml_format/2,
-	write_MMO_terms/3,
 	write_raw_token_lists/2,
 	write_sentences/2,
 	write_token_list/3
@@ -428,10 +428,10 @@ verify_MMO_settings(0).
 verify_mmi_settings(Result) :-
 	control_option(fielded_mmi_output),
 	!,
-	warning_check([show_cuis], fielded_mmi_output),
+	warning_check([show_cuis,negex], fielded_mmi_output),
 	fatal_error_check([tagger_output, hide_plain_syntax, hide_candidates,
 			   number_the_candidates, hide_semantic_types,
-			   show_preferrred_names_only, negex, hide_mappings, sources],
+			   show_preferrred_names_only, hide_mappings, sources],
 			  fielded_mmi_output, 0, Result).
 verify_mmi_settings(0).
 
@@ -636,7 +636,7 @@ verify_tagger_server_settings(Result) :-
 % Error if WSD is not specified, but a specific WSD server is specified
 verify_WSD_server_settings(Result) :-
 	( \+ control_option(word_sense_disambiguation),
-	  control_value('WSD', ChosenWSDServer) ->
+	  control_value('WSD_SERVER', ChosenWSDServer) ->
 	  send_message('~N### MetaMap ERROR: If WSD is not specified, ', []),
 	  send_message('a specific WSD server (~s) cannot be chosen.~n', [ChosenWSDServer]),
 	  Result is 1
@@ -843,7 +843,7 @@ generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length,
 	  PhraseMMO = phrase(PhraseTextAtom,Phrase,StartPos/Length,ReplacementPos)
 	; ( \+ control_option(hide_plain_syntax) ->
 	    atom_codes(PhraseTextAtom,PhraseText),
-	    format('~nPhrase: ~p~n',[PhraseText])
+	    format('~nPhrase: ~s~n',[PhraseText])
 	  ; true
 	  ),
 	  ( control_option(syntax) ->
@@ -994,7 +994,7 @@ generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
 		       HeaderMMO, HeaderMMORest) :-
 	  HeaderMMO = [ArgsMMO,AAsMMO,NegExMMO|HeaderMMORest],
 	  format_cmd_line_for_machine_output(IOptions, IArgs, ArgsMMO),
-	  generate_aa_term(DisambMMOutput, AAsMMO),
+	  generate_AAs_MMO_term(DisambMMOutput, AAsMMO),
 	  % NegExList is currently hardcoded.
 	  NegExMMO = neg_list(NegExList).
 
@@ -1008,24 +1008,24 @@ generate_utterance_output(Label, Text0, UttStartPos, UttLength, ReplPos, Utteran
 	; true
 	).
 
-generate_aa_term(DisambMMOutput, aas(SortedAAList)) :-
+generate_AAs_MMO_term(DisambMMOutput, aas(SortedAAList)) :-
 	% Exctact the AA term from the DisambMMOutput
 	get_aa_term(DisambMMOutput, AAs),
 	avl_to_list(AAs, AAListTokens),
-	reformat_aa_list(AAListTokens, DisambMMOutput, AAList),
+	reformat_AA_list(AAListTokens, DisambMMOutput, AAList),
 	sort(AAList, SortedAAList).
 
 	
-reformat_aa_list([], _DisambMMOutput, []).
-reformat_aa_list([FirstAA|RestAAs], DisambMMOutput,
+reformat_AA_list([], _DisambMMOutput, []).
+reformat_AA_list([FirstAA|RestAAs], DisambMMOutput,
 		 [AAString*ExpansionString*CountData*CUIList|RestReformattedAAs]) :-
-	reformat_one_aa(FirstAA, DisambMMOutput,
+	reformat_one_AA(FirstAA, DisambMMOutput,
 			AAString, ExpansionString, CountData, TempCUIList),
 	% 0 seeds the predicate with a NegScore
 	choose_best_mappings_only(TempCUIList, 0, CUIList),
-	reformat_aa_list(RestAAs, DisambMMOutput, RestReformattedAAs).
+	reformat_AA_list(RestAAs, DisambMMOutput, RestReformattedAAs).
 
-reformat_one_aa(AATokenList-[ExpansionTokenList],
+reformat_one_AA(AATokenList-[ExpansionTokenList],
 		DisambMMOutput, AAString, ExpansionString, CountData, CUIList) :-
 	% Get the actual strings from the AATokenList
 	extract_token_strings(AATokenList, AAStringList),
@@ -1042,7 +1042,7 @@ reformat_one_aa(AATokenList-[ExpansionTokenList],
 	append(ExpansionStringList, ExpansionString),
 	length(ExpansionString, ExpansionStringLength), 
 	append(ANLCExpansionStringList, ANLCExpansionString),
-	CountData = [AATokenListLength,AAStringLength,ExpansionTokenListLength,ExpansionStringLength],
+	CountData = (AATokenListLength,AAStringLength,ExpansionTokenListLength,ExpansionStringLength),
 	atom_codes(ANLCExpansionAtom, ANLCExpansionString),
 	find_matching_CUIs(DisambMMOutput, ANLCExpansionAtom, TempCUIList, []),
 	sort(TempCUIList, CUIList).
@@ -1100,18 +1100,32 @@ get_aa_term(MMOutput, AAs) :-
 	FirstMMOutput = mm_output(_ExpandedUtterance,_Citation,_ModifiedText,
 				  _Tagging,AAs,_Syntax,_MMOPhrases,_ExtractedPhrases).
 
-write_MMO_terms(PrintMMO, OutputStream, MMOTerms) :-
-	( PrintMMO =:= 1,
-	  control_option(machine_output) ->
-	  write_MMO_terms_aux(MMOTerms, OutputStream)
+% generate_MMO_terms(OutputStream, MMOTerms) :-
+generate_MMO_terms(IArgs, IOptions, NegExList, DisambMMOutput,
+		   HeaderMMO, HeaderMMORest, OutputStream, AllMMO) :-
+	  conditionally_generate_header_output(IArgs, IOptions, NegExList,
+					       DisambMMOutput, HeaderMMO, HeaderMMORest),
+	  AllMMO = HeaderMMO,
+	  conditionally_write_MMO_terms(AllMMO, OutputStream).
+
+conditionally_generate_header_output(IArgs, IOptions, NegExList,
+				     DisambMMOutput, HeaderMMO, HeaderMMORest) :-
+	( ( control_option(machine_output)
+	   ; xml_output_format(_)  ) ->
+	  generate_header_output(IArgs, IOptions, NegExList,
+				 DisambMMOutput, HeaderMMO, HeaderMMORest)
 	; true
 	).
 
-write_MMO_terms_aux([ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO], OutputStream) :-
+
+conditionally_write_MMO_terms([ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO], OutputStream) :-
+	( control_option(machine_output) ->
 	  write_args_MMO_term(ArgsMMO, OutputStream),
 	  write_AAs_MMO_term(AAsMMO, OutputStream),
 	  write_negex_MMO_term(NegExMMO, OutputStream),
-	  write_all_utterance_MMO_terms(UtteranceMMO, OutputStream).
+	  write_all_utterance_MMO_terms(UtteranceMMO, OutputStream)
+	; true
+	).
        
 write_args_MMO_term(ArgsMMO, OutputStream) :-
 	write_term(OutputStream, ArgsMMO,
@@ -1136,15 +1150,15 @@ write_all_utterance_MMO_terms([FirstMMOTerm|RestMMOTerms], OutputStream) :-
 
 write_one_utterance_MMO_term(UtteranceTerm, OutputStream, RestMMOTerms, RemainingMMOTerms) :-
         % this is the one place to use portrayed(true)
-	UtteranceTerm = utterance(Label, UtteranceString, PosInfo, ReplPos),
-	% We can no longer simply do
-	% write_term(UtteranceTerm, [quoted(true),portrayed(true)])
-	% because ReplPos is a list of small integers,
-	% which would be interpreted as a print string by portray/1. Blarg.
-	format(OutputStream, 'utterance(~q,', [Label]),
-	write_term(OutputStream, UtteranceString, [quoted(true),portrayed(true)]),
-	format(OutputStream, ',~w,~w).~n', [PosInfo,ReplPos]),
-	write_all_phrase_MMO_terms(RestMMOTerms, OutputStream, RemainingMMOTerms).
+        UtteranceTerm = utterance(Label, UtteranceString, PosInfo, ReplPos),
+        % We can no longer simply do
+        % write_term(UtteranceTerm, [quoted(true),portrayed(true)])
+        % because ReplPos is a list of small integers,
+        % which would be interpreted as a print string by portray/1. Blarg.
+        format(OutputStream, 'utterance(~q,', [Label]),
+        write_term(OutputStream, UtteranceString, [quoted(true),portrayed(true)]),
+        format(OutputStream, ',~w,~w).~n', [PosInfo,ReplPos]),
+        write_all_phrase_MMO_terms(RestMMOTerms, OutputStream, RemainingMMOTerms).
 
 write_all_phrase_MMO_terms([], _OutputStream, []).
 write_all_phrase_MMO_terms([H|T], OutputStream, RemainingMMOTerms) :-
@@ -1388,18 +1402,23 @@ ensure_number(Atom, Number) :-
 	  number_codes(Number, AtomCodes)
 	).
 
+% Generate the MMO, which is needed for machine_output, fielded_mmi_output, and XML output.
 check_generate_utterance_output_control_options_1 :-
 	( control_option(machine_output)     -> true
 	; control_option(fielded_mmi_output) -> true
 	; xml_output_format(_XMLFormat)
 	).
 
+% This predicate succeeds and causes
+%           format('~NProcessing ~a: ~s~n',[Label,Text0])
+% to be called UNLESS hide_plain_syntax, hide_candidates, and hide_mappings are on
+% AND both syntax and variants are off.
 check_generate_utterance_output_control_options_2 :-
 	( \+ control_option(hide_plain_syntax) -> true
-	; control_option(syntax)               -> true
-	; control_option(variants)             -> true
 	; \+ control_option(hide_candidates)   -> true
-	; \+ control_option(hide_mappings)
+	; \+ control_option(hide_mappings)     -> true
+	; control_option(syntax)               -> true
+	; control_option(variants)
 	).
 
 conditionally_print_header_info(InputFile, TagMode, OutputFile, TagOption) :-
