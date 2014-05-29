@@ -105,6 +105,8 @@ c_nls_db.o:	c_nls_db.c ${BTREE_QLIB} ${SKR_BERKELEY_DB}/embed.h
 splfr_STATIC:	${BTREE_QLIB_A}
 		${SPLFR} ${SPLFR_STATIC_FLAGS} db_access.pl c_nls_db.c ${DBLIBS} ${LINK_FLAGS}
 
+db_access.${SOEXT} : splfr_DYNAMIC
+
 splfr_DYNAMIC:	${BTREE_QLIB_O}
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}
 

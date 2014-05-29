@@ -35,13 +35,13 @@ include ../../Makefile.include
 RM = /bin/rm -f
 MOVE = mv
 
-LOCAL_INCLUDES = -I${SKR_LEXICON}/include
+LOCAL_INCLUDES = -I../include
 SP_INCLUDES = -I${SPINCDIR}
 ALL_INCLUDES = ${LOCAL_INCLUDES} ${SP_INCLUDES}
 CFLAGS = ${DEFAULT_CFLAGS} ${ALL_INCLUDES}
 CFLAGS = ${DEFAULT_CFLAGS} ${LOCAL_INCLUDES}
 LIBDIR=${SKR_LEX_LIB}
-LOCAL_LIBS= ${SKR_LEXICON}/miscutil/miscutil.a
+LOCAL_LIBS= ../miscutil/miscutil.a
 # LD_LIBRARY_PATH= ${SPECIALIST}/lib
 
 O_SYSTEM = $(shell uname)

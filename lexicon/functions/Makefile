@@ -50,7 +50,7 @@ LIB=lexicon.a
 #-----------------------------
 # Include paths
 #-----------------------------
-INCLUDES = -I${SKR_LEXICON}/include -I${SKR_DEBUG}/include
+INCLUDES = -I../include -I../../debug/include
 
 # OBJ = c_lexicon.o c_linfl.o field.o linfl.o tokenize.o tokenizer.o 
 OBJ = linfl.o tokenize.o tokenizer.o 
