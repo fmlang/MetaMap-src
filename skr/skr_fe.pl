@@ -658,6 +658,8 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 			   aphrases(APhrases)),
 	instantiate_candidates_NegEx_values(Evaluations,  NegExList),
 	instantiate_candidates_NegEx_values(Evaluations3, NegExList),
+	% This needs to be done explicitly if candidates are not displayed
+	conditionally_instantiate_mappings_NegEx_values(Mappings, NegExList),
 	PhraseTextAtom = PhraseTextAtom0,
 	% format('PhraseTextAtom:~n~p~n',[PhraseTextAtom]),
 	generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length, ReplacementPos,
@@ -676,6 +678,23 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 	NextM is M + 1,
 	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases, NegExList,
 			    Sentences, BracketedOutput, N, NextM, AAs, Label, MMONext, MMOOut).
+
+
+% If show_candidates is on, the candidate terms will be present in the big MMOPhrase term, and
+% instantiate_candidates_NegEx_values/2 will instantiate the Negated field in the candidate terms,
+% which will instantiate the Negated field in the Mappings because the variables are shared
+% in the Candidates and Mappings data structures, so there's nothing to do here.
+
+% If, however, show_candidates is not on, both Evaluations and Evaluations3 will be [],
+% so the Negated field in the Mappings will need to be explicitly instantiated here.
+conditionally_instantiate_mappings_NegEx_values(Mappings, NegExList) :-
+	( \+ control_option(show_candidates) ->
+	   (  foreach(map(_NegScore,CandidatesList), Mappings),
+	       param(NegExList)
+	   do instantiate_candidates_NegEx_values(CandidatesList, NegExList)
+	   )
+	; true
+	).
 
 instantiate_candidates_NegEx_values(Evaluations, NegExList) :-
 	% format(user_output, '~q~n', [NegExList]),
