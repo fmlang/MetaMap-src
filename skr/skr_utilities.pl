@@ -53,7 +53,7 @@
 	generate_candidates_output/7,
 	% generate_header_output/6,
 	generate_mappings_output/5,
-	generate_MMO_terms/8,
+	generate_MMO_terms/9,
 	generate_phrase_output/7,
 	generate_utterance_output/6,
 	generate_variants_output/2,
@@ -920,6 +920,7 @@ generate_candidates_output(Evaluations3, TotalCandidateCount,
 				     ExcludedCandidateCount,PrunedCandidateCount,
 				     RemainingCandidateCount,Evaluations3)
 	; control_option(show_candidates),
+	  % Even if show_candidates is on, if there are no candidates, there's no output.
 	  Evaluations3 \== [] ->
 	  conditionally_skr_begin_write(BracketedOutput, 'Candidates'),
 	  conditionally_dump_evals(Evaluations3, TotalCandidateCount,
@@ -965,7 +966,7 @@ conditionally_dump_evals(Evaluations3, TotalCandidateCount,
 %				    RemainingCandidateCount, 'Candidates')
 %	).
 
-generate_mappings_output(Mappings, Evaluations, APhrases, BracketedOutput, MappingsMMO) :-
+generate_mappings_output(Mappings, _Evaluations, APhrases, BracketedOutput, MappingsMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
 	( ( control_option(machine_output)
 	  ; xml_output_format(_XMLFormat)
@@ -974,8 +975,7 @@ generate_mappings_output(Mappings, Evaluations, APhrases, BracketedOutput, Mappi
 	  % Generate the MMO for the Mappings,
 	  % which is needed for both MMO and XML output!
 	  MappingsMMO = mappings(Mappings)
-	; ( \+ control_option(hide_mappings),
-	    Evaluations\==[] ->
+	; ( \+ control_option(hide_mappings) ->
             ( BracketedOutput == 1 ->
 	      skr_begin_write('Mappings')
 	    ; true
@@ -1102,11 +1102,11 @@ get_aa_term(MMOutput, AAs) :-
 
 % generate_MMO_terms(OutputStream, MMOTerms) :-
 generate_MMO_terms(IArgs, IOptions, NegExList, DisambMMOutput,
-		   HeaderMMO, HeaderMMORest, OutputStream, AllMMO) :-
+		   HeaderMMO, HeaderMMORest, OutputStream, PrintMMO, AllMMO) :-
 	  conditionally_generate_header_output(IArgs, IOptions, NegExList,
 					       DisambMMOutput, HeaderMMO, HeaderMMORest),
 	  AllMMO = HeaderMMO,
-	  conditionally_write_MMO_terms(AllMMO, OutputStream).
+	  conditionally_write_MMO_terms(PrintMMO, AllMMO, OutputStream).
 
 conditionally_generate_header_output(IArgs, IOptions, NegExList,
 				     DisambMMOutput, HeaderMMO, HeaderMMORest) :-
@@ -1117,9 +1117,9 @@ conditionally_generate_header_output(IArgs, IOptions, NegExList,
 	; true
 	).
 
-
-conditionally_write_MMO_terms([ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO], OutputStream) :-
-	( control_option(machine_output) ->
+conditionally_write_MMO_terms(PrintMMO, [ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO], OutputStream) :-
+	( PrintMMO is 1,
+	  control_option(machine_output) ->
 	  write_args_MMO_term(ArgsMMO, OutputStream),
 	  write_AAs_MMO_term(AAsMMO, OutputStream),
 	  write_negex_MMO_term(NegExMMO, OutputStream),
