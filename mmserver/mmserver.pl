@@ -21,7 +21,7 @@
    ]).
 
 :- use_module(skr(skr_fe), [
-	postprocess_sentences/10,
+	postprocess_sentences/11,
 	initialize_skr/4,
 	process_text/9
    ]).
@@ -260,15 +260,14 @@ remove_final_CRLF(TrimmedInput0, TrimmedInput) :-
 	  TrimmedInput = AllButLast
 	; TrimmedInput = TrimmedInput0
 	).
-	
 
 postprocess_text_mmserver(Lines0, BracketedOutput, InterpretedArgs,
 			  IOptions,  ExpRawTokenList, AAs, MMResults, AllMMO) :-
 	MMResults = mm_results(Lines0, _TagOption, _ModifiedLines, _InputType,
 			       Sentences, _CoordSentences, OrigUtterances, DisambMMOutput),
-
 	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
 	generate_negex_output(NegationTerms),
+	PrintMMO = 0,
 	postprocess_sentences(user_output, OrigUtterances, NegationTerms, InterpretedArgs,
 			      IOptions, AAs, Sentences, BracketedOutput, DisambMMOutput,
-			      AllMMO).
+			      PrintMMO, AllMMO).
