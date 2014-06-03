@@ -141,14 +141,14 @@ set_options(OptionString) :-
 	IOptions=IOptionsFinal0 ),
     %% Temporary code for use until a final lex access method is
     %% determined.
-    ( \+ member(iopt(lexicon,c),IOptionsFinal0) -> 
-	append([iopt(lexicon,c)], IOptionsFinal0, IOptionsFinal) ;
+    ( \+ member(iopt(lexicon,db),IOptionsFinal0) -> 
+	append([iopt(lexicon,db)], IOptionsFinal0, IOptionsFinal) ;
 	IOptions=IOptionsFinal ),
     %% end Temporary code 
     add_to_control_options(IOptionsFinal),
     %% Temporary code for use until a final lex access method is
     %% determined.
-    assert(control_value(lexicon,c)),
+    assert(control_value(lexicon,db)),
     % end Temporary code 
     set_control_values(IOptionsFinal,IArgs),
     %%
@@ -184,7 +184,7 @@ unset_options(OptionString) :-
     subtract_from_control_options(IOptions),
     %% Temporary code for use until a final lex access method is
     %% determined.
-    assert(control_value(lexicon,c)).
+    assert(control_value(lexicon,db)).
     %% end Temporary code
 
 control_option_as_iopt(iopt(X,Value)) :-
@@ -201,15 +201,15 @@ reset_options :-
 	%% determined.  This will need re-factoring to remove
 	%% references to lexicon.
 	%% set_control_options(),
- 	IOptions=[iopt(lexicon,c),iopt(machine_output,none)],
+ 	IOptions=[iopt(lexicon,db),iopt(machine_output,none)],
  	add_to_control_options(IOptions),
-	assert(control_value(lexicon,c)).
+	assert(control_value(lexicon,db)).
         %% end Temporary code 
 
 process_string(Input,Output) :-
 	%% Temporary code for use until a final lex access method is
 	%% determined.
-	assert(control_value(lexicon,c)),
+	assert(control_value(lexicon,db)),
 	%% end Temporary code 
 	trim_whitespace_right(Input, TrimmedInput0),
 	remove_final_CRLF(TrimmedInput0, TrimmedInput1),
@@ -231,8 +231,8 @@ process_string(Input,Output) :-
 	    IOptions=IOptionsFinal0 ),
 	%% Temporary code for use until a final lex access method is
 	%% determined.
-	( \+ member(iopt(lexicon,c),IOptionsFinal0) -> 
-	    append([iopt(lexicon,c)], IOptionsFinal0, IOptionsFinal) ;
+	( \+ member(iopt(lexicon,db),IOptionsFinal0) -> 
+	    append([iopt(lexicon,db)], IOptionsFinal0, IOptionsFinal) ;
 	    IOptions=IOptionsFinal ),
 	%% end Temporary code 
 	output_should_be_bracketed(BracketedOutput),
