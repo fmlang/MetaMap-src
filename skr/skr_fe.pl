@@ -46,7 +46,7 @@
 	% called by MetaMap API -- do not change signature!
 	initialize_skr/4,
 	% called by MetaMap API -- do not change signature!
-	postprocess_sentences/10,
+	postprocess_sentences/11,
 	% called by MetaMap API -- do not change signature!
 	process_text/9
    ]).
@@ -116,7 +116,7 @@
 	token_template/5,
 	token_template/6,
 	usage/0,
-        generate_MMO_terms/8,
+        generate_MMO_terms/9,
         write_raw_token_lists/2,
         write_sentences/2
    ]).
@@ -588,10 +588,11 @@ postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
 	generate_negex_output(NegationTerms),
 	% current_output(OutputStream),
-	% format(user_output, '~n### Current output is ~q', [OutputStream]),	
+	% format(user_output, '~n### Current output is ~q', [OutputStream]),
+	PrintMMO = 1,
 	postprocess_sentences(OutputStream, OrigUtterances, NegationTerms,
 			      InterpretedArgs, IOptions, AAs, Sentences,
-			      BracketedOutput, DisambMMOutput, AllMMO),
+			      BracketedOutput, DisambMMOutput, PrintMMO, AllMMO),
 	% All the XML output for the current citation is handled here
 	generate_and_print_xml(AllMMO, OutputStream),
 	do_MMI_processing(OrigUtterances, BracketedOutput, AAs, DisambMMOutput),
@@ -600,7 +601,7 @@ postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 % DO NOT MODIFY post_process_sentences/11 without checking with the maintainer of the MetaMap API.
 % PrintMMO is 1 for printing MMO (as MetaMap does), and 0 for not print MMO (as the Java API does).
 postprocess_sentences(OutputStream, OrigUtterances, NegExList, IArgs, IOptions, AAs,
-		      Sentences, BracketedOutput, DisambMMOutput, AllMMO) :-
+		      Sentences, BracketedOutput, DisambMMOutput, PrintMMO, AllMMO) :-
 	% HeaderMMO = [ArgsMMO,AAsMMO,NegExMMO|HeaderMMORest],
 	% HeaderMMORest is the (as yet) uninstantiated tail of HeaderMMO
 	postprocess_sentences_1(OrigUtterances, Sentences, NegExList,
@@ -610,7 +611,7 @@ postprocess_sentences(OutputStream, OrigUtterances, NegExList, IArgs, IOptions, 
 % 	generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
 % 			       HeaderMMO, HeaderMMORest),
 	generate_MMO_terms(IArgs, IOptions, NegExList, DisambMMOutput,
-			   HeaderMMO, HeaderMMORest, OutputStream, AllMMO).
+			   HeaderMMO, HeaderMMORest, OutputStream, PrintMMO, AllMMO).
 
 postprocess_sentences_1([], _Sentences, _NegExList,
 			_BracketedOutput, _N, _AAs, [], MMO, MMO).

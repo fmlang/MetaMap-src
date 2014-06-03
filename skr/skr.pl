@@ -602,20 +602,29 @@ skr_phrase_1(Label, UtteranceTextString,
 	%  format(user_output, 'Total=~d; Excluded=~d; Pruned=~d; Remaining=~d~n',
 	%        [TotalCandidateCount,ExcludedCandidateCount,
 	% 	PrunedCandidateCount,RemainingCandidateCount]),
+	maybe_hide_evaluations(FinalEvaluations, FinalEvaluationsAfterHiding),
+	maybe_hide_evaluations(RefinedEvaluations, RefinedEvaluationsAfterHiding),
 	MMOPhraseTerm = phrase(phrase(OrigPhraseTextAtom,PhraseSyntax,
 				      PhraseStartPos/PhraseLength,ReplacementPositions),
 			       candidates(TotalCandidateCount,
 					  ExcludedCandidateCount,
 					  PrunedCandidateCount,
 					  RemainingCandidateCount,
-					  FinalEvaluations),
+					  FinalEvaluationsAfterHiding),
 			       mappings(Mappings),
 			       pwi(PhraseWordInfoPair),
 			       gvcs(GVCs),
 			       % Change the next line to ev0(BestCandidates)
 			       % to include best candidates only in output
-			       ev0(RefinedEvaluations),
+			       ev0(RefinedEvaluationsAfterHiding),
 			       aphrases(APhrases)).
+
+maybe_hide_evaluations(Evaluations, EvaluationsAfterHiding) :-
+	( control_option(show_candidates) ->
+	  EvaluationsAfterHiding = Evaluations
+	; EvaluationsAfterHiding = []
+	).
+
 
 mark_excluded_evaluations(RefinedEvaluations) :-
 	(  foreach(Candidate, RefinedEvaluations)
@@ -783,7 +792,7 @@ generate_initial_evaluations(Label, UtteranceText,
 	  Evaluations0 = [],
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
-	; check_generate_initial_evaluations_1_control_options_1,
+	; check_generate_initial_evaluations_control_options_1,
 	  lower(PhraseTextString, LCPhraseTextString),
 	  extract_syntactic_tags(Phrase, Tags),
 	  atom_codes(LCPhraseAtom, LCPhraseTextString),
@@ -791,7 +800,7 @@ generate_initial_evaluations(Label, UtteranceText,
 	  Evaluations0 = [],
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
-	; check_generate_initial_evaluations_1_control_options_2 ->
+	; check_generate_initial_evaluations_control_options_2 ->
  	  compute_evaluations(Label, UtteranceText,
  			      Phrase, Variants, GVCs,
  			      WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
@@ -808,7 +817,7 @@ generate_initial_evaluations(Label, UtteranceText,
 % 			       GVCs, WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
 % 			       InputMatchPhraseWords, PhraseTokens, TokenPhraseWords,
 % 			       TokenPhraseHeadWords, WordDataCacheOut, USCCacheOut, Evaluations0) :-
-% 	( check_generate_initial_evaluations_1_control_options_1,
+% 	( check_generate_initial_evaluations_control_options_1,
 % 	  lower(PhraseTextString, LCPhraseTextString),
 % 	  extract_syntactic_tags(Phrase, Tags),
 % 	  atom_codes(LCPhraseAtom, LCPhraseTextString),
@@ -816,7 +825,7 @@ generate_initial_evaluations(Label, UtteranceText,
 % 	  Evaluations0 = [],
 % 	  WordDataCacheOut = WordDataCacheIn,
 % 	  USCCacheOut = USCCacheIn
-% 	; check_generate_initial_evaluations_1_control_options_2 ->
+% 	; check_generate_initial_evaluations_control_options_2 ->
 % 	  % format(user_output, 'About to call compute_evaluations~n', []), ttyflush,
 % 	  compute_evaluations(Label, UtteranceText,
 % 			      Phrase, Variants, GVCs,
@@ -3840,7 +3849,7 @@ check_construct_best_mappings_control_options :-
 	; xml_output_format(_XMLFormat)
 	).
 
-check_generate_initial_evaluations_1_control_options_1 :-
+check_generate_initial_evaluations_control_options_1 :-
 	\+ control_option(allow_overmatches),
 	\+ control_option(allow_concept_gaps),
 	\+ control_option(ignore_stop_phrases),
@@ -3856,7 +3865,7 @@ check_generate_initial_evaluations_1_control_options_1 :-
 % show_candidates is not set,
 % in which case there is no reason to generate candidates!
 
-check_generate_initial_evaluations_1_control_options_2 :-
+check_generate_initial_evaluations_control_options_2 :-
 	( control_option(show_candidates)    -> true
 	; \+ control_option(hide_mappings)   -> true
 	; control_option(fielded_mmi_output) -> true
