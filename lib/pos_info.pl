@@ -88,6 +88,7 @@
 	append/2,
 	append_length/3,
 	last/2,
+	rev/2,
 	sublist/4,
 	sublist/5
     ]).
@@ -423,8 +424,8 @@ handle_special_token_type(aadef, PrevToken, _ExtraCharsIn,
 	% Removed this call to handle strings like
 	% "Vasoactive Intestinal Peptide - (VIP) like immunoreactive nerves"
 	% in PMID- 3891693
-	% remove_final_hyphen_and_ws_tokens(AADefTokens1, AADefTokens),
-	AADefTokens = AADefTokens1,
+	remove_final_hyphen_and_ws_tokens(AADefTokens1, AADefTokens),
+	% AADefTokens = AADefTokens1,
 	% AADefTokens = AADefTokens0,
 	create_new_tokens_and_consume_strings(AADefTokens, PrevTokenType, RestTokensIn,
 					      CurrentPos, InputStringIn,
@@ -667,16 +668,10 @@ remove_leading_hyphen_and_ws_tokens([H|T], AADefTokens) :-
 	; AADefTokens = [H|T]
 	).	    
 	
-remove_final_hyphen_and_ws_tokens(AADefTokens0, AADefTokens) :-
-	append(AADefTokensPrefix0, [LastAADefToken], AADefTokens0),
-	( hyphen_or_ws_token(LastAADefToken) ->
-	  AADefTokens1 = AADefTokensPrefix0
-	; AADefTokens1 = AADefTokens0
-	),
-	( AADefTokens1 = AADefTokens0 ->
-	  AADefTokens = AADefTokens1
-	; remove_final_hyphen_and_ws_tokens(AADefTokens1, AADefTokens)
-	).
+remove_final_hyphen_and_ws_tokens(AADefTokensIn, AADefTokensOut) :-
+	rev(AADefTokensIn, RevAADefTokensIn0),
+	remove_leading_hyphen_and_ws_tokens(RevAADefTokensIn0, RevAADefTokensIn1),
+	rev(RevAADefTokensIn1, AADefTokensOut).
 
 hyphen_or_ws_token(Token) :-
 	( token_template(Token, pn, HyphenString, HyphenString, _PosInfo),
