@@ -448,7 +448,8 @@ keep_useful_phrasemaps(PhraseMaps, FinalPhraseMaps) :-
 mincoman_get_pos_tag([], []).
 mincoman_get_pos_tag([MincomanElement|MincomanElements], Tag) :-
 	( ( MincomanElement = head(_)
-	  ; MincomanElement = verb(_) ) ->
+	  ; MincomanElement = verb(_)
+	  ; MincomanElement = mod(_) ) ->
 	    Tag = MincomanElement
 	; mincoman_get_pos_tag(MincomanElements, Tag)
 	).
@@ -461,9 +462,9 @@ delete_nonuseful_phrasemaps([], []).
 delete_nonuseful_phrasemaps([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
 	PhraseMap = [Phrase,_Mappings],
 	phrase_get_pos_tag(Phrase, Tag),
-	( ( Tag=head(_);  Tag=verb(_) ) ->
-	    FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
-	  ; FinalPhraseMaps = RestFinalPhraseMaps
+	( Tag \== [] ->
+	  FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
+	; FinalPhraseMaps = RestFinalPhraseMaps
 	),
 	delete_nonuseful_phrasemaps(PhraseMaps, RestFinalPhraseMaps).
 
@@ -1200,6 +1201,7 @@ negb_phrase_tokens(is, [ruled,out]).
 negb_phrase_tokens(are, [ruled,out]).
 negb_phrase_tokens(have, [been,ruled,out]).
 negb_phrase_tokens(has, [been,ruled,out]).
+% negb_phrase_tokens(is, [negative]).
 
 % In http://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Pre-condition possibility phrase (used to mark an indexed term as possible)".

@@ -219,7 +219,7 @@ process_string(Input,Output) :-
 	ExtraChars = [],
 	get_UDAs(UDAList),
 	bb_get(all_server_streams, AllServerStreams),
-	process_text(Strings, "0000000", ExtraChars,
+	process_text(Strings, "00000000", ExtraChars,
 		     TagOption, AllServerStreams,
 		     ExpRawTokenList, AAs, UDAList, MMResults),
 	parse_command_line(CLTerm),
