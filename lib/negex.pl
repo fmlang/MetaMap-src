@@ -532,9 +532,9 @@ get_trigger_token(after, Tokens, TriggerToken) :-
 	last(Tokens, TriggerToken).
 
 test_relative_position(before, ConceptPosition, TriggerPosition) :-
-	ConceptPosition < TriggerPosition.
+	ConceptPosition =< TriggerPosition.
 test_relative_position(after, ConceptPosition, TriggerPosition) :-
-	ConceptPosition > TriggerPosition.
+	ConceptPosition >= TriggerPosition.
 
 get_negation_data(TriggerPositionTerm, ConceptTokensPhraseMap,
 		  TriggerPosition, ConceptPosition, Phrase, Mappings) :-
