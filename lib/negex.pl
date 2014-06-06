@@ -1200,6 +1200,10 @@ negb_phrase_tokens(is, [ruled,out]).
 negb_phrase_tokens(are, [ruled,out]).
 negb_phrase_tokens(have, [been,ruled,out]).
 negb_phrase_tokens(has, [been,ruled,out]).
+negb_phrase_tokens(is,[negative]).
+negb_phrase_tokens(are,[negative]).
+negb_phrase_tokens(was,[negative]).
+negb_phrase_tokens(were,[negative]).
 
 % In http://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Pre-condition possibility phrase (used to mark an indexed term as possible)".
