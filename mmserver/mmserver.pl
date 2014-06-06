@@ -103,8 +103,15 @@ main :-
     bb_put(all_server_streams, AllServerStreams),
     parse_command_line(CLTerm),
     CLTerm=command_line(Options,Args),
-    ( \+ member(q,Options) -> append(Options, [q], OptionsFinal) ; Options=OptionsFinal),
-    initialize_skr(OptionsFinal, Args, _IArgs, IOptions),
+    format('Options:~q~n', [Options]),
+    format('Args:~q~n', [Args]),
+    ( \+ member(q,Options) -> append(Options, [q], OptionsFinal0) ; Options=OptionsFinal0),
+    ( \+ member('Q',Options) ->
+	append(OptionsFinal0, ['Q'], OptionsFinal),
+	append(Args, ['4'], ArgsFinal) ;
+	OptionsFinal0=OptionsFinal, Args=ArgsFinal),
+    initialize_skr(OptionsFinal, ArgsFinal, _IArgs, IOptions),
+    format('IOptions:~q~n', [IOptions]),
     add_to_control_options(IOptions),
     start(ServerOptions).
 
