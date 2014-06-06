@@ -975,7 +975,8 @@ generate_mappings_output(Mappings, _Evaluations, APhrases, BracketedOutput, Mapp
 	  % Generate the MMO for the Mappings,
 	  % which is needed for both MMO and XML output!
 	  MappingsMMO = mappings(Mappings)
-	; ( \+ control_option(hide_mappings) ->
+	; ( \+ control_option(hide_mappings),
+	      Mappings \== [] ->
             ( BracketedOutput == 1 ->
 	      skr_begin_write('Mappings')
 	    ; true
