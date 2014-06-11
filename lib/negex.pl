@@ -1085,7 +1085,5 @@ get_utterance_tokens([CurrentToken|RestTokens], [], [CurrentToken|RestTokens]).
 ignore_token_type(field).
 ignore_token_type(label).
 
-%
 % List of negation triggers.
 % These are now contained in negex_triggers.pl.
-% 
