@@ -229,6 +229,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				 TokenHeadWords, PhraseTokens, Evaluation) ->
 	  % format(user_output, '### OUT: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
 	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]),
+	  % format(user_output, '~q~n', [Evaluation]),
 	  debug_evaluate_candidate_list_3(DebugFlags, Evaluation),
 	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
 	  % format(user_output, '     ~q~n', [Evaluation]),	    

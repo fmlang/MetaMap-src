@@ -363,18 +363,22 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_WSD_server_settings(WSDServerSettings),
 	verify_pruning_settings(PruningSettings),
 	verify_sldi_settings(SLDISettings),
+	verify_negex_trigger_setting(NegExTriggerSetting),
 	verify_negex_settings(NegExSettings),
 	verify_lexicon_setting(LexiconSetting),
 	verify_composite_phrases_setting(CompositePhrasesSetting),
 	verify_blanklines_setting(BlankLinesSetting),
+	verify_number_the_candidates_setting(NumberTheCandidatesSetting),
+	verify_number_the_mappings_setting(NumberTheCandidatesSetting),
 	verify_all_results([ModelSettings, TaggerOutputSettings, SingleOutputFormat,
 			    XMLSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
 			    SemTypeOptions, SemTypeValues, % GapSizeValues,
 			    AcrosAbbrsSettings, DerivationalVariantsSettings,
 			    TaggerServerSettings, WSDServerSettings,
-			    PruningSettings, SLDISettings, NegExSettings,
-			    LexiconSetting, CompositePhrasesSetting,BlankLinesSetting],
+			    PruningSettings, SLDISettings, NegExTriggerSetting, NegExSettings,
+			    LexiconSetting, CompositePhrasesSetting, BlankLinesSetting,
+			    NumberTheCandidatesSetting, NumberTheCandidatesSetting],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, DefaultRelease).
 
@@ -385,7 +389,6 @@ verify_model_settings(Result) :-
 	  Result is 1
 	; Result is 0
 	).
-
 
 % Error if both tagger_output and formal_tagger_output are set
 verify_tagger_output_settings(Result) :-
@@ -467,110 +470,6 @@ verify_semantic_type_options(Result) :-
 	; Result is 0
 	).
 
-% Error if any of negex_st_add, negex_st_del, negex_st_set is set and invalid ST is specified.
-% Each of those three options, if set, contributes 1 to Total.
-% If Total > 1, more than one of the three options has been set,
-% so declare a fatal error.
-verify_negex_settings(Result) :-
-	% If the user has specified negex_st_add,
-	( control_value(negex_st_add, SemTypesToAdd0) ->
-	  sort(SemTypesToAdd0, SemTypesToAdd1),
-	  % remove all and 'ALL' from the SemTypes
-	  subtract(SemTypesToAdd1, [all,'ALL'], SemTypesToAdd),
-	  % and verify that all remaining specified SemTypes are valid.
-	  % verify_sts/1 will throw a fatal error if an invalid ST is found.
-	  verify_sts(SemTypesToAdd),
-	  verify_useless_sts(add, SemTypesToAdd),
-	  ADD is 1
-	; ADD is 0
-	),
-	( control_value(negex_st_del, SemTypesToDel0) ->
-	  sort(SemTypesToDel0, SemTypesToDel),
-	  verify_all_del(SemTypesToDel),
-	  verify_sts(SemTypesToDel),
-	  verify_useless_sts(del, SemTypesToDel),
-	  DEL is 1
-	; DEL is 0
-	),
-	( control_value(negex_st_set, SemTypesToSet0) ->
-	  subtract(SemTypesToSet0, [all,'ALL'], SemTypesToSet),
-	  verify_sts(SemTypesToSet),
-	  SET is 1
-	; SET is 0
-	),
-	% Do not allow SET along with either ADD or DEL
-	( 1 is SET /\ ( ADD \/ DEL ) ->
-	  send_message('~n### MetaMap ERROR: --negex_st_set cannot be combined ', []),
-	  send_message('with either --negex_st_add or --negex_st_del.~n', []),
-	  Result is 1
-	; Result is 0
-	).
-
-verify_lexicon_setting(LexiconSetting) :-
-	( \+ control_value(lexicon, c),
-	  \+ control_value(lexicon, db) ->
-	  send_message('~nERROR: --lexicon setting must be either c or db!~n', []),
-	  LexiconSetting is 1
-	; control_value(lexicon, c),
-	  control_value(lexicon, db) ->
-	  send_message('~nERROR: --lexicon setting must be either c or db!~n', []),
-	  LexiconSetting is 1
-	; LexiconSetting is 0
-	).
-
-verify_composite_phrases_setting(CompositePhrasesSetting) :-
-	( \+ control_value(composite_phrases, _) ->
-	  CompositePhrasesSetting is 0
-	; control_value(composite_phrases, Value),
-	  ( Value > 12 ->
-	  send_message('~N### WARNING: --composite_phrases (-Q) setting of ~d > maximum of 12; using 12 instead.~n',
-		       [Value]),
-	    assert_control_value(composite_phrases, 12)
-	  ; true
-	  ),
-	  CompositePhrasesSetting is 0
-	).
-
-verify_blanklines_setting(BlankLinesSetting) :-
-	control_value(blanklines, N),
-	!,
-	( N >= 0 ->
-	  BlankLinesSetting is 0
-	; send_message('~nERROR: --blanklines setting must be a nonnegative integer.~n', []),
-	  BlankLinesSetting is 1
-	).
-
-verify_blanklines_setting(0).
-
-verify_all_del(SemTypesToDel) :-
-	intersection(SemTypesToDel, [all,'ALL'], Intersection),
-	( Intersection = [_|_] ->
-	  fatal_error('"all" and "ALL" cannot be used with negex_st_del~n.', [])
-	; true
-	).
-
-verify_useless_sts(add, SemTypesToAdd) :-
-	default_negex_semtypes(DefaultNegExSemTypes),
-	intersection(SemTypesToAdd, DefaultNegExSemTypes, Intersection),
-	( Intersection \== [] ->
-	  set_message(Intersection, PluralIndicator, Verb, Pronoun, Determiner),
-	  send_message('~N### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
-		       [PluralIndicator,Intersection,Verb,Determiner,PluralIndicator]),
-	  send_message('             Adding ~w has no effect.~n', [Pronoun])
-	; true
-	).
-verify_useless_sts(del, SemTypesToAdd) :-
-	default_negex_semtypes(DefaultNegExSemTypes),
-	subtract(SemTypesToAdd, DefaultNegExSemTypes, LeftOvers),
-	( LeftOvers \= [] ->
-	  set_message(LeftOvers, PluralIndicator, Verb, Pronoun, Determiner),
-	  send_message('~N### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
-		       [PluralIndicator,LeftOvers,Verb,Determiner,PluralIndicator]),
-	  send_message('             Deleting ~w has no effect.~n', [Pronoun])
-
-	; true
-	).
-
 % Error if either restrict_to_sts and exclude_sts is set and invalid ST is specified
 verify_semantic_type_values(Result) :-
 	( control_value(restrict_to_sts,STs)
@@ -601,7 +500,6 @@ verify_semantic_type_values(0).
 %%% 	integer(MaxGapSize),
 %%% 	MinPhraseLength >= MaxGapSize + 2.
 
-
 % Error if both all_acros_abbrs and unique_acros_abbrs_only are set
 verify_acros_abbrs_settings(Result) :-
 	( control_option(all_acros_abbrs),
@@ -612,7 +510,6 @@ verify_acros_abbrs_settings(Result) :-
 	; Result is 0
 	).			    
 
-
 % Error if both all_derivational_variants and no_derivational_variants are set
 verify_derivational_variants_settings(Result) :-
 	( control_option(all_derivational_variants),
@@ -622,7 +519,6 @@ verify_derivational_variants_settings(Result) :-
 	  Result is 1
 	; Result is 0
 	).			    
-
 % Error if no_tagging is specified, but a specific tagger server is specified
 verify_tagger_server_settings(Result) :-
 	( control_option(no_tagging),
@@ -660,6 +556,136 @@ verify_sldi_settings(Result) :-
 	  Result is 1
 	; Result is 0
 	).			    
+
+% Error if any of negex_trigger_file is set, but negex is not!
+verify_negex_trigger_setting(Result) :-
+	( control_value(negex_trigger_file, _),
+	  \+ control_option(negex) ->
+	  send_message('~nERROR: --negex_trigger_file cannot be used without --negex!~n', []),
+	  Result is 1
+	; Result is 0
+	).
+
+% Error if any of negex_st_add, negex_st_del, negex_st_set is set and invalid ST is specified.
+% Each of those three options, if set, contributes 1 to Total.
+% If Total > 1, more than one of the three options has been set,
+% so declare a fatal error.
+verify_negex_settings(Result) :-	
+	% If the user has specified negex_st_add,
+	( control_value(negex_st_add, SemTypesToAdd0) ->
+	  sort(SemTypesToAdd0, SemTypesToAdd1),
+	  % remove all and 'ALL' from the SemTypes
+	  subtract(SemTypesToAdd1, [all,'ALL'], SemTypesToAdd),
+	  % and verify that all remaining specified SemTypes are valid.
+	  % verify_sts/1 will throw a fatal error if an invalid ST is found.
+	  verify_sts(SemTypesToAdd),
+	  verify_useless_sts(add, SemTypesToAdd),
+	  ADD is 1
+	; ADD is 0
+	),
+	( control_value(negex_st_del, SemTypesToDel0) ->
+	  sort(SemTypesToDel0, SemTypesToDel),
+	  verify_all_del(SemTypesToDel),
+	  verify_sts(SemTypesToDel),
+	  verify_useless_sts(del, SemTypesToDel),
+	  DEL is 1
+	; DEL is 0
+	),
+	( control_value(negex_st_set, SemTypesToSet0) ->
+	  subtract(SemTypesToSet0, [all,'ALL'], SemTypesToSet),
+	  verify_sts(SemTypesToSet),
+	  SET is 1
+	; SET is 0
+	),
+	% Do not allow SET along with either ADD or DEL
+	( 1 is SET /\ ( ADD \/ DEL ) ->
+	  send_message('~n### MetaMap ERROR: --negex_st_set cannot be combined ', []),
+	  send_message('with either --negex_st_add or --negex_st_del.~n', []),
+	  Result is 1
+	; Result is 0
+	).
+
+% Called by verify_negex_settings/1
+verify_useless_sts(add, SemTypesToAdd) :-
+	default_negex_semtypes(DefaultNegExSemTypes),
+	intersection(SemTypesToAdd, DefaultNegExSemTypes, Intersection),
+	( Intersection \== [] ->
+	  set_message(Intersection, PluralIndicator, Verb, Pronoun, Determiner),
+	  send_message('~N### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
+		       [PluralIndicator,Intersection,Verb,Determiner,PluralIndicator]),
+	  send_message('             Adding ~w has no effect.~n', [Pronoun])
+	; true
+	).
+verify_useless_sts(del, SemTypesToAdd) :-
+	default_negex_semtypes(DefaultNegExSemTypes),
+	subtract(SemTypesToAdd, DefaultNegExSemTypes, LeftOvers),
+	( LeftOvers \= [] ->
+	  set_message(LeftOvers, PluralIndicator, Verb, Pronoun, Determiner),
+	  send_message('~N### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
+		       [PluralIndicator,LeftOvers,Verb,Determiner,PluralIndicator]),
+	  send_message('             Deleting ~w has no effect.~n', [Pronoun])
+
+	; true
+	).
+
+% Called by verify_negex_settings/1
+verify_all_del(SemTypesToDel) :-
+	intersection(SemTypesToDel, [all,'ALL'], Intersection),
+	( Intersection = [_|_] ->
+	  fatal_error('"all" and "ALL" cannot be used with negex_st_del~n.', [])
+	; true
+	).
+
+verify_lexicon_setting(LexiconSetting) :-
+	( \+ control_value(lexicon, c),
+	  \+ control_value(lexicon, db) ->
+	  send_message('~nERROR: --lexicon setting must be either c or db!~n', []),
+	  LexiconSetting is 1
+	; control_value(lexicon, c),
+	  control_value(lexicon, db) ->
+	  send_message('~nERROR: --lexicon setting must be either c or db!~n', []),
+	  LexiconSetting is 1
+	; LexiconSetting is 0
+	).
+
+verify_composite_phrases_setting(CompositePhrasesSetting) :-
+	( \+ control_value(composite_phrases, _) ->
+	  CompositePhrasesSetting is 0
+	; control_value(composite_phrases, Value),
+	  ( Value > 12 ->
+	  send_message('~N### WARNING: --composite_phrases (-Q) setting of ~d > maximum of 12; using 12 instead.~n',
+		       [Value]),
+	    assert_control_value(composite_phrases, 12)
+	  ; true
+	  ),
+	  CompositePhrasesSetting is 0
+	).
+
+verify_blanklines_setting(BlankLinesSetting) :-
+	control_value(blanklines, N),
+	!,
+	( N >= 0 ->
+	  BlankLinesSetting is 0
+	; send_message('~nERROR: --blanklines setting must be a nonnegative integer.~n', []),
+	  BlankLinesSetting is 1
+	).
+verify_blanklines_setting(0).
+
+verify_number_the_candidates_setting(NumberTheCandidatesSetting) :-
+	( control_option(number_the_candidates),
+	  \+ control_option(show_candidates) ->
+	   send_message('~nERROR: --number_the_candidates cannot be used without --show_candidates!~n', []),
+	   NumberTheCandidatesSetting is 1
+	;  NumberTheCandidatesSetting is 0
+	).
+
+verify_number_the_mappings_setting(NumberTheMappingsSetting) :-
+	( control_option(number_the_mappings),
+	  control_option(hide_mappings) ->
+	   send_message('~nERROR: --number_the_mappings cannot be used with --hide_mappings!~n', []),
+	   NumberTheMappingsSetting is 1
+	;  NumberTheMappingsSetting is 0
+	).
 
 verify_all_results(ValuesList, InputStream, OutputStream) :-
 	compute_sum(ValuesList, 0, Result),

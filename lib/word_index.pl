@@ -52,8 +52,7 @@
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
-	concat_atom/2,
-	sublist/2
+	concat_atom/2
     ]).
 
 :- use_module(library(avl), [
@@ -63,6 +62,10 @@
 
 :- use_module(library(lists), [
 	prefix/2
+    ]).
+
+:- use_module(library(lists3), [
+	sublist/2
     ]).
 
 /* get_filtered_uscs_for_word(+Table, +Word, +DebugFlags, +FilterWordStrings,
@@ -120,7 +123,7 @@ filter_uscs_subseq([usc(UIString,S,C)|Rest], Word, DebugUSCs, FilterWordStrings,
 	% UIString\=='other',
 	% UIString\=='Other',
 	tokenize_text_mm(UIString, UIStringTokens),
-	sublist(UIStringTokens, FilterWordStrings),
+	sublist(FilterWordStrings, UIStringTokens),
 	!,
 	maybe_announce_USC(DebugUSCs, 1, Word, FilterWordStrings, UIString, S, C),
 	filter_uscs_subseq(Rest, Word, DebugUSCs, FilterWordStrings, FilteredRest).
