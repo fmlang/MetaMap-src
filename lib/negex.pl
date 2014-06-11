@@ -160,28 +160,10 @@ compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) :-
 	  % Split the token list for the entire utterance into a list of lists of tokens;
 	  % each sub-list contains all the tokens for a single utterance.
 	  split_token_list(RawTokenList, ListOfTokenLists),
-	  maybe_load_negex_trigger_file,
 	  negex_aux(ListOfTokenLists, DisambMMOutput,
 		    UtteranceMaxDistNum, ConceptMaxDistNum, NegationTerms0),
 	  flatten(NegationTerms0, NegationTerms)
 	).
-
-maybe_load_negex_trigger_file :-
-	( control_value(negex_trigger_file, NegExTriggerFile) ->
-	  prolog_flag(redefine_warnings, CurrentFlag),
-	  prolog_flag(redefine_warnings, CurrentFlag, off),
-	  negex_load(NegExTriggerFile),
-	  prolog_flag(redefine_warnings, off, CurrentFlag)
-	; true
-	).
-
-negex_load(NegExTriggerFile) :-
-	atom_length(NegExTriggerFile, FileNameLength),
-	BannerLength is FileNameLength + 24,
-	format(user_output, '~n~*c~n###### Re-loading ~w #####~n~*c~n',
-	       [BannerLength,35,NegExTriggerFile,BannerLength,35]),
-	compile(NegExTriggerFile).
-
 
 negex_aux([], [], _UtteranceMaxDist, _ConceptMaxDist, []).
 negex_aux([RawTokenList|ListOfTokenLists], [MMOutput|MMOutputList],

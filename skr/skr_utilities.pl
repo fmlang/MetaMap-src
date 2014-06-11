@@ -563,8 +563,28 @@ verify_negex_trigger_setting(Result) :-
 	  \+ control_option(negex) ->
 	  send_message('~nERROR: --negex_trigger_file cannot be used without --negex!~n', []),
 	  Result is 1
+	; control_value(negex_trigger_file, _) ->
+	  load_negex_trigger_file,
+	  Result is 0
 	; Result is 0
 	).
+
+load_negex_trigger_file :-
+	( control_value(negex_trigger_file, NegExTriggerFile) ->
+	  prolog_flag(redefine_warnings, CurrentFlag),
+	  prolog_flag(redefine_warnings, CurrentFlag, off),
+	  negex_load(NegExTriggerFile),
+	  prolog_flag(redefine_warnings, off, CurrentFlag)
+	; true
+	).
+
+negex_load(NegExTriggerFile) :-
+	atom_length(NegExTriggerFile, FileNameLength),
+	BannerLength is FileNameLength + 40,
+	format(user_output, '~n~*c~n###### Loading NegEx trigger file ~w #####~n~*c~n',
+	       [BannerLength,35,NegExTriggerFile,BannerLength,35]),
+	compile(NegExTriggerFile).
+
 
 % Error if any of negex_st_add, negex_st_del, negex_st_set is set and invalid ST is specified.
 % Each of those three options, if set, contributes 1 to Total.
