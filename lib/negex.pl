@@ -1201,10 +1201,23 @@ negb_phrase_tokens(is, [ruled,out]).
 negb_phrase_tokens(are, [ruled,out]).
 negb_phrase_tokens(have, [been,ruled,out]).
 negb_phrase_tokens(has, [been,ruled,out]).
+
+%% Post Negations added for Sina 
 negb_phrase_tokens(is,[negative]).
 negb_phrase_tokens(are,[negative]).
 negb_phrase_tokens(was,[negative]).
 negb_phrase_tokens(were,[negative]).
+
+% Post Negations From Dina Demner's Negation Lexicon
+negb_phrase_tokens(is, [not,seen]).
+negb_phrase_tokens(are, [not,seen]).
+negb_phrase_tokens(is, [absent]).
+negb_phrase_tokens(not, [seen]).
+negb_phrase_tokens(can, [be,ruled,out]).
+negb_phrase_tokens(ruled, [out]).
+negb_phrase_tokens(resolved, []).
+negb_phrase_tokens(negative, []).
+negb_phrase_tokens(remains, [off]).
 
 % In http://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Pre-condition possibility phrase (used to mark an indexed term as possible)".
@@ -1268,6 +1281,9 @@ pseudoneg_phrase_tokens(gram,    [negative]).
 pseudoneg_phrase_tokens(without, [difficulty]).
 pseudoneg_phrase_tokens(not,     [necessarily]).
 pseudoneg_phrase_tokens(not,     [only]).
+
+% Pseudo Negations From Dina Demner's Negation Lexicon
+pseudoneg_phrase_tokens(without, [contrast]).
 
 % In http://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Termination terms".
