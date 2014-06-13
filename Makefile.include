@@ -85,7 +85,7 @@ else
     export SOLDFLAGS = -m32 -bundle
     export LINKFLAGS = -m32 -bundle
     export LDFLAGS = -m32
-    export BERKELEY_VERSION = /usr/local/db-4.8.24
+    export BERKELEY_VERSION = /usr/local/db-4.8.30
     export BERKELEY_INC = $(BERKELEY_VERSION)/include
     export BERKELEY_LIB = $(BERKELEY_VERSION)/lib
     export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb.a

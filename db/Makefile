@@ -37,7 +37,7 @@
 #	Make file.
 #
 #%REVISED
-	#	30Aug95 divita -- Initial Version
+#	30Aug95 divita -- Initial Version
 #
 #
 #==========================================================*/
@@ -48,7 +48,7 @@ O_SYSTEM = $(shell uname)
 
 C_NLS_DB_STATIC_LIB=c_nls_db.a
 C_NLS_DB_DYNAMIC_LIB=c_nls_db.${SOEXT}	
-SPINCDIR=${SICSTUS_HOME}/include/sicstus
+SPINCDIR=${SICSTUS}/include/sicstus
 
 ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
@@ -79,7 +79,7 @@ LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
 SPLFR_BASIC_FLAGS =  --vv --keep ${SPCONFIG}
 SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
 SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
-SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}
+SPLFR = splfr $(CONF) --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}
 
 # all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
 all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB} db_access.${SOEXT}
