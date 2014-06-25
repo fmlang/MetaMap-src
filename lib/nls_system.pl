@@ -258,7 +258,7 @@ is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLn1',		 	no, none).
 
-is_control_option(metamap,  '', 'allcats',		 	no, none).
+% is_control_option(metamap,  '', 'allcats',		 	no, none).
 
 is_control_option(metamap,  '', lexicon, no,
                    aspec(lexicon, mandatory, none, none, no_default,
@@ -274,8 +274,10 @@ is_control_option(metamap,  '', prompt, no,
 
 % show lexical definitions
 is_control_option(metamap,  '', 'show_lex',		 	no, none).
-
-		   
+% recompile negex_triggers.pl
+is_control_option(metamap,  '', 'negex_trigger_file', no,
+		  aspec(negex_trigger_file, mandatory, file, read, no_default,
+			'File containing NegEx trigger definitions')).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Other programs %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
