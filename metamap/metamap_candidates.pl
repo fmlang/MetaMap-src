@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -168,8 +167,7 @@ stop_variant(Word) :-
 	  db_get_mwi_word_count(first_words_counts, Word, Count),
 	  ensure_number(Count, CountNumber),
 	  test_count_and_length(CountNumber, Length)
-	),
-	maybe_warn_stop_variant(Word, Count).
+	).
 
 test_count_and_length(Count, Length) :-
 	  ( Count > 4000 ->
@@ -221,25 +219,27 @@ get_meta_candidates_for_variants_1([Variant-NFR|Rest], AllVariants,
 					  WordDataCacheOut, USCCacheOut).
 
 
-/* get_meta_uscs(+Text, +AllVariants, +NFR, +DebugFlags, -MetaUSCs,
+/* get_meta_uscs(+ThisVariant, +AllVariants, +NFR, +DebugFlags, -MetaUSCs,
    		 +WordDataCacheIn, +USCCacheIn,
 		 -WordDataCacheOut, -USCCacheOut)
 
 get_meta_uscs/8 returns a list MetaUSCs of terms
-usc(<canonical textwords>,<string text>,<concept text>) for Text using a
+usc(<canonical textwords>,<string text>,<concept text>) for ThisVariant using a
 Metathesaurus word index where <canonical textwords> is the lowercased,
 normalized, uninverted, tokenized form of <string text> and <concept text> is
 <string text>'s concept string. */
 
-get_meta_uscs(Text, AllVariants, NFR, DebugFlags, MetaUSCs,
+get_meta_uscs(ThisVariant, AllVariants, NFR, DebugFlags, MetaUSCs,
 	      WordDataCacheIn, USCCacheIn,
 	      WordDataCacheOut, USCCacheOut) :-
-	tokenize_text(Text, Words),
-	tokenize_text_mm(Text, MMWords),
-	get_meta_uscs_1(MMWords, Words, NFR, AllVariants, DebugFlags, MetaUSCs,
+	tokenize_text(ThisVariant, ThisVariantWords),
+	tokenize_text_mm(ThisVariant, ThisVariantMMWords),
+	% format(user_output, 'TT:  ~w-->~q~n', [ThisVariant, Words]),
+ 	% format(user_output, 'TTM: ~w-->~q~n', [ThisVariant, MMWords]),
+	get_meta_uscs_1(ThisVariantMMWords, ThisVariantWords, NFR,
+			AllVariants, DebugFlags, MetaUSCs,
 			WordDataCacheIn, USCCacheIn,
-			WordDataCacheOut, USCCacheOut),
-	maybe_warn_get_meta_uscs(Text).
+			WordDataCacheOut, USCCacheOut).
 
 /* 
 Multi words CAN produce output (cf. "mentally ill" -> Mental illness),
@@ -247,17 +247,18 @@ but always choose the first word of multi-word items to search a word
 index.
 */
 
-get_meta_uscs_1([], _Words, _NFR, _AllVariants, _DebugFlags, [],
+get_meta_uscs_1([], _ThisVariantWords, _NFR, _AllVariants, _DebugFlags, [],
 		WordDataCache, USCCache, WordDataCache, USCCache).
-get_meta_uscs_1([Word|_RestWords], Words, NFR, AllVariants, DebugFlags, MetaUSCs,
+get_meta_uscs_1([Word|_RestWords], ThisVariantWords, NFR, AllVariants, DebugFlags, MetaUSCs,
 		WordDataCacheIn, USCCacheIn,
 		WordDataCacheOut, USCCacheOut) :-
 	% WTF is this for?
-	length(Words, NWords),
-	NewNFR is NFR + NWords - 1,
+	length(ThisVariantWords, ThisVariantWordCount),
+ 	% NewNFR is max(ThisVariantWordCount, NFR),???
+	NewNFR is NFR + ThisVariantWordCount - 1,
 	% format(user_output, '~d ~d : ~w~n', [NFR,NewNFR,Words]),
 	% NewNFR is NFR,
-	get_meta_uscs_2(NewNFR, Word, AllVariants, Words, DebugFlags, MetaUSCs,
+	get_meta_uscs_2(NewNFR, Word, AllVariants, ThisVariantWords, DebugFlags, MetaUSCs,
 			WordDataCacheIn, USCCacheIn,
 			WordDataCacheOut, USCCacheOut).
 
@@ -279,10 +280,11 @@ determine_table(Word, AllVariants, PhraseLength, Table) :-
 	; determine_first_word_index(Word, AllVariants, Table)
 	).
 
-get_from_table(Word, FilterWords, Table, DebugFlags, MetaUSCs,
+get_from_table(Word, FilterWords, Table, NewNFR, DebugFlags, MetaUSCs,
 	       WordDataCacheIn, USCCacheIn,
 	       WordDataCacheOut, USCCacheOut) :-
-	debug_message(db, '~n### Looking up ~q|~q from ~q~n', [Word,FilterWords,Table]),
+	debug_message(db, '~n### Looking up ~q|~q|~q from ~q~n',
+		          [Word,NewNFR,FilterWords,Table]),
 	make_avl_key_2(Word, Table, FilterWords, AVLKey),
 	( avl_fetch(AVLKey, USCCacheIn, MetaUSCs) ->
 	  debug_message(db, '~N### USC CACHE FOUND ~q|~q from ~q~n', [Word,FilterWords,Table]),
@@ -295,14 +297,18 @@ get_from_table(Word, FilterWords, Table, DebugFlags, MetaUSCs,
 	  WordDataCacheOut = WordDataCacheIn,
   	  avl_store(AVLKey, USCCacheIn, MetaUSCs, USCCacheOut)
 	),
-	debug_message(db, '~N### DONE looking up ~q|~q~n', [Word,FilterWords]).
+	debug_message(db, '~n### DONE looking up ~q|~q|~q from ~q~n',
+		          [Word,NewNFR,FilterWords,Table]).
+
 
 make_avl_key_2(Word, Table, FilterWords, AVLKey) :-
 	concat_atom([Word,'-',Table], Functor),
 	functor(AVLKey, Functor, 1),
 	arg(1, AVLKey, FilterWords).
 
-/* get_meta_uscs_2(+PhraseLength, +Word, +AllVariants,
+/*
+   NFR == "Number From Right", the position of Word in the phrase counting from the right
+   get_meta_uscs_2(+NewNFR, +Word, +AllVariants,
                    +FilterWords, +DebugFlags, -MetaUSCs,
 		   +WordDataCacheIn, +USCCacheIn,
 		   -WordDataCacheOut, -USCCacheOut)
@@ -318,17 +324,17 @@ get_meta_uscs_2(1, Word, _AllVariants, FilterWords, DebugFlags, MetaUSCs,
 	\+ control_option(allow_overmatches),
 	\+ control_option(ignore_word_order),
 	!,
-	get_from_table(Word, FilterWords, first_words_of_one, DebugFlags, MetaUSCs,
+	get_from_table(Word, FilterWords, first_words_of_one, 1, DebugFlags, MetaUSCs,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut),
 	debug_get_uscs(DebugFlags, WordDataCacheIn, WordDataCacheOut).
-get_meta_uscs_2(PhraseLength, Word, AllVariants, FilterWords,
+get_meta_uscs_2(NewNFR, Word, AllVariants, FilterWords,
 		DebugFlags, MetaUSCs,
 		WordDataCacheIn, USCCacheIn,
 		WordDataCacheOut, USCCacheOut) :-
-	determine_table(Word, AllVariants, PhraseLength, Table),
-	% format(user_output, '~q (~d): ~w~n', [Word,PhraseLength,Table]),
-	get_from_table(Word, FilterWords, Table, DebugFlags, MetaUSCs,
+	determine_table(Word, AllVariants, NewNFR, Table),
+	% format(user_output, '~q (~d): ~w~n', [Word,NewNFR,Table]),
+	get_from_table(Word, FilterWords, Table, NewNFR, DebugFlags, MetaUSCs,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut),
 	debug_get_uscs(DebugFlags, WordDataCacheIn, WordDataCacheOut).
@@ -350,6 +356,44 @@ determine_first_word_index(Word, AllVariants, Index) :-
 	  Index = first_words
 	; Index = first_wordsb
 	).
+
+
+%dump_uscs(_,_,[]) :-
+%    !.
+%dump_uscs(Text,Word,MetaUSCs) :-
+%    format('USCs for ~p, ~p:~n',[Text,Word]),
+%    wl(MetaUSCs),
+%    format('end USCs~n',[]).
+
+debug_get_meta_candidates_1(DebugFlags, Variant) :-
+	( memberchk(2, DebugFlags) ->
+	  format('~nVariant: ~p~n',[Variant])
+	; true
+	).
+
+debug_get_meta_candidates_2(DebugFlags, NewCandidates) :-
+	( memberchk(2, DebugFlags) ->
+	  length(NewCandidates, NewCandidatesLength),
+	  format('~d candidates.~n', [NewCandidatesLength]),
+	  wl(NewCandidates)
+	; true
+	).
+
+
+debug_get_uscs(DebugFlags, WordDataCacheIn, WordDataCacheOut) :-
+	( memberchk(2, DebugFlags),
+	  WordDataCacheIn = WordDataCacheOut ->
+	  format('(by cache)~n', [])
+	; true
+	).
+
+
+% :- use_module(skr_lib(addportray)).
+% portray_node(Node) :-
+% 	Node = node(_,_,_,_,_),
+% 	writeq('NODE').
+% :- add_portray(portray_node).
+
 frequent_first_word_pair('2',                   'acid').
 frequent_first_word_pair('3',                   'acid').
 frequent_first_word_pair('4',                   'acid').
@@ -412,6 +456,7 @@ frequent_first_word_pair('stage',               'cancer').
 frequent_first_word_pair('stage',               'carcinoma').
 frequent_first_word_pair('stage',               'v6').
 frequent_first_word_pair('stage',               'v7').
+frequent_first_word_pair('structure',           'artery').
 frequent_first_word_pair('surface',             'bone').
 frequent_first_word_pair('surface',             'vertebra').
 frequent_first_word_pair('trabecular',          'bone').
@@ -423,52 +468,3 @@ frequent_first_word_pair('x',                   'body').
 frequent_first_word_pair('x',                   'joint').
 frequent_first_word_pair('xenopus',             'protein').
 frequent_first_word_pair('zebrafish',           'protein').
-
-
-%dump_uscs(_,_,[]) :-
-%    !.
-%dump_uscs(Text,Word,MetaUSCs) :-
-%    format('USCs for ~p, ~p:~n',[Text,Word]),
-%    wl(MetaUSCs),
-%    format('end USCs~n',[]).
-
-debug_get_meta_candidates_1(DebugFlags, Variant) :-
-	( memberchk(2, DebugFlags) ->
-	  format('~nVariant: ~p~n',[Variant])
-	; true
-	).
-
-debug_get_meta_candidates_2(DebugFlags, NewCandidates) :-
-	( memberchk(2, DebugFlags) ->
-	  length(NewCandidates, NewCandidatesLength),
-	  format('~d candidates.~n', [NewCandidatesLength]),
-	  wl(NewCandidates)
-	; true
-	).
-
-
-debug_get_uscs(DebugFlags, WordDataCacheIn, WordDataCacheOut) :-
-	( memberchk(2, DebugFlags),
-	  WordDataCacheIn = WordDataCacheOut ->
-	  format('(by cache)~n', [])
-	; true
-	).
-
-
-maybe_warn_stop_variant(Word, Count) :-
-	( control_option(warnings) ->
-	  format('~NWARNING: Stopping variant ~p (~p).~n', [Word,Count])
-	; true
-	).
-
-maybe_warn_get_meta_uscs(Text) :-
-	( control_option(warnings) ->
-	  format('~NWARNING: No subword of ~p being searched.~n',[Text])
-	; true
-	).
-
-% :- use_module(skr_lib(addportray)).
-% portray_node(Node) :-
-% 	Node = node(_,_,_,_,_),
-% 	writeq('NODE').
-% :- add_portray(portray_node).

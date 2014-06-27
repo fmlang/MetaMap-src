@@ -33,7 +33,6 @@
 % Author:   Lan
 % Purpose:  Provide additional functionality to the AVL module
 
-
 :- module(nls_avl,[
     add_to_avl/4,
     add_to_avl_once/4

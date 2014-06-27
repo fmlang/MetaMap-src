@@ -55,8 +55,6 @@
 	string_char/3,
 	string_size/2,
 	subchars/4,
-	sublist/2,
-	sublist/4,
 	substring/4,
 	ttyflush/0,
 	upper/2,
@@ -64,11 +62,15 @@
    ]).
 
 
-:- use_module(skr_lib(ctypes), [
-	is_punct/1,
-	to_lower/2,
-	to_upper/2
+:- use_module(metamap(metamap_tokenization), [
+	local_to_lower/2,
+	local_to_upper/2
     ]).
+
+% :- use_module(skr_lib(ctypes), [
+% 	to_lower/2,
+%	to_upper/2
+%    ]).
 
 :- use_module(library(codesio), [
 	open_codes_stream/2
@@ -76,8 +78,7 @@
 
 
 :- use_module(library(lists), [
-	append/2,
-	sublist/3
+	append/2
     ]).
 
 
@@ -133,7 +134,7 @@ lower(Text, Lower) :-
 
 lower_chars([], []).
 lower_chars([T|Ts], [U|Us]) :-
-        to_lower(T, U),
+        local_to_lower(T, U),
         lower_chars(Ts, Us).
 
 /* lowercase_list(+TextList, -LowercaseTextList)
@@ -162,7 +163,7 @@ upper(Text, Upper) :-
 upper_chars(-, _) :- !, fail.
 upper_chars([], []).
 upper_chars([T|Ts], [U|Us]) :-
-        to_upper(T, U),
+        local_to_upper(T, U),
         upper_chars(Ts, Us).
 
 
@@ -239,9 +240,6 @@ string_size(StringOrAtom, Size) :-
 subchars(Atom, SubString, Offset, Length) :-
 	sub_atom(Atom, Offset, Length, _After, SubAtom),
 	atom_codes(SubAtom, SubString).
-
-sublist(List, SubList) :-
-	sublist(List, SubList, _Before).
 
 % This comment is lifted verbatim from the Quintus Prolog strings.pl library file:
 

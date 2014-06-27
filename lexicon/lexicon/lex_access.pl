@@ -40,7 +40,7 @@
 	get_spellings_and_inflections_for_form/4,
 	get_variants_for_form/2,
 	get_im_varlist/2,
-	get_im_varlist/3,
+	get_im_varlist_with_cats/3,
 	get_im_varlist_for_form/3,
 	get_im_varlist_for_all_forms/2,
 	initialize_lexicon/2,
@@ -77,8 +77,12 @@
 	% lex_get_spvar_from_record/2
     ]).
 
-:- use_module(skr_lib(ctypes), [
-        is_punct/1
+% :- use_module(skr_lib(ctypes), [
+%         is_punct/1
+%    ]).
+
+:- use_module(metamap(metamap_tokenization), [
+	local_punct/1
    ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -130,7 +134,7 @@ is_a_base_form_with_categories(Form, Categories) :-
 get_im_varlist(BaseForm, VarList) :-
 	get_im_varlist_TOGGLE(BaseForm, [], VarList).
 
-get_im_varlist(BaseForm, Categories, VarList) :-
+get_im_varlist_with_cats(BaseForm, Categories, VarList) :-
 	get_im_varlist_TOGGLE(BaseForm, Categories, VarList).
 
 get_im_varlist_TOGGLE(BaseForm, _Categories, VarInfo) :-
@@ -236,7 +240,7 @@ remove_punct_chars(Atom, AtomWithoutPunctChars) :-
        atom_codes(Atom, CodeList),
        (  foreach(Code, CodeList),
 	  fromto(CodesWithoutPunctChars, S0, S, [])
-       do ( is_punct(Code) ->
+       do ( local_punct(Code) ->
 	    S0 = S ;
 	    S0 = [Code|S]
 	  )

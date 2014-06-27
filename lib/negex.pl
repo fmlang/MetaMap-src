@@ -55,6 +55,15 @@
 	flatten/2
    ]).
 
+:- use_module(negex_triggers, [
+	nega_phrase_tokens/2,
+	negb_phrase_tokens/2,
+	pnega_phrase_tokens/2,
+	pnegb_phrase_tokens/2,
+	pseudoneg_phrase_tokens/2,
+	conj_phrase_tokens/2
+   ]).
+
 :- use_module(skr_lib(nls_strings),[
 	split_string_completely/3
    ]).
@@ -66,7 +75,6 @@
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/3,
-	sublist/2,
 	ttyflush/0
    ]).
 
@@ -81,6 +89,10 @@
 	last/2,
 	select/3,
 	subseq1/2
+   ]).
+
+:- use_module(library(lists3), [
+	sublist/2
    ]).
 
 :- use_module(library(sets), [
@@ -124,6 +136,8 @@ compute_negex(RawTokenList, Lines, DisambMMOutput, NegationTerms) :-
 do_negex :-
 	( control_option(negex) ->
 	  true
+	; control_option(fielded_mmi_output) ->
+	  true
 	; control_value(negex_st_add, _) ->
 	  true
 	; control_value(negex_st_del, _) ->
@@ -133,6 +147,7 @@ do_negex :-
 
 compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) :-
 	( \+ control_option(machine_output),
+	  \+ control_option(fielded_mmi_output),
 	  \+ xml_output_format(_XMLFormat),
 	  \+ do_negex ->
 	  NegationTerms = []
@@ -142,12 +157,14 @@ compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) :-
 	  environ('NEGEX_CONCEPT_MAX_DIST',   ConceptMaxDistAtom),
 	  atom_codes(ConceptMaxDistAtom,      ConceptMaxDistChars),
 	  number_codes(ConceptMaxDistNum ,    ConceptMaxDistChars),
+	  % Split the token list for the entire utterance into a list of lists of tokens;
+	  % each sub-list contains all the tokens for a single utterance.
 	  split_token_list(RawTokenList, ListOfTokenLists),
 	  negex_aux(ListOfTokenLists, DisambMMOutput,
 		    UtteranceMaxDistNum, ConceptMaxDistNum, NegationTerms0),
 	  flatten(NegationTerms0, NegationTerms)
 	).
-	
+
 negex_aux([], [], _UtteranceMaxDist, _ConceptMaxDist, []).
 negex_aux([RawTokenList|ListOfTokenLists], [MMOutput|MMOutputList],
 	  UtteranceMaxDist, ConceptMaxDist, [NegationTerm|NegationTerms]) :-
@@ -163,6 +180,7 @@ negex_aux([RawTokenList|ListOfTokenLists], [MMOutput|MMOutputList],
 generate_negex_output(NegationTerms) :-
 	( do_negex,
 	  \+ control_option(machine_output),
+	  \+ control_option(fielded_mmi_output),
 	  \+ xml_output_format(_XMLFormat) ->
 	   format('~nNEGATIONS:~n', []),
 	   generate_all_negex_output(NegationTerms),
@@ -216,8 +234,10 @@ write_list_elements([H|T], Datum) :-
 % first attempt -- mostly exploration with using token based 
 token_negex(RawTokenList, DisambiguatedMMOPhrases,
 	    UtteranceMaxDist, ConceptMaxDist, ConsolidatedNegationTerms) :-
+	% Remove field, label, pn, sn, pe, and ws tokens.
  	remove_nonuseful_tokens(RawTokenList, UsefulTokenList),
  	extract_atoms_from_tokenlist(UsefulTokenList, AtomList),
+	% [ [nega, [not]] ... ]
  	get_negation_phrase_list(AtomList, NegationPhraseList0),
 	sort(NegationPhraseList0, NegationPhraseList),
 	generate_negation_terms_1(NegationPhraseList, DisambiguatedMMOPhrases,
@@ -230,8 +250,14 @@ generate_negation_terms_1([H|T], DisambiguatedMMOPhrases,
 			  UtteranceMaxDist, ConceptMaxDist,
 			  UsefulTokenList, NegationTerms) :-
 	NegationPhraseList = [H|T],
+	% TriggerList = [trigger(nega,[tok(lc,"not","not",pos(83,86),pos(83,3))])]
 	get_triggerlist(UsefulTokenList, NegationPhraseList, TriggerList0),
+	% PhraseMaps0 is a list of lists of the form [PhraseObject,Mappings];
+	% PhraseObject is phrase(PhraseAtom, Syntax, StartPos/Length, ReplPos), and
+	% Mappings is a list of the mappings generated from that phrase.
 	list_phrases_with_mappings(DisambiguatedMMOPhrases, PhraseMaps0),
+	% Keep only [PhraseObject,Mappings] lists in which
+	% PhraseObject is head or verb, and Mappings is nonempty.
 	keep_useful_phrasemaps(PhraseMaps0, PhraseMaps),
 	generate_negation_terms_2(PhraseMaps, UsefulTokenList,
 				  UtteranceMaxDist, ConceptMaxDist,
@@ -363,7 +389,7 @@ make_triggers([TokenList|ListOfTokenLists], NegType, [Trigger|TriggerList]) :-
 map_negterm_tokens(TokenList, NegTerm, NegTermTokenList) :-
 	atomize_strings(NegTermStringList, NegTerm),
 	tokenize_strings(NegTermStringList, NegTermTokenList),
-	sublist(TokenList, NegTermTokenList).
+	sublist(NegTermTokenList, TokenList).
 
 tokenize_strings([], []).
 tokenize_strings([String|StringList], [Token|TokenList]) :-
@@ -385,7 +411,7 @@ tokenize_strings([String|StringList], [Token|TokenList]) :-
 % no
 %
 check_for_negation_phrase(Type, Target, WordList) :-
-	sublist(Target, WordList),
+	sublist(WordList, Target),
 	WordList = [H|T],
 	negation_phrase_tokens(Type, H, T).
 
@@ -420,19 +446,22 @@ get_negation_phrase_list(Target, ResultList) :-
 list_phrases_with_mappings([],[]).   
 list_phrases_with_mappings([DisambiguatedMMOPhrase|DisambiguatedMMOPhraseList],
 			   [PhraseMap|PhraseMaps]) :-
-	DisambiguatedMMOPhrase = phrase(PhraseObject,_candidates,Mappings,_pwi,_gvcs,_ev0,_aphrases),
-	list_phrases_with_mappings(DisambiguatedMMOPhraseList,PhraseMaps),
-	PhraseMap = [PhraseObject,Mappings].
+	DisambiguatedMMOPhrase =
+	          phrase(PhraseObject,_Candidates,Mappings,_PWI,_GVCs,_EV0,_APhrases),
+	PhraseMap = [PhraseObject,Mappings],
+	list_phrases_with_mappings(DisambiguatedMMOPhraseList,PhraseMaps).
+
 
 % map concepts of head and verb phrases, ignore the others
 keep_useful_phrasemaps(PhraseMaps, FinalPhraseMaps) :-
-	replace_phrasemaps_with_empty_mappings(PhraseMaps, FinalPhraseMaps0),
-	replace_nonuseful_phrasemaps(FinalPhraseMaps0, FinalPhraseMaps).
+	delete_phrasemaps_with_empty_mappings(PhraseMaps, FinalPhraseMaps0),
+	delete_nonuseful_phrasemaps(FinalPhraseMaps0, FinalPhraseMaps).
 
-mincoman_get_pos_tag([],[]).
-mincoman_get_pos_tag([MincomanElement|MincomanElements],Tag) :-
+mincoman_get_pos_tag([], []).
+mincoman_get_pos_tag([MincomanElement|MincomanElements], Tag) :-
 	( ( MincomanElement = head(_)
-	  ; MincomanElement = verb(_) ) ->
+	  ; MincomanElement = verb(_)
+	  ; MincomanElement = mod(_) ) ->
 	    Tag = MincomanElement
 	; mincoman_get_pos_tag(MincomanElements, Tag)
 	).
@@ -441,24 +470,24 @@ phrase_get_pos_tag(Phrase,Tag) :-
 	Phrase = phrase(_LowerPhraseText,Mincoman,_PosPair,_),
 	mincoman_get_pos_tag(Mincoman,Tag).
 
-replace_nonuseful_phrasemaps([], []).
-replace_nonuseful_phrasemaps([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
+delete_nonuseful_phrasemaps([], []).
+delete_nonuseful_phrasemaps([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
 	PhraseMap = [Phrase,_Mappings],
 	phrase_get_pos_tag(Phrase, Tag),
-	( ( Tag=head(_);  Tag=verb(_) ) ->
-	    FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
-	  ; FinalPhraseMaps = RestFinalPhraseMaps
+	( Tag \== [] ->
+	  FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
+	; FinalPhraseMaps = RestFinalPhraseMaps
 	),
-	replace_nonuseful_phrasemaps(PhraseMaps, RestFinalPhraseMaps).
+	delete_nonuseful_phrasemaps(PhraseMaps, RestFinalPhraseMaps).
 
-replace_phrasemaps_with_empty_mappings([], []).
-replace_phrasemaps_with_empty_mappings([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
+delete_phrasemaps_with_empty_mappings([], []).
+delete_phrasemaps_with_empty_mappings([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
 	PhraseMap = [_Phrase,Mappings],
 	( Mappings = mappings([]) ->
 	  FinalPhraseMaps = RestFinalPhraseMaps
 	; FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
 	),
-	replace_phrasemaps_with_empty_mappings(PhraseMaps, RestFinalPhraseMaps).
+	delete_phrasemaps_with_empty_mappings(PhraseMaps, RestFinalPhraseMaps).
 
 %
 % List concepts that have positions before or after trigger, based on
@@ -516,9 +545,9 @@ get_trigger_token(after, Tokens, TriggerToken) :-
 	last(Tokens, TriggerToken).
 
 test_relative_position(before, ConceptPosition, TriggerPosition) :-
-	ConceptPosition < TriggerPosition.
+	ConceptPosition =< TriggerPosition.
 test_relative_position(after, ConceptPosition, TriggerPosition) :-
-	ConceptPosition > TriggerPosition.
+	ConceptPosition >= TriggerPosition.
 
 get_negation_data(TriggerPositionTerm, ConceptTokensPhraseMap,
 		  TriggerPosition, ConceptPosition, Phrase, Mappings) :-
@@ -886,7 +915,7 @@ term_wordlength(Term, WordLength) :-
 % This error prevents TokenIndex from being returned uninstantiated,
 % which should never happen!
 charpos_to_tokenindex([], NegationTerm, CharPosInfo, _, _) :-
-	fatal_error('NegEx negation "~p" not beyond char pos ~w.~n~n',
+	fatal_error('NegEx negation "~p" beyond char pos ~w.~n~n',
 		    [NegationTerm,CharPosInfo]).
 charpos_to_tokenindex([Token|TokenList], NegationTerm, CharPosInfo, Start, TokenIndex) :-
 	Token = tok(_,_,NString,AbsPosInfo,RelPosInfo),
@@ -1038,324 +1067,5 @@ get_utterance_tokens([CurrentToken|RestTokens], [], [CurrentToken|RestTokens]).
 ignore_token_type(field).
 ignore_token_type(label).
 
-%
-% List of negation phrases.
-%
-
-% In http://code.google.com/p/negex/wiki/NegExTerms,
-% these are "Pre-condition negation terms (used to mark an indexed term as negated)".
-
-nega_phrase_tokens(absence, [of]).
-nega_phrase_tokens(cannot, []).
-nega_phrase_tokens(cannot, [see]).
-nega_phrase_tokens(checked, [for]).
-nega_phrase_tokens(declined, []).
-nega_phrase_tokens(declines, []).
-nega_phrase_tokens(deny, []).
-nega_phrase_tokens(denied, []).
-nega_phrase_tokens(denies, []).
-nega_phrase_tokens(denying, []).
-nega_phrase_tokens(evaluate, [for]).
-nega_phrase_tokens(fails, [to,reveal]).
-nega_phrase_tokens(free, [of]).
-nega_phrase_tokens(negative, [for]).
-nega_phrase_tokens(never, [developed]).
-nega_phrase_tokens(never, [had]).
-nega_phrase_tokens(no, []).
-nega_phrase_tokens(no, [abnormal]).
-nega_phrase_tokens(no, [cause,of]).
-nega_phrase_tokens(no, [complaints,of]).
-nega_phrase_tokens(no, [evidence]).
-nega_phrase_tokens(no, [new,evidence]).
-nega_phrase_tokens(no, [other,evidence]).
-nega_phrase_tokens(no, [evidence,to,suggest]).
-nega_phrase_tokens(no, [findings,of]).
-nega_phrase_tokens(no, [findings,to,indicate]).
-nega_phrase_tokens(no, [mammographic,evidence,of]).
-nega_phrase_tokens(no, [new]).
-nega_phrase_tokens(no, [radiographic,evidence,of]).
-nega_phrase_tokens(no, [sign,of]).
-nega_phrase_tokens(no, [significant]).
-nega_phrase_tokens(no, [signs,of]).
-nega_phrase_tokens(no, [suggestion,of]).
-nega_phrase_tokens(no, [suspicious]).
-nega_phrase_tokens(not, []).
-nega_phrase_tokens(not, [appear]).
-nega_phrase_tokens(not, [appreciate]).
-nega_phrase_tokens(not, [associated,with]).
-nega_phrase_tokens(not, [complain,of]).
-nega_phrase_tokens(not, [demonstrate]).
-nega_phrase_tokens(not, [exhibit]).
-nega_phrase_tokens(not, [feel]).
-nega_phrase_tokens(not, [had]).
-nega_phrase_tokens(not, [have]).
-nega_phrase_tokens(not, [know,of]).
-nega_phrase_tokens(not, [known,to,have]).
-nega_phrase_tokens(not, [reveal]).
-nega_phrase_tokens(not, [see]).
-nega_phrase_tokens(not, [to,be]).
-nega_phrase_tokens(patient, [was,not]).
-nega_phrase_tokens(rather, [than]).
-nega_phrase_tokens(resolved, []).
-nega_phrase_tokens(test, [for]).
-nega_phrase_tokens(to, [exclude]).
-nega_phrase_tokens(unremarkable, [for]).
-nega_phrase_tokens(with, [no]).
-nega_phrase_tokens(without, []).
-nega_phrase_tokens(without, [any,evidence,of]).
-nega_phrase_tokens(without, [evidence]).
-nega_phrase_tokens(without, [indication,of]).
-nega_phrase_tokens(without, [sign,of]).
-nega_phrase_tokens(rules, [out]).
-nega_phrase_tokens(rules, [him,out]).
-nega_phrase_tokens(rules, [her,out]).
-nega_phrase_tokens(rules, [the,patient,out]).
-nega_phrase_tokens(rules, [out,for]).
-nega_phrase_tokens(rules, [him,out,for]).
-nega_phrase_tokens(rules, [her,out,for]).
-nega_phrase_tokens(rules, [the,patient,out,for]).
-nega_phrase_tokens(ruled, [out]).
-nega_phrase_tokens(ruled, [him,out]).
-nega_phrase_tokens(ruled, [her,out]).
-nega_phrase_tokens(ruled, [the,patient,out]).
-nega_phrase_tokens(ruled, [out,for]).
-nega_phrase_tokens(ruled, [him,out,for]).
-nega_phrase_tokens(ruled, [her,out,for]).
-nega_phrase_tokens(ruled, [the,patient,out,for]).
-nega_phrase_tokens(ruled, [out,against]).
-nega_phrase_tokens(ruled, [him,out,against]).
-nega_phrase_tokens(ruled, [her,out,against]).
-nega_phrase_tokens(ruled, [the,patient,out,against]).
-nega_phrase_tokens(did, [rule,out]).
-nega_phrase_tokens(did, [rule,out,for]).
-nega_phrase_tokens(did, [rule,out,against]).
-nega_phrase_tokens(did, [rule,him,out]).
-nega_phrase_tokens(did, [rule,her,out]).
-nega_phrase_tokens(did, [rule,the,patient,out]).
-nega_phrase_tokens(did, [rule,him,out,for]).
-nega_phrase_tokens(did, [rule,her,out,for]).
-nega_phrase_tokens(did, [rule,him,out,against]).
-nega_phrase_tokens(did, [rule,her,out,against]).
-nega_phrase_tokens(did, [rule,the,patient,out,for]).
-nega_phrase_tokens(did, [rule,the,patient,out,against]).
-nega_phrase_tokens(can, [rule,out]).
-nega_phrase_tokens(can, [rule,out,for]).
-nega_phrase_tokens(can, [rule,out,against]).
-nega_phrase_tokens(can, [rule,him,out]).
-nega_phrase_tokens(can, [rule,her,out]).
-nega_phrase_tokens(can, [rule,the,patient,out]).
-nega_phrase_tokens(can, [rule,him,out,for]).
-nega_phrase_tokens(can, [rule,her,out,for]).
-nega_phrase_tokens(can, [rule,the,patient,out,for]).
-nega_phrase_tokens(can, [rule,him,out,against]).
-nega_phrase_tokens(can, [rule,her,out,against]).
-nega_phrase_tokens(can, [rule,the,patient,out,against]).
-nega_phrase_tokens(adequate, [to,rule,out]).
-nega_phrase_tokens(adequate, [to,rule,him,out]).
-nega_phrase_tokens(adequate, [to,rule,her,out]).
-nega_phrase_tokens(adequate, [to,rule,the,patient,out]).
-nega_phrase_tokens(adequate, [to,rule,out,for]).
-nega_phrase_tokens(adequate, [to,rule,him,out,for]).
-nega_phrase_tokens(adequate, [to,rule,her,out,for]).
-nega_phrase_tokens(adequate, [to,rule,the,patient,out,for]).
-nega_phrase_tokens(adequate, [to,rule,the,patient,out,against]).
-nega_phrase_tokens(sufficient, [to,rule,out]).
-nega_phrase_tokens(sufficient, [to,rule,him,out]).
-nega_phrase_tokens(sufficient, [to,rule,her,out]).
-nega_phrase_tokens(sufficient, [to,rule,the,patient,out]).
-nega_phrase_tokens(sufficient, [to,rule,out,for]).
-nega_phrase_tokens(sufficient, [to,rule,him,out,for]).
-nega_phrase_tokens(sufficient, [to,rule,her,out,for]).
-nega_phrase_tokens(sufficient, [to,rule,the,patient,out,for]).
-nega_phrase_tokens(sufficient, [to,rule,out,against]).
-nega_phrase_tokens(sufficient, [to,rule,him,out,against]).
-nega_phrase_tokens(sufficient, [to,rule,her,out,against]).
-nega_phrase_tokens(sufficient, [to,rule,the,patient,out,against]).
-% The following nega_phrase_token was added by NLM
-nega_phrase_tokens(with, [no,evidence,of]).
-
-% In http://code.google.com/p/negex/wiki/NegExTerms,
-% these are "Post-condition negation terms".
-
-negb_phrase_tokens(unlikely, []).
-negb_phrase_tokens(free, []).
-negb_phrase_tokens(was, [ruled,out]).
-negb_phrase_tokens(is, [ruled,out]).
-negb_phrase_tokens(are, [ruled,out]).
-negb_phrase_tokens(have, [been,ruled,out]).
-negb_phrase_tokens(has, [been,ruled,out]).
-
-% In http://code.google.com/p/negex/wiki/NegExTerms,
-% these are "Pre-condition possibility phrase (used to mark an indexed term as possible)".
-
-pnega_phrase_tokens(rule, [out]).
-pnega_phrase_tokens('r/o', []).
-pnega_phrase_tokens(ro, []).
-pnega_phrase_tokens(rule, [him,out]).
-pnega_phrase_tokens(rule, [her,out]).
-pnega_phrase_tokens(rule, [the,patient,out]).
-pnega_phrase_tokens(rule, [out,for]).
-pnega_phrase_tokens(rule, [him,out,for]).
-pnega_phrase_tokens(rule, [her,out,for]).
-pnega_phrase_tokens(rule, [the,patient,out,for]).
-pnega_phrase_tokens(be, [ruled,out,for]).
-pnega_phrase_tokens(should, [be,ruled,out,for]).
-pnega_phrase_tokens(ought, [to,be,ruled,out,for]).
-pnega_phrase_tokens(may, [be,ruled,out,for]).
-pnega_phrase_tokens(might, [be,ruled,out,for]).
-pnega_phrase_tokens(could, [be,ruled,out,for]).
-pnega_phrase_tokens(will, [be,ruled,out,for]).
-pnega_phrase_tokens(can, [be,ruled,out,for]).
-pnega_phrase_tokens(must, [be,ruled,out,for]).
-pnega_phrase_tokens(is, [to,be,ruled,out,for]).
-pnega_phrase_tokens(what, [must,be,ruled,out,is]).
-
-% In http://code.google.com/p/negex/wiki/NegExTerms,
-% these are "Post-condition possibility terms (used to mark an indexed term as possible)".
-
-pnegb_phrase_tokens(did, [not,rule,out]).
-pnegb_phrase_tokens(not, [ruled,out]).
-pnegb_phrase_tokens(not, [been,ruled,out]).
-pnegb_phrase_tokens(being, [ruled,out]).
-pnegb_phrase_tokens(be, [ruled,out]).
-pnegb_phrase_tokens(should, [be,ruled,out]).
-pnegb_phrase_tokens(ought, [to,be,ruled,out]).
-pnegb_phrase_tokens(may, [be,ruled,out]).
-pnegb_phrase_tokens(might, [be,ruled,out]).
-pnegb_phrase_tokens(could, [be,ruled,out]).
-pnegb_phrase_tokens(will, [be,ruled,out]).
-pnegb_phrase_tokens(can, [be,ruled,out]).
-pnegb_phrase_tokens(must, [be,ruled,out]).
-pnegb_phrase_tokens(is, [to,be,ruled,out]).
-
-% In http://code.google.com/p/negex/wiki/NegExTerms,
-% these are "Pseudo negation terms".
-
-pseudoneg_phrase_tokens(no,	 [increase]).
-pseudoneg_phrase_tokens(no,      [suspicious,change]).
-pseudoneg_phrase_tokens(no,      [significant,change]).
-pseudoneg_phrase_tokens(no,      [change]).
-pseudoneg_phrase_tokens(no,      [interval,change]).
-pseudoneg_phrase_tokens(no,      [definite,change]).
-pseudoneg_phrase_tokens(no,      [significant,interval,change]).
-pseudoneg_phrase_tokens(not,     [extend]).
-pseudoneg_phrase_tokens(not,     [cause]).
-pseudoneg_phrase_tokens(not,     [drain]).
-pseudoneg_phrase_tokens(not,     [certain,if]).
-pseudoneg_phrase_tokens(not,     [certain,whether]).
-pseudoneg_phrase_tokens(gram,    [negative]).
-pseudoneg_phrase_tokens(without, [difficulty]).
-pseudoneg_phrase_tokens(not,     [necessarily]).
-pseudoneg_phrase_tokens(not,     [only]).
-
-% In http://code.google.com/p/negex/wiki/NegExTerms,
-% these are "Termination terms".
-
-conj_phrase_tokens(although, []).
-conj_phrase_tokens(apart, [from]).
-conj_phrase_tokens(as, [a,cause,for]).
-conj_phrase_tokens(as, [a,cause,of]).
-conj_phrase_tokens(as, [a,etiology,for]).
-conj_phrase_tokens(as, [a,etiology,of]).
-conj_phrase_tokens(as, [a,reason,for]).
-conj_phrase_tokens(as, [a,reason,of]).
-conj_phrase_tokens(as, [a,secondary,cause,for]).
-conj_phrase_tokens(as, [a,secondary,cause,of]).
-conj_phrase_tokens(as, [a,secondary,etiology,for]).
-conj_phrase_tokens(as, [a,secondary,etiology,of]).
-conj_phrase_tokens(as, [a,secondary,origin,for]).
-conj_phrase_tokens(as, [a,secondary,origin,of]).
-conj_phrase_tokens(as, [a,secondary,reason,for]).
-conj_phrase_tokens(as, [a,secondary,reason,of]).
-conj_phrase_tokens(as, [a,secondary,source,for]).
-conj_phrase_tokens(as, [a,secondary,source,of]).
-conj_phrase_tokens(as, [a,source,for]).
-conj_phrase_tokens(as, [a,source,of]).
-conj_phrase_tokens(as, [an,cause,for]).
-conj_phrase_tokens(as, [an,cause,of]).
-conj_phrase_tokens(as, [an,etiology,for]).
-conj_phrase_tokens(as, [an,etiology,of]).
-conj_phrase_tokens(as, [an,origin,for]).
-conj_phrase_tokens(as, [an,origin,of]).
-conj_phrase_tokens(as, [an,reason,for]).
-conj_phrase_tokens(as, [an,reason,of]).
-conj_phrase_tokens(as, [an,secondary,cause,for]).
-conj_phrase_tokens(as, [an,secondary,cause,of]).
-conj_phrase_tokens(as, [an,secondary,etiology,for]).
-conj_phrase_tokens(as, [an,secondary,etiology,of]).
-conj_phrase_tokens(as, [an,secondary,origin,for]).
-conj_phrase_tokens(as, [an,secondary,origin,of]).
-conj_phrase_tokens(as, [an,secondary,reason,for]).
-conj_phrase_tokens(as, [an,secondary,reason,of]).
-conj_phrase_tokens(as, [an,secondary,source,for]).
-conj_phrase_tokens(as, [an,secondary,source,of]).
-conj_phrase_tokens(as, [an,source,for]).
-conj_phrase_tokens(as, [an,source,of]).
-conj_phrase_tokens(as, [the,cause,for]).
-conj_phrase_tokens(as, [the,cause,of]).
-conj_phrase_tokens(as, [the,etiology,for]).
-conj_phrase_tokens(as, [the,etiology,of]).
-conj_phrase_tokens(as, [the,origin,for]).
-conj_phrase_tokens(as, [the,origin,of]).
-conj_phrase_tokens(as, [the,reason,for]).
-conj_phrase_tokens(as, [the,reason,of]).
-conj_phrase_tokens(as, [the,secondary,cause,for]).
-conj_phrase_tokens(as, [the,secondary,cause,of]).
-conj_phrase_tokens(as, [the,secondary,etiology,for]).
-conj_phrase_tokens(as, [the,secondary,etiology,of]).
-conj_phrase_tokens(as, [the,secondary,origin,for]).
-conj_phrase_tokens(as, [the,secondary,origin,of]).
-conj_phrase_tokens(as, [the,secondary,reason,for]).
-conj_phrase_tokens(as, [the,secondary,reason,of]).
-conj_phrase_tokens(as, [the,secondary,source,for]).
-conj_phrase_tokens(as, [the,secondary,source,of]).
-conj_phrase_tokens(as, [the,source,for]).
-conj_phrase_tokens(as, [the,source,of]).
-conj_phrase_tokens(aside, [from]).
-conj_phrase_tokens(but, []).
-conj_phrase_tokens(cause, [for]).
-conj_phrase_tokens(cause, [of]).
-conj_phrase_tokens(causes, [for]).
-conj_phrase_tokens(causes, [of]).
-conj_phrase_tokens(etiology, [for]).
-conj_phrase_tokens(etiology, [of]).
-conj_phrase_tokens(except, []).
-conj_phrase_tokens(however, []).
-conj_phrase_tokens(nevertheless, []).
-conj_phrase_tokens(origin, [for]).
-conj_phrase_tokens(origin, [of]).
-conj_phrase_tokens(origins, [for]).
-conj_phrase_tokens(origins, [of]).
-conj_phrase_tokens(other, [possibilities,of]).
-conj_phrase_tokens(reason, [for]).
-conj_phrase_tokens(reason, [of]).
-conj_phrase_tokens(reasons, [for]).
-conj_phrase_tokens(reasons, [of]).
-conj_phrase_tokens(secondary, [to]).
-conj_phrase_tokens(source, [for]).
-conj_phrase_tokens(source, [of]).
-conj_phrase_tokens(sources, [for]).
-conj_phrase_tokens(sources, [of]).
-conj_phrase_tokens(still, []).
-conj_phrase_tokens(though, []).
-conj_phrase_tokens(trigger, [event,for]).
-conj_phrase_tokens(yet, []).
-
-% The following conj_phrase_tokens were added  by NLM
-conj_phrase_tokens(other,     [than]).
-conj_phrase_tokens(otherwise, []).
-conj_phrase_tokens(then,      []).
-conj_phrase_tokens(to,        [account,for]).
-conj_phrase_tokens(to,        [explain]).
-
-% Negated UMLS concepts must below to one of the following semantic types
-% this is essentially a specially defined semantic group that is a super set of "Disorders"
-% negex_semtype_list([acab,anab,biof,cgab,comd,dsyn,emod,fndg,
-%		      inpo,lbtr,menp,mobd,neop,patf,phsf,sosy]).
-
-% fin
-
-% :- use_module(library(addportray)).
-% portray_mm_output(mm_output(_ExpandedUtterance,_CitationTextAtom,_ModifiedText,_Tagging,_AAs,
-% 			    _Syntax,_DisambiguatedMMOPhrases,_ExtractedPhrases)) :- write('MMO').
-% :- add_portray(portray_mm_output).
+% List of negation triggers.
+% These are now contained in negex_triggers.pl.

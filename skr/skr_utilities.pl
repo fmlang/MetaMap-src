@@ -48,11 +48,12 @@
  	ensure_number/2,
  	expand_split_word_list/2,
 	fatal_error/2,
-	generate_aa_term/2,
+	generate_AAs_MMO_term/2,
 	generate_bracketed_output/2,
 	generate_candidates_output/7,
-	generate_header_output/6,
+	% generate_header_output/6,
 	generate_mappings_output/5,
+	generate_MMO_terms/9,
 	generate_phrase_output/7,
 	generate_utterance_output/6,
 	generate_variants_output/2,
@@ -77,7 +78,6 @@
 	token_template/6,
 	usage/0,
 	verify_xml_format/2,
-	write_MMO_terms/3,
 	write_raw_token_lists/2,
 	write_sentences/2,
 	write_token_list/3
@@ -363,18 +363,22 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_WSD_server_settings(WSDServerSettings),
 	verify_pruning_settings(PruningSettings),
 	verify_sldi_settings(SLDISettings),
+	verify_negex_trigger_setting(NegExTriggerSetting),
 	verify_negex_settings(NegExSettings),
 	verify_lexicon_setting(LexiconSetting),
 	verify_composite_phrases_setting(CompositePhrasesSetting),
 	verify_blanklines_setting(BlankLinesSetting),
+	verify_number_the_candidates_setting(NumberTheCandidatesSetting),
+	verify_number_the_mappings_setting(NumberTheCandidatesSetting),
 	verify_all_results([ModelSettings, TaggerOutputSettings, SingleOutputFormat,
 			    XMLSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
 			    SemTypeOptions, SemTypeValues, % GapSizeValues,
 			    AcrosAbbrsSettings, DerivationalVariantsSettings,
 			    TaggerServerSettings, WSDServerSettings,
-			    PruningSettings, SLDISettings, NegExSettings,
-			    LexiconSetting, CompositePhrasesSetting,BlankLinesSetting],
+			    PruningSettings, SLDISettings, NegExTriggerSetting, NegExSettings,
+			    LexiconSetting, CompositePhrasesSetting, BlankLinesSetting,
+			    NumberTheCandidatesSetting, NumberTheCandidatesSetting],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, DefaultRelease).
 
@@ -385,7 +389,6 @@ verify_model_settings(Result) :-
 	  Result is 1
 	; Result is 0
 	).
-
 
 % Error if both tagger_output and formal_tagger_output are set
 verify_tagger_output_settings(Result) :-
@@ -411,7 +414,7 @@ verify_xml_settings(Result) :-
 	xml_output_format(XMLFormat),
 	!,
 	warning_check([syntax, show_cuis, negex, sources, dump_aas], XMLFormat),
-	fatal_error_check([hide_plain_syntax, hide_candidates, number_the_candidates,
+	fatal_error_check([hide_plain_syntax, number_the_candidates,
 			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
 			  XMLFormat, 0, Result).
 verify_xml_settings(0).
@@ -420,7 +423,7 @@ verify_MMO_settings(Result) :-
 	control_option(machine_output),
 	!,
 	warning_check([syntax, show_cuis, negex, sources, dump_aas], machine_output),
-	fatal_error_check([hide_plain_syntax, hide_candidates, number_the_candidates,
+	fatal_error_check([hide_plain_syntax, number_the_candidates,
 			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
 			  machine_output, 0, Result).
 verify_MMO_settings(0).
@@ -428,10 +431,10 @@ verify_MMO_settings(0).
 verify_mmi_settings(Result) :-
 	control_option(fielded_mmi_output),
 	!,
-	warning_check([show_cuis], fielded_mmi_output),
-	fatal_error_check([tagger_output, hide_plain_syntax, hide_candidates,
+	warning_check([show_cuis,negex], fielded_mmi_output),
+	fatal_error_check([tagger_output, hide_plain_syntax, display_candidates,
 			   number_the_candidates, hide_semantic_types,
-			   show_preferrred_names_only, negex, hide_mappings, sources],
+			   show_preferrred_names_only, hide_mappings, sources],
 			  fielded_mmi_output, 0, Result).
 verify_mmi_settings(0).
 
@@ -467,11 +470,127 @@ verify_semantic_type_options(Result) :-
 	; Result is 0
 	).
 
+% Error if either restrict_to_sts and exclude_sts is set and invalid ST is specified
+verify_semantic_type_values(Result) :-
+	( control_value(restrict_to_sts,STs)
+	; control_value(exclude_sts,STs)
+	),
+	!,
+	( verify_sts(STs) ->
+	  Result is 0
+	; Result is 1
+	).
+verify_semantic_type_values(0).
+
+%%% % Error if invalid gap size is specified (obsolete)
+%%% verify_gap_size_values(Result) :-
+%%% 	control_value(gap_size, GapSize),
+%%% 	!,
+%%% 	( verify_gap_size_values_aux(GapSize) ->
+%%% 	  Result is 0
+%%% 	; send_message('gap_size argument must be of form Int1,Int2 ', []),
+%%% 	  send_message('with Int1 >= Int2+2~n', []),
+%%% 	  Result is 1
+%%% 	).
+%%% verify_gap_size_values(0).
+%%% 
+%%% verify_gap_size_values_aux(GapSize) :-
+%%% 	GapSize = [MinPhraseLength, MaxGapSize],
+%%% 	integer(MinPhraseLength),
+%%% 	integer(MaxGapSize),
+%%% 	MinPhraseLength >= MaxGapSize + 2.
+
+% Error if both all_acros_abbrs and unique_acros_abbrs_only are set
+verify_acros_abbrs_settings(Result) :-
+	( control_option(all_acros_abbrs),
+	  control_option(unique_acros_abbrs_only) ->
+	  send_message('~N### MetaMap ERROR: Only one of --all_acros_abbrs and ', []),
+	  send_message('--unique_acros_abbrs_only can be specified.~n', []),
+	  Result is 1
+	; Result is 0
+	).			    
+
+% Error if both all_derivational_variants and no_derivational_variants are set
+verify_derivational_variants_settings(Result) :-
+	( control_option(all_derivational_variants),
+	  control_option(no_derivational_variants) ->
+	  send_message('~N### MetaMap ERROR: Only one of --all_derivational_variants and ', []),
+	  send_message('--no_derivational_variants can be specified.~n', []),
+	  Result is 1
+	; Result is 0
+	).			    
+% Error if no_tagging is specified, but a specific tagger server is specified
+verify_tagger_server_settings(Result) :-
+	( control_option(no_tagging),
+	  control_value(tagger, ChosenTaggerServer) ->
+	  send_message('~N### MetaMap ERROR: If no_tagging is specified, ', []),
+	  send_message('a specific tagger (~s) cannot be chosen.~n', [ChosenTaggerServer]),
+	  Result is 1
+	; Result is 0
+	).
+
+% Error if WSD is not specified, but a specific WSD server is specified
+verify_WSD_server_settings(Result) :-
+	( \+ control_option(word_sense_disambiguation),
+	  control_value('WSD_SERVER', ChosenWSDServer) ->
+	  send_message('~N### MetaMap ERROR: If WSD is not specified, ', []),
+	  send_message('a specific WSD server (~s) cannot be chosen.~n', [ChosenWSDServer]),
+	  Result is 1
+	; Result is 0
+	).			    
+
+% Error if both --prune and --no_prune are specified.
+verify_pruning_settings(Result) :-
+	( control_value(prune, _),
+	  control_option(no_prune) ->
+	  send_message('## MetaMap ERROR: Cannot specify --prune and --no_prune.~n', []),
+	  Result is 1
+	; Result is 0
+	).			    
+
+% Error if both --sldi and --sldiID are specified.
+verify_sldi_settings(Result) :-
+	( control_option(sldi),
+	  control_option(sldiID) ->
+	  send_message('~N### MetaMap ERROR: Cannot specify --sldi and --sldiID.~n', []),
+	  Result is 1
+	; Result is 0
+	).			    
+
+% Error if any of negex_trigger_file is set, but negex is not!
+verify_negex_trigger_setting(Result) :-
+	( control_value(negex_trigger_file, _),
+	  \+ control_option(negex) ->
+	  send_message('~nERROR: --negex_trigger_file cannot be used without --negex!~n', []),
+	  Result is 1
+	; control_value(negex_trigger_file, _) ->
+	  load_negex_trigger_file,
+	  Result is 0
+	; Result is 0
+	).
+
+load_negex_trigger_file :-
+	( control_value(negex_trigger_file, NegExTriggerFile) ->
+	  prolog_flag(redefine_warnings, CurrentFlag),
+	  prolog_flag(redefine_warnings, CurrentFlag, off),
+	  negex_load(NegExTriggerFile),
+	  prolog_flag(redefine_warnings, off, CurrentFlag)
+	; true
+	).
+
+negex_load(NegExTriggerFile) :-
+	atom_length(NegExTriggerFile, FileNameLength),
+	BannerLength is FileNameLength + 40,
+	format(user_output, '~n~*c~n###### Loading NegEx trigger file ~w #####~n~*c~n',
+	       [BannerLength,35,NegExTriggerFile,BannerLength,35]),
+	compile(NegExTriggerFile).
+
+
 % Error if any of negex_st_add, negex_st_del, negex_st_set is set and invalid ST is specified.
 % Each of those three options, if set, contributes 1 to Total.
 % If Total > 1, more than one of the three options has been set,
 % so declare a fatal error.
-verify_negex_settings(Result) :-
+verify_negex_settings(Result) :-	
 	% If the user has specified negex_st_add,
 	( control_value(negex_st_add, SemTypesToAdd0) ->
 	  sort(SemTypesToAdd0, SemTypesToAdd1),
@@ -504,6 +623,37 @@ verify_negex_settings(Result) :-
 	  send_message('with either --negex_st_add or --negex_st_del.~n', []),
 	  Result is 1
 	; Result is 0
+	).
+
+% Called by verify_negex_settings/1
+verify_useless_sts(add, SemTypesToAdd) :-
+	default_negex_semtypes(DefaultNegExSemTypes),
+	intersection(SemTypesToAdd, DefaultNegExSemTypes, Intersection),
+	( Intersection \== [] ->
+	  set_message(Intersection, PluralIndicator, Verb, Pronoun, Determiner),
+	  send_message('~N### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
+		       [PluralIndicator,Intersection,Verb,Determiner,PluralIndicator]),
+	  send_message('             Adding ~w has no effect.~n', [Pronoun])
+	; true
+	).
+verify_useless_sts(del, SemTypesToAdd) :-
+	default_negex_semtypes(DefaultNegExSemTypes),
+	subtract(SemTypesToAdd, DefaultNegExSemTypes, LeftOvers),
+	( LeftOvers \= [] ->
+	  set_message(LeftOvers, PluralIndicator, Verb, Pronoun, Determiner),
+	  send_message('~N### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
+		       [PluralIndicator,LeftOvers,Verb,Determiner,PluralIndicator]),
+	  send_message('             Deleting ~w has no effect.~n', [Pronoun])
+
+	; true
+	).
+
+% Called by verify_negex_settings/1
+verify_all_del(SemTypesToDel) :-
+	intersection(SemTypesToDel, [all,'ALL'], Intersection),
+	( Intersection = [_|_] ->
+	  fatal_error('"all" and "ALL" cannot be used with negex_st_del~n.', [])
+	; true
 	).
 
 verify_lexicon_setting(LexiconSetting) :-
@@ -539,127 +689,23 @@ verify_blanklines_setting(BlankLinesSetting) :-
 	; send_message('~nERROR: --blanklines setting must be a nonnegative integer.~n', []),
 	  BlankLinesSetting is 1
 	).
-
 verify_blanklines_setting(0).
 
-verify_all_del(SemTypesToDel) :-
-	intersection(SemTypesToDel, [all,'ALL'], Intersection),
-	( Intersection = [_|_] ->
-	  fatal_error('"all" and "ALL" cannot be used with negex_st_del~n.', [])
-	; true
+verify_number_the_candidates_setting(NumberTheCandidatesSetting) :-
+	( control_option(number_the_candidates),
+	  \+ control_option(show_candidates) ->
+	   send_message('~nERROR: --number_the_candidates cannot be used without --show_candidates!~n', []),
+	   NumberTheCandidatesSetting is 1
+	;  NumberTheCandidatesSetting is 0
 	).
 
-verify_useless_sts(add, SemTypesToAdd) :-
-	default_negex_semtypes(DefaultNegExSemTypes),
-	intersection(SemTypesToAdd, DefaultNegExSemTypes, Intersection),
-	( Intersection \== [] ->
-	  set_message(Intersection, PluralIndicator, Verb, Pronoun, Determiner),
-	  send_message('~N### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
-		       [PluralIndicator,Intersection,Verb,Determiner,PluralIndicator]),
-	  send_message('             Adding ~w has no effect.~n', [Pronoun])
-	; true
+verify_number_the_mappings_setting(NumberTheMappingsSetting) :-
+	( control_option(number_the_mappings),
+	  control_option(hide_mappings) ->
+	   send_message('~nERROR: --number_the_mappings cannot be used with --hide_mappings!~n', []),
+	   NumberTheMappingsSetting is 1
+	;  NumberTheMappingsSetting is 0
 	).
-verify_useless_sts(del, SemTypesToAdd) :-
-	default_negex_semtypes(DefaultNegExSemTypes),
-	subtract(SemTypesToAdd, DefaultNegExSemTypes, LeftOvers),
-	( LeftOvers \= [] ->
-	  set_message(LeftOvers, PluralIndicator, Verb, Pronoun, Determiner),
-	  send_message('~N### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
-		       [PluralIndicator,LeftOvers,Verb,Determiner,PluralIndicator]),
-	  send_message('             Deleting ~w has no effect.~n', [Pronoun])
-
-	; true
-	).
-
-% Error if either restrict_to_sts and exclude_sts is set and invalid ST is specified
-verify_semantic_type_values(Result) :-
-	( control_value(restrict_to_sts,STs)
-	; control_value(exclude_sts,STs)
-	),
-	!,
-	( verify_sts(STs) ->
-	  Result is 0
-	; Result is 1
-	).
-verify_semantic_type_values(0).
-
-%%% % Error if invalid gap size is specified (obsolete)
-%%% verify_gap_size_values(Result) :-
-%%% 	control_value(gap_size, GapSize),
-%%% 	!,
-%%% 	( verify_gap_size_values_aux(GapSize) ->
-%%% 	  Result is 0
-%%% 	; send_message('gap_size argument must be of form Int1,Int2 ', []),
-%%% 	  send_message('with Int1 >= Int2+2~n', []),
-%%% 	  Result is 1
-%%% 	).
-%%% verify_gap_size_values(0).
-%%% 
-%%% verify_gap_size_values_aux(GapSize) :-
-%%% 	GapSize = [MinPhraseLength, MaxGapSize],
-%%% 	integer(MinPhraseLength),
-%%% 	integer(MaxGapSize),
-%%% 	MinPhraseLength >= MaxGapSize + 2.
-
-
-% Error if both all_acros_abbrs and unique_acros_abbrs_only are set
-verify_acros_abbrs_settings(Result) :-
-	( control_option(all_acros_abbrs),
-	  control_option(unique_acros_abbrs_only) ->
-	  send_message('~N### MetaMap ERROR: Only one of --all_acros_abbrs and ', []),
-	  send_message('--unique_acros_abbrs_only can be specified.~n', []),
-	  Result is 1
-	; Result is 0
-	).			    
-
-
-% Error if both all_derivational_variants and no_derivational_variants are set
-verify_derivational_variants_settings(Result) :-
-	( control_option(all_derivational_variants),
-	  control_option(no_derivational_variants) ->
-	  send_message('~N### MetaMap ERROR: Only one of --all_derivational_variants and ', []),
-	  send_message('--no_derivational_variants can be specified.~n', []),
-	  Result is 1
-	; Result is 0
-	).			    
-
-% Error if no_tagging is specified, but a specific tagger server is specified
-verify_tagger_server_settings(Result) :-
-	( control_option(no_tagging),
-	  control_value(tagger, ChosenTaggerServer) ->
-	  send_message('~N### MetaMap ERROR: If no_tagging is specified, ', []),
-	  send_message('a specific tagger (~s) cannot be chosen.~n', [ChosenTaggerServer]),
-	  Result is 1
-	; Result is 0
-	).
-
-% Error if WSD is not specified, but a specific WSD server is specified
-verify_WSD_server_settings(Result) :-
-	( \+ control_option(word_sense_disambiguation),
-	  control_value('WSD', ChosenWSDServer) ->
-	  send_message('~N### MetaMap ERROR: If WSD is not specified, ', []),
-	  send_message('a specific WSD server (~s) cannot be chosen.~n', [ChosenWSDServer]),
-	  Result is 1
-	; Result is 0
-	).			    
-
-% Error if both --prune and --no_prune are specified.
-verify_pruning_settings(Result) :-
-	( control_value(prune, _),
-	  control_option(no_prune) ->
-	  send_message('## MetaMap ERROR: Cannot specify --prune and --no_prune.~n', []),
-	  Result is 1
-	; Result is 0
-	).			    
-
-% Error if both --sldi and --sldiID are specified.
-verify_sldi_settings(Result) :-
-	( control_option(sldi),
-	  control_option(sldiID) ->
-	  send_message('~N### MetaMap ERROR: Cannot specify --sldi and --sldiID.~n', []),
-	  Result is 1
-	; Result is 0
-	).			    
 
 verify_all_results(ValuesList, InputStream, OutputStream) :-
 	compute_sum(ValuesList, 0, Result),
@@ -843,7 +889,7 @@ generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length,
 	  PhraseMMO = phrase(PhraseTextAtom,Phrase,StartPos/Length,ReplacementPos)
 	; ( \+ control_option(hide_plain_syntax) ->
 	    atom_codes(PhraseTextAtom,PhraseText),
-	    format('~nPhrase: ~p~n',[PhraseText])
+	    format('~nPhrase: ~s~n',[PhraseText])
 	  ; true
 	  ),
 	  ( control_option(syntax) ->
@@ -919,7 +965,8 @@ generate_candidates_output(Evaluations3, TotalCandidateCount,
 	  CandidatesMMO = candidates(TotalCandidateCount,
 				     ExcludedCandidateCount,PrunedCandidateCount,
 				     RemainingCandidateCount,Evaluations3)
-	; \+ control_option(hide_candidates),
+	; control_option(show_candidates),
+	  % Even if show_candidates is on, if there are no candidates, there's no output.
 	  Evaluations3 \== [] ->
 	  conditionally_skr_begin_write(BracketedOutput, 'Candidates'),
 	  conditionally_dump_evals(Evaluations3, TotalCandidateCount,
@@ -965,7 +1012,7 @@ conditionally_dump_evals(Evaluations3, TotalCandidateCount,
 %				    RemainingCandidateCount, 'Candidates')
 %	).
 
-generate_mappings_output(Mappings, Evaluations, APhrases, BracketedOutput, MappingsMMO) :-
+generate_mappings_output(Mappings, _Evaluations, APhrases, BracketedOutput, MappingsMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
 	( ( control_option(machine_output)
 	  ; xml_output_format(_XMLFormat)
@@ -975,7 +1022,7 @@ generate_mappings_output(Mappings, Evaluations, APhrases, BracketedOutput, Mappi
 	  % which is needed for both MMO and XML output!
 	  MappingsMMO = mappings(Mappings)
 	; ( \+ control_option(hide_mappings),
-	    Evaluations\==[] ->
+	      Mappings \== [] ->
             ( BracketedOutput == 1 ->
 	      skr_begin_write('Mappings')
 	    ; true
@@ -994,7 +1041,7 @@ generate_header_output(IArgs, IOptions, NegExList, DisambMMOutput,
 		       HeaderMMO, HeaderMMORest) :-
 	  HeaderMMO = [ArgsMMO,AAsMMO,NegExMMO|HeaderMMORest],
 	  format_cmd_line_for_machine_output(IOptions, IArgs, ArgsMMO),
-	  generate_aa_term(DisambMMOutput, AAsMMO),
+	  generate_AAs_MMO_term(DisambMMOutput, AAsMMO),
 	  % NegExList is currently hardcoded.
 	  NegExMMO = neg_list(NegExList).
 
@@ -1008,24 +1055,24 @@ generate_utterance_output(Label, Text0, UttStartPos, UttLength, ReplPos, Utteran
 	; true
 	).
 
-generate_aa_term(DisambMMOutput, aas(SortedAAList)) :-
+generate_AAs_MMO_term(DisambMMOutput, aas(SortedAAList)) :-
 	% Exctact the AA term from the DisambMMOutput
 	get_aa_term(DisambMMOutput, AAs),
 	avl_to_list(AAs, AAListTokens),
-	reformat_aa_list(AAListTokens, DisambMMOutput, AAList),
+	reformat_AA_list(AAListTokens, DisambMMOutput, AAList),
 	sort(AAList, SortedAAList).
 
 	
-reformat_aa_list([], _DisambMMOutput, []).
-reformat_aa_list([FirstAA|RestAAs], DisambMMOutput,
+reformat_AA_list([], _DisambMMOutput, []).
+reformat_AA_list([FirstAA|RestAAs], DisambMMOutput,
 		 [AAString*ExpansionString*CountData*CUIList|RestReformattedAAs]) :-
-	reformat_one_aa(FirstAA, DisambMMOutput,
+	reformat_one_AA(FirstAA, DisambMMOutput,
 			AAString, ExpansionString, CountData, TempCUIList),
 	% 0 seeds the predicate with a NegScore
 	choose_best_mappings_only(TempCUIList, 0, CUIList),
-	reformat_aa_list(RestAAs, DisambMMOutput, RestReformattedAAs).
+	reformat_AA_list(RestAAs, DisambMMOutput, RestReformattedAAs).
 
-reformat_one_aa(AATokenList-[ExpansionTokenList],
+reformat_one_AA(AATokenList-[ExpansionTokenList],
 		DisambMMOutput, AAString, ExpansionString, CountData, CUIList) :-
 	% Get the actual strings from the AATokenList
 	extract_token_strings(AATokenList, AAStringList),
@@ -1042,7 +1089,7 @@ reformat_one_aa(AATokenList-[ExpansionTokenList],
 	append(ExpansionStringList, ExpansionString),
 	length(ExpansionString, ExpansionStringLength), 
 	append(ANLCExpansionStringList, ANLCExpansionString),
-	CountData = [AATokenListLength,AAStringLength,ExpansionTokenListLength,ExpansionStringLength],
+	CountData = (AATokenListLength,AAStringLength,ExpansionTokenListLength,ExpansionStringLength),
 	atom_codes(ANLCExpansionAtom, ANLCExpansionString),
 	find_matching_CUIs(DisambMMOutput, ANLCExpansionAtom, TempCUIList, []),
 	sort(TempCUIList, CUIList).
@@ -1100,18 +1147,32 @@ get_aa_term(MMOutput, AAs) :-
 	FirstMMOutput = mm_output(_ExpandedUtterance,_Citation,_ModifiedText,
 				  _Tagging,AAs,_Syntax,_MMOPhrases,_ExtractedPhrases).
 
-write_MMO_terms(PrintMMO, OutputStream, MMOTerms) :-
-	( PrintMMO =:= 1,
-	  control_option(machine_output) ->
-	  write_MMO_terms_aux(MMOTerms, OutputStream)
+% generate_MMO_terms(OutputStream, MMOTerms) :-
+generate_MMO_terms(IArgs, IOptions, NegExList, DisambMMOutput,
+		   HeaderMMO, HeaderMMORest, OutputStream, PrintMMO, AllMMO) :-
+	  conditionally_generate_header_output(IArgs, IOptions, NegExList,
+					       DisambMMOutput, HeaderMMO, HeaderMMORest),
+	  AllMMO = HeaderMMO,
+	  conditionally_write_MMO_terms(PrintMMO, AllMMO, OutputStream).
+
+conditionally_generate_header_output(IArgs, IOptions, NegExList,
+				     DisambMMOutput, HeaderMMO, HeaderMMORest) :-
+	( ( control_option(machine_output)
+	   ; xml_output_format(_)  ) ->
+	  generate_header_output(IArgs, IOptions, NegExList,
+				 DisambMMOutput, HeaderMMO, HeaderMMORest)
 	; true
 	).
 
-write_MMO_terms_aux([ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO], OutputStream) :-
+conditionally_write_MMO_terms(PrintMMO, [ArgsMMO,AAsMMO,NegExMMO|UtteranceMMO], OutputStream) :-
+	( PrintMMO is 1,
+	  control_option(machine_output) ->
 	  write_args_MMO_term(ArgsMMO, OutputStream),
 	  write_AAs_MMO_term(AAsMMO, OutputStream),
 	  write_negex_MMO_term(NegExMMO, OutputStream),
-	  write_all_utterance_MMO_terms(UtteranceMMO, OutputStream).
+	  write_all_utterance_MMO_terms(UtteranceMMO, OutputStream)
+	; true
+	).
        
 write_args_MMO_term(ArgsMMO, OutputStream) :-
 	write_term(OutputStream, ArgsMMO,
@@ -1136,15 +1197,15 @@ write_all_utterance_MMO_terms([FirstMMOTerm|RestMMOTerms], OutputStream) :-
 
 write_one_utterance_MMO_term(UtteranceTerm, OutputStream, RestMMOTerms, RemainingMMOTerms) :-
         % this is the one place to use portrayed(true)
-	UtteranceTerm = utterance(Label, UtteranceString, PosInfo, ReplPos),
-	% We can no longer simply do
-	% write_term(UtteranceTerm, [quoted(true),portrayed(true)])
-	% because ReplPos is a list of small integers,
-	% which would be interpreted as a print string by portray/1. Blarg.
-	format(OutputStream, 'utterance(~q,', [Label]),
-	write_term(OutputStream, UtteranceString, [quoted(true),portrayed(true)]),
-	format(OutputStream, ',~w,~w).~n', [PosInfo,ReplPos]),
-	write_all_phrase_MMO_terms(RestMMOTerms, OutputStream, RemainingMMOTerms).
+        UtteranceTerm = utterance(Label, UtteranceString, PosInfo, ReplPos),
+        % We can no longer simply do
+        % write_term(UtteranceTerm, [quoted(true),portrayed(true)])
+        % because ReplPos is a list of small integers,
+        % which would be interpreted as a print string by portray/1. Blarg.
+        format(OutputStream, 'utterance(~q,', [Label]),
+        write_term(OutputStream, UtteranceString, [quoted(true),portrayed(true)]),
+        format(OutputStream, ',~w,~w).~n', [PosInfo,ReplPos]),
+        write_all_phrase_MMO_terms(RestMMOTerms, OutputStream, RemainingMMOTerms).
 
 write_all_phrase_MMO_terms([], _OutputStream, []).
 write_all_phrase_MMO_terms([H|T], OutputStream, RemainingMMOTerms) :-
@@ -1179,7 +1240,8 @@ write_candidates_MMO_component(CandidatesTerm, OutputStream) :-
 	       [TotalCandidateCount,ExcludedCandidateCount,
 		PrunedCandidateCount,RemainingCandidateCount]),
 	% If the candidate list is empty, do nothing!
-	( CandidateList = [H|T] ->
+	( CandidateList = [H|T],
+	  control_option(show_candidates) ->
 	  write_MMO_candidate_list(T, OutputStream, H)
 	; true
 	),
@@ -1388,18 +1450,26 @@ ensure_number(Atom, Number) :-
 	  number_codes(Number, AtomCodes)
 	).
 
+% Generate the MMO, which is needed for machine_output, fielded_mmi_output, and XML output.
 check_generate_utterance_output_control_options_1 :-
 	( control_option(machine_output)     -> true
 	; control_option(fielded_mmi_output) -> true
 	; xml_output_format(_XMLFormat)
 	).
 
+% If this predicate succeeds it causes
+%           format('~NProcessing ~a: ~s~n',[Label,Text0])
+% e.g.,
+% Processing 12087422.ti.1: Toxicology and carcinogenesis studies . . .
+% to be called, which we want to happen
+% UNLESS hide_plain_syntax and hide_mappings are on
+% AND    show_candidates, syntax and variants are off.
 check_generate_utterance_output_control_options_2 :-
 	( \+ control_option(hide_plain_syntax) -> true
+	; \+ control_option(hide_mappings)     -> true
+	; control_option(show_candidates)      -> true
 	; control_option(syntax)               -> true
-	; control_option(variants)             -> true
-	; \+ control_option(hide_candidates)   -> true
-	; \+ control_option(hide_mappings)
+	; control_option(variants)
 	).
 
 conditionally_print_header_info(InputFile, TagMode, OutputFile, TagOption) :-

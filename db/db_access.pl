@@ -38,15 +38,17 @@
 	db_get_concept_cui/2,
 	% db_get_concept_sts/2,
 	db_get_cui_sourceinfo/2,
+        db_get_cui_sources_and_semtypes/3,
 	% db_get_cui_sts/2,
-	db_get_cui_sources_and_semtypes/3,
+	% db_get_cui_semtypes/2,
 	db_get_mesh_mh/2,
 	db_get_mesh_tc_relaxed/2,
 	db_get_meta_mesh/2,
 	db_get_mwi_word_count/3,
 	db_get_mwi_word_data/4,
+	% db_get_string_sources/2,
 	db_get_synonyms/2,
-	db_get_synonyms/3,
+	db_get_synonyms_with_cat/3,
 	db_get_unique_acros_abbrs/2,
 	db_get_root_source_name/2,
 	db_get_variants/3,
@@ -74,18 +76,34 @@
 	run_query/3		      
    ]).
 
-:- use_module(skr_lib(nls_system), [
-	control_option/1,
-	control_value/2
+:- use_module(metamap(metamap_tokenization), [
+	local_digit/1
+    ]).
+
+:- use_module(metamap(metamap_variants), [
+	variant_score/2
+    ]).
+
+:- use_module(skr(skr_utilities),[
+	debug_call/2,
+	debug_message/3,
+	ensure_atom/2,
+	fatal_error/2,
+	send_message/2
     ]).
 
 :- use_module(skr(skr_xml), [
 	xml_output_format/1
     ]).
 
-:- use_module(skr_lib(ctypes), [
-	is_digit/1
+:- use_module(skr_lib(nls_system), [
+	control_option/1,
+	control_value/2
     ]).
+
+% :- use_module(skr_lib(ctypes), [
+% 	is_digit/1
+%     ]).
 
 :- use_module(skr_lib(nls_strings),[
 	atom_codes_list/2,
@@ -102,14 +120,6 @@
 	concat_atom/2,
 	lower/2,
 	ttyflush/0
-    ]).
-
-:- use_module(skr(skr_utilities),[
-	debug_call/2,
-	debug_message/3,
-	ensure_atom/2,
-	fatal_error/2,
-	send_message/2
     ]).
 
 :- use_module(library(codesio), [
@@ -222,7 +232,7 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 	
-default_release('2013AB').
+default_release('2014AA').
 
 initialize_db_access :-
 	get_data_release(Release, 1),
@@ -498,19 +508,19 @@ remove_input([Input-_|Rest], Input, ModifiedRest) :-
 remove_input([First|Rest],Input, [First|ModifiedRest]) :-
 	remove_input(Rest, Input, ModifiedRest).
 
-db_get_synonyms(Word, WordCategory, Synonyms) :-
+db_get_synonyms_with_cat(Word, WordCategory, Synonyms) :-
 	( Word == [] ->
 	  Synonyms = []
         ; ensure_atom(Word, WordAtom),
 	  ensure_atom(WordCategory, WordCategoryAtom),
-	  db_get_synonyms_aux(WordAtom, WordCategoryAtom, Synonyms0),
+	  db_get_synonyms_with_cat_aux(WordAtom, WordCategoryAtom, Synonyms0),
 	  del_element(WordAtom-WordCategoryAtom, Synonyms0, Synonyms)
 	),
 	!.
-db_get_synonyms(Word, WordCategory, []) :-
+db_get_synonyms_with_cat(Word, WordCategory, []) :-
 	fatal_error('db_get_synonyms/3 failed for ~w/~w.~n', [Word, WordCategory]).
 
-db_get_synonyms_aux(WordAtom, WordCategoryAtom, Synonyms) :-
+db_get_synonyms_with_cat_aux(WordAtom, WordCategoryAtom, Synonyms) :-
 	form_complex_query("syn, scat", "syns", "word", WordAtom, "wcat", WordCategoryAtom, Query),
 	run_query(Query, Synonyms0, 1),
 	normalize_synonyms(Synonyms0, Synonyms1),
@@ -624,6 +634,7 @@ db_get_mwi_word_data(Table, Word, DebugFlags, Results) :-
 	  debug_db_get_mwi_data_2(DebugFlags),
 	  form_uscs(RawResults, 0, Results),
 	  debug_db_get_mwi_data_3(DebugFlags, Results)
+	
 	  ),
 	!.
 db_get_mwi_word_data(Table, Word, _DebugFlags, []) :-
@@ -656,8 +667,13 @@ db_get_mwi_word_data_aux(1, Table, Word, DebugFlags, RawResults) :-
 
 % This is the wide version
 db_get_mwi_word_data_WIDE(Table, Word, DebugFlags, RawResults) :-
-	form_simple_query("nmstr, str, concept", Table, "word", Word, Query),	
+	form_simple_query("nmstr, str, concept", Table, "word", Word, Query),
+	% statistics(runtime, [T0|_]),
         run_query(Query, RawResults, 1),
+	% statistics(runtime, [T1|_]),
+	% Total is T1 - T0,
+	% length(RawResults, Length),
+	% format(user_output, 'TABLE|~w|~w|~d ms|~d results.~n', [Table,Word,Total,Length]),
 	debug_db_get_mwi_data_aux_2(DebugFlags, RawResults),
 	!.
 db_get_mwi_word_data_WIDE(Table, Word, _DebugFlags, _RawResults) :-
@@ -738,51 +754,167 @@ db_get_variants(Concept, Category, Variants) :-
 	db_get_variants_aux(ConceptString, Category, Variants).
 
 % always treat adjectives as nouns, if possible
-db_get_variants_aux(Concept, Category0, Variants) :-
+db_get_variants_aux(ConceptString, Category0, AllVariantsTerms) :-
 	get_real_category(Category0, Category),
-	( Category == adj,
-	  get_variants_from_db(Concept, noun, Variants),
-	  Variants \== [] ->
-	  true
-	; get_variants_from_db(Concept, Category, Variants)
+	Recurse = 1,
+	( Category == adj ->
+	  get_variants_from_db(ConceptString, Recurse, noun, NounVariantsLists),
+	  maybe_get_adj_variants(ConceptString, Recurse, NounVariantsLists, AdjVariantsLists),
+	  append(NounVariantsLists, AdjVariantsLists, AllVariantsLists)
+	; get_variants_from_db(ConceptString, Recurse, Category, AdjVariantsLists),
+	  AllVariantsLists = AdjVariantsLists
 	),
-	!.
+	sort(AllVariantsLists, SortedAllVariantsLists),
+	convert_to_variant_terms(SortedAllVariantsLists, AllVariantsTerms).
+
+maybe_get_adj_variants(ConceptString, Recurse, NounVariants, AdjVariants) :-
+	  ( atom_codes(ConceptAtom, ConceptString),
+	    \+ memberchk([_Dist,ConceptAtom,_LexCat,_Hist,_Roots], NounVariants) ->
+	    % If the noun variants don't include the word itself,
+	    % e.g., for "pancreatic" with expvars == 2,
+	    % look for adj variants and combine the results.
+	    get_variants_from_db(ConceptString, Recurse, adj, AdjVariants)
+	  ; AdjVariants = []
+	  ).
 
 get_real_category([Category], Category).
 get_real_category([],         []).
 
-get_variants_from_db(Concept, Category, Variants) :-
+get_variants_from_db(WordString, Recurse, Category, AllVariantsLists) :-
 	db_access_var_table(VarTable),
 	ensure_string(VarTable, VarTableString),
-	( control_option(allcats) ->
+	( ( control_option(allcats)
+	  ; Category == [] ) ->
 	  % select var, vcat, dist, hist, roots from varsan where word=\'haemophilic\'
 	  form_simple_query("dist, var, vcat, hist, roots",
-			      VarTableString, "word", Concept, Query)
+			      VarTableString, "word", WordString, Query)
 	; ensure_atom(Category, CategoryAtom),
 	  % select var, vcat, dist, hist, roots from varsan
 	  %     where word=\'haemophilic\' and wcat=\'noun\'
 	  form_complex_query("dist, var, vcat, hist, roots",
-			     VarTableString, "word", Concept, "wcat", CategoryAtom, Query)
+			     VarTableString, "word", WordString, "wcat", CategoryAtom, Query)
 	),
-	run_query(Query, Variants0, 1),
-	sort(Variants0, Variants1),
-	% format('~nget_variants_aux:~nquery = ~p~nresult = ~p~n',[Query,Variants0]),
-	% format('~nafter sort~n', []),
-	convert_to_variant_terms(Variants1, Variants).
+	run_query(Query, VariantsLists, 1),
+	maybe_get_expanded_variants(Recurse, WordString, ExpandedVariantsLists),
+	% maybe_get_subsyn_variants(Recurse, WordString, SubSynVariantsLists),
+	% append([VariantsLists,ExpandedVariantsLists,SubSynVariantsLists], AllVariantsLists).
+	append(VariantsLists, ExpandedVariantsLists, AllVariantsLists).
+
+
+% maybe_get_subsyn_variants(Recurse1, WordString, SubSynVariants) :-
+% 	( \+ control_option(subsyn) ->
+% 	  SubSynVariants = []
+% 	; Recurse1 =:= 0 ->
+% 	  SubSynVariants = []
+% 	; Category = [],
+% 	  atom_codes(WordAtom, WordString),
+% 	  setof(SSV, subsyn_variant(WordAtom, SSV), SubSynVariants0) ->
+% 	  variant_score(synonym, SynonymScore),
+% 	  atom_codes(WordAtom, WordString),
+% 	  (  foreach(SubSynVar, SubSynVariants0),
+% 	     foreach(SubSynVarList, SubSynVariants1),
+% 	     param([Category,SynonymScore])
+%  	  do SubSynVarList = [SynonymScore,SubSynVar,noun,s,[]]
+% 	  ),
+% 	  SubSynVariants = SubSynVariants1
+% 	; SubSynVariants = []
+% 	).
+
+% 	; % First, look in the subsyn_vars table to get the subsynonymy variant,
+% 	  % e.g., assessment --> evaluation
+% 	  form_simple_query("subsynvar", "subsynvars", "word", WordString, Query),
+% 	  run_query(Query, SubSynResult, 1),
+% 	  sort(SubSynResult, SortedSubSynResult),
+% 	  ( SortedSubSynResult == [] ->
+% 	    SubSynVariants = []
+% 	  ; % Then get the usual variants based on the SubSyn variant(s)
+% 	    % Result = [[ExpVar]],
+% 	    % Result looks like [[v1], [v2], ..., [v3]]
+% 	    Category = [],
+% 	    Recurse2 is 0,
+% 	    variant_score(synonym, SynonymScore),
+% 	    (  foreach([SubSynVar], SortedSubSynResult),
+% 	       foreach(SubSynVarList, SubSynVariants0),
+% 	       param([Category,Recurse2,SynonymScore])
+% 	    do SubSynVarList = [SynonymScore,SubSynVar,noun,s,[]]
+% 	    ),
+% % 	    (  foreach([SubSynVar], SortedSubSynResult),
+% % 	       foreach(SubSynVarList, SubSynVariants0),f% 
+% % 	       param([Category,Recurse2,SynonymScore])
+% % 	    do get_variants_from_db(SubSynVar, Recurse2, Category, SubSynVarList0),
+% % 	       adjust_subsyn_scores(SubSynVarList0, SynonymScore, SubSynVarList1),
+% % 	       SubSynVarList = [[SynonymScore,SubSynVar,noun,s,[]]|SubSynVarList1]
+% % 	    ),
+% 	    % append(SubSynVariants0, SubSynVariants)
+% 	    SubSynVariants = SubSynVariants0
+% 	  )	    
+% 	).
+
+% adjust_subsyn_scores(VarsIn, SynonymScore, VarsOut) :-
+% 	(  foreach([DistanceIn, Variant,LexCat,HistoryIn, Roots], VarsIn),
+% 	   foreach([DistanceOut,Variant,LexCat,HistoryOut,Roots], VarsOut),
+% 	   param([SynonymScore])
+%         do DistanceOut is DistanceIn + SynonymScore,
+% 	   concat_atom([d,HistoryIn], HistoryOut)
+% 	).
+ 
+maybe_get_expanded_variants(Recurse1, WordString, ExpandedVariants) :-
+	( \+ control_option(expvars) ->
+	  ExpandedVariants = []
+	; Recurse1 =:= 0 ->
+	  ExpandedVariants = []
+	; % IF  expvars control option is set
+	  % AND Recurse is 1:
+          % First, look in the expvar table to get the expanded variant,
+	  % e.g., intrahepatically --> hepatic
+	  control_value(expvars, ExpVarsLevelInteger),
+%	  format(user_output, 'GEV: ~d:~s~n', [ExpVarsLevelInteger,WordString]),
+	  ensure_atom(ExpVarsLevelInteger, ExpVarsLevelAtom),
+	  form_complex_query("level, expvar, penalty", "expvars",
+			     "word", WordString, "level", ExpVarsLevelAtom, Query),
+	  run_query(Query, ExpVarsResult, 1),
+	  sort(ExpVarsResult, SortedExpVarsResult),
+	  ( SortedExpVarsResult == [] ->
+	    ExpandedVariants = []
+	  ; % Then get the usual variants based on the expanded variant(s)
+	    % With expvars.2, multiple results are possible!
+	    % Result = [[ExpVar]],
+	    % Result looks like [[v1], [v2], ..., [v3]]
+	    Recurse2 is 0,
+	    Category = [],
+	    variant_score(derivation, DerivationScore),
+	    (  foreach([_Level,ExpVar,Penalty], SortedExpVarsResult),
+	       foreach(ExpVarList, ExpandedVariants0),
+	       param([Recurse2,Category,DerivationScore])
+	    do get_variants_from_db(ExpVar, Recurse2, Category, ExpVarList0),
+	       adjust_expvar_scores(ExpVarList0, Penalty, DerivationScore, ExpVarList)
+	    ),
+	    append(ExpandedVariants0, ExpandedVariants)	  
+	  )	    
+	).
+
+adjust_expvar_scores(VarsIn, Penalty, DerivationScore, VarsOut) :-
+	(  foreach([DistanceIn, Variant,LexCat,HistoryIn, Roots], VarsIn),
+	   foreach([DistanceOut,Variant,LexCat,HistoryOut,Roots], VarsOut),
+	   param([DerivationScore,Penalty])
+        do DistanceOut is DistanceIn + DerivationScore + Penalty,
+	   concat_atom([d,HistoryIn], HistoryOut)
+	).
+
 
 convert_to_variant_terms([], []).
 % temp  to handle null values until they're removed
 % convert_to_variant_terms([[]|Rest],ConvertedRest) :-
 %    !,
 %    convert_to_variant_terms(Rest,ConvertedRest).
-convert_to_variant_terms([[Distance,Var,VCat0,Hist0,Roots]|Rest],
-                         [v(Var,DistInteger,VCat,Hist,Roots,_)|ConvertedRest]) :-
+convert_to_variant_terms([[Distance,Var,VCat0,Hist,Roots]|Rest],
+                         [v(Var,DistInteger,VCat,HistCodes,Roots,_)|ConvertedRest]) :-
 	ensure_atom(Distance, DistAtom),
 	atom_codes(DistAtom, DistCodes),
 	number_codes(DistInteger, DistCodes),
 	convert_variant_category(VCat0, VCat),
 	% format('~nconverted ~q to ~q~n', [VCat0, VCat]),
-	atom_codes(Hist0, Hist),
+	atom_codes(Hist, HistCodes),
 	convert_to_variant_terms(Rest, ConvertedRest).
 
 convert_variant_category(VCat0, VCat) :-
@@ -894,8 +1026,8 @@ normalize_db_access_year(Release, NormalizedRelease) :-
 	  ; ReleaseLength =:= 4,
 	    % Nonstandard, e.g., 08AA, 09AB, 10AA, etc.
 	    Codes = [D1, D2, A, ABC],
-	    is_digit(D1),
-	    is_digit(D2),
+	    local_digit(D1),
+	    local_digit(D2),
 	    A == 0'A,
 	    is_ABC(ABC) ->
 	    choose_century(D1, Century),
@@ -920,7 +1052,7 @@ choose_century(Digit, Century) :-
 	).
 
 all_digits([]).
-all_digits([H|T]) :- is_digit(H), all_digits(T).
+all_digits([H|T]) :- local_digit(H), all_digits(T).
 
 is_ABC(0'A).
 is_ABC(0'B).
@@ -1045,20 +1177,43 @@ db_get_lex_prefix_EUIs(PrefixAtom, EUIList) :-
 	append([H|T], EUIList).
 	% format(user_output, 'Q1: ~w~n', [PrefixAtom]).
 
+% No longer needed, now that cui_sourceinfo.txt table is created
+% without first_of_each_source_only option.
+
+% db_get_string_sources(String, SourcesList) :-
+% 	% No need to get the sources unless they're necessary!
+% 	( \+ control_option(sources),
+% 	  \+ control_option(restrict_to_sources),
+% 	  \+ control_option(exclude_sources),
+% 	  \+ control_option(machine_output),
+% 	  \+ xml_output_format(_) ->
+% 	  SourcesList = []
+% 	; form_simple_query("sources", "string_sources", "string", String, Query),
+% 	  run_query(Query, [[SourcesAtom]], 1),
+% 	  split_atom_completely(SourcesAtom,  ',', SourcesList0),
+% 	  sort(SourcesList0, SourcesList)
+% 	).
+
+% db_get_cui_semtypes(CUI, SemTypesList) :-
+% 	form_simple_query("semtypes", "cui_semtypes", "cui", CUI, Query),
+% 	run_query(Query, [[SemTypesAtom]], 1),
+% 	split_atom_completely(SemTypesAtom, ',', SemTypesList0),
+% 	sort(SemTypesList0, SemTypesList).
+
 db_get_cui_sources_and_semtypes(CUI, SourcesList, SemTypesList) :-
-	% No need to get the sources unless they're necessary!
-	( \+ control_option(sources),
-	  \+ control_option(restrict_to_sources),
-	  \+ control_option(exclude_sources),
-	  \+ control_option(machine_output),
-	  \+ xml_output_format(_) ->
-	  form_simple_query("semtypes", "cui_srcs_sts", "cui", CUI, Query),
-	  run_query(Query, [[SemTypesAtom]], 1),
-	  SourcesAtom = []
-	; form_simple_query("sources, semtypes", "cui_srcs_sts", "cui", CUI, Query),
-	  run_query(Query, [[SourcesAtom, SemTypesAtom]], 1)
-	),
-	split_atom_completely(SourcesAtom,  ',', SourcesList0),
-	split_atom_completely(SemTypesAtom, ',', SemTypesList0),
-	sort(SourcesList0, SourcesList),
-	sort(SemTypesList0, SemTypesList).
+        % No need to get the sources unless they're necessary!
+        ( \+ control_option(sources),
+          \+ control_option(restrict_to_sources),
+          \+ control_option(exclude_sources),
+          \+ control_option(machine_output),
+          \+ xml_output_format(_) ->
+          form_simple_query("semtypes", "cui_srcs_sts", "cui", CUI, Query),
+          run_query(Query, [[SemTypesAtom]], 1),
+          SourcesAtom = []
+        ; form_simple_query("sources, semtypes", "cui_srcs_sts", "cui", CUI, Query),
+          run_query(Query, [[SourcesAtom, SemTypesAtom]], 1)
+        ),
+        split_atom_completely(SourcesAtom,  ',', SourcesList0),
+        split_atom_completely(SemTypesAtom, ',', SemTypesList0),
+        sort(SourcesList0, SourcesList),
+        sort(SemTypesList0, SemTypesList).

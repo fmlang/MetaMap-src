@@ -53,7 +53,9 @@
 /*----------------------------
 %CONSTANTS
 ----------------------------*/
+#ifndef STRIP_WHITE_SPACE
 #define STRIP_WHITE_SPACE     2
+#endif
 /*end of constants ---------*/
 
 /*----------------------------

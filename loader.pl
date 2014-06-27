@@ -37,9 +37,11 @@
 % In particular, metamap_fe and metamap have been replaced by skr_fe and skr.
 
 :- use_module(skr(skr_fe), [
+	fg/0,
 	go/0,
 	go/1,
-	go/2
+	go/2,
+	gt/0
     ]).
 
 :- use_module(skr(skr), [
@@ -117,7 +119,10 @@ pl_to_po :-
       ; true.
 
 compile_to_PO_if_necessary(FilePL) :-
-	sub_atom(FilePL, _, _, _, 'SKR'),
+	( sub_atom(FilePL, _, _, _, 'SKR') ->
+	  true
+	; sub_atom(FilePL, _, _, _, public_mm)
+	),
 	atom_concat(Prefix, '.pl', FilePL),
 	atom_concat(Prefix, '.po', FilePO),
 	% UNLESS the PO file exists and is more recent than the PL file,

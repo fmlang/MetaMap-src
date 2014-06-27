@@ -178,9 +178,13 @@ linking_clause(Link, Pred, Arity, Goal, Module, Head, Body) :-
 	atom(Link),
 	!,
 	% must_be_symbol(Pred, 2, Goal),
-	must_be(Pred, atom, Goal, 2),
+	% must_be(Pred, atom, Goal, 2),
+	% FML changed 2 to 0 per Mats Carlsson's e-mail 04/01/2013
+	must_be(Pred, atom, Goal, 0),
 	% must_be_nonneg(Arity, 3, Goal),
-	must_be(Arity, number(>=(0)), Goal, 3),
+	% FML changed 3 to 0 per Mats Carlsson's e-mail 04/01/2013
+	% must_be(Arity, number(>=(0)), Goal, 3),
+	must_be(Arity, number(>=(0)), Goal, 0),
 	functor(Head, Pred, Arity),
 	functor(Call, Link, Arity),
 	same_arguments(Arity, Head, Call),

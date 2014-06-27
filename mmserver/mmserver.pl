@@ -103,8 +103,15 @@ main :-
     bb_put(all_server_streams, AllServerStreams),
     parse_command_line(CLTerm),
     CLTerm=command_line(Options,Args),
-    ( \+ member(q,Options) -> append(Options, [q], OptionsFinal) ; Options=OptionsFinal),
-    initialize_skr(OptionsFinal, Args, _IArgs, IOptions),
+    format('Options:~q~n', [Options]),
+    format('Args:~q~n', [Args]),
+    ( \+ member(q,Options) -> append(Options, [q], OptionsFinal0) ; Options=OptionsFinal0),
+    ( \+ member('Q',Options) ->
+	append(OptionsFinal0, ['Q'], OptionsFinal),
+	append(Args, ['4'], ArgsFinal) ;
+	OptionsFinal0=OptionsFinal, Args=ArgsFinal),
+    initialize_skr(OptionsFinal, ArgsFinal, _IArgs, IOptions),
+    format('IOptions:~q~n', [IOptions]),
     add_to_control_options(IOptions),
     start(ServerOptions).
 
@@ -141,14 +148,14 @@ set_options(OptionString) :-
 	IOptions=IOptionsFinal0 ),
     %% Temporary code for use until a final lex access method is
     %% determined.
-    ( \+ member(iopt(lexicon,c),IOptionsFinal0) -> 
-	append([iopt(lexicon,c)], IOptionsFinal0, IOptionsFinal) ;
+    ( \+ member(iopt(lexicon,db),IOptionsFinal0) -> 
+	append([iopt(lexicon,db)], IOptionsFinal0, IOptionsFinal) ;
 	IOptions=IOptionsFinal ),
     %% end Temporary code 
     add_to_control_options(IOptionsFinal),
     %% Temporary code for use until a final lex access method is
     %% determined.
-    assert(control_value(lexicon,c)),
+    assert(control_value(lexicon,db)),
     % end Temporary code 
     set_control_values(IOptionsFinal,IArgs),
     %%
@@ -184,7 +191,7 @@ unset_options(OptionString) :-
     subtract_from_control_options(IOptions),
     %% Temporary code for use until a final lex access method is
     %% determined.
-    assert(control_value(lexicon,c)).
+    assert(control_value(lexicon,db)).
     %% end Temporary code
 
 control_option_as_iopt(iopt(X,Value)) :-
@@ -201,15 +208,15 @@ reset_options :-
 	%% determined.  This will need re-factoring to remove
 	%% references to lexicon.
 	%% set_control_options(),
- 	IOptions=[iopt(lexicon,c),iopt(machine_output,none)],
+ 	IOptions=[iopt(lexicon,db),iopt(machine_output,none)],
  	add_to_control_options(IOptions),
-	assert(control_value(lexicon,c)).
+	assert(control_value(lexicon,db)).
         %% end Temporary code 
 
 process_string(Input,Output) :-
 	%% Temporary code for use until a final lex access method is
 	%% determined.
-	assert(control_value(lexicon,c)),
+	assert(control_value(lexicon,db)),
 	%% end Temporary code 
 	trim_whitespace_right(Input, TrimmedInput0),
 	remove_final_CRLF(TrimmedInput0, TrimmedInput1),
@@ -219,7 +226,7 @@ process_string(Input,Output) :-
 	ExtraChars = [],
 	get_UDAs(UDAList),
 	bb_get(all_server_streams, AllServerStreams),
-	process_text(Strings, "0000000", ExtraChars,
+	process_text(Strings, "00000000", ExtraChars,
 		     TagOption, AllServerStreams,
 		     ExpRawTokenList, AAs, UDAList, MMResults),
 	parse_command_line(CLTerm),
@@ -231,8 +238,8 @@ process_string(Input,Output) :-
 	    IOptions=IOptionsFinal0 ),
 	%% Temporary code for use until a final lex access method is
 	%% determined.
-	( \+ member(iopt(lexicon,c),IOptionsFinal0) -> 
-	    append([iopt(lexicon,c)], IOptionsFinal0, IOptionsFinal) ;
+	( \+ member(iopt(lexicon,db),IOptionsFinal0) -> 
+	    append([iopt(lexicon,db)], IOptionsFinal0, IOptionsFinal) ;
 	    IOptions=IOptionsFinal ),
 	%% end Temporary code 
 	output_should_be_bracketed(BracketedOutput),
@@ -260,15 +267,14 @@ remove_final_CRLF(TrimmedInput0, TrimmedInput) :-
 	  TrimmedInput = AllButLast
 	; TrimmedInput = TrimmedInput0
 	).
-	
 
 postprocess_text_mmserver(Lines0, BracketedOutput, InterpretedArgs,
 			  IOptions,  ExpRawTokenList, AAs, MMResults, AllMMO) :-
 	MMResults = mm_results(Lines0, _TagOption, _ModifiedLines, _InputType,
 			       Sentences, _CoordSentences, OrigUtterances, DisambMMOutput),
-
 	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
 	generate_negex_output(NegationTerms),
+	PrintMMO = 0,
 	postprocess_sentences(user_output, OrigUtterances, NegationTerms, InterpretedArgs,
 			      IOptions, AAs, Sentences, BracketedOutput, DisambMMOutput,
-			      0, AllMMO).
+			      PrintMMO, AllMMO).

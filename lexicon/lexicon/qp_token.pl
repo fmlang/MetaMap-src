@@ -49,18 +49,23 @@
 	    [['C3','/','C5',convertase]]
 */
 
-:- module(qp_token,[
+:- module(qp_token, [
     tokenize_string/2
     ]).
 
-:- use_module(library(lists),[
+:- use_module(metamap(metamap_tokenization), [
+	local_alnum/1,
+	local_ws/1
+    ]).
+
+:- use_module(library(lists), [
     rev/2
     ]).
 
-:- use_module(skr_lib(ctypes),[
-    is_alnum/1,
-    is_space/1
-    ]).
+% :- use_module(skr_lib(ctypes), [
+%     is_alnum/1,
+%     is_space/1
+%     ]).
 
 
 /* tokenize_string(+String, -TokenLists)
@@ -90,12 +95,12 @@ ttw_tokens(Ts) --> ttw_token(T), !, ttw_tokens(RestTs), {Ts=[T|RestTs]}
 
                 ;  {Ts=[]}.
 
-ttw_token(T) --> [C], {is_alnum(C)}, !, ttw_alnums(RestCs),
+ttw_token(T) --> [C], {local_alnum(C)}, !, ttw_alnums(RestCs),
                  {atom_codes(T,[C|RestCs])}
 
               ;  [T].
 
-ttw_alnums(Cs) --> [C], {is_alnum(C)}, !, ttw_alnums(RestCs), {Cs=[C|RestCs]}
+ttw_alnums(Cs) --> [C], {local_alnum(C)}, !, ttw_alnums(RestCs), {Cs=[C|RestCs]}
 
                 ;  {Cs=[]}.
 
@@ -122,7 +127,7 @@ form_barrier_token_lists([C],RevTokenList,Result) :-
 % barrier followed by whitespace
 form_barrier_token_lists([C,W|Rest],RevTokenList,Result) :-
     is_barrier(C,B),
-    is_space(W),
+    local_ws(W),
     !,
     (RevTokenList==[] ->
         Result=[[B]|RestResult]
@@ -132,7 +137,7 @@ form_barrier_token_lists([C,W|Rest],RevTokenList,Result) :-
     form_barrier_token_lists([W|Rest],[],RestResult).
 % barrier preceded by whitespace
 %form_barrier_token_lists([W,C|Rest],RevTokenList,Result) :-
-%    is_space(W),
+%    local_ws(W),
 %    is_barrier(C,B),
 %    !,
 %    (RevTokenList==[] ->
@@ -143,7 +148,7 @@ form_barrier_token_lists([C,W|Rest],RevTokenList,Result) :-
 %    form_barrier_token_lists(Rest,[],RestResult).
 % other whitespace
 form_barrier_token_lists([W|Rest],RevTokenList,Result) :-
-    is_space(W),
+    local_ws(W),
     !,
     form_barrier_token_lists(Rest,RevTokenList,Result).
 % everything else

@@ -75,6 +75,8 @@
 	% db_get_cui_sourceinfo/2,
 	% db_get_cui_sts/2,
 	db_get_cui_sources_and_semtypes/3
+	% db_get_cui_semtypes/2,
+	% db_get_string_sources/2
     ]).
 
 :- use_module(skr_lib(nls_avl), [
@@ -100,7 +102,6 @@
 
 :- use_module(library(avl), [
 	avl_fetch/3,
-	avl_incr/4,
 	avl_member/3
     ]).
 
@@ -228,6 +229,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				 TokenHeadWords, PhraseTokens, Evaluation) ->
 	  % format(user_output, '### OUT: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
 	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]),
+	  % format(user_output, '~q~n', [Evaluation]),
 	  debug_evaluate_candidate_list_3(DebugFlags, Evaluation),
 	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
 	  % format(user_output, '     ~q~n', [Evaluation]),	    
@@ -274,6 +276,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	% TempMatchMap = [MatchMapHead|MatchMapTail],
 	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
 	% get_matching_phrasewords(TokenPhraseWords, MatchMap, MatchingWords),
+	% format(user_output,'TokenPhraseWords     = ~q~n', [TokenPhraseWords]),	
 	% format(user_output,'MetaWords     = ~q~n', [MetaWords]),	
 	% format(user_output,'MatchMap      = ~q~n', [MatchMap]),	
 	% format(user_output,'MetaTerm      = ~q~n', [MetaTerm]),	
@@ -295,19 +298,22 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	debug_compute_one_evaluation_2(DebugFlags, MetaTerm),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
-	% new call!
-	db_get_cui_sources_and_semtypes(CUI, Sources, SemTypes),
+	% new calls!
+	% CUISources and SemTypes are sorted by db_get_cui_sources_and_semtypes/3
+	db_get_cui_sources_and_semtypes(CUI, CUISources, SemTypes),
+	% db_get_cui_semtypes(CUI, SemTypes),
+	% db_get_string_sources(MetaTerm, StringSources),
         compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
+	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo),
 	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-		       IsOvermatch, Sources, PosInfo, _Status, _Negated, Evaluation),
-	
+		       IsOvermatch, CUISources, PosInfo, _Status, _Negated, Evaluation).
 	% format(user_output, 'EV:~q:~n', [Evaluation]),
 	% format(user_output, '~N~q:~q:~q~n', [MetaTerm,MetaWords,TokenPhraseWords]),
 	% This is just so the debugger will let me examine Evaluation
-	Evaluation \== [],
+	% Evaluation \== [],
 	% get the positional info corresponding to this MatchMap
-	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo).
+
 
 %%% get_sources_and_semtypes(CUI, Sources, SemTypes) :-
 %%% 	( control_option(srcst) ->
@@ -432,7 +438,8 @@ get_one_pos_info(MatchMap, TokenPhraseWords, PhraseTokensIn, PhraseTokensOut,
 			      FirstStartPos, FirstLength),
  	get_rest_word_pos_info(RestMatchingTokenPhraseWords, PhraseTokensNext,
 			       RawTokensOut, RestMatchingTokens,
-			       PhraseTokensOut, RestPosInfo).
+			       PhraseTokensOut, RestPosInfo),
+	!.
 
 get_matchmap_indices([[X,Y]|_], X, Y).
 
@@ -601,7 +608,7 @@ compute_phrase_match_aux([First|Rest], Label, UtteranceText, AllMetaWords, Token
 	extract_components(MatchMapIn, PhraseComponents, _MetaComponents),
 	get_one_from_avl(First, PhraseComponents, Variants, VariantInfo),
 	VariantInfo = vinfo(_Generator,GeneratorPosition,GeneratorInvolvesHead,
-			    Variant,[First|RestVariantWords]),
+			    Variant,[First|RestVariantWords],_LastVariantWord),
 	get_previous_begin_and_end(MatchMapIn, PreviousBegin, _PreviousEnd),
 	GeneratorPosition = [CurrentBegin|_],
 	% allow_short_gaps_only(MinPhraseLength, MaxGapSize, Label, UtteranceText,
@@ -727,23 +734,40 @@ get_previous_begin_and_end(MatchMap, PreviousBegin, PreviousEnd) :-
 word_is_lasts_word_of_some_variant/2 succeeds if Word is the last word of a
 variant in Variants.  */
 
-word_is_last_word_of_some_variant(Word, Variants) :-
-	% first try the word itself as a key
-	get_one_from_avl(Word, [], Variants,
-			 vinfo(_Generator,_GeneratorPosition,_GeneratorInvolvesHead,
-			       _Variant,VariantWords)),
-	% reversed order of args from QP library version!
-	last(VariantWords, Word),
-	!.
+% There are possibly 3 clauses for word_is_last_word_of_some_variant.
+% Using clauses 1 and 3 is historical, and is the implementation in a.out.13.Linux.
+% Using clauses 2 and 3 is new, and is the implementation in a.out.23.Linux.
+% Using clause 3 only is new, and is the implementation in a.out.3.Linux.
+% All 3 generated the same results on LONG100,
+% with essentially identical timings, so I am going with #3 only.
+% #1
+% word_is_last_word_of_some_variant(Word, Variants) :-
+% 	% first try the word itself as a key
+% 	get_one_from_avl(Word, [], Variants,
+% 			 vinfo(_Generator,_GeneratorPosition,_GeneratorInvolvesHead,
+% 			       _Variant,VariantWords)),
+% 	% reversed order of args from QP library version!
+% 	last(VariantWords, Word),
+% 	!.
+% #2
+% word_is_last_word_of_some_variant(Word, Variants) :-
+% 	avl_fetch(Word, Variants, Values),
+% 	member(vinfo(_Generator,_GeneratorPosition,_GeneratorInvolvesHead,
+% 		     _Variant,VariantWords),
+% 	       Values),
+% 	% reversed order of args from QP library version!
+% 	last(VariantWords, Word),
+% 	!.
+% #3
 word_is_last_word_of_some_variant(Word, Variants) :-
 	avl_member(_Key, Variants, Values),
-	member(vinfo(_Generator,_GeneratorPosition,
-		     _GeneratorInvolvesHead,_Variant,VariantWords),
+	member(vinfo(_Generator,_GeneratorPosition,_GeneratorInvolvesHead,
+		     _Variant,_VariantWords,LastVariantWord),
 	       Values),
 	% reversed order of args from QP library version!
-	last(VariantWords, Word),
+	% last(VariantWords, Word),
+	Word == LastVariantWord,
 	!.
-
 
 /* get_one_from_avl(+Key, +PhraseComponents, +AVL, -Value)
 
@@ -752,11 +776,11 @@ a list of values in reverse order.  get_one_from_avl/3 returns one Value,
 returning the next on backtracking.  PhraseComponents is used to reorder
 the values preferring those which do not intersect PhraseComponents.  */
 
-% 07/22/2013: FML changed the structure of the v/4 term
+% 07/22/2013: FML changed the structure of the v/6 term
 % from v(Word, Categories, VarLevel, History, Roots, NFR)
 % to   v(Word, VarLevel, Categories, History, Roots, NFR)
 % throughout all the MetaMap (and mm_variants) code
-% in order to allow sorting v/4 terms to capture
+% in order to allow sorting v/6 terms to capture
 % the lower (and preferable) VarLevel field.
 
 get_one_from_avl(Key,PhraseComponents,AVL,Value) :-
@@ -779,7 +803,7 @@ reorder_by_phrase_components(Values,PhraseComponents,ReorderedValues) :-
 split_by_phrase_components([],_,RNIVIn,RNIVIn,RIVIn,RIVIn).
 split_by_phrase_components([Value|Rest],PhraseComponents,
                            RNIVIn,RNIVOut,RIVIn,RIVOut) :-
-    Value=vinfo(_,GeneratorPosition,_,_,_),
+    Value = vinfo(_Generator,GeneratorPosition,_GenInvolvesHead,_Variant,_Words,_LastWord),
     component_intersects_components(PhraseComponents,GeneratorPosition),
     !,
     split_by_phrase_components(Rest,PhraseComponents,
@@ -967,10 +991,10 @@ compute_bounds/5
 
 compute_bounds([], 0, -1).
 compute_bounds([[Begin,End]|Rest], LB, UB) :-
-	compute_bounds(Rest, Begin, LB, End, UB).
+	compute_bounds_aux(Rest, Begin, LB, End, UB).
 
-compute_bounds([], LBIn, LBIn, UBIn, UBIn).
-compute_bounds([[Begin,End]|Rest], LBIn, LBOut, UBIn, UBOut) :-
+compute_bounds_aux([], LBIn, LBIn, UBIn, UBIn).
+compute_bounds_aux([[Begin,End]|Rest], LBIn, LBOut, UBIn, UBOut) :-
 	( Begin < LBIn ->
 	  LBNext = Begin
 	; LBNext = LBIn
@@ -979,7 +1003,7 @@ compute_bounds([[Begin,End]|Rest], LBIn, LBOut, UBIn, UBOut) :-
 	  UBNext = End
 	; UBNext = UBIn
 	),
-	compute_bounds(Rest, LBNext, LBOut, UBNext, UBOut).
+	compute_bounds_aux(Rest, LBNext, LBOut, UBNext, UBOut).
 
 
 /* compute_strict_coverage_value(+MatchMap, +NTokenPhraseWords, +NMetaWords,
