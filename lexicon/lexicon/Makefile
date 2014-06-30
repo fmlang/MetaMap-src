@@ -47,21 +47,14 @@ ifeq '$(O_SYSTEM)' "SunOS"
   LIBS = # -lnsl  -lsocket -lrt -llm  -lm
 else
   ifeq '$(O_SYSTEM)' "Linux"
-    LD = gcc
-    LDFLAGS=-m32 -shared
     LIBS = -lpthread -llm  -lm
-  else 
-    ifeq '$(O_SYSTEM)' "Darwin"
-        LDFLAGS=-m32
-        LIBS = 
-    endif
   endif
 endif
 
-LIBDIR = $(SKR_LEXICON)/lib
-INCDIR= $(SKR_LEXICON)/include
+LIBDIR = ../lib
+INCDIR= ../include
 
-SPLIBS= -f lexicon:$(SKR_LEXICON)/lexicon		\
+SPLIBS= -f lexicon:../lexicon		\
 	-f metamap:$(SKR_METAMAP)			\
 	-f mmi:$(SKR_MMI)				\
 	-f morph:$(SKR_MORPH)				\
@@ -73,37 +66,37 @@ SPLIBS= -f lexicon:$(SKR_LEXICON)/lexicon		\
 	-f text:$(SKR_TEXT)				\
 	-f wsd:$(SKR_WSD)/WSD
 
-DEBUG_LIB = $(SKR_DEBUG)/debug.a
+DEBUG_LIB = ../../debug/debug.a
 SPLD = spld
 
-INCLUDES = -I$(SKR_LEXICON)/include -I$(SKR_DEBUG)/include
+INCLUDES = -I../include -I../../debug/include
 
 SPLFR_BASIC_FLAGS =  --vv --keep $(SPCONFIG)
 SPLFR_DYNAMIC_FLAGS = $(SPLFR_BASIC_FLAGS) --moveable
 SPLFR_STATIC_FLAGS = $(SPLFR_BASIC_FLAGS) --static
 SPLFR = splfr --conf CC="$(CC)" --cflag="$(INCLUDES)" $(addprefix --cflag=, $(CFLAGS))
 
-STATIC_LINK_FLAGS = -- $(SKR_LEXICON)/functions/linfl.o		\
-		       $(SKR_LEXICON)/functions/tokenize.o	\
-		       $(SKR_LEXICON)/morph/lm.o		\
-		       $(SKR_LEXICON)/morph/util.o		\
-		       $(SKR_LEXICON)/query/btree_query.o	\
-		       $(SKR_LEXICON)/query/tokenize.o		\
-		       $(SKR_LEXICON)/query/lex_btree.a		\
-		       $(SKR_LEXICON)/query/wl.o		\
-		       $(SKR_LEXICON)/miscutil/miscutil.o	\
-		       $(SKR_DEBUG)/get_val.o
+STATIC_LINK_FLAGS = -- ../functions/linfl.o		\
+		       ../functions/tokenize.o	\
+		       ../morph/lm.o		\
+		       ../morph/util.o		\
+		       ../query/btree_query.o	\
+		       ../query/tokenize.o		\
+		       ../query/lex_btree.a		\
+		       ../query/wl.o		\
+		       ../miscutil/miscutil.o	\
+		       ../../debug/get_val.o
 
 DYNAMIC_LINK_FLAGS = -- $(SOLDFLAGS)			        \
 			$(BERKELEY_LIB_SO)			\
-			$(SKR_LEXICON)/functions/linfl.o	\
-		        $(SKR_LEXICON)/morph/lm.o		\
-		        $(SKR_LEXICON)/morph/util.o		\
-			$(SKR_LEXICON)/functions/lexicon.a	\
-			$(SKR_LEXICON)/query/lex_btree.a	\
-			$(SKR_LEXICON)/miscutil/miscutil.a	\
-			$(SKR_DEBUG)/debug.o			\
-			$(SKR_DEBUG)/get_val.o
+			../functions/linfl.o	\
+		        ../morph/lm.o		\
+		        ../morph/util.o		\
+			../functions/lexicon.a	\
+			../query/lex_btree.a	\
+			../miscutil/miscutil.a	\
+			../../debug/debug.o			\
+			../../debug/get_val.o
 
 
 all:		splfr_STATIC splfr_DYNAMIC
@@ -116,20 +109,20 @@ splfr_DYNAMIC:	functions query miscutil morph
 
 
 functions:
-		cd $(SKR_LEXICON)/functions && $(MAKE)
+		cd ../functions && $(MAKE)
 
 query:
-		cd $(SKR_LEXICON)/query && $(MAKE)
+		cd ../query && $(MAKE)
 
 miscutil:
-		cd $(SKR_LEXICON)/miscutil && $(MAKE)
+		cd ../miscutil && $(MAKE)
 
 morph:
-		cd $(SKR_LEXICON)/morph && $(MAKE)
+		cd ../morph && $(MAKE)
 
 clean:
 		-$(RM) *.o *.a *.s.o *.${SOEXT} *.s.o *glue* lcheck lcheckp lterm core
-		cd $(SKR_LEXICON)/functions && $(MAKE) clean
-		cd $(SKR_LEXICON)/query     && $(MAKE) clean
-		cd $(SKR_LEXICON)/miscutil  && $(MAKE) clean
-		cd $(SKR_LEXICON)/morph     && $(MAKE) clean 
+		cd ../functions && $(MAKE) clean
+		cd ../query     && $(MAKE) clean
+		cd ../miscutil  && $(MAKE) clean
+		cd ../morph     && $(MAKE) clean 

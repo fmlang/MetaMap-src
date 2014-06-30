@@ -46,7 +46,7 @@ include ../../Makefile.include
 
 CFLAGS= ${DEFAULT_CFLAGS}
 
-INCLUDES = -I${SKR_LEXICON}/include -I${SKR_DEBUG}/include -I${BERKELEY_INC}
+INCLUDES = -I../include -I../../debug/include -I${BERKELEY_INC}
 
 OBJ = btree_query.o tokenize.o wl.o
 

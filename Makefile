@@ -39,9 +39,21 @@
 # In this case the main Makefile and the sub-directory Makefiles
 # include the file "Makefile.include" (Makefile is used implicitly).
 #
+# Building the 64-bit version
+#   $ make SKR=${ROOT}/specialist/SKR \
+#      APPNAME=metamap12 MSAPPNAME=mmserver12 MACHINE_TYPE=-m64 \
+#      ARCHDIR=x86_64-linux-glibc2.5
+#      BERKELEY=${BERELEY_DB_64bit}/db-4.8.24 \
+#      SICSTUS=/nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86_64-linux-glibc2.5 \
+#
+# Possible environment variable values:
+#  ROOT=${HOME}
+#  BERKELEY_DB_64bit=/nfsvol/nls/tools/berkeley_db/Linux-x86_64
+#
 include Makefile.include
 
-SICSTUSARGS=
+# For source release
+# SICSTUSARGS=-f -l $(SKR_SRC_HOME)/sicstus.ini
 
 APPNAME=metamap13
 SAVED_STATE=$(APPNAME).sav
@@ -51,36 +63,89 @@ MSAPPNAME=mmserver13
 MSSAVED_STATE=$(MSAPPNAME).sav
 MSBINEXEC=$(MSAPPNAME).BINARY.$(ARCH)
 
-all : build_debug build_lib build_db build_functions \
-      build_miscutil build_morph build_query build_lexicon \
-      build_runtime build_metamap build_mmserver build_liblm \
-      build_lcat build_lvar
+all : build_metamap build_mmserver
+
+forceall : build_debug build_lib build_db build_functions \
+	   build_miscutil build_morph build_query build_lexicon \
+	   build_runtime build_metamap build_mmserver build_liblm \
+	   build_lcat build_lvar
+
 
 build_metamap : $(BINEXEC)
 build_mmserver : $(MSBINEXEC)
 
-build_debug :
+TARGETS=$(DEBUGTARGETS) $(DBTARGETS) $(MISCTARGETS)		\
+        $(FUNCTIONTARGETS) $(MORPHTARGETS) $(QUERYTARGETS)	\
+        $(LIBTARGETS) $(LEXICONTARGETS)
+
+# sharable libraries need by SICStus Prolog interpreter
+PROLOGSHOBJS=db_access.$(SOEXT) nls_signal.$(SOEXT) qp_lexicon.$(SOEXT) qp_morph.$(SOEXT) 
+
+DEBUGTARGETS=debug/debug.a debug/debug.$(SOEXT) debug/debug.o debug/get_val.o
+build_debug : $(DEBUGTARGETS)
+
+$(DEBUGTARGETS) :
 	cd debug && $(MAKE)
 
-build_lib :
+nls_signal.$(SOEXT) : lib/nls_signal.$(SOEXT)
+	$(CP) lib/nls_signal.$(SOEXT) nls_signal.$(SOEXT)
+
+LIBTARGETS=lib/nls_signal.$(SOEXT) lib/nls_signal.o
+
+build_lib : $(LIBTARGETS)
+
+$(LIBTARGETS) :
 	cd lib && $(MAKE)
 
-build_db :
+db_access.$(SOEXT) : db/db_access.$(SOEXT)
+	$(CP) db/db_access.$(SOEXT) db_access.$(SOEXT)
+
+DBTARGETS=db/c_nls_db.a db/c_nls_db.$(SOEXT) db/db_access.$(SOEXT)
+build_db :  $(DBTARGETS)
+
+$(DBTARGETS) :
 	cd db && $(MAKE)
 
-build_miscutil :
+MISCTARGETS=lexicon/miscutil/miscutil.a lexicon/miscutil/miscutil.o
+build_miscutil : $(MISCTARGETS)
+
+$(MISCTARGETS) :
 	cd lexicon/miscutil && $(MAKE)
 
-build_functions :
+build_functions : $(FUNCTIONTARGETS)
+
+FUNCTIONTARGETS=lexicon/functions/lexicon.a lexicon/functions/linfl.o lexicon/functions/tokenize.o
+
+$(FUNCTIONTARGETS):
 	cd lexicon/functions && $(MAKE)
 
-build_morph :
+qp_morph.$(SOEXT) : lexicon/morph/qp_morph.$(SOEXT) 
+	$(CP) lexicon/morph/qp_morph.$(SOEXT) qp_morph.$(SOEXT)
+
+MORPHTARGETS=lexicon/morph/qp_morph.$(SOEXT) lexicon/morph/liblm.a	\
+lexicon/morph/lm.o lexicon/morph/util.o
+
+build_morph : $(MORPHTARGETS) $(DEBUGTARGETS)
+
+$(MORPHTARGETS) : $(DEBUGTARGETS)
 	cd lexicon/morph && $(MAKE)
 
-build_query :
+build_query : lexicon/query/lex_btree.a 
+
+QUERYTARGETS=lexicon/query/lex_btree.a					\
+lexicon/query/btree_query.o lexicon/query/tokenize.o	\
+lexicon/query/wl.o
+
+$(QUERYTARGETS) : $(DEBUGTARGETS)
 	cd lexicon/query && $(MAKE)
 
-build_lexicon :
+qp_lexicon.$(SOEXT) : lexicon/lexicon/qp_lexicon.$(SOEXT)
+	$(CP) lexicon/lexicon/qp_lexicon.$(SOEXT) qp_lexicon.$(SOEXT)
+
+LEXICONTARGETS=lexicon/lexicon/qp_lexicon.$(SOEXT)
+build_lexicon : $(LEXICONTARGETS)
+
+$(LEXICONTARGETS) : $(DEBUGTARGETS)
 	cd lexicon/lexicon && $(MAKE)
 
 build_lcat : lexicon/morph/liblm.a
@@ -89,25 +154,27 @@ build_lcat : lexicon/morph/liblm.a
 build_lvar : lexicon/morph/liblm.a
 	cd lexicon/lvar && $(MAKE)
 
-build_liblm : lexicon/morph/liblm.a
+# build_liblm : lexicon/morph/liblm.a
 
-lexicon/morph/liblm.a : 
-	cd lexicon/morph && $(MAKE) liblm.a
+# lexicon/morph/liblm.a : 
+# 	cd lexicon/morph && $(MAKE) liblm.a
 
 # MetaMap targets
-$(SAVED_STATE) :
-	$(RM) loader.pl
-	$(GIT) checkout -- loader.pl
+$(SAVED_STATE) : $(PROLOGSHOBJS)
 	$(PROLOG) $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
 
-$(BINEXEC) : $(SAVED_STATE)
+$(BINEXEC) : $(SAVED_STATE) 
 	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
 
 # MetaMap Server targets
-$(MSSAVED_STATE) :
-	$(CP) mmserver/loader.pl .
+loader.mmserver.pl: mmserver/loader.pl
+	$(CP) mmserver/loader.pl loader.mmserver.pl
+
+mmserver.pl: mmserver/mmserver.pl
 	$(CP) mmserver/mmserver.pl .
-	$(PROLOG) $(SICSTUSARGS) --goal "save_program('$(MSSAVED_STATE)'), halt."
+
+$(MSSAVED_STATE) : mmserver.pl loader.mmserver.pl $(PROLOGSHOBJS)
+	LOADER_MODULE=loader.mmserver.pl $(PROLOG) $(SICSTUSARGS) --goal "save_program('$(MSSAVED_STATE)'), halt."
 
 $(MSBINEXEC) : $(MSSAVED_STATE)
 	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(MSSAVED_STATE) --output=$(MSBINEXEC) $(LINK_FILES) $(LDFLAGS)
@@ -208,28 +275,6 @@ $(RT_NATIVE_LIB)/fastrw.s.o : $(SICSTUS_NATIVE_LIB)/fastrw.s.o  $(RT_NATIVE_LIB)
 
 $(RT_NATIVE_LIB)/jasper.s.o : $(SICSTUS_NATIVE_LIB)/jasper.s.o $(RT_NATIVE_LIB)
 	$(CP) $(SICSTUS_NATIVE_LIB)/jasper.s.o  $(RT_NATIVE_LIB)
-
-$(RT_NATIVE_LIB)/jasper.s.o : $(SICSTUS_NATIVE_LIB)/jasper.s.o $(RT_NATIVE_LIB)
-	$(CP) $(SICSTUS_NATIVE_LIB)/jasper.s.o  $(RT_NATIVE_LIB)
-
-
-$(SKR_SRC_HOME)/c_nls_db.$(SOEXT) : $(SKR_DB)/c_nls_db.$(SOEXT)
-	$(CP) $(SKR_DB)/c_nls_db.$(SOEXT) $(SKR_SRC_HOME)/c_nls_db.$(SOEXT)
-
-$(SKR_SRC_HOME)/db_access.$(SOEXT) : $(SKR_DB)/db_access.$(SOEXT)
-	$(CP) $(SKR_DB)/db_access.$(SOEXT) $(SKR_SRC_HOME)/db_access.$(SOEXT)
-
-$(SKR_SRC_HOME)/debug.$(SOEXT) : $(SKR_DEBUG)/debug.$(SOEXT)
-	$(CP) $(SKR_DEBUG)/debug.$(SOEXT) $(SKR_SRC_HOME)/debug.$(SOEXT)
-
-$(SKR_SRC_HOME)/nls_signal.$(SOEXT) : $(SKR_LIB)/nls_signal.$(SOEXT)
-	$(CP) $(SKR_LIB)/nls_signal.$(SOEXT) $(SKR_SRC_HOME)/nls_signal.$(SOEXT) 
-
-$(SKR_SRC_HOME)/qp_morph.$(SOEXT) : $(SKR_MORPH)/qp_morph.$(SOEXT)
-	$(CP) $(SKR_MORPH)/qp_morph.$(SOEXT) 	$(SKR_SRC_HOME)/qp_morph.$(SOEXT) 
-
-$(SKR_SRC_HOME)/qp_lexicon.$(SOEXT)  : $(SKR_LEXICON)/lexicon/qp_lexicon.$(SOEXT)
-	$(CP) $(SKR_LEXICON)/lexicon/qp_lexicon.$(SOEXT) $(SKR_SRC_HOME)/qp_lexicon.$(SOEXT) 
 
 RT_DIRS=$(RT_BIN) $(RT_LIB) $(RT_NATIVE_LIB)
 
