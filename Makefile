@@ -78,8 +78,13 @@ TARGETS=$(DEBUGTARGETS) $(DBTARGETS) $(MISCTARGETS)		\
         $(FUNCTIONTARGETS) $(MORPHTARGETS) $(QUERYTARGETS)	\
         $(LIBTARGETS) $(LEXICONTARGETS)
 
-# sharable libraries need by SICStus Prolog interpreter
-PROLOGSHOBJS=db_access.$(SOEXT) nls_signal.$(SOEXT) qp_lexicon.$(SOEXT) qp_morph.$(SOEXT) 
+# sharable libraries needed by SICStus Prolog interpreter
+PROLOGSHOBJS=db_access.$(SOEXT) nls_signal.$(SOEXT) \
+             qp_lexicon.$(SOEXT) qp_morph.$(SOEXT) \
+             c_nls_db.$(SOEXT) debug.$(SOEXT)
+
+debug.$(SOEXT) : debug/debug.$(SOEXT)
+	$(CP) debug/debug.$(SOEXT) debug.$(SOEXT)
 
 DEBUGTARGETS=debug/debug.a debug/debug.$(SOEXT) debug/debug.o debug/get_val.o
 build_debug : $(DEBUGTARGETS)
@@ -99,6 +104,9 @@ $(LIBTARGETS) :
 
 db_access.$(SOEXT) : db/db_access.$(SOEXT)
 	$(CP) db/db_access.$(SOEXT) db_access.$(SOEXT)
+
+c_nls_db.$(SOEXT) : db/c_nls_db.$(SOEXT)
+	$(CP) db/c_nls_db.$(SOEXT) c_nls_db.$(SOEXT)
 
 DBTARGETS=db/c_nls_db.a db/c_nls_db.$(SOEXT) db/db_access.$(SOEXT)
 build_db :  $(DBTARGETS)
