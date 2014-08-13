@@ -179,6 +179,18 @@ $(MSSAVED_STATE) : mmserver.pl loader.mmserver.pl $(PROLOGSHOBJS)
 $(MSBINEXEC) : $(MSSAVED_STATE)
 	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(MSSAVED_STATE) --output=$(MSBINEXEC) $(LINK_FILES) $(LDFLAGS)
 
+# arbitrary targets
+# $ make SKR=${HOME}/specialist/SKR A_APPNAME=filter_mrconso
+#
+A_BINEXEC=$(A_APPNAME).BINARY.$(ARCH)
+A_SAVED_STATE=$(A_APPNAME).sav
+A_LOADER_MODULE=loader.$(A_APPNAME).pl
+$(A_SAVED_STATE) : $(PROLOGSHOBJS)
+	LOADER_MODULE=$(A_LOADER_MODULE) $(PROLOG) $(SICSTUSARGS) --goal "save_program('$(A_SAVED_STATE)'), halt."
+
+$(A_BINEXEC) : $(ASAVED_STATE) 
+	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(A_SAVED_STATE) --output=$(A_BINEXEC) $(LINK_FILES) $(LDFLAGS)
+
 RT_DIR=$(SKR_SRC_HOME)/sp-$(SICSTUS_VERSION)
 RT_BIN=$(RT_DIR)/sicstus-$(SICSTUS_VERSION)/bin
 RT_LIB=$(RT_DIR)/sicstus-$(SICSTUS_VERSION)/library
