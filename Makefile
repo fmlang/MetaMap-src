@@ -42,9 +42,9 @@
 # Building the 64-bit version
 #   $ make SKR=${ROOT}/specialist/SKR \
 #      APPNAME=metamap12 MSAPPNAME=mmserver12 MACHINE_TYPE=-m64 \
-#      ARCHDIR=x86_64-linux-glibc2.5
+#      ARCHDIR=x86_64-linux-glibc$(GLIBC_VERSION)
 #      BERKELEY=${BERELEY_DB_64bit}/db-4.8.24 \
-#      SICSTUS=/nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86_64-linux-glibc2.5 \
+#      SICSTUS=/nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86_64-linux-glibc$(GLIBC_VERSION) \
 #
 # Possible environment variable values:
 #  ROOT=${HOME}

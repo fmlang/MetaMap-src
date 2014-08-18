@@ -26,6 +26,7 @@ export PROLOG = sicstus
 export SPLD = spld
 export SICSTUS_VERSION = 4.2.1
 export SICSTUS_VERSION_DASHED = 4-2-1
+export GLIBC_VERSION = 2.5
 export PREFIX='$$SP_APP_DIR'
 
 export WARNINGS = -pedantic -Wall -Wbad-function-cast -Wcast-qual -Wcast-align -Wconversion \
@@ -68,7 +69,7 @@ ifeq '$(O_SYSTEM)' "Linux"
   # export BERKELEY_LIB_DYNAMIC = $(BERKELEY_LIB)/libdb-4.8.so
   export BERKELEY_LIB_DYNAMIC = "-L$(BERKELEY_LIB) -ldb-4.8"
   export DEFAULT_LIBXML_DIR = /usr
-  export SICSTUS = /nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86-linux-glibc2.5
+  export SICSTUS = /nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86-linux-glibc${GLIBC_VERSION}
   export SICSTUS_BIN = $(SICSTUS)/bin
   export SICSTUS_LIB = $(SICSTUS)/lib
   export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-$(SICSTUS_VERSION)/bin
@@ -77,7 +78,7 @@ ifeq '$(O_SYSTEM)' "Linux"
   export SOEXT=so
   export LSOEXT=so
   export JSOEXT=so
-  export ARCHDIR = x86-linux-glibc2.5
+  export ARCHDIR = x86-linux-glibc${GLIBC_VERSION}
   export SICSTUS_NATIVE_LIB = $(SICSTUS_LIBRARY)/$(ARCHDIR)
 else
   ifeq '$(O_SYSTEM)' "Darwin"
