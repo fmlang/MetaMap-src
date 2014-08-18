@@ -26,6 +26,7 @@ export PROLOG = sicstus
 export SPLD = spld
 export SICSTUS_VERSION = 4.2.1
 export SICSTUS_VERSION_DASHED = 4-2-1
+export GLIBC_VERSION = 2.5
 export PREFIX='$$SP_APP_DIR'
 
 export WARNINGS = -pedantic -Wall -Wbad-function-cast -Wcast-qual -Wcast-align -Wconversion \
@@ -49,14 +50,15 @@ export SKR_MMI=$(SKR_SRC_HOME)/mmi
 export TOOLS_SRC=$(SKR)/tools
 
 O_SYSTEM = $(shell uname)
+MACHINE_TYPE=-m32
 
 ifeq '$(O_SYSTEM)' "Linux"
   RANLIB = /bin/true
-  export DEFAULT_CFLAGS = -g -O -m32 -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -D__DEBUG
-  export SOFLAGS = -m32 -shared
-  export SOLDFLAGS = -m32 -shared
-  export LDFLAGS = -m32
-  export LINKFLAGS = -m32 -shared
+  export DEFAULT_CFLAGS = -g -O $(MACHINE_TYPE) -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -D__DEBUG
+  export SOFLAGS = $(MACHINE_TYPE) -shared
+  export SOLDFLAGS = $(MACHINE_TYPE) -shared
+  export LDFLAGS = $(MACHINE_TYPE)
+  export LINKFLAGS = $(MACHINE_TYPE) -shared
   export BERKELEY_DIR = /nfsvol/nls/tools/berkeley_db
   export BERKELEY = $(BERKELEY_DIR)/Linux-i686/db-4.8.24
   export BERKELEY_INC = $(BERKELEY)/include
@@ -64,9 +66,10 @@ ifeq '$(O_SYSTEM)' "Linux"
   export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb-4.8.a
   export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb-4.8.so
   export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb-4.8.a
-  export BERKELEY_LIB_DYNAMIC = $(BERKELEY_LIB)/libdb-4.8.so
+  # export BERKELEY_LIB_DYNAMIC = $(BERKELEY_LIB)/libdb-4.8.so
+  export BERKELEY_LIB_DYNAMIC = "-L$(BERKELEY_LIB) -ldb-4.8"
   export DEFAULT_LIBXML_DIR = /usr
-  export SICSTUS = /nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86-linux-glibc2.5
+  export SICSTUS = /nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86-linux-glibc${GLIBC_VERSION}
   export SICSTUS_BIN = $(SICSTUS)/bin
   export SICSTUS_LIB = $(SICSTUS)/lib
   export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-$(SICSTUS_VERSION)/bin
@@ -75,16 +78,16 @@ ifeq '$(O_SYSTEM)' "Linux"
   export SOEXT=so
   export LSOEXT=so
   export JSOEXT=so
-  export ARCHDIR = x86-linux-glibc2.5
+  export ARCHDIR = x86-linux-glibc${GLIBC_VERSION}
   export SICSTUS_NATIVE_LIB = $(SICSTUS_LIBRARY)/$(ARCHDIR)
 else
   ifeq '$(O_SYSTEM)' "Darwin"
     RANLIB = ranlib
-    export DEFAULT_CFLAGS = -g -O -m32 -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -I/usr/include/malloc -D__DEBUG -mmacosx-version-min=10.5
-    export SOFLAGS = -m32 -bundle
-    export SOLDFLAGS = -m32 -bundle
-    export LINKFLAGS = -m32 -bundle
-    export LDFLAGS = -m32
+    export DEFAULT_CFLAGS = -g -O $(MACHINE_TYPE) -fPIC $(WARNINGS) -DSKR_PLATFORM=$(ARCH) -I/usr/include/malloc -D__DEBUG -mmacosx-version-min=10.5
+    export SOFLAGS = $(MACHINE_TYPE) -bundle
+    export SOLDFLAGS = $(MACHINE_TYPE) -bundle
+    export LINKFLAGS = $(MACHINE_TYPE) -bundle
+    export LDFLAGS = $(MACHINE_TYPE)
     export BERKELEY_VERSION = /usr/local/db-4.8.30
     export BERKELEY_INC = $(BERKELEY_VERSION)/include
     export BERKELEY_LIB = $(BERKELEY_VERSION)/lib
@@ -108,17 +111,17 @@ endif
 RESPATH=.:$(SKR_LIB):$(SKR_LEXICON)/lexicon:$(SKR_LEXICON)/morph:$(SKR_DB)
 
 export LINK_FILES=$(SKR_DEBUG)/debug.o \
-           $(SKR_LEXICON)/functions/linfl.o \
-           $(SKR_LEXICON)/functions/tokenize.o \
-           $(SKR_LEXICON)/morph/lm.o \
-           $(SKR_LEXICON)/morph/util.o \
-           $(SKR_LEXICON)/query/btree_query.o \
-           $(SKR_LEXICON)/query/tokenize.o \
-           $(SKR_LEXICON)/query/wl.o \
-           $(SKR_LEXICON)/miscutil/miscutil.o \
-           $(SKR_DEBUG)/get_val.o \
-           $(SKR_LEXICON)/morph/dm.o \
-           $(SKR_DB)/c_nls_db.a \
+           ./lexicon/functions/linfl.o \
+           ./lexicon/functions/tokenize.o \
+           ./lexicon/morph/lm.o \
+           ./lexicon/morph/util.o \
+           ./lexicon/query/btree_query.o \
+           ./lexicon/query/tokenize.o \
+           ./lexicon/query/wl.o \
+           ./lexicon/miscutil/miscutil.o \
+           ./debug/get_val.o \
+           ./lexicon/morph/dm.o \
+           ./db/c_nls_db.a \
            $(BERKELEY_LIB_DYNAMIC) \
            $(XDR_STATIC_LIB)
 

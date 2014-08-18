@@ -44,18 +44,14 @@
 #
 #==========================================================*/
 
+include ../Makefile.include
+
 O_SYSTEM = $(shell uname)
 
 ifeq '$(O_SYSTEM)' "SunOS"
   LD = ld
   LDFLAGS=-G -shared
   LIBS =
-else
-  ifeq '$(O_SYSTEM)' "Linux"
-    LD = gcc
-    LDFLAGS=-m32 -shared
-    LIBS = -lpthread
-  endif
 endif
 
 CFLAGS=${DEFAULT_CFLAGS}

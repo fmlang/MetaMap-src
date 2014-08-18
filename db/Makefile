@@ -54,13 +54,8 @@ ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
   LIBS = #-lsocket -lnsl -lrt
 else
-  ifeq '$(O_SYSTEM)' "Linux"
-    LDFLAGS=-m32 -shared
-    LIBS = -lpthread
-  else 
-    ifeq '$(O_SYSTEM)' "Darwin"
-      LIBS=db_access_glue.o
-    endif
+  ifeq '$(O_SYSTEM)' "Darwin"
+    LIBS=db_access_glue.o
   endif
 endif
 
@@ -71,8 +66,8 @@ SKR_BERKELEY_DB=./berkeley_db
 BTREE_QLIB_A = ${SKR_BERKELEY_DB}/btreeQlib.a
 BTREE_QLIB_O = ${SKR_BERKELEY_DB}/btreeQlib.o
 
-# BERKELEY_LIB_A is set in SKRenv.09
-DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_A} 
+# BERKELEY_LIB_XXX is set in SKRenv.XX or ../Makefile.include
+DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_DYNAMIC} 
 
 LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
 
@@ -109,6 +104,8 @@ c_nls_db.o:	c_nls_db.c ${BTREE_QLIB} ${SKR_BERKELEY_DB}/embed.h
 
 splfr_STATIC:	${BTREE_QLIB_A}
 		${SPLFR} ${SPLFR_STATIC_FLAGS} db_access.pl c_nls_db.c ${DBLIBS} ${LINK_FLAGS}
+
+db_access.${SOEXT} : splfr_DYNAMIC
 
 splfr_DYNAMIC:	${BTREE_QLIB_O}
 		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}

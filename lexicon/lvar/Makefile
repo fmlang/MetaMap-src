@@ -6,14 +6,7 @@ O_SYSTEM = $(shell uname)
 ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
   LIBS =  -lsocket -lnsl -lrt
-else
-  ifeq '$(O_SYSTEM)' "Linux"
-    LD = gcc
-    LDFLAGS=-m32 -shared
-    LIBS = -lpthread
-  endif
 endif
-
 
 SPLIBDIR=../lib
 LEXICONSRC=../lexicon
@@ -42,8 +35,7 @@ LIBRARIES = \
 LLIBS = $(LIBRARIES)  -lm $(LIBS)
 
 # compiler flags
-CFLAGS=-g -m32 $(INCLUDES) $(DEFAULT_CFLAGS)
-LDFLAGS=-m32
+CFLAGS=-g $(INCLUDES) $(DEFAULT_CFLAGS)
 
 # Source files
 SRC = lvar.c

@@ -53,6 +53,7 @@ ifeq '$(O_SYSTEM)' "SunOS"
   SEXT=so
 else
   ifeq '$(O_SYSTEM)' "Linux"
+    LDFLAGS=$(LINKFLAGS)
     LIBS = -lpthread
     C_NLS_DB_DYNAMIC_LIB=c_nls_db.so
     SEXT=so
