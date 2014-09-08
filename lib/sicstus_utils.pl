@@ -55,6 +55,7 @@
 	string_char/3,
 	string_size/2,
 	subchars/4,
+	sublist/2,
 	substring/4,
 	ttyflush/0,
 	upper/2,
@@ -78,7 +79,8 @@
 
 
 :- use_module(library(lists), [
-	append/2
+	append/2,
+	sublist/3
     ]).
 
 
@@ -240,6 +242,9 @@ string_size(StringOrAtom, Size) :-
 subchars(Atom, SubString, Offset, Length) :-
 	sub_atom(Atom, Offset, Length, _After, SubAtom),
 	atom_codes(SubAtom, SubString).
+
+sublist(List, SubList) :-
+        sublist(List, SubList, _Before).
 
 % This comment is lifted verbatim from the Quintus Prolog strings.pl library file:
 
