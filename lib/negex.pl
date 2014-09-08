@@ -75,6 +75,7 @@
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/3,
+	sublist/2,
 	ttyflush/0
    ]).
 
@@ -89,10 +90,6 @@
 	last/2,
 	select/3,
 	subseq1/2
-   ]).
-
-:- use_module(library(lists3), [
-	sublist/2
    ]).
 
 :- use_module(library(sets), [
@@ -389,7 +386,7 @@ make_triggers([TokenList|ListOfTokenLists], NegType, [Trigger|TriggerList]) :-
 map_negterm_tokens(TokenList, NegTerm, NegTermTokenList) :-
 	atomize_strings(NegTermStringList, NegTerm),
 	tokenize_strings(NegTermStringList, NegTermTokenList),
-	sublist(NegTermTokenList, TokenList).
+	sublist(TokenList, NegTermTokenList).
 
 tokenize_strings([], []).
 tokenize_strings([String|StringList], [Token|TokenList]) :-
@@ -411,7 +408,7 @@ tokenize_strings([String|StringList], [Token|TokenList]) :-
 % no
 %
 check_for_negation_phrase(Type, Target, WordList) :-
-	sublist(WordList, Target),
+	sublist(Target, WordList),
 	WordList = [H|T],
 	negation_phrase_tokens(Type, H, T).
 
