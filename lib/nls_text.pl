@@ -35,7 +35,8 @@
 
 :- module(nls_text,[
 	concatenate_text/3,
-	eliminate_multiple_meaning_designator/2,
+	% OBSOLETE
+	% eliminate_multiple_meaning_designator/2,
 	is_all_graphic_text/1,
 	string_uninvert/2
    ]).
@@ -94,16 +95,18 @@ concatenate_text_aux([First|Rest], InsertText, TextIn, TextOut) :-
 eliminate_multiple_meaning_designator/2 removes an expression of the form
 <n> where n is an integer from Word (an atom) producing ModifiedWord.  */
 
-eliminate_multiple_meaning_designator(Word, ModifiedWord) :-
-	( atom_codes(Word, WordString),
-	  split_string_backtrack(WordString, "<", Base, A1),
-	  split_string_backtrack(A1, ">", Integer, Tail),
-	  is_integer_string(Integer),
-	  trim_whitespace(Tail, "") ->
-	  trim_whitespace(Base, ModifiedWordString),
-	  atom_codes(ModifiedWord, ModifiedWordString)
-	; ModifiedWord = Word
-	).
+
+% OBSOLETE
+% eliminate_multiple_meaning_designator(Word, ModifiedWord) :-
+% 	( atom_codes(Word, WordString),
+% 	  split_string_backtrack(WordString, "<", Base, A1),
+% 	  split_string_backtrack(A1, ">", Integer, Tail),
+% 	  is_integer_string(Integer),
+% 	  trim_whitespace(Tail, "") ->
+% 	  trim_whitespace(Base, ModifiedWordString),
+% 	  atom_codes(ModifiedWord, ModifiedWordString)
+% 	; ModifiedWord = Word
+% 	).
 
 /* is_all_graphic_text(+Text)
    is_graphic_text(+Text)

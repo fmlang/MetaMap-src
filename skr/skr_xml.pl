@@ -787,8 +787,11 @@ generate_xml_AA_term(AAsMMO, XMLAATerm) :-
 
 
 generate_xml_AA_list([], []).
-generate_xml_AA_list([Acronym*Expansion*CountTerm*CUIList|RestAATerms], [XMLAA|RestXMLAAs]) :-
-	generate_one_xml_AA_term(Acronym, Expansion, CountTerm, CUIList, XMLAA),
+generate_xml_AA_list([AcronymAtom*ExpansionAtom*CountTerm*CUIList|RestAATerms],
+		     [XMLAA|RestXMLAAs]) :-
+	atom_codes(AcronymAtom, AcronymString),
+	atom_codes(ExpansionAtom, ExpansionString),
+	generate_one_xml_AA_term(AcronymString, ExpansionString, CountTerm, CUIList, XMLAA),
 	generate_xml_AA_list(RestAATerms, RestXMLAAs).
 
 
@@ -841,7 +844,8 @@ generate_xml_AA_list([Acronym*Expansion*CountTerm*CUIList|RestAATerms], [XMLAA|R
 
 generate_one_xml_AA_term(Acronym, Expansion, CountTerm, MMOCUIList, XMLAA) :-
 	% With MM2014, delete convert_AA_count_term and use the next line instead:
-	CountTerm = (AATokenNum,AALen,AAExpTokenNum,AAExpLen),
+	CountTerm = (AATokenNum,AALen,AAExpTokenNum,AAExpLen,AAPosInfo),
+	AAPosInfo = AAStartPos:AALen,
 	% convert_AA_count_term(CountTerm, AATokenNum, AALen, AAExpTokenNum, AAExpLen),
 	length(MMOCUIList, CUILengthAtom),
 	number_codes(CUILengthAtom, AACUICount),
@@ -849,6 +853,7 @@ generate_one_xml_AA_term(Acronym, Expansion, CountTerm, MMOCUIList, XMLAA) :-
 	number_codes(AALen, AALenString),
 	number_codes(AAExpTokenNum, AAExpTokenNumString),
 	number_codes(AAExpLen, AAExpLenString),
+	number_codes(AAStartPos, AAStartPosString),
 	generate_xml_AA_CUI_list(MMOCUIList, XMLCUIList),
 	create_xml_element('AAText',
 			   [],
@@ -874,6 +879,10 @@ generate_one_xml_AA_term(Acronym, Expansion, CountTerm, MMOCUIList, XMLAA) :-
 			   [],
 			   [pcdata(AAExpLenString)],
 			   AAExpLenTerm),
+	create_xml_element('AAStartPos',
+			   [],
+			   [pcdata(AAStartPosString)],
+			   AAStartPosTerm),
 	create_xml_element('AACUIs',
 			   ['Count'=AACUICount],
 			   XMLCUIList,
@@ -882,7 +891,7 @@ generate_one_xml_AA_term(Acronym, Expansion, CountTerm, MMOCUIList, XMLAA) :-
 			   [],
 			   [AATextTerm,AAExpTerm,
 			    AATokenNumTerm,AALenTerm,
-			    AAExpTokenNumTerm,AAExpLenTerm,CUIListTerm],
+			    AAExpTokenNumTerm,AAExpLenTerm,AAStartPosTerm,AALenTerm,CUIListTerm],
 			   XMLAA).
 
 generate_xml_AA_CUI_list([], []).

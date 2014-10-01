@@ -61,6 +61,7 @@
 	higher_order_or_annotation_tok/1,
 	higher_order_tok/1,
 	higher_order_type/1,
+	hyphen_or_slash_tok/1,
 	hyphen_punc/1,
 	hyphen_punc_char/1,
 	ic_tok/1,
@@ -229,13 +230,25 @@ higher_order_or_annotation_tok(Tok) :-
 
 punc_tok(tok(pn,_,_,_)).
 
+hyphen_or_slash_tok(tok(pn,_String, LCString,_PosInfo)) :-
+	( hyphen_punc(LCString) ->
+	  true
+	; slash_punc(LCString)
+	).
+
 hyphen_punc(String) :-
 	String = [Char],
 	hyphen_punc_char(Char).
 
+slash_punc(String) :-
+	String = [Char],
+	slash_punc_char(Char).
+
 % '-'
 % hyphen_punc_char(45).
 hyphen_punc_char(0'-).
+
+slash_punc_char(0'/).
 
 sentence_punc_tok(tok(pn,SP,SP,_)) :- sentence_punc(SP).
 

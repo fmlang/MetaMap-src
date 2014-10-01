@@ -56,7 +56,8 @@
   ]).
 
 :- use_module(skr(skr_utilities), [
-	fatal_error/2
+	fatal_error/2,
+	send_message/2
   ]).
 
 % :- use_module(skr_lib(ctypes), [
@@ -141,7 +142,7 @@ get_lex_item([_Other|More], Item, ItemInfo) :-
 
 get_this_variant([], _VariantFound, _StopGap,
 		 LexMatch, _InputMatch, [unknown:[base]|VarInfo], VarInfo) :-
-	format(user_output, '### WARNING: "~w" has no i-variants!~n', [LexMatch]).
+	send_message('### WARNING: "~w" has no i-variants!~n', [LexMatch]).
 get_this_variant([H|T], VariantFound, StopGap,
 		 LexMatch, InputMatch, ThisVarInfo, VariantTail) :-	
 	get_this_variant_1([H|T], VariantFound, StopGap,
@@ -150,8 +151,7 @@ get_this_variant([H|T], VariantFound, StopGap,
 get_this_variant_1([], VariantFound, StopGap,
 		   LexMatch, InputMatch, [StopGap|ThisVarInfo], ThisVarInfo) :-
 	( VariantFound =:= 0 ->
-	  format(user_output,
-		 '### WARNING: Mismatch in LexMatch "~w" and InputMatch ~w ~n',
+	  send_message('### WARNING: Mismatch in LexMatch "~w" and InputMatch ~w ~n',
 		 [LexMatch,InputMatch])
 	; true
 	).

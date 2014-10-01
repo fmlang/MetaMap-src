@@ -113,6 +113,7 @@
 
 :- use_module(skr(skr_utilities),[
 	fatal_error/2,
+	send_message/2,
 	token_template/6
     ]).
 
@@ -452,7 +453,7 @@ extract_tokens(PhraseItem, [], []) :-
 extract_tokens_aux(PhraseItems, TokenWords) :-
 	( atom(PhraseItems) ->
 	  TokenWords = [PhraseItems],
-	  format(user_output, "PRIMITIVE: ~q~n", [PhraseItems])
+	  send_message('PRIMITIVE: ~q~n', [PhraseItems])
 	; % PhraseItems = [H|T],
 	  memberchk(tokens(TokenWords), PhraseItems)
 	).
@@ -507,7 +508,7 @@ filter_tokens_1(PhraseItem, TokenWords, []) :-
 	  extract_tokens_aux(SubItemList, TokenWords)
 	; arg(1, PhraseItem, SubItemList),
 	  extract_tokens_aux(SubItemList, TokenWords),
-	  format(user_output, '### WARNING: ~q is an unexpected phrase item!~n', [PhraseItem]),
+	  send_message('### WARNING: ~q is an unexpected phrase item!~n', [PhraseItem]),
 	  ttyflush
 	),
 	!.

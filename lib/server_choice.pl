@@ -33,8 +33,13 @@
 	get_server_stream/2
     ]).
 
+:- use_module(skr(skr), [
+	stop_and_halt/0
+   ]).
+
 :- use_module(skr(skr_utilities), [
-	ensure_number/2
+	ensure_number/2,
+	send_message/2
    ]).
 
 :- use_module(skr_lib(nls_strings), [
@@ -124,20 +129,17 @@ get_server_stream_aux(ServerType, ControlValue, HostsEnvVar, PortEnvVar, ServerS
 	!.
 get_server_stream_aux(ServerType, ControlValue, _HostsEnvVar, _PortEnvVar, _ServerStream) :-
 	( control_value(ControlValue, UserChoice) ->
-	  format(user_output,
-		 '~nCould not set ~w Server hosts and port for ~q.~nAborting.~n',
-		 [ServerType,UserChoice])
-	; format(user_output,
-		 '~nCould not set ~w Server hosts and port.~nAborting.~n',
-		 [ServerType])
+	  send_message('~nCould not set ~w Server hosts and port for ~q.~nAborting.~n',
+		       [ServerType,UserChoice])
+	; send_message('~nCould not set ~w Server hosts and port.~nAborting.~n',
+		       [ServerType])
 	),
-	halt.
+	stop_and_halt.
 
 conditionally_announce_server_connection(ServerType, ServerMessage, ServerHost, ServerStream) :-
 	( \+ control_option(silent) ->
-	  format(user_output,
-		 'Established connection ~w to ~w Server on ~w~w.~n',
-		 [ServerStream,ServerType,ServerMessage,ServerHost])
+	  send_message('Established connection ~w to ~w Server on ~w~w.~n',
+		       [ServerStream,ServerType,ServerMessage,ServerHost])
 	; true
 	).
 

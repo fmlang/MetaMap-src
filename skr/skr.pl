@@ -45,8 +45,9 @@
 	% but they must still be exported because they're called via debug_call.
 	print_candidate_grid/6,
 	print_duplicate_info/4,
-	skr_phrases/17,
+	skr_phrases/18,
 	print_all_aevs/1,
+	stop_and_halt/0,
 	% called by MetaMap API -- do not change signature!
 	stop_skr/0
     ]).
@@ -117,12 +118,21 @@
 	sab_tables_exist/0
     ]).
 
+:- use_module(skr(skr_utilities),[
+        send_message/2
+    ]).
+
+:- use_module(skr(skr_fe), [
+	get_output_stream/1
+    ]).
+
 :- use_module(skr(skr_utilities), [
 	debug_call/2,
 	debug_message/3,
 	ensure_number/2,
 	expand_split_word_list/2,
 	fatal_error/2,
+	generate_EOT_output/1,
 	get_candidate_feature/3,
 	get_all_candidate_features/3,
 	replace_crs_with_blanks/4,
@@ -175,7 +185,7 @@
     ]).
 
 :- use_module(text(text_objects), [
-	extract_token_strings/2
+	extract_token_atoms/2
     ]).
 
 :- use_module(text(text_object_util), [
@@ -244,31 +254,16 @@ initialize_skr(Options) :-
 initialize_skr(_) :-
 	fatal_error('initialize_skr/1 failed.~n', []).
 
+stop_and_halt :- stop_skr, halt.
 
 stop_skr :-
 	( stop_db_access ->
 	  true
 	; true
 	),
+	get_output_stream(OutputStream),
+	generate_EOT_output(OutputStream),
 	close_all_streams.
-%	( current_stream(File, Mode, Stream),
-%	  stream_property(Stream, Prop),
-%	  stream_position(Stream, Pos),
-%	  format(user_output, '~q-~q-~q-~q-~q~n', [File,Mode,Stream,Prop,Pos]),
-%	  fail
-%	; true
-%	),
-%	nl(user_output),
-%	local_close_all_streams.
-
-local_close_all_streams :-
-	current_stream(File,Mode,Stream),
-	format(user_output, 'Closing stream ~q-~q-~q~n', [File,Mode,Stream]),
-	close(Stream),
-	format(user_output, 'CLOSED  stream ~q-~q-~q~n', [File,Mode,Stream]),
-	fail
-      ; format(user_output, '#####################~n', []),
-        halt.
 
 warn_if_no_sab_files :-
 	% If the sab tables (sab_rv and sab_vr) exist, do not issue a warning.
@@ -282,18 +277,18 @@ warn_if_no_sab_files :-
 	  ( control_option(exclude_sources)
 	  ; control_option(restrict_to_sources)
 	  ) ->
-	  format(user_output, '### WARNING: Validation of UMLS sources specified on command line disabled!~n', [])
+	  send_message('### WARNING: Validation of UMLS sources specified on command line disabled!~n', [])
 	% If neither of the above circumstances hold, then issue no warning.
 	; true
 	).
 
 skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-	    AAs, UDAs, SyntacticAnalysis, TagList,
+	    AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
 	    WordDataCacheIn, USCCacheIn, RawTokensIn,
 	    ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 	    MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) :-
 	( skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-			  AAs, UDAs, SyntacticAnalysis, TagList,
+			  AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
 			  WordDataCacheIn, USCCacheIn, RawTokensIn,
 			  ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 			  MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) ->
@@ -303,19 +298,18 @@ skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
         ).
 
 skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-		AAs, UDAs, SyntacticAnalysis, TagList,
+		AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
 		WordDataCacheIn, USCCacheIn, RawTokensIn,
 		ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 		DisambiguatedMMOPhrases, ExtractedPhrases,
 		minimal_syntax(SemRepPhrasesWithWSD)) :-
 	ServerStreams = _TaggerServerStream-WSDServerStream,
-	maybe_atom_gc(_DidGC, _SpaceCollected),
 	SyntacticAnalysis = minimal_syntax(Phrases0),
 	add_tokens_to_phrases(Phrases0, Phrases),
 	% UtteranceText contains no AAs. E.g.,
 	% "heart attack (HA)" will become simply "heart attack".
 	skr_phrases_1(Phrases, InputLabel, UtteranceText,
-		      AAs, UDAs, CitationTextAtom, TagList,
+		      AAs, UDAs, NoMapPairs, CitationTextAtom, TagList,
 		      WordDataCacheIn, USCCacheIn,
 		      WordDataCacheOut, USCCacheOut,
 		      RawTokensIn, RawTokensOut,
@@ -332,11 +326,11 @@ skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
 % 	nl(user_output).
 
 skr_phrases_1([], _InputLabel,
-	      _AllUtteranceText, _AAs, _UDAs, _CitationTextAtom, _TagList,
+	      _AllUtteranceText, _AAs, _UDAs, _NoMapPairs, _CitationTextAtom, _TagList,
 	      WordDataCache, USCCache, WordDataCache, USCCache,
 	      RawTokens, RawTokens, [], []).
 skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
-	      AAs, UDAs, CitationTextAtom, TagList,
+	      AAs, UDAs, NoMapPairs, CitationTextAtom, TagList,
 	      WordDataCacheIn, USCCacheIn,
 	      WordDataCacheOut, USCCacheOut,
 	      RawTokensIn, RawTokensOut,
@@ -366,11 +360,12 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	% which is no longer used!!
 	% format(user_output, 'Phrase ~w:~n', [MergedPhrase]),
 	skr_phrase(InputLabel, AllUtteranceText,
-		   MergedPhrase, AAs, CitationTextAtom, TagList,
+		   MergedPhrase, AAs, NoMapPairs, CitationTextAtom, TagList,
 		   RawTokensIn, GVCs,
 		   WordDataCacheIn, USCCacheIn,
 		   WordDataCacheNext, USCCacheNext,
 		   RawTokensNext, APhrases, FirstMMOPhrase),
+	maybe_atom_gc(_DidGC, _SpaceCollected),
 	% format(user_output, 'Tokens Next:~n', []),
 	% skr_utilities:write_token_list(RawTokensNext, 0, 1),
 	set_var_GVCs_to_null(GVCs),
@@ -378,7 +373,7 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	subtract_from_control_options(AllAddedOptions),
 	% add_semtypes_to_phrases_if_necessary(Phrases0,FirstEPPhrases),
 	skr_phrases_1(RestMergedPhrases, InputLabel, AllUtteranceText,
-		      AAs, UDAs, CitationTextAtom, TagList,
+		      AAs, UDAs, NoMapPairs, CitationTextAtom, TagList,
 		      WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut,
 		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrases).
 
@@ -407,10 +402,10 @@ merge_aa_phrases_1(PhrasesToMerge, [AppendedPhrase1|DemotedPhrases]) :-
 % and assume it's the only one that does. Maybe too simple?
 acronym_expansion_spans_phrases(AAs, UDAs, [FirstPhrase|RestPhrases],
 				[FirstPhrasePrefix|PhrasesToMerge], RemainingPhrases) :-
-	( avl_member(_AATokens, AAs, [ExpansionTokens])
+	( member(_AATokens-ExpansionTokens, AAs)
 	; avl_member(_AATokens, UDAs, [ExpansionTokens])
 	),
-	% extract_token_strings(ExpansionTokens, ExpansionStrings),
+	% extract_token_atoms(ExpansionTokens, ExpansionStrings),
 	append(FirstPhrasePrefix, FirstPhraseSuffix, FirstPhrase),
 	FirstPhraseSuffix \== [],
 	% reversed order of args from QP library version!
@@ -502,8 +497,7 @@ match_tokens_to_inputmatch([FirstExpansionToken|RestExpansionTokens],
 	  match_tokens_to_inputmatch(RestExpansionTokens,
 				     InputMatchAtoms, RemainingExpansionTokens)
 	; InputMatchAtoms = [FirstInputMatchAtom|RestInputMatchAtoms],
-	  token_template(FirstExpansionToken, _TokenType, TokenString, _LCTokenString, _PosInfo),
-	  atom_codes(TokenAtom, TokenString),
+	  token_template(FirstExpansionToken, _TokenType, TokenAtom, _LCTokenAtom, _PosInfo),
 	  TokenAtom == FirstInputMatchAtom,
 	  match_tokens_to_inputmatch(RestExpansionTokens,
 				     RestInputMatchAtoms, RemainingExpansionTokens)
@@ -536,14 +530,14 @@ element of the pair is of the form
      pwi(PhraseWordL,PhraseHeadWordL,PhraseMap).
 */
 
-skr_phrase(Label, UtteranceText, PhraseSyntax, AAs,
+skr_phrase(Label, UtteranceText, PhraseSyntax, AAs, NoMapPairs,
 	   CitationTextAtom, TagList,
 	   RawTokensIn, GVCs,
 	   WordDataCacheIn, USCCacheIn,
 	   WordDataCacheOut, USCCacheOut,
 	   RawTokensOut, APhrases, MMOPhraseTerm) :-
 	( skr_phrase_1(Label, UtteranceText,
-		       PhraseSyntax, AAs, RawTokensIn,
+		       PhraseSyntax, AAs, NoMapPairs, RawTokensIn,
 		       CitationTextAtom, TagList, GVCs,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut,
@@ -554,7 +548,7 @@ skr_phrase(Label, UtteranceText, PhraseSyntax, AAs,
         ).
 
 skr_phrase_1(Label, UtteranceTextString,
-	     PhraseSyntax, AAs,
+	     PhraseSyntax, AAs, NoMapPairs,
 	     RawTokensIn, CitationTextAtom, TagList, GVCs,
 	     WordDataCacheIn, USCCacheIn,
 	     WordDataCacheOut, USCCacheOut,
@@ -568,14 +562,14 @@ skr_phrase_1(Label, UtteranceTextString,
 	atom_codes(OrigPhraseTextAtom, OrigPhraseTextString),
 	debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords),
 	atom_codes(UtteranceTextAtom, UtteranceTextString),
-	generate_initial_evaluations(Label, UtteranceTextAtom,
-				     OrigPhraseTextString, PhraseSyntax, Variants,
-				     GVCs, WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
+	generate_initial_evaluations(Label, UtteranceTextAtom, OrigPhraseTextString,
+				     PhraseSyntax, Variants, GVCs, WordDataCacheIn, USCCacheIn,
+				     RawTokensOut, AAs,
 				     InputMatchPhraseWords, PhraseTokens, TokenPhraseWords,
 				     TokenPhraseHeadWords, WordDataCacheOut,
 				     USCCacheOut, Evaluations0),
 
-	refine_evaluations(Evaluations0, RefinedEvaluations, FinalEvaluations),
+	refine_evaluations(Evaluations0, NoMapPairs, RefinedEvaluations, FinalEvaluations),
 	length(RefinedEvaluations, TotalCandidateCount),
 	length(FinalEvaluations, RefinedCandidateCount),
 	ExcludedCandidateCount is TotalCandidateCount - RefinedCandidateCount,
@@ -647,7 +641,7 @@ debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords) :-
 		 [PMID,TiOrAB,UtteranceNum,TokenPhraseLength,InputMatchPhraseWords]),
 	  flush_output(OutputStream),
 	  % don't duplicate output to user_output
-	  ( OutputStream == user_output ->
+	  ( stream_property(OutputStream, alias(user_output)) ->
 	    true
 	  ; format(user_output, 'Phrase|~s|~s|~s|~d|~q~n',
 		   [PMID,TiOrAB,UtteranceNum,TokenPhraseLength,InputMatchPhraseWords]),
@@ -773,8 +767,8 @@ matching_tokens_4(tok(TokenType, TokenString, TokenLCString, Pos1),
 		  
 	
 get_AA_text(AATokens, AATextString) :-
-	extract_token_strings(AATokens, AATextString).
-	% extract_token_strings(AATokens, AATokenStrings),
+	extract_token_atoms(AATokens, AATextString).
+	% extract_token_atoms(AATokens, AATokenStrings),
 	% interleave_string(AATokenStrings, " ", AATextString).
 
 generate_initial_evaluations(Label, UtteranceText,
@@ -851,6 +845,22 @@ stop_analysis(Atom, String, Tags) :-
 	  Length < MinLength
 	).
 
+refine_evaluations(InitialEvaluations, NoMapPairs, RefinedEvaluations, FinalEvaluations) :-
+	refine_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs,
+					      EvaluationsAfterUserExclusions),
+	refine_evaluations_by_sources(EvaluationsAfterUserExclusions, EvaluationsAfterSources),
+	refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
+	refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
+
+
+refine_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs, EvaluationsAfterUserExclusions) :-
+	( control_value(nomap, _) ->
+	  filter_evaluations_by_user_exclusions(InitialEvaluations,
+						NoMapPairs,
+						EvaluationsAfterUserExclusions)
+	; EvaluationsAfterUserExclusions  = InitialEvaluations
+	).
+	  
 refine_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	( control_value(restrict_to_sources, RestrictedSources) ->
 	  convert_to_root_sources(RestrictedSources, RestrictedRootSources),
@@ -865,14 +875,14 @@ refine_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	; EvaluationsAfterSources = Evaluations0
 	).
 
-refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations) :-
+refine_evaluations_by_semtypes(Evaluations0, RefinedEvaluations) :-
 	( control_option(restrict_to_sts) ->
 	  control_value(restrict_to_sts, STs),
-	  filter_evaluations_restricting_to_sts(EvaluationsAfterSources, STs, RefinedEvaluations)
+	  filter_evaluations_restricting_to_sts(Evaluations0, STs, RefinedEvaluations)
 	; control_option(exclude_sts) ->
 	  control_value(exclude_sts, STs),
-	  filter_evaluations_excluding_sts(EvaluationsAfterSources, STs, RefinedEvaluations)
-	; RefinedEvaluations = EvaluationsAfterSources
+	  filter_evaluations_excluding_sts(Evaluations0, STs, RefinedEvaluations)
+	; RefinedEvaluations = Evaluations0
 	).
 
 refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations) :-
@@ -880,11 +890,6 @@ refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations) :-
  	  filter_out_subsumed_evaluations(RefinedEvaluations, FinalEvaluations)
  	; FinalEvaluations = RefinedEvaluations
  	).
-
-refine_evaluations(InitialEvaluations, RefinedEvaluations, FinalEvaluations) :-
-	refine_evaluations_by_sources(InitialEvaluations, EvaluationsAfterSources),
-	refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
-	refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
 
 debug_evaluations(Evaluations) :-
 	( control_value(debug, DebugFlags),
@@ -1244,7 +1249,7 @@ create_new_token(Word, RestTokens, CreatedToken) :-
 % and use the "AIDS" token's PI.
 % 
 % get_word_token(Word, _PrevTokenStartPos, RestTokens, MatchingToken, NewRestTokens) :-
-%         % format(user_output, '#### WARNING: Token mismatch for "~w"; ', [Word]),
+%         % send_message('#### WARNING: Token mismatch for "~w"; ', [Word]),
 %         ( find_next_matching_token(5, Word, RestTokens, MatchingToken, NewRestTokens) ->
 % 	  true
 %           % format(user_output, ' FOUND matching token.~n', [])
@@ -1439,6 +1444,17 @@ occurs_in_gvcs([_|Rest], Word, Tags) :-
 	occurs_in_gvcs(Rest, Word, Tags).
 
 
+% ev(-1000,'C0596170','BED','Binge eating disorder',[bed],[mobd],[[[1,1],[1,1],0]],[1],1,yes,no,[],[0/3],_247965,_247967)],
+filter_evaluations_by_user_exclusions([], _UserExclusions, []).
+filter_evaluations_by_user_exclusions([FirstCandidate|RestCandidates],
+				      UserExclusions, Results) :-
+	get_all_candidate_features([cui,metaterm], FirstCandidate, [CUI, MetaTerm]),
+	( memberchk(MetaTerm:CUI, UserExclusions) ->
+          Results = RestResults
+	; Results = [FirstCandidate|RestResults]
+	),
+        filter_evaluations_by_user_exclusions(RestCandidates, UserExclusions, RestResults).
+
 /* filter_evaluations_restricting_to_sources(+EvaluationsIn, +Sources, -EvaluationsOut)
 
 filter_evaluations_restricting_to_sources/3 removes those evaluations from EvaluationsIn
@@ -1450,7 +1466,7 @@ the name is included in curly braces. */
 filter_evaluations_restricting_to_sources([], _, []).
 filter_evaluations_restricting_to_sources([FirstCandidate|RestCandidates],
 					  RestrictRootSources, Results) :-
-        candidate_term(NegValue, CUI, MetaTerm, _MetaConcept, MetaWords, SemTypes,
+        candidate_term(NegValue, CUI, _MetaTerm, MetaConcept, MetaWords, SemTypes,
                        MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
                        IsOvermatch, CUISources, PosInfo, Status, Negated, FirstCandidate),
 	convert_to_root_sources(CUISources, CUIRootSources),
@@ -1461,7 +1477,7 @@ filter_evaluations_restricting_to_sources([FirstCandidate|RestCandidates],
 	; db_get_cui_sourceinfo(CUI, CUISourceInfo0),
 	  extract_relevant_sources(CUISourceInfo0, RestrictRootSources, CUISourceInfo),
 	  extract_name_in_source(CUISourceInfo, ConceptNameInSource),
-          candidate_term(NegValue, CUI, MetaTerm, ConceptNameInSource, MetaWords, SemTypes,
+          candidate_term(NegValue, CUI, ConceptNameInSource, MetaConcept, MetaWords, SemTypes,
                          MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
                          IsOvermatch, CommonSources, PosInfo, Status, Negated, NewCandidate),
           Results = [NewCandidate|ModRest]
@@ -3695,34 +3711,42 @@ get_composite_phrases([PhraseIn|RestPhrases], PhraseIn, 0, RestPhrases, []).
 begins_with_composite_phrase/3 determines if Phrases begins with a CompositePhrase,
 and returns it and the Rest of the phrases. A composite phrase is detected if
 the phrase list begins with
- *  a phrase containing a head(_) structure
- *  followed by a prepositional phrase
- *  followed by one or more prepositional phrases introduced by "of".
+(1)  a phrase containing a head(_) structure
+(2)  followed by a prepositional phrase
+(3)  followed by one or more prepositional phrases introduced by "of", e.g.,
+
+(1) pain
+(2) on the left side
+(3) of the chest
 
 */
 
-begins_with_composite_phrase([First,Second|Rest], MaxPrepPhraseCount,
+begins_with_composite_phrase([First,Second|Rest], MaxPrepPhraseCount0,
 			     ActualPrepPhraseCount, [First,Second|RestComposite], NewRest) :-
 	% We want to allow not just "pain on the left side of the chest",
 	% but also "the patient presented with pain on the left side of the chest"!
 	% \+ is_prep_phrase(First),
 	% contains_head(First),
-        \+ ends_with_punc(First),
-        is_prep_phrase(Second),
+        \+ ends_with_punc(First), % "pain"
+        is_prep_phrase(Second),   % "on the left side"
 	% !,
 	% MaxPrepPhraseCount is the total number of prepositional phrases
 	% that can be glommed onto the initial phrase;
-	InitPrepPhraseCount is 1,
+	MaxPrepPhraseCount is MaxPrepPhraseCount0 - 1,
+	InitPrepPhraseCount is 0,
 	initial_of_phrases(Rest, MaxPrepPhraseCount, InitPrepPhraseCount,
-			   ActualPrepPhraseCount0, _RestComposite0, _NewRest0),
+			   _ActualPrepPhraseCount0, _RestComposite0, _NewRest0),
 	!,
 	% This looks ugly, but it prevents needless backtracking.
-	% ActualPrepPhraseCount0 is the max # of prep phrases found,
+	% ActualPrepPhraseCount0 is the max # of "of" prep phrases found,
 	% so instead of backtracking from -4 (or whatever the limit is) to 0,
 	% just backtrack from ActualPrepPhraseCount0 to 0.
-	NegActualPrepPhraseCount is -1 * ActualPrepPhraseCount0,
-	between(NegActualPrepPhraseCount, 0, TempNegActualPrepPhraseCount),
+	NegMaxPrepPhraseCount is -1 * MaxPrepPhraseCount,
+%	NegActualPrepPhraseCount is -1 * ActualPrepPhraseCount0,
+%	between(NegActualPrepPhraseCount, 0, TempNegActualPrepPhraseCount),
+	between(NegMaxPrepPhraseCount, 0, TempNegActualPrepPhraseCount),
 	TempActualPrepPhraseCount is -1 * TempNegActualPrepPhraseCount,
+%	TempActualPrepPhraseCount is -1 * TempNegActualPrepPhraseCount,
 	initial_of_phrases(Rest, TempActualPrepPhraseCount, InitPrepPhraseCount,
 			   ActualPrepPhraseCount, RestComposite, NewRest).
 

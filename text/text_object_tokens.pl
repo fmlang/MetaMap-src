@@ -90,6 +90,7 @@
     ]).
 
 :- use_module(skr_lib(sicstus_utils),[
+	concat_atom/2,
 	lower/2,
 	lowercase_list/2
     ]).
@@ -478,9 +479,13 @@ remove_bracketing([First|Rest],ModifiedTokens) :-
 
 extract_text/2 extracts the Text of Tokens.  */
 
-extract_text(Tokens,Text) :-
-    extract_text_aux(Tokens,TokensText),
-    append(TokensText,Text).
+extract_text(Tokens, Text) :-
+	extract_text_aux(Tokens, TokensText),
+	TokensText = [First|_],
+	( atom(First) ->
+	  concat_atom(TokensText, Text)
+	; append(TokensText, Text)
+	).
 
 extract_text_aux([],[]).
 % not currently needed

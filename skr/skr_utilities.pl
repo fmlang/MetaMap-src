@@ -83,6 +83,10 @@
 	write_token_list/3
     ]).
 
+:- use_module(lexicon(qp_lexicon), [
+	concat_atoms_intelligently/2
+    ]).
+
 :- use_module(metamap(metamap_variants), [
 	write_all_variants/4
     ]).
@@ -137,7 +141,8 @@
 	% print_candidate_grid/6 and print_duplicate_info/4 are not explicitly called here,
 	% but they must still be imported because they're called via debug_call.
 	print_candidate_grid/6,
-	print_duplicate_info/4
+	print_duplicate_info/4,
+	stop_and_halt/0
     ]).
 
 :- use_module(skr(skr_xml), [
@@ -159,8 +164,8 @@
    ]).		     
 
 :- use_module(text(text_objects), [
-	extract_an_lc_strings/2,
-	extract_token_strings/2
+	extract_an_lc_atoms/2,
+	extract_token_atoms/2
    ]).		     
 
 :- use_module(library(avl), [
@@ -413,7 +418,7 @@ verify_single_output_format(Result) :-
 verify_xml_settings(Result) :-
 	xml_output_format(XMLFormat),
 	!,
-	warning_check([syntax, show_cuis, negex, sources, dump_aas], XMLFormat),
+	warning_check([syntax, show_cuis, sources, dump_aas], XMLFormat),
 	fatal_error_check([hide_plain_syntax, number_the_candidates,
 			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
 			  XMLFormat, 0, Result).
@@ -422,7 +427,7 @@ verify_xml_settings(0).
 verify_MMO_settings(Result) :-
 	control_option(machine_output),
 	!,
-	warning_check([syntax, show_cuis, negex, sources, dump_aas], machine_output),
+	warning_check([syntax, show_cuis, sources, dump_aas], machine_output),
 	fatal_error_check([hide_plain_syntax, number_the_candidates,
 			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
 			  machine_output, 0, Result).
@@ -431,8 +436,8 @@ verify_MMO_settings(0).
 verify_mmi_settings(Result) :-
 	control_option(fielded_mmi_output),
 	!,
-	warning_check([show_cuis,negex], fielded_mmi_output),
-	fatal_error_check([tagger_output, hide_plain_syntax, display_candidates,
+	warning_check([show_cuis,negex,syntax], fielded_mmi_output),
+	fatal_error_check([tagger_output, hide_plain_syntax, show_candidates,
 			   number_the_candidates, hide_semantic_types,
 			   show_preferrred_names_only, hide_mappings, sources],
 			  fielded_mmi_output, 0, Result).
@@ -559,11 +564,7 @@ verify_sldi_settings(Result) :-
 
 % Error if any of negex_trigger_file is set, but negex is not!
 verify_negex_trigger_setting(Result) :-
-	( control_value(negex_trigger_file, _),
-	  \+ control_option(negex) ->
-	  send_message('~nERROR: --negex_trigger_file cannot be used without --negex!~n', []),
-	  Result is 1
-	; control_value(negex_trigger_file, _) ->
+	( control_value(negex_trigger_file, _) ->
 	  load_negex_trigger_file,
 	  Result is 0
 	; Result is 0
@@ -581,7 +582,7 @@ load_negex_trigger_file :-
 negex_load(NegExTriggerFile) :-
 	atom_length(NegExTriggerFile, FileNameLength),
 	BannerLength is FileNameLength + 40,
-	format(user_output, '~n~*c~n###### Loading NegEx trigger file ~w #####~n~*c~n',
+	send_message('~n~*c~n###### Loading NegEx trigger file ~w #####~n~*c~n',
 	       [BannerLength,35,NegExTriggerFile,BannerLength,35]),
 	compile(NegExTriggerFile).
 
@@ -714,7 +715,7 @@ verify_all_results(ValuesList, InputStream, OutputStream) :-
 	; generate_EOT_output(OutputStream),
 	  close(InputStream),
 	  close(OutputStream),
-	  halt
+	  stop_and_halt
 	).	
 
 warning_check([], _OutputOption).
@@ -737,15 +738,8 @@ fatal_error_check([FatalErrorOption|RestOptions], OutputOption, ResultIn, Result
 	fatal_error_check(RestOptions, OutputOption, ResultNext, ResultOut).
 
 send_message(Message, Format):-
-	current_output(OutputStream),
-	% First, send the message to the output stream.
-	format(OutputStream, Message, Format),
-	% Then, if the output stream is not user_output,
-	( \+ stream_property(OutputStream, alias(user_output)) ->
-	% send the message to user_output as well.
-	  format(user_output, Message, Format)
-	; true
-	).
+	% send message to stderr only, not to the output file, if there is one
+	format(user_error, Message, Format).
 
 /* usage
 
@@ -803,16 +797,16 @@ get_program_name(ProgramName) :-
 	atom_codes(ProgramName, ProgramNameCodes).
 
 basename(File, Base) :-
-        basename(File, S, S, Base).
+        basename_aux(File, S, S, Base).
 
 % This predicate is stolen from system3.pl in the SICStus Prolog 4.1.1 library directory,
 % from where it is NOT exported. Rather than modify the SP library file to export basename/4,
 % I have just copied it here.
-basename([], Base, [], Base).
-basename([0'/|File], _, _, Base) :- !,
-        basename(File, S, S, Base).
-basename([C|File], S0, [C|S], Base) :- !,
-        basename(File, S0, S, Base).
+basename_aux([], Base, [], Base).
+basename_aux([0'/|File], _, _, Base) :- !,
+        basename_aux(File, S, S, Base).
+basename_aux([C|File], S0, [C|S], Base) :- !,
+        basename_aux(File, S0, S, Base).
 
 % format_cmd_line_for_machine_output_1(Options, IArgs, ArgsMO)
 format_cmd_line_for_machine_output_1([], ArgsRest, ArgsMO) :-
@@ -1057,40 +1051,45 @@ generate_utterance_output(Label, Text0, UttStartPos, UttLength, ReplPos, Utteran
 
 generate_AAs_MMO_term(DisambMMOutput, aas(SortedAAList)) :-
 	% Exctact the AA term from the DisambMMOutput
-	get_aa_term(DisambMMOutput, AAs),
-	avl_to_list(AAs, AAListTokens),
-	reformat_AA_list(AAListTokens, DisambMMOutput, AAList),
+	get_aa_term(DisambMMOutput, AAListTokens),
+	% avl_to_list(AAs, AAListTokens),
+	reformat_AA_list_for_MMO(AAListTokens, DisambMMOutput, AAList),
 	sort(AAList, SortedAAList).
 
 	
-reformat_AA_list([], _DisambMMOutput, []).
-reformat_AA_list([FirstAA|RestAAs], DisambMMOutput,
+reformat_AA_list_for_MMO([], _DisambMMOutput, []).
+reformat_AA_list_for_MMO([FirstAA|RestAAs], DisambMMOutput,
 		 [AAString*ExpansionString*CountData*CUIList|RestReformattedAAs]) :-
-	reformat_one_AA(FirstAA, DisambMMOutput,
-			AAString, ExpansionString, CountData, TempCUIList),
+	reformat_one_AA_for_MMO(FirstAA, DisambMMOutput,
+				AAString, ExpansionString, CountData, TempCUIList),
 	% 0 seeds the predicate with a NegScore
 	choose_best_mappings_only(TempCUIList, 0, CUIList),
-	reformat_AA_list(RestAAs, DisambMMOutput, RestReformattedAAs).
+	reformat_AA_list_for_MMO(RestAAs, DisambMMOutput, RestReformattedAAs).
 
-reformat_one_AA(AATokenList-[ExpansionTokenList],
-		DisambMMOutput, AAString, ExpansionString, CountData, CUIList) :-
-	% Get the actual strings from the AATokenList
-	extract_token_strings(AATokenList, AAStringList),
+reformat_one_AA_for_MMO(AATokenList-ExpansionTokenList,
+			DisambMMOutput, AAAtom, ExpansionAtom, CountData, CUIList) :-
+	% Get the actual atoms from the AATokenList
+	extract_token_atoms(AATokenList, AAAtomList),
+	AATokenList = [FirstAAToken|_],
+	token_template(FirstAAToken, _TokenType, _Atom, _LCAtom, pos(AAStartPos,_EndPos)),
 	length(AATokenList, AATokenListLength),
-	% Get the actual strings from the ExpansionTokenList
-	extract_token_strings(ExpansionTokenList, ExpansionStringList),
+	% Get the actual atoms from the ExpansionTokenList
+	extract_token_atoms(ExpansionTokenList, ExpansionAtomList),
 	length(ExpansionTokenList, ExpansionTokenListLength),
-	% Get the lowercase alphanumeric strings only from the ExpansionTokenList;
+	% Get the lowercase alphanumeric atoms only from the ExpansionTokenList;
 	% this will be used to match against the word lists in the ev terms
-	extract_an_lc_strings(ExpansionTokenList, ANLCExpansionStringList),
-	% AAStrings is for display purposes in the aas(_) term
-	append(AAStringList, AAString),
-	length(AAString, AAStringLength),
-	append(ExpansionStringList, ExpansionString),
-	length(ExpansionString, ExpansionStringLength), 
-	append(ANLCExpansionStringList, ANLCExpansionString),
-	CountData = (AATokenListLength,AAStringLength,ExpansionTokenListLength,ExpansionStringLength),
-	atom_codes(ANLCExpansionAtom, ANLCExpansionString),
+	extract_an_lc_atoms(ExpansionTokenList, ANLCExpansionAtomList),
+	% AAAtoms is for display purposes in the aas(_) term
+	concat_atom(AAAtomList, AAAtom),
+	atom_length(AAAtom, AAAtomLength),
+	concat_atom(ExpansionAtomList, ExpansionAtom),
+	atom_length(ExpansionAtom, ExpansionAtomLength), 
+	concat_atom(ANLCExpansionAtomList, ' ', ANLCExpansionAtom),
+	CountData = (AATokenListLength,
+		     AAAtomLength,
+		     ExpansionTokenListLength,
+		     ExpansionAtomLength,
+		     AAStartPos:AAAtomLength),
 	find_matching_CUIs(DisambMMOutput, ANLCExpansionAtom, TempCUIList, []),
 	sort(TempCUIList, CUIList).
 
@@ -1118,13 +1117,17 @@ find_matching_CUIs([FirstMMOTerm|RestMMOTerms], ExpansionAtom, CUIListIn, CUILis
 
 find_matching_CUIs_in_phrases([], _ExpansionAtom, CUIList, CUIList).
 find_matching_CUIs_in_phrases([FirstPhraseTerm|RestPhraseTerms], ExpansionAtom, CUIListIn, CUIListOut) :-
-	FirstPhraseTerm = phrase(_Phrase, Candidates, _Mappings, _Pwi, _Gvcs, _Ev0, _Aphrases),
-	Candidates = candidates(_TotalCandidateCount,
-				_ExcludedCandidateCount,_PrunedCandidateCount,
-				_RemainingCandidateCount, CandidateList),
-	find_matching_CUIs_in_candidates(CandidateList, ExpansionAtom, CUIListIn, CUIListNext),
+	FirstPhraseTerm = phrase(_Phrase, _Candidates, Mappings, _Pwi, _Gvcs, _Ev0, _Aphrases),
+	Mappings = mappings(MappingsList),
+	find_matching_CUIs_in_mappings(MappingsList, ExpansionAtom, CUIListIn, CUIListNext),
 	find_matching_CUIs_in_phrases(RestPhraseTerms, ExpansionAtom, CUIListNext, CUIListOut).
 	
+find_matching_CUIs_in_mappings([], _ExpansionAtom, CUIList, CUIList).
+find_matching_CUIs_in_mappings([FirstMapping|RestMappings], ExpansionAtom, CUIListIn, CUIListOut) :-
+	FirstMapping = map(_NegScore, CandidateList),
+	find_matching_CUIs_in_candidates(CandidateList, ExpansionAtom, CUIListIn, CUIListNext),
+	find_matching_CUIs_in_mappings(RestMappings, ExpansionAtom, CUIListNext, CUIListOut).
+
 find_matching_CUIs_in_candidates([], _ExpansionAtom, CUIList, CUIList).
 find_matching_CUIs_in_candidates([FirstCandidate|RestCandidates],
 				 ExpansionAtom, CUIListIn, CUIListOut) :-
@@ -1138,7 +1141,7 @@ matching_CUI(Candidate, ExpansionAtomLC, CurrScore-MatchingCUI) :-
 	get_all_candidate_features([negvalue,cui,metawords],
 				   Candidate,
 				   [CurrScore,MatchingCUI,MatchingWordList]),
-	concat_atom(MatchingWordList, MatchingWordAtom),
+	concat_atoms_intelligently(MatchingWordList, MatchingWordAtom),
 	ExpansionAtomLC == MatchingWordAtom.
 
 
@@ -1585,19 +1588,12 @@ get_candidate_feature(negated, Candidate, Negated) :-
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,Negated, Candidate).
+
 fatal_error(Message, Args) :-
-	format(user_output, '~N### MetaMap ERROR: ', []),
-	format(user_output, Message, Args),
+	send_message('~N### MetaMap ERROR: ', []),
+	send_message(Message, Args),
 	ttyflush,
-	current_output(OutputStream),
-	% don't duplicate message if the default output stream is user_output!
-	( \+ stream_property(OutputStream, alias(user_output)) ->
-	  format(OutputStream, '~N### MetaMap ERROR: ', []),
-	  format(OutputStream, Message, Args),
-	  flush_output(OutputStream)
-	; true
-	),
-	abort.
+	stop_and_halt.
 
 set_message(SourceList, PluralIndicator, Verb, Pronoun, Determiner) :-
 	length(SourceList, Length),

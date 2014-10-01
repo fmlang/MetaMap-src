@@ -93,6 +93,7 @@ dm_variants_TOGGLE(Term, Cats, VarList) :-
 	  )     
  	; control_value(lexicon, db) ->
 	  get_dm_variants_by_category(Term, Cats, VarList)
+	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
 	).
 
 %%% changes Term(Cat) to Term:[cat:[Cat]]
