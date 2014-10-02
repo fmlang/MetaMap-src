@@ -38,6 +38,7 @@
 	form_expanded_utterances/3,
 	% must be exported for SemRep
 	form_original_utterances/7,
+	get_nomap_pairs/1,
 	get_output_stream/1,
 	fg/0,
 	go/0,
