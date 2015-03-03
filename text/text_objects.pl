@@ -3199,7 +3199,7 @@ annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedToke
 	  AVLNext = AVLIn,
 	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens]
 	% The first token is alphanumeric, so get its String
-	; FirstToken = tok(_TokenType,String,_LCString,pos(StartPos,_EndPos)),
+	; FirstToken = tok(_TokenType,String,_LCString,pos(StartPos,EndPos)),
 	  % Is String one of the UDAs?
 	  member(ThisUDA:ThisExpansion, UDAs),
 	  String = ThisUDA ->
@@ -3207,7 +3207,7 @@ annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedToke
 	  tokenize_text_utterly(ThisExpansion, TokenizedThisExpansion),
 	  tokenize_text_utterly(LCThisExpansion, LCTokenizedThisExpansion),
 	  form_simple_tokens(TokenizedThisExpansion, LCTokenizedThisExpansion,
-			     StartPos, ExpansionTokens),
+			     StartPos/EndPos, ExpansionTokens),
 	  LastUnwantedToken = '',
 	  store_aa([FirstToken], LastUnwantedToken, ExpansionTokens, AVLIn, AVLNext),
 	  append(ExpansionTokens, RestAnnotatedTokens, AnnotatedTokens)
