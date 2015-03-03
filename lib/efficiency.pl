@@ -35,11 +35,12 @@
 
 
 :- module(efficiency,[
-    maybe_atom_gc/2
+	maybe_atom_gc/2
    ]).
 
 :- use_module(skr(skr_utilities), [
-	fatal_error/2
+	fatal_error/2,
+	send_message/2
     ]).
 
 :- dynamic atom_gc_threshold/1.
@@ -54,58 +55,60 @@
    of the collection are displayed.
    maybe_atom_gc/2 calls maybe_atom_gc/3 with Notify set to 'no'.  */
 
-maybe_atom_gc(DidGC,SpaceCollected) :-
-    maybe_atom_gc(no,DidGC,SpaceCollected).
+maybe_atom_gc(DidGC, SpaceCollected) :-
+	maybe_atom_gc(no, DidGC, SpaceCollected).
 
-maybe_atom_gc(Notify,DidGC,SpaceCollected) :-
-    atom_gc_threshold(Threshold),
-    statistics(atoms,[NAtoms0,SpaceInUse0,SpaceFree0|_]),
-    (SpaceInUse0 > Threshold ->
-        (Notify==yes ->
-            format_and_notify('~Nmaybe_atom_gc threshold = ~d~n',[Threshold]),
-            TotalSpace0 is SpaceInUse0 + SpaceFree0,
-            format_and_notify('~Nmaybe_atom_gc before = ~d  ~d + ~d = ~d~n',
-                     [NAtoms0,SpaceInUse0,SpaceFree0,TotalSpace0])
-        ;   true
-        ),
-        garbage_collect_atoms,
-        DidGC=yes,
-        statistics(atoms,[NAtoms,SpaceInUse,SpaceFree|_]),
-        SpaceCollected is SpaceInUse0-SpaceInUse,
-        (Notify==yes ->
-            TotalSpace is SpaceInUse + SpaceFree,
-            format_and_notify('~Nmaybe_atom_gc  after = ~d  ~d + ~d = ~d~n',
-                     [NAtoms,SpaceInUse,SpaceFree,TotalSpace])
-% temp to test need for trimcore/0
-% it actually made things worse, i.e., process size grew faster, not slower
-%statistics(stacks,Stacks0),
-%statistics(global_stack,GStack0),
-%statistics(local_stack,LStack0),
-%format('Stack info before: ~p ~p ~p~n',[Stacks0,GStack0,LStack0]),
-%trimcore,
-%statistics(stacks,Stacks),
-%statistics(global_stack,GStack),
-%statistics(local_stack,LStack),
-%format('Stack info after: ~p ~p ~p~n',[Stacks,GStack,LStack])
-        ;   true
-        ),
-        NewThreshold is SpaceInUse + (SpaceFree // 2),
-        (atom_gc_threshold(NewThreshold) ->
-            true
-        ;   retractall(atom_gc_threshold(_)),
-            assert(atom_gc_threshold(NewThreshold)),
-            (Notify==yes ->
-                format_and_notify('~Nmaybe_atom_gc new threshold = ~d~n',
-                                  [NewThreshold])
-            ; true
-            )
-        )
-    ;   DidGC=no,
-        SpaceCollected = 0
-    ),
-    !.
+maybe_atom_gc(Notify, DidGC, SpaceCollected) :-
+	atom_gc_threshold(Threshold),
+	statistics(atoms, [NAtoms0,SpaceInUse0,SpaceFree0|_]),
+	( SpaceInUse0 > Threshold ->
+	  maybe_notify_1(Notify, Threshold, NAtoms0, SpaceInUse0, SpaceFree0),
+	  garbage_collect_atoms,
+	  DidGC = yes,
+	  statistics(atoms, [NAtoms,SpaceInUse,SpaceFree|_]),
+	  SpaceCollected is SpaceInUse0 - SpaceInUse,
+	  maybe_notify_2(Notify, NAtoms, SpaceInUse, SpaceFree),
+	  NewThreshold is SpaceInUse + (SpaceFree // 2),
+	  maybe_update_threshold(Notify, NewThreshold)
+	; DidGC = no,
+	  SpaceCollected = 0
+	),
+	!.
 maybe_atom_gc(_Notify,_DidGC,_SpaceCollected) :-
     fatal_error('maybe_atom_gc/3 did not finish normally.~n',[]).
+
+
+maybe_notify_1(Notify, Threshold, NAtoms0, SpaceInUse0, SpaceFree0) :-
+	( Notify == yes ->
+          send_message('~Nmaybe_atom_gc threshold = ~d~n',[Threshold]),
+          TotalSpace0 is SpaceInUse0 + SpaceFree0,
+          send_message('~Nmaybe_atom_gc before = ~d  ~d + ~d = ~d~n',
+		       [NAtoms0,SpaceInUse0,SpaceFree0,TotalSpace0])
+        ; true
+        ).
+
+maybe_notify_2(Notify, NAtoms, SpaceInUse, SpaceFree) :-
+        ( Notify == yes ->
+          TotalSpace is SpaceInUse + SpaceFree,
+          send_message('~Nmaybe_atom_gc  after = ~d  ~d + ~d = ~d~n',
+		       [NAtoms,SpaceInUse,SpaceFree,TotalSpace])
+        ; true
+        ).
+
+maybe_notify_3(Notify, NewThreshold) :-
+	( Notify == yes ->
+	  send_message('~Nmaybe_atom_gc new threshold = ~d~n',
+		       [NewThreshold])
+	; true
+	).
+
+maybe_update_threshold(Notify, NewThreshold) :-
+	( atom_gc_threshold(NewThreshold) ->
+	  true
+	; retractall(atom_gc_threshold(_)),
+	  assert(atom_gc_threshold(NewThreshold)),
+	  maybe_notify_3(Notify, NewThreshold)
+	).
 
 
 /* atom_gc_threshold(?Threshold)
@@ -118,16 +121,3 @@ where <base> is the amount of atom space in use and <free> the amount free
 after the garbage collection.  */
 
 atom_gc_threshold(0).
-
-
-/* format_and_notify(+Control, +Args)
-
-format_and_notify/2 does what format does to both current_output and user_output
-(if different).  */
-
-format_and_notify(Control, Args) :-
-	format(Control, Args),
-	( current_output(user_output) ->
-	  true
-	; format(user_output,Control,Args)
-	).

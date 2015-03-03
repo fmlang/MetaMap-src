@@ -328,6 +328,7 @@ lex_form_ci_var_lists_5_TOGGLE(Form, Categories, Lexicon, Index, VarList) :-
 	  append(VarLists0, VarList)
 	; control_value(lexicon, db) ->
 	  get_im_varlist_with_cats(Form, Categories, VarList)
+	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
 	).
 
 %%% generic record retrieval predicate

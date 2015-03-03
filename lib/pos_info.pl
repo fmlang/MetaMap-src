@@ -57,6 +57,7 @@
 
 :- use_module(skr(skr_utilities),[
 	fatal_error/2,
+	send_message/2,
 	token_template/5,
 	token_template/6,
 	write_token_list/3
@@ -465,7 +466,7 @@ handle_special_token_type(aadef, _PrevToken, _ExtraCharsIn,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
 			  _ExtraCharsOut, RestNewTokens) :-
-	format(user_output, '#### WARNING: aadef token failed:~n', []),
+	send_message('#### WARNING: aadef token failed:~n', []),
 	write_token_list([CurrentToken], 0, 1),
 	InputStringNext = InputStringIn,
 	RestNewTokens = NewTokens,
@@ -611,7 +612,7 @@ handle_special_token_type(aa, _PrevToken, _ExtraCharsIn,
 % 			  InputStringIn,   _CurrentToken, CurrentPos, RestTokensIn,
 % 			  InputStringNext, NewTokens,     NextPos,    RestTokensNext,
 % 			  RestNewTokens) :-
-% 	format(user_output, '#### WARNING: aa token failed:~n', []),
+% 	send_message('#### WARNING: aa token failed:~n', []),
 % 	write_token_list([CurrentToken], 0, 1),
 % 	ttyflush,
 % 	InputStringNext = InputStringIn,

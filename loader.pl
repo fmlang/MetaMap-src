@@ -107,10 +107,10 @@ runtime_entry(start) :-
 	go.
     
 runtime_entry(abort) :-
-	format(user_output,'~nDisconnecting servers and closing files...',[]),
+	format(user_error,'~nDisconnecting servers and closing files...',[]),
 	ttyflush,
 	stop_skr,
-	format(user_output,'Done.~n',[]).
+	format(user_error,'Done.~n',[]).
 
 pl_to_po :-
 	source_file(FilePL),
@@ -132,7 +132,7 @@ compile_to_PO_if_necessary(FilePL) :-
 	  file_property(FilePO, modify_timestamp, TimeStampPO),
 	  TimeStampPO > TimeStampPL ->
 	  true
-	; format(user_output, 'Saving ~w to ~w~n', [FilePL,FilePO]),
+	; format(user_error, 'Saving ~w to ~w~n', [FilePL,FilePO]),
 	  save_files(FilePL, FilePO)
 	).
 	   

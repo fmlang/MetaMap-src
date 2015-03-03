@@ -34,12 +34,14 @@
 % Purpose:  To provide support for text objects (sentences, parentheticals, AAs, ...)
 
 :- module(text_objects, [
-	dump_all_avl/4,
-	extract_token_strings/2,
-	extract_an_lc_strings/2,
+	create_UDAs/2,
+	dump_all_AAs/4,
+	extract_token_atoms/2,
+	extract_an_lc_atoms/2,
 	find_and_coordinate_sentences/9,
         get_UDAs/1,
-	reformat_aa_output_list/3
+        maybe_dump_AAs/3,
+	reformat_AA_list_for_output/3
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -47,6 +49,11 @@
 	tokenize_text_utterly/2,
 	tokenize_text/2
     ]).
+
+:- use_module(skr(skr), [
+	stop_and_halt/0
+   ]).
+
 
 :- use_module(skr(skr_text_processing), [
 	convert_all_utf8_to_ascii/4,
@@ -78,6 +85,7 @@
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2,
 	lower/2,
 	ttyflush/0
     ]).
@@ -125,6 +133,7 @@
 	higher_order_tok/1,
 	higher_order_type/1,
 	hyphen_punc/1,
+	hyphen_or_slash_tok/1,
 	ic_tok/1,
 	lbracket_tok/1,
 	lc_tok/1,
@@ -600,24 +609,25 @@ All these predicates create an AVL tree AAs.
 find_all_aas/4 simply has an in/out AVL tree.
 find_aas_1/5 is an auxiliary for processing a single sentence.  */
 
-find_all_aas(Sentences, UIString, OutputStream, AAs) :-
+find_all_aas(Sentences, _UIString, _OutputStream, AAs) :-
 	empty_avl(AAs0),
 	% reversed order of args from QP library version!
 	last(Sentences, LastToken),
 	arg(4, LastToken, pos(_,LastPos)),
 	find_aas(Sentences, LastPos, AAs0, AAs),
-	maybe_dump_aas(UIString, AAs, OutputStream),
+%	maybe_dump_aas(UIString, AAs, OutputStream),
 	!.
 
-maybe_dump_aas(UIString, AAs, OutputStream) :-
-	( ( control_option(dump_aas)
+maybe_dump_AAs(UIAtom, AAs, OutputStream) :-
+	( ( control_option(dump_aas) ->
+	    true
 	  ; control_option(aas_only)
 	  ),
 	  \+ control_option(machine_output),
 	  \+ xml_output_on ->
-	  atom_codes(UIAtom, UIString),
 	  % The "aa" argument specifies that "AA" should be the first field in he AA output
-	  dump_all_avl(AAs, aa, UIAtom, OutputStream)
+	  current_output(OutputStream),
+	  dump_all_AAs(AAs, aa, UIAtom, OutputStream)
 	; true
 	).
 
@@ -636,52 +646,57 @@ xml_output_on :-
 % PMID|AA  -- for --fielded_mmi_output, e.g.,
 % 00000000|AA|HA|heart attack|1|2|3|12
 
-dump_all_avl(AVL, FirstField, UI, OutputStream) :-
+dump_all_AAs(AAListTokens, FirstField, UI, OutputStream) :-
 	% Key is e.g., "HA"
 	% Values is e.g., "Heart Attack"
 	% avl_member(Key, AVL, Values),
 	% dump_one_avl(Key, UI, Values, OutputStream),
 	% fail.
-	avl_to_list(AVL, AAListTokens),
-	reformat_aa_output_list(AAListTokens, UI, AAList),
-	sort(AAList, SortedAAList),
-	write_avl_data(SortedAAList, FirstField, OutputStream),
+	reformat_AA_list_for_output(AAListTokens, UI, AAList),
+	write_AA_data(AAList, FirstField, OutputStream),
 	flush_output(OutputStream).
 	
 
-reformat_aa_output_list([], _UI, []).
-reformat_aa_output_list([AA-[Expansion]|RestTokenListPairs], UI, [FirstAAData|RestAAData]) :-
-	reformat_one_aa(AA, Expansion, UI, FirstAAData),
-	reformat_aa_output_list(RestTokenListPairs, UI, RestAAData).
+reformat_AA_list_for_output([], _UI, []).
+reformat_AA_list_for_output([AA-Expansion|RestTokenListPairs], UI, [FirstAAData|RestAAData]) :-
+	reformat_one_AA_for_output(AA, Expansion, UI, FirstAAData),
+	reformat_AA_list_for_output(RestTokenListPairs, UI, RestAAData).
 
-reformat_one_aa(AA, Expansion, UI, ReformattedAAData) :-
-	extract_text(AA, AATextString),
-	atom_codes(AATextAtom, AATextString),
+reformat_one_AA_for_output(AA, Expansion, UI, ReformattedAAData) :-
+	extract_text(AA, AATextAtom),
+	atom_length(AATextAtom, AATextLength),
+	get_AA_startpos_and_endpos(AA, AATextLength, StartPos, _EndPos),
 	length(AA, AATokenLength),
-	length(AATextString, AATextLength),
-	extract_text(Expansion, ExpansionTextString),
-	atom_codes(ExpansionTextAtom, ExpansionTextString),
+	extract_text(Expansion, ExpansionTextAtom),
 	length(Expansion, ExpansionTokenLength),
-	length(ExpansionTextString, ExpansionTextLength),
+	atom_length(ExpansionTextAtom, ExpansionTextLength),
 	ReformattedAAData = UI-AATextAtom-ExpansionTextAtom-
 			    AATokenLength-AATextLength-
-			    ExpansionTokenLength-ExpansionTextLength.
+			    ExpansionTokenLength-ExpansionTextLength-StartPos.
 
-write_avl_data([], _FirstField, _OutputStream).
-write_avl_data([FirstAAData|RestAAs], FirstField, OutputStream) :-
+get_AA_startpos_and_endpos(AA, AATextLength, StartPos, EndPos) :-
+	AA = [FirstAAToken|_],
+	FirstAAToken = tok(_,_,_,pos(StartPos,_)),
+	EndPos is StartPos + AATextLength.
+
+write_AA_data([], _FirstField, _OutputStream).
+write_AA_data([FirstAAData|RestAAs], FirstField, OutputStream) :-
 	FirstAAData = UI-AATextAtom-ExpansionTextAtom-
 		      AATokenLength-AATextLength-
-		      ExpansionTokenLength-ExpansionTextLength,
+		      ExpansionTokenLength-ExpansionTextLength-StartPos,
 	output_fields(FirstField, OutputStream, UI, AATextAtom, ExpansionTextAtom,
-		      AATokenLength, AATextLength, ExpansionTokenLength, ExpansionTextLength),
-	write_avl_data(RestAAs, FirstField, OutputStream).
+		      AATokenLength, AATextLength, ExpansionTokenLength, ExpansionTextLength,
+		      StartPos, AATextLength),
+	write_AA_data(RestAAs, FirstField, OutputStream).
 
 output_fields(FirstField, OutputStream, UI, AATextAtom, ExpansionTextAtom,
-	      AATokenLength, AATextLength, ExpansionTokenLength,  ExpansionTextLength) :-
+	      AATokenLength, AATextLength, ExpansionTokenLength,  ExpansionTextLength,
+	      StartPos, EndPos) :-
 	set_field_order(FirstField, UI, Field1, Field2),
-	format(OutputStream, '~w|~w|~w|~w|~w|~w|~w|~w~n',
+	format(OutputStream, '~w|~w|~w|~w|~d|~d|~d|~d|~d:~d~n',
 	       [Field1,Field2,AATextAtom,ExpansionTextAtom,AATokenLength,
-		AATextLength, ExpansionTokenLength, ExpansionTextLength]).
+		AATextLength, ExpansionTokenLength, ExpansionTextLength,
+		StartPos,EndPos]).
 
 set_field_order(aa,   UI, 'AA', UI).
 set_field_order(pmid, UI,   UI, 'AA').
@@ -766,7 +781,7 @@ test_valid_aa_01(AATokens) :-
 	token_sequence_length(AARest, AA1, AAStartPos, AATokensLength),
 	AATokensLength > 20,
 	!,
-	announce_failure('AA-01', AATokens),
+	announce_aa_failure('AA-01', AATokens),
 	fail.
 test_valid_aa_01(_).
 
@@ -786,7 +801,7 @@ test_valid_aa_02(AATokens) :-
 	),
 	\+ memberchk(tok(pe,"-","-",_), AATokens),
 	!,
-	announce_failure('AA-02', AATokens),
+	announce_aa_failure('AA-02', AATokens),
 	fail.
 test_valid_aa_02(_).
 
@@ -794,7 +809,7 @@ test_valid_aa_02(_).
 test_valid_aa_03(AATokens) :-
 	contains_forbidden_token_coocurrence(aa, AATokens),
 	!,
-	announce_failure('AA-03', AATokens),
+	announce_aa_failure('AA-03', AATokens),
 	fail.
 test_valid_aa_03(_).
 
@@ -802,7 +817,7 @@ test_valid_aa_03(_).
 test_valid_aa_04(AATokens) :-
         contains_forbidden_token_sequence(aa, AATokens),
         !,
-	announce_failure('AA-04', AATokens),
+	announce_aa_failure('AA-04', AATokens),
         fail.
 test_valid_aa_04(_).
 
@@ -816,7 +831,7 @@ test_valid_aa_05(AATokens) :-
 	% \+ uc_tok(SingleToken),
 	% \+ strict_an_tok(SingleToken),
 	!,
-	announce_failure('AA-05', AATokens),
+	announce_aa_failure('AA-05', AATokens),
 	fail.
 test_valid_aa_05(_).
 
@@ -825,7 +840,7 @@ test_valid_aa_06(AATokens) :-
 	count_tokens_of_type(AATokens, pe, 0, Count),
 	Count > 3,
 	!,
-	announce_failure('AA-06', AATokens),
+	announce_aa_failure('AA-06', AATokens),
 	fail.
 test_valid_aa_06(_).
 
@@ -834,7 +849,7 @@ test_valid_aa_07(AATokens) :-
 	count_prefix_match_tokens(AATokens, 'equal', 0, Count),
 	Count > 0,
 	!,
-	announce_failure('AA-07', AATokens),
+	announce_aa_failure('AA-07', AATokens),
 	fail.
 test_valid_aa_07(_).
 
@@ -845,7 +860,7 @@ test_valid_aa_08(AATokens) :-
 	AATokenLength > 4,
 	all_an_tokens_are_lc(AATokens),
 	!,
-	announce_failure('AA-08', AATokens),
+	announce_aa_failure('AA-08', AATokens),
 	fail.
 test_valid_aa_08(_).
 
@@ -854,7 +869,7 @@ test_valid_aa_09(AATokens) :-
 	memberchk(tok(pe,_,_,pos(X,Y)), AATokens),
 	Y - X >= 10,
 	!,
-	announce_failure('AA-09', AATokens),
+	announce_aa_failure('AA-09', AATokens),
 	fail.
 test_valid_aa_09(_).
 
@@ -863,7 +878,7 @@ test_valid_aa_10(AATokens) :-
 	count_comma_space_seq(AATokens, 0, 0, CommaSpaceCount),
 	CommaSpaceCount > 1,
 	!,
-	announce_failure('AA-10', AATokens),
+	announce_aa_failure('AA-10', AATokens),
 	fail.
 test_valid_aa_10(_).
 
@@ -876,7 +891,7 @@ test_valid_aa_11(AATokens) :-
 	member(tok(pn, [Char], [Char], _Pos2), AATokens),
 	memberchk(Char, [58,59,61]), % :;=
 	!,
-	announce_failure('AA-11', AATokens),
+	announce_aa_failure('AA-11', AATokens),
 	fail.
 test_valid_aa_11(_).
 
@@ -888,7 +903,7 @@ test_valid_aa_12(AATokens) :-
 	atom_codes(LCAtom, LCString),
 	forbidden_aa_word(LCAtom),
 	!,
-	announce_failure('AA-12', AATokens),
+	announce_aa_failure('AA-12', AATokens),
 	fail.
 test_valid_aa_12(_).
 
@@ -900,7 +915,7 @@ test_valid_aa_13(AATokens) :-
 	atom_codes(LCAtom, LCString),
 	forbidden_first_aa_word(LCAtom),
 	!,
-	announce_failure('AA-13', AATokens),
+	announce_aa_failure('AA-13', AATokens),
 	fail.
 test_valid_aa_13(_).
 
@@ -916,7 +931,7 @@ test_valid_aa_14(AATokens) :-
 	  Char3 == 103  % g
 	),
 	!,
-	announce_failure('AA-14', AATokens),
+	announce_aa_failure('AA-14', AATokens),
 	fail.
 test_valid_aa_14(_).
 
@@ -928,7 +943,7 @@ test_valid_aa_15(AATokens) :-
 	count_multi_letter_lc_tokens(AATokens, 0, MultiLetterLCTokenCount),
 	MultiLetterLCTokenCount * 3 > AATokensLength,
 	!,
-	announce_failure('AA-15', AATokens),
+	announce_aa_failure('AA-15', AATokens),
 	fail.
 test_valid_aa_15(_).
 
@@ -941,7 +956,7 @@ test_valid_aa_16(AATokens) :-
 	count_multi_letter_lc_tokens(AATokens, 0, MultiLetterLCTokenCount),
 	MultiLetterLCTokenCount * 3 > AATokensLength,
 	!,
-	announce_failure('AA-16', AATokens),
+	announce_aa_failure('AA-16', AATokens),
 	fail.
 test_valid_aa_16(_).
 
@@ -953,7 +968,7 @@ test_valid_aa_17(AATokens, LastCitationPos) :-
 	arg(4, LastAAToken, pos(_,LastAAPos)),
 	LastAAPos + 5 > LastCitationPos,
 	!,
-	announce_failure('AA-17', AATokens),
+	announce_aa_failure('AA-17', AATokens),
 	fail.
 test_valid_aa_17(_AATokens, _LastCitationPos).
 
@@ -1275,7 +1290,7 @@ test_valid_scope(AATokens, ScopeTokens) :-
 test_valid_scope_01(AATokens, ScopeTokens) :-
 	contains_forbidden_token_sequence_1(ScopeTokens),
 	!,
-	announce_failure('SC-01', AATokens, ScopeTokens),
+	announce_scope_failure('SC-01', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_01(_, _).
 
@@ -1287,7 +1302,7 @@ test_valid_scope_02(AATokens, ScopeTokens) :-
 	number_codes(Number, NumberString),
 	Number > 9999,	
         !,
-	announce_failure('SC-02', AATokens, ScopeTokens),
+	announce_scope_failure('SC-02', AATokens, ScopeTokens),
         fail.
 test_valid_scope_02(_, _).
 
@@ -1295,7 +1310,7 @@ test_valid_scope_02(_, _).
 test_valid_scope_03(AATokens, ScopeTokens) :-
         contains_forbidden_token_sequence(scope, ScopeTokens),
         !,
-	announce_failure('SC-03', AATokens, ScopeTokens),
+	announce_scope_failure('SC-03', AATokens, ScopeTokens),
         fail.
 test_valid_scope_03(_, _).
 
@@ -1303,7 +1318,7 @@ test_valid_scope_03(_, _).
 test_valid_scope_04(AATokens, ScopeTokens) :-
         contains_DNA_sequence(ScopeTokens),
         !,
-	announce_failure('SC-04', AATokens, ScopeTokens),
+	announce_scope_failure('SC-04', AATokens, ScopeTokens),
         fail.
 test_valid_scope_04(_, _).
 
@@ -1311,7 +1326,7 @@ test_valid_scope_04(_, _).
 test_valid_scope_05(AATokens, ScopeTokens) :-
         memberchk(tok(pe,_,_,_), ScopeTokens),
         !,
-	announce_failure('SC-05', AATokens, ScopeTokens),
+	announce_scope_failure('SC-05', AATokens, ScopeTokens),
         fail.
 test_valid_scope_05(_, _).
 
@@ -1319,7 +1334,7 @@ test_valid_scope_05(_, _).
 test_valid_scope_06(AATokens, ScopeTokens) :-
 	contains_comma_and_forbidden_scope_word(ScopeTokens),
 	!,
-	announce_failure('SC-06', AATokens, ScopeTokens),
+	announce_scope_failure('SC-06', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_06(_, _).
 
@@ -1328,7 +1343,7 @@ test_valid_scope_07(AATokens, ScopeTokens) :-
 	contains_specific_token(ScopeTokens, ScopeTokenLCAtom, _RestScopeTokens),
 	forbidden_scope_word(ScopeTokenLCAtom),
 	!,
-	announce_failure('SC-07', AATokens, ScopeTokens),
+	announce_scope_failure('SC-07', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_07(_, _).
 
@@ -1336,7 +1351,7 @@ test_valid_scope_07(_, _).
 test_valid_scope_08(AATokens, ScopeTokens) :-
 	contains_forbidden_token_coocurrence(scope, ScopeTokens),
 	!,
-	announce_failure('SC-08', AATokens, ScopeTokens),
+	announce_scope_failure('SC-08', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_08(_, _).
 
@@ -1349,7 +1364,7 @@ test_valid_scope_08(_, _).
 test_valid_scope_09(AATokens, ScopeTokens) :-
 	test_for_sentence(ScopeTokens),
 	!,
-	announce_failure('SC-09', AATokens, ScopeTokens),
+	announce_scope_failure('SC-09', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_09(_, _).
 
@@ -1358,7 +1373,7 @@ test_valid_scope_10(AATokens, ScopeTokens) :-
 	count_exact_match_tokens(ScopeTokens, 'the', 0, Count),
 	Count > 2,
 	!,
-	announce_failure('SC-10', AATokens, ScopeTokens),
+	announce_scope_failure('SC-10', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_10(_, _).
 
@@ -1369,7 +1384,7 @@ test_valid_scope_11(AATokens, ScopeTokens) :-
 	count_exact_match_tokens(ScopeTokens, 'in', 0, InCount),
 	InCount >= 2,
 	!,
-	announce_failure('SC-11', AATokens, ScopeTokens),
+	announce_scope_failure('SC-11', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_11(_, _).
 
@@ -1381,7 +1396,7 @@ test_valid_scope_12(AATokens, ScopeTokens) :-
 	atom_codes(FirstScopeAtom, FirstScopeString),
 	forbidden_first_scope_word(FirstScopeAtom),
 	!,
-	announce_failure('SC-12', AATokens, ScopeTokens),
+	announce_scope_failure('SC-12', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_12(_, _).
 
@@ -1390,7 +1405,7 @@ test_valid_scope_12(_, _).
 test_valid_scope_13(AATokens, ScopeTokens) :-
 	memberchk(tok(pe,_,_,_), ScopeTokens),
 	!,
-	announce_failure('SC-13', AATokens, ScopeTokens),
+	announce_scope_failure('SC-13', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_13(_, _).
 
@@ -1401,7 +1416,7 @@ test_valid_scope_14(AATokens, ScopeTokens) :-
 	token_sequence_length(SRest, S1, ScopeStartPos, ScopeTokensLength),
 	ScopeTokensLength > 80,
 	!,
-	announce_failure('SC-14', AATokens, ScopeTokens),
+	announce_scope_failure('SC-14', AATokens, ScopeTokens),
 	fail.
 test_valid_scope_14(_, _).
 
@@ -1427,7 +1442,7 @@ test_valid_aa_and_expansion_01(AATokens, ScopeTokens) :-
 	token_sequence_length(ScopeRest, Scope1, ScopeStartPos, ScopeLength),
 	AATokensLength > ScopeLength,
 	!,
-	announce_failure('2-00', AATokens, ScopeTokens),
+	announce_both_failure('2-00', AATokens, ScopeTokens),
 	fail.
 test_valid_aa_and_expansion_01(_, _).
 
@@ -1437,7 +1452,7 @@ test_valid_aa_and_expansion_02(AATokens, ScopeTokens) :-
 	contains_specific_token(AATokens, 'and', _RestAATokens),
 	\+ contains_specific_token(ScopeTokens, 'and', _RestScopeTokens),
 	!,
-	announce_failure('2-02', AATokens, ScopeTokens),
+	announce_both_failure('2-02', AATokens, ScopeTokens),
 	fail.
 test_valid_aa_and_expansion_02(_, _).
 
@@ -1446,7 +1461,7 @@ test_valid_aa_and_expansion_03(AATokens, ScopeTokens) :-
 	contains_specific_token(AATokens, 'non', _RestAATokens),
 	\+ contains_specific_token(ScopeTokens, 'non', _RestScopeTokens),
 	!,
-	announce_failure('2-03', AATokens, ScopeTokens),
+	announce_both_failure('2-03', AATokens, ScopeTokens),
 	fail.
 test_valid_aa_and_expansion_03(_, _).
 
@@ -1459,7 +1474,7 @@ test_valid_aa_and_expansion_04(AATokens, ScopeTokens) :-
 	count_multi_letter_lc_tokens(AATokens, 0, MultiLetterLCTokenCount),
 	MultiLetterLCTokenCount * 3 > ScopeLength,
 	!,
-	announce_failure('2-04', AATokens, ScopeTokens),
+	announce_both_failure('2-04', AATokens, ScopeTokens),
 	fail.	
 test_valid_aa_and_expansion_04(_, _).
 
@@ -1474,7 +1489,7 @@ test_valid_aa_and_expansion_05(AATokens, ScopeTokens) :-
 	count_multi_letter_lc_tokens(AATokens, 0, MultiLetterLCTokenCount),
 	MultiLetterLCTokenCount * 3 > ScopeLength,
 	!,
-	announce_failure('2-05', AATokens, ScopeTokens),
+	announce_both_failure('2-05', AATokens, ScopeTokens),
 	fail.	
 test_valid_aa_and_expansion_05(_, _).
 
@@ -1482,10 +1497,10 @@ test_valid_aa_and_expansion_05(_, _).
 % as the proposed AA has an chars.
 test_valid_aa_and_expansion_06(AATokens, ScopeTokens) :-
 	count_an_token_chars(AATokens, 0, AATokensCharCount),
-	count_an_tokens(ScopeTokens, ScopeANTokens),
+	count_an_tokens(ScopeTokens, 0, ScopeANTokens),
 	ScopeANTokens > 2 * AATokensCharCount,
 	!,
-	announce_failure('2-06', AATokens, ScopeTokens),
+	announce_both_failure('2-06', AATokens, ScopeTokens),
 	fail.
 test_valid_aa_and_expansion_06(_, _).
 
@@ -1502,7 +1517,7 @@ test_valid_aa_and_expansion_07(AATokens, ScopeTokens) :-
 	% ScopeTokens doesn't contain a token with the same token type, text and lc text
 	\+ contains_matching_token(Token, ScopeTokens),
 	!,
-	announce_failure('2-07', AATokens, ScopeTokens),
+	announce_both_failure('2-07', AATokens, ScopeTokens),
 	fail.
 test_valid_aa_and_expansion_07(_, _).
 
@@ -1514,7 +1529,7 @@ test_valid_aa_and_expansion_08(AATokens, ScopeTokens) :-
 	arg(2, FirstScopeToken, FirstScopeTokenString),
 	atom_codes(FirstScopeTokenAtom, FirstScopeTokenString),
 	section_header(FirstScopeTokenAtom),
-	announce_failure('2-09', AATokens, ScopeTokens),	
+	announce_both_failure('2-09', AATokens, ScopeTokens),	
 	!,
 	fail.
 test_valid_aa_and_expansion_08(_, _).
@@ -1525,41 +1540,45 @@ test_valid_aa_and_expansion_09(AATokens, ScopeTokens) :-
 	( ex_rbracket_tok(Token)
 	; ex_lbracket_tok(Token)
 	),
-	announce_failure('2-09', AATokens, ScopeTokens),	
+	announce_both_failure('2-09', AATokens, ScopeTokens),	
 	!,
 	fail.
 test_valid_aa_and_expansion_09(_, _).
 
+announce_aa_failure(Rule, Tokens) :- announce_failure(Rule, Tokens).
+
+announce_scope_failure(Rule, AATokens, ScopeTokens) :-
+	announce_both_failure(Rule, AATokens, ScopeTokens).
+
 announce_failure(_Rule, _Tokens).
+
+announce_both_failure(_Rule, _AATokens, _ScopeTokens).
 
 % announce_failure(Rule, Tokens) :-
 % 	assemble_tokens_atom(Tokens, TokensAtom),
 % 	format(user_output, 'Rule ~w FAILED on "~w".~n', [Rule,TokensAtom]).
 
-announce_failure(_Rule, _AATokens, _ScopeTokens).
-
-% announce_failure(Rule, AATokens, ScopeTokens) :-
+% announce_both_failure(Rule, AATokens, ScopeTokens) :-
 % 	assemble_tokens_atom(AATokens, AATokensAtom),
 % 	assemble_tokens_atom(ScopeTokens, ScopeTokensAtom),
 % 	format(user_output, 'Rule ~w FAILED on "~w"/"~w".~n', [Rule,ScopeTokensAtom,AATokensAtom]).
 
 assemble_tokens_atom(Tokens, Atom) :-
-	extract_token_strings(Tokens, Strings),
-	append(Strings, AllStrings),
-	atom_codes(Atom, AllStrings).
+	extract_token_atoms(Tokens, TokenAtoms),
+	concat_atom(TokenAtoms, Atom).
 
-extract_token_strings([], []).
-extract_token_strings([tok(_TokType,String,_LCString,_PosInfo)|RestTokens], [String|RestStrings]) :-
-	extract_token_strings(RestTokens, RestStrings).
+extract_token_atoms([], []).
+extract_token_atoms([tok(_TokType,Atom,_LCAtom,_PosInfo)|RestTokens], [Atom|RestAtoms]) :-
+	extract_token_atoms(RestTokens, RestAtoms).
 
-% Keep only the LC strings from an tokens
-extract_an_lc_strings([], []).
-extract_an_lc_strings([tok(TokType,_String,LCString,_PosInfo)|RestTokens], ExtractedStrings) :-
+% Keep only the LC atoms from an tokens
+extract_an_lc_atoms([], []).
+extract_an_lc_atoms([tok(TokType,_Atom,LCAtom,_PosInfo)|RestTokens], ExtractedAtoms) :-
 	( an_type(TokType) ->
-	  ExtractedStrings = [LCString|RestExtractedStrings]
-	; ExtractedStrings = RestExtractedStrings
+	  ExtractedAtoms = [LCAtom|RestExtractedAtoms]
+	; ExtractedAtoms = RestExtractedAtoms
 	),
-	extract_an_lc_strings(RestTokens, RestExtractedStrings).
+	extract_an_lc_atoms(RestTokens, RestExtractedAtoms).
 
 
 contains_specific_token(TokenList, LCTokenAtom, RestTokenList) :-
@@ -1757,7 +1776,10 @@ find_aa(AATokensIn, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut
 	% This last check has been disabled. No idea why it was there in the first place.
 	rev(TempRevScope0, TempScope0),
 	ensure_first_letter_match(TempScope0, AlphaNumericChar),
- 	push_back_unwanted_tokens(TempRevScope0, TempRestTokens, TempRevScope1, RestTokens),
+	LastUnwantedToken0 = '',
+ 	push_back_unwanted_tokens(TempRevScope0, TempRestTokens,
+				  LastUnwantedToken0, TempRevScope1,
+				  RestTokens, LastUnwantedToken),
 	rev(TempRevScope1, Scope),
 	% an AA expansion can't be immediately preceeded by a punc tok;
 	% E.g., in "the effect of 20K-hGH on human PRL receptor (hPRLR).",
@@ -1801,22 +1823,26 @@ find_aa(AATokensIn, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut
 	% skr_utilities:write_token_list(AATokens, 0, 1),
 	% format(user_output, 'SCO: ', []),
 	% skr_utilities:write_token_list(Scope, 0, 1),	
-	store_aa(AATokens, Scope, AAsIn, AAsOut),
+	store_aa(AATokens, LastUnwantedToken, Scope, AAsIn, AAsOut),
 	!.
-
 %%    repeat find_initial_scope ..., if necessary
 %%    don't forget reverse aas (i.e., when the defn, not the aa, is
 %%    parenthesized and the aa precedes it but not necessarily immediately)
 find_aa(_AATokens, _AATokensWithParens, _PE_Token,  _LastPos, _RevPre, AAsIn, AAsIn).
 
 % push_back_unwanted_tokens(Scope0, RestTokens0, Scope, RestTokens),
-push_back_ws_pn_tokens([FirstToken|RestTokens], RestTokensIn, RevScope, RestTokensOut) :-
-	( ( ws_tok(FirstToken)
-	  ; pn_tok(FirstToken) ) ->
+push_back_unwanted_tokens([FirstToken|RestTokens], RestTokensIn,
+			  LastUwantedTokenIn, RevScope,
+			  RestTokensOut, LastUnwantedTokenOut) :-
+	( skip_tok(FirstToken) ->
 	  RevScope = RestRevScope,
 	  RestTokensNext = [FirstToken|RestTokensIn],
-	  push_back_ws_pn_tokens(RestTokens, RestTokensNext, RestRevScope, RestTokensOut)
+	  LastUnwantedTokenNext = FirstToken,
+	  push_back_unwanted_tokens(RestTokens, RestTokensNext,
+				    LastUnwantedTokenNext, RestRevScope,
+				    RestTokensOut, LastUnwantedTokenOut)
 	; RevScope = [FirstToken|RestTokens],
+	  LastUnwantedTokenOut = LastUwantedTokenIn,
 	  RestTokensOut = RestTokensIn
 	).
 
@@ -1826,17 +1852,17 @@ ensure_first_letter_match(Scope0, AlphaNumericChar) :-
 	an_type(TokenType),
 	LCString = [AlphaNumericChar|_].
 
-push_back_unwanted_tokens([], RestTokens, [], RestTokens).
-push_back_unwanted_tokens([FirstScopeIn|RestScopeIn], RestTokensIn, ScopeOut, RestTokensOut) :-
-	( skip_tok(FirstScopeIn) ->
-	  RestTokensNext = [FirstScopeIn|RestTokensIn],
-	  push_back_unwanted_tokens(RestScopeIn, RestTokensNext, ScopeOut, RestTokensOut)
-% 	; FirstScopeIn = tok(_TokenType, _String, LCString, _PosInfo),
-% 	  lex_stop_word(LCString) ->
-%	  push_back_unwanted_tokens(RestScopeIn, RestTokensIn, ScopeOut, RestTokensOut)
-	; RestTokensOut = RestTokensIn,
-	  ScopeOut = [FirstScopeIn|RestScopeIn]
-	).	  
+% push_back_unwanted_tokens([], RestTokens, [], RestTokens).
+% push_back_unwanted_tokens([FirstScopeIn|RestScopeIn], RestTokensIn, ScopeOut, RestTokensOut) :-
+% 	( skip_tok(FirstScopeIn) ->
+% 	  RestTokensNext = [FirstScopeIn|RestTokensIn],
+% 	  push_back_unwanted_tokens(RestScopeIn, RestTokensNext, ScopeOut, RestTokensOut)
+% % 	; FirstScopeIn = tok(_TokenType, _String, LCString, _PosInfo),
+% % 	  lex_stop_word(LCString) ->
+% %	  push_back_unwanted_tokens(RestScopeIn, RestTokensIn, ScopeOut, RestTokensOut)
+% 	; RestTokensOut = RestTokensIn,
+% 	  ScopeOut = [FirstScopeIn|RestScopeIn]
+% 	).	  
 
 announce_tokens_and_scope(Tokens, Scope) :-
 	format(user_output, 'Tokens are ~n', []),
@@ -1938,7 +1964,7 @@ no_overlapping_aas(_AAsIn, _Scope, _RestTokens).
 
 token_sequence_length([], Length, Length).
 token_sequence_length([H|T], LengthIn, LengthOut) :-
-	arg(2, H, String),
+	token_template(H, _TokenType, String, _LCString, _PosInfo),
 	length(String, StringLength),
 	LengthNext is LengthIn + StringLength,
 	token_sequence_length(T, LengthNext, LengthOut).
@@ -1968,7 +1994,9 @@ matching_strings(TokenList1, TokenList2) :-
 find_initial_scope(Tokens, AATokensLength, RevPre, RevScope0, AlphaNumericChar, RestTokens) :-
 	find_first_an(Tokens, AlphaNumericChar),
 	% Initialize PreviousMatchingText to ''
-	match_initial_to_char(0, 0, AATokensLength, RevPre,
+	State is 0,
+	TokensConsumed is 0,
+	match_initial_to_char(State, TokensConsumed, AATokensLength, RevPre,
 			      AlphaNumericChar, '', RevScope0, RestTokens).
 
 find_first_an([tok(Type,_,[AN|_],_)|_], AN) :-
@@ -1995,7 +2023,7 @@ find_first_an([_|Rest], AN) :-
 % of the first token in the AA TokenList has been found.
 
 % MatchFound == 0 means that no matching token has yet been found.
-match_initial_to_char(0, Depth, AALength, [Token|RestTokens], Char, '',
+match_initial_to_char(0, TokensConsumed, AALength, [Token|RestTokens], Char, '',
 		      [Token|RestMatchingTokens], LeftOverTokens) :-
 	% If the first char of current token (LCText) is Char,
 	% then we've found a matching token, so change the state to 1,
@@ -2003,34 +2031,36 @@ match_initial_to_char(0, Depth, AALength, [Token|RestTokens], Char, '',
 	( Token = tok(_,_,LCText,_),	    
 	  LCText = [Char|_] ->
 	  NextState is 1,
-	  NextDepth is Depth + 1,
+	  NextTokensConsumed is TokensConsumed + 1,
 	  PreviousMatchingText = LCText
 	% Token does match, so keep the state at 0, and continue
 	; NextState is 0,
-	  NextDepth is Depth,
+	  NextTokensConsumed is TokensConsumed,
 	  PreviousMatchingText = ''
 	),
-	match_initial_to_char(NextState, NextDepth, AALength, RestTokens, Char,
+	match_initial_to_char(NextState, NextTokensConsumed, AALength, RestTokens, Char,
 			      PreviousMatchingText, RestMatchingTokens, LeftOverTokens).
 % MatchFound == 1 means that a matching token has already been found.
-match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
+match_initial_to_char(1, TokensConsumed, AALength, Tokens, Char, PreviousMatchingText,
 		      MatchingTokens, LeftOverTokens) :-
-	NextDepth is Depth + 1,
 	% Once a match has been found, it's OK to quit, as long as the previous matching token
 	% was not a prep/conj/det; we don't want to allow, e.g., "AMI" to expand to
 	% "and acute myocardial infarction".
 	( Tokens = [Token|RestTokens],
 	  skip_tok(Token),
+	  % If the token is skippable, don't count it against the length of the AA.
+	  NextTokensConsumed is TokensConsumed,
 	  MatchingTokens = [Token|RestMatchingTokens],
-	  match_initial_to_char(1, NextDepth, AALength, RestTokens, Char, " ",
+	  match_initial_to_char(1, NextTokensConsumed, AALength, RestTokens, Char, " ",
 				RestMatchingTokens, LeftOverTokens)
 	  % Allow skipping over non-matching tokens to allow e.g., "Department of Defense (DoD)".
-	; Depth < AALength,
+	; TokensConsumed < AALength,
 	  Tokens = [Token|RestTokens],
 	  Token = tok(_,_,LCText,_),
 	  an_tok(Token),
+	  NextTokensConsumed is TokensConsumed + 1,
 	  MatchingTokens = [Token|RestMatchingTokens],
-	  match_initial_to_char(1, NextDepth, AALength, RestTokens, Char,
+	  match_initial_to_char(1, NextTokensConsumed, AALength, RestTokens, Char,
 				LCText, RestMatchingTokens, LeftOverTokens)
 	 % We've found a matching token, so stop.
 	 % This must NOT be an if-then-else, because we must be able to backtrack
@@ -2045,7 +2075,7 @@ match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
 	  MatchingTokens = [Token],
 	  RestMatchingTokens = [],
 	  LeftOverTokens = RestTokens
-	  % match_initial_to_char(1, NextDepth, AALength, RestTokens, Char, LCText,
+	  % match_initial_to_char(1, NextTokensConsumed, AALength, RestTokens, Char, LCText,
 	  % 			  RestMatchingTokens, LeftOverTokens)
 	  ; \+ lex_stop_word(PreviousMatchingText),
 	    MatchingTokens = [],
@@ -2063,8 +2093,8 @@ match_initial_to_char(1, Depth, AALength, Tokens, Char, PreviousMatchingText,
 skip_tok(Token) :-
 	( ws_tok(Token) ->
 	  true
-	% ; pn_tok(Token) ->
-	% true
+	; hyphen_or_slash_tok(Token) ->
+	  true
 	; pe_tok(Token) ->
 	  true
 	).
@@ -2569,7 +2599,7 @@ match_less_than_token(aatok(_,_,_,_,_,MatchTokenPos,MatchTokenCharPos,_),
 	).
 
 
-store_aa(AATokens, ExpansionTokens0, AAsIn, AAsOut) :-
+store_aa(AATokens, LastUnwantedToken, ExpansionTokens0, AAsIn, AAsOut) :-
 	% We do *not* want to trim ws tokens from the AATokens,
 	% because the text could be something like
 	% "multiple endocrine neoplasia type 1 ( MEN-1 )".
@@ -2581,17 +2611,18 @@ store_aa(AATokens, ExpansionTokens0, AAsIn, AAsOut) :-
         % ExpansionTokens1 = ExpansionTokens0,
 	% This call handles AAs like "Transforming growth factor-beta (TGF-)"
 	% which show up later as "TGF-2". We don't want the token "beta2" to be created!
-	add_hyphen_to_expansion(AATokens, ExpansionTokens1, ExpansionTokens),
+	add_hyphen_to_expansion(AATokens, LastUnwantedToken, ExpansionTokens1, ExpansionTokens),
 	% modify_scope_for_punctuation(Tokens, ExpansionTokens1, ExpansionTokens),
 	% temp
 	% format('~nAdding to AVL:~p~n~p~n',[Tokens,ExpansionTokens]),
 	add_to_avl_once(AATokens, ExpansionTokens, AAsIn, AAsOut).
 
-add_hyphen_to_expansion(AATokens, ExpansionTokensIn, ExpansionTokensOut) :-
+add_hyphen_to_expansion(AATokens, LastUnwantedToken, ExpansionTokensIn, ExpansionTokensOut) :-
 	% Do the AA tokens end with a hyphen? E.g.,
 	% "Hydrosulfide (HS-) coordination in iron porphyrinates." (PMID 20038134).
 	( last(AATokens, LastAAToken),
-	  token_template(LastAAToken, pn, HyphenString1, HyphenString1, _PosInfo1),
+	  token_template(LastUnwantedToken, pn, HyphenString1, HyphenString1, _PosInfo1),
+	  token_template(LastAAToken,       pn, HyphenString1, HyphenString1, _PosInfo2),
 	  hyphen_punc(HyphenString1) ->
 	  last(ExpansionTokensIn, LastExpansionToken),
 	  % deconstruct the last AA Expansion token
@@ -2710,13 +2741,13 @@ add_hyphen_to_expansion(AATokens, ExpansionTokensIn, ExpansionTokensOut) :-
 evaluate_aa_match(AATokens, AAScope, _AAMatch, AATokens0, AAScope0,
 		  NT, NT0, NS, NS0, T, S, V, YN,_OutputStream) :-
 	% NT is the number of *unmatched* chars in the AA
-	count_an_chars_aa(AATokens, NT),
+	count_an_chars_aa(AATokens, 0, NT),
 	% NT0 is the number of chars in the an (alphanumeric) tokens in the AA
-	count_an_chars_aa(AATokens0, NT0),
+	count_an_chars_aa(AATokens0, 0, NT0),
 	filter_out_interior(AAScope, FAAScope),
-	count_an_chars_aa(FAAScope, NS),
+	count_an_chars_aa(FAAScope, 0, NS),
 	% NS0 is the number of alphanumeric chars in the expansion of the acronym
-	count_an_chars_aa(AAScope0,NS0),
+	count_an_chars_aa(AAScope0, 0,NS0),
 	% We require that the expansion of the acronym (NS0) contain more chars
 	% than the acronym itself (NT0). This is for handling cases such as
 	% "Immigration and Nationality Act (Act).",
@@ -2765,9 +2796,6 @@ keep_the_interior(AAToks,_,Result) :-
     filter_out_interior(AAToks,Result).
 
 
-count_an_chars_aa(AAToks, Count) :-
-	count_an_chars_aa(AAToks, 0, Count).
-
 count_an_chars_aa([], Count, Count).
 count_an_chars_aa([aatok(char,_,_,_,_,_,_,_)|Rest], CountIn, CountOut) :-
 	!,
@@ -2795,9 +2823,6 @@ count_an_chars_aa([aatok(word,Type,Text,_,_,_,_,_)|Rest], CountIn, CountOut) :-
 %    ;   NInOut=NIn
 %    ),
 %    count_an_tokens_aa(Rest,NInOut,NOut).
-
-count_an_tokens(Toks, N) :-
-	count_an_tokens(Toks, 0, N).
 
 count_an_tokens([], N, N).
 count_an_tokens([tok(Type,_,_,_)|Rest], NIn, NOut) :-
@@ -2848,7 +2873,7 @@ find_and_coordinate_sentences(UI, ExtraChars, Fields, Sentences, CoordinatedSent
 	% annotate_with_UDAs(Sentences1, UDA_AVL0, UDAListOut, UDA_AVL, Sentences2),
 	annotate_with_UDAs(UDAListOut, Sentences1, UDA_AVL0, UDA_AVL, Sentences2),
 	% format(user_output, '~nSentences1:~n', []),
-	add_sentence_labels(Sentences2, UI, Sentences),
+	add_sentence_labels(Sentences2, UI, "TX", 0, Sentences),
 	% format(user_output, '~nSentences:~n', []),
 	coordinate_sentences(Sentences, UI, TempCoordinatedSentences),
 	CoordinatedSentences  = TempCoordinatedSentences,
@@ -2896,23 +2921,23 @@ skip_over_ws_parenthetical(TokensIn,TokensOut) :-
 
 
 /* flatten_field_sentences(+FieldSentences, -Sentences)
-   flatten_field_sentences(+FieldSentences, +Offset, -Sentences)
+   flatten_field_sentences_aux(+FieldSentences, +Offset, -Sentences)
 
 flatten_field_sentences/2 concatenates the sentences in FieldSentences,
 adjusting the pos/2 terms and inserting field tokens of the form
   tok(field,<field>,<lcfield>,<position>)
 along the way.
 
-flatten_field_sentences/3 is an auxiliary predicate that keeps track of the
+flatten_field_sentences_aux/3 is an auxiliary predicate that keeps track of the
 Offset from the beginning of all fields for the current field. */
 
 flatten_field_sentences(FieldSentences,Sentences) :-
-    flatten_field_sentences(FieldSentences,0,Sentences0),
+    flatten_field_sentences_aux(FieldSentences,0,Sentences0),
     append(Sentences0,Sentences).
 
-flatten_field_sentences([],_,[]) :-
+flatten_field_sentences_aux([],_,[]) :-
     !.
-flatten_field_sentences([[Field,STokens]|Rest],Offset,
+flatten_field_sentences_aux([[Field,STokens]|Rest],Offset,
 			[FirstSentences|RestSentences]) :-
     compute_field_length(STokens,0,FieldLength),
     adjust_tokens(STokens,Offset,AdjustedSTokens),
@@ -2920,7 +2945,7 @@ flatten_field_sentences([[Field,STokens]|Rest],Offset,
     lower(Field,LCField),
     FirstSentences=[tok(field,Field,LCField,pos(Offset,NewOffset))
 		   |AdjustedSTokens],
-    flatten_field_sentences(Rest,NewOffset,RestSentences).
+    flatten_field_sentences_aux(Rest,NewOffset,RestSentences).
 
 compute_field_length([],LengthIn,LengthIn) :-
     !.
@@ -2947,8 +2972,8 @@ add_sentence_labels/3 adds a label token at the start of each sentence
 using add_sentence_labels/5 to keep track of the current Fieeld and N
 (sentence number within the field). */
 
-add_sentence_labels(Sentences0,UI,Sentences) :-
-    add_sentence_labels(Sentences0,UI,"TX",0,Sentences).
+% add_sentence_labels(Sentences0,UI,Sentences) :-
+%     add_sentence_labels(Sentences0,UI,"TX",0,Sentences).
 
 add_sentence_labels([],_UI,_Field,_N,[]) :-
     !.
@@ -3174,7 +3199,7 @@ annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedToke
 	  AVLNext = AVLIn,
 	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens]
 	% The first token is alphanumeric, so get its String
-	; FirstToken = tok(_TokenType,String,_LCString,pos(StartPos,_EndPos)),
+	; FirstToken = tok(_TokenType,String,_LCString,pos(StartPos,EndPos)),
 	  % Is String one of the UDAs?
 	  member(ThisUDA:ThisExpansion, UDAs),
 	  String = ThisUDA ->
@@ -3182,8 +3207,9 @@ annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedToke
 	  tokenize_text_utterly(ThisExpansion, TokenizedThisExpansion),
 	  tokenize_text_utterly(LCThisExpansion, LCTokenizedThisExpansion),
 	  form_simple_tokens(TokenizedThisExpansion, LCTokenizedThisExpansion,
-			     StartPos, ExpansionTokens),
-	  store_aa([FirstToken], ExpansionTokens, AVLIn, AVLNext),
+			     StartPos/EndPos, ExpansionTokens),
+	  LastUnwantedToken = '',
+	  store_aa([FirstToken], LastUnwantedToken, ExpansionTokens, AVLIn, AVLNext),
 	  append(ExpansionTokens, RestAnnotatedTokens, AnnotatedTokens)
 	; AVLNext = AVLIn,
 	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens]
@@ -3216,7 +3242,7 @@ insert_aa_def([First|Rest], DefPos, Def, AA, NewToken, SentencesOut) :-
 	NewToken = tok(aadef,Def,AA,DefPos),
 	SentencesOut = [NewToken,First|Rest].
 insert_aa_def([First|Rest], DefPos, Def, AA, NewToken, [First|ModifiedRest]) :-
-    insert_aa_def(Rest, DefPos, Def, AA, NewToken, ModifiedRest).
+	insert_aa_def(Rest, DefPos, Def, AA, NewToken, ModifiedRest).
 
 % We need to accumulate aa tokens as they're encountered,
 % in order to ensure that no matching token Match has already participated
@@ -3355,7 +3381,7 @@ get_UDA_short_and_long_forms(String, AACodes, ExpansionCodes) :-
 	( split_string_completely(String, "|", [Before,After]) ->
 	  true
 	; fatal_error('Each data line in UDA file must contain exactly one "|" char!~n', []),
-	  halt
+	  stop_and_halt
 	),
 	trim_and_compress_whitespace(Before, TrimmedBefore),
 	trim_and_compress_whitespace(After, TrimmedAfter),

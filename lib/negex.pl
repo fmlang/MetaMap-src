@@ -133,6 +133,8 @@ compute_negex(RawTokenList, Lines, DisambMMOutput, NegationTerms) :-
 do_negex :-
 	( control_option(negex) ->
 	  true
+	; control_option(negex_trigger_file) ->
+	  true
 	; control_option(fielded_mmi_output) ->
 	  true
 	; control_value(negex_st_add, _) ->
@@ -179,7 +181,7 @@ generate_negex_output(NegationTerms) :-
 	  \+ control_option(machine_output),
 	  \+ control_option(fielded_mmi_output),
 	  \+ xml_output_format(_XMLFormat) ->
-	   format('~nNEGATIONS:~n', []),
+	   format('NEGATIONS:~n', []),
 	   generate_all_negex_output(NegationTerms),
 	   nl
 	; true

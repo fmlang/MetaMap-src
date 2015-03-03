@@ -88,9 +88,9 @@
 	control_value/2
     ]).
 
-:- use_module(skr_lib(nls_text), [
-    	eliminate_multiple_meaning_designator/2
-    ]).
+% :- use_module(skr_lib(nls_text), [
+%     	eliminate_multiple_meaning_designator/2
+%     ]).
 
 :- use_module(skr_lib(pos_info), [
     	collapse_pos_info/3
@@ -197,7 +197,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	avl_fetch(MetaCanonical, CCsIn, SavedValues),
 	memberchk(MetaConcept, SavedValues),
 	% member(cc(MetaCanonical,MetaConcept), CCsIn),
-	eliminate_multiple_meaning_designator(MetaConcept, MetaConcept),
+	% eliminate_multiple_meaning_designator(MetaConcept, MetaConcept),
 	!,
 	% format(user_output, '~N### FOUND ~q|~q in cache~n', [MetaCanonical,MetaConcept]),
 	debug_evaluate_candidate_list_2(DebugFlags),
@@ -249,12 +249,12 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				CCsNext, CCsOut, RestEvaluations).
 
 /* 
-   compute_one_evaluation(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaTerm, +MetaConcept,
+   compute_one_evaluation(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaString, +MetaConcept,
    			  +Variants, +TokenPhraseWords, +PhraseTokenLength,
 			  +RawTokensOut, +AAs, +InputmatchPhraseWords,
 		          +TokenHeadWords, +PhraseTokens, -Evaluation)
 
-   compute_all_evaluations(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaTerm, +MetaConcept,
+   compute_all_evaluations(+MetaWords, +DebugFlags, +Label, +UtteranceText, +MetaString, +MetaConcept,
                            +Variants, +TokenPhraseWords, +PhraseTokenLength,
 			   +RawTokensOut, +AAs, +InputmatchPhraseWords,
 		           +TokenHeadWords, +PhraseTokens, -Evaluations)
@@ -264,7 +264,7 @@ compute_all_evaluations/14 allows for multiple results (in the non-standard case
 in which multiple CUIs can have the same preferred name).
 */
 
-compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, MetaConcept,
+compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaString, MetaConcept,
 		       Variants, TokenPhraseWords, PhraseTokenLength,
 		       RawTokensOut, _AAs, _InputmatchPhraseWords,
 		       TokenHeadWords, PhraseTokens, Evaluation) :-
@@ -279,7 +279,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	% format(user_output,'TokenPhraseWords     = ~q~n', [TokenPhraseWords]),	
 	% format(user_output,'MetaWords     = ~q~n', [MetaWords]),	
 	% format(user_output,'MatchMap      = ~q~n', [MatchMap]),	
-	% format(user_output,'MetaTerm      = ~q~n', [MetaTerm]),	
+	% format(user_output,'MetaString      = ~q~n', [MetaString]),	
 	% format(user_output,'MetaConcept   = ~q~n', [MetaConcept]),
 	test_minimum_length(TokenPhraseWords, MatchMap),
 	debug_message(trace, '~N### computing one evaluation: ~q~n', [MetaWords]),
@@ -295,25 +295,31 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaTerm, Me
 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
 			    ExtraMetaWords, Variants, InvolvesHead, Value),
 	% format(user_output,'MatchValue    = ~q~n', [Value]),	
-	debug_compute_one_evaluation_2(DebugFlags, MetaTerm),
+	debug_compute_one_evaluation_2(DebugFlags, MetaString),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
 	% new calls!
 	% CUISources and SemTypes are sorted by db_get_cui_sources_and_semtypes/3
 	db_get_cui_sources_and_semtypes(CUI, CUISources, SemTypes),
 	% db_get_cui_semtypes(CUI, SemTypes),
-	% db_get_string_sources(MetaTerm, StringSources),
+	% db_get_string_sources(MetaString, StringSources),
         compute_target_LS_component(MatchMap, LSComponents, TargetLSComponent),
 	get_all_pos_info(MatchMap, TokenPhraseWords, PhraseTokens, RawTokensOut, PosInfo),
-	candidate_term(NegValue, CUI, MetaTerm, MetaConcept, MetaWords, SemTypes,
+	candidate_term(NegValue, CUI, MetaString, MetaConcept, MetaWords, SemTypes,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
-		       IsOvermatch, CUISources, PosInfo, _Status, _Negated, Evaluation).
+		       IsOvermatch, CUISources, PosInfo, _Status, _Negated, Evaluation),
+	debug_candidate_term(DebugFlags, Evaluation).
 	% format(user_output, 'EV:~q:~n', [Evaluation]),
-	% format(user_output, '~N~q:~q:~q~n', [MetaTerm,MetaWords,TokenPhraseWords]),
+	% format(user_output, '~N~q:~q:~q~n', [MetaString,MetaWords,TokenPhraseWords]),
 	% This is just so the debugger will let me examine Evaluation
 	% Evaluation \== [],
 	% get the positional info corresponding to this MatchMap
 
+debug_candidate_term(DebugFlags, Evaluation) :-
+	( memberchk(ev, DebugFlags) ->
+	  format('~q~n', [Evaluation])
+	; true
+	).
 
 %%% get_sources_and_semtypes(CUI, Sources, SemTypes) :-
 %%% 	( control_option(srcst) ->
@@ -1173,8 +1179,8 @@ debug_compute_one_evaluation_1(DebugFlags, TokenPhraseWords, MetaWords,
 	; true
 	).
 
-debug_compute_one_evaluation_2(DebugFlags, MetaTerm) :-
+debug_compute_one_evaluation_2(DebugFlags, MetaString) :-
 	( memberchk(5, DebugFlags) ->    % see compute_match_value
-	  format(' <-- ~p~n',[MetaTerm])
+	  format(' <-- ~p~n',[MetaString])
 	; true
 	).
