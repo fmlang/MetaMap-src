@@ -83,7 +83,9 @@ mmo_terms_to_xml_doc(MMOTermList, MethodList, XMLDoc) :-
 	% start by pulling off the citation term, e.g., citation('Text of entire citation')
 	MMOTermList = [CitationTerm,AATerm|RestMMOTerms],
 	CitationTerm = citation(CitationAtom),
-	AATerm = aas(AAList),
+	AATerm = aas(AAList0),
+	% XML expects both the AA and the expansion to be strings
+	make_AA_and_expansion_strings(AAList0, AAList),
 	atom_codes(CitationAtom, CitationString),
         get_utterance_list(RestMMOTerms, UtteranceTerms),
 	CitationOutputTerm = element(citation,[],[pcdata(CitationString)]),
@@ -96,6 +98,14 @@ mmo_terms_to_xml_doc(MMOTermList, MethodList, XMLDoc) :-
         TermList = [CitationOutputTerm,AAOutputTerm,UtteranceTerms,MethodsTerm,ServerOptionsTerm],
 	MachineOutputTerm = element(machine_output,[],TermList),
         XMLDoc = xml([version="1.0"],[MachineOutputTerm]).
+
+make_AA_and_expansion_strings(AAListAtoms, AAListStrings) :-
+	(  foreach(AAAtom*ExpansionAtom*AAData*CUIs, AAListAtoms),
+	   foreach(AAString*ExpansionString*AAData*CUIs, AAListStrings)
+	do atom_codes(AAAtom, AAString),
+	   atom_codes(ExpansionAtom, ExpansionString)
+	).
+
 
 handle_server_options(ServerOptionList, ServerOptionsTerm) :-
        handle_server_optionlist(ServerOptionList, OptionTermList),
