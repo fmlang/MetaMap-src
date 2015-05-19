@@ -62,7 +62,7 @@
 	file_property/3
     ]).
 
-:- use_module(library(random), [
+:- use_module(library(random), [s
 	random/1,
 	setrand/1
     ]).
@@ -70,6 +70,10 @@
 :- use_module(library(system), [
 	datime/1
     ]).
+
+:- prolog_flag(agc_margin, Current), New is 5*Current, prolog_flag(agc_margin, Current, New).
+
+:- prolog_flag(gc_margin,  Current), New is 5*Current, prolog_flag(gc_margin,  Current, New).
 
 %%% Code provided by Mats Carlsson of SICS to FML via e-mail 03/27/2007:
 %%% 

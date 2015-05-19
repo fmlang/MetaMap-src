@@ -305,6 +305,7 @@ add_pairs([], _Tag, Pairs, Pairs).
 add_pairs([H|T], Tag, [LowerHNoApostropheS-Tag|RemainingPairs], RestPairs) :-
 	lower(H, LowerH),
 	remove_apostrophe_s(LowerH, LowerHNoApostropheS),
+	% LowerHNoApostropheS = LowerH,
 	add_pairs(T, Tag, RemainingPairs, RestPairs).
 
 remove_apostrophe_s(LowerH, LowerHNoApostropheS) :-

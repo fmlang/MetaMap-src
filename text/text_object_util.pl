@@ -100,6 +100,7 @@ an_type(ic).
 an_type(mc).
 an_type(an).
 an_type(nu).
+an_type(xx).
 
 pn_type(pn).
 
@@ -228,7 +229,7 @@ higher_order_or_annotation_tok(Tok) :-
 	; annotation_tok(Tok)
 	).
 
-punc_tok(tok(pn,_,_,_)).
+punc_tok(Tok) :- pn_tok(Tok).
 
 hyphen_or_slash_tok(tok(pn,_String, LCString,_PosInfo)) :-
 	( hyphen_punc(LCString) ->

@@ -37,9 +37,9 @@
 :- module(text_object_tokens,[
 	all_alnum/1,
 	compute_token_position/2,
-	extract_text/2,
+	extract_text_from_tokens/2,
 	filter_out_field_comments/2,
-	form_field_tokens/3,
+	form_field_tokens/2,
 	form_simple_tokens/4,
 	get_token_position/2,
 	position_contains/2,
@@ -65,6 +65,7 @@
     ]).
 
 :- use_module(text(text_object_util), [
+	higher_order_or_annotation_type/1,
 	higher_order_type/1,
 	lbracket/1,
 	rbracket/1,
@@ -86,6 +87,7 @@
 %    ]).
 
 :- use_module(skr_lib(nls_strings),[
+	atom_codes_list/2,
 	split_string/4
     ]).
 
@@ -97,6 +99,7 @@
 
 :- use_module(library(lists),[
 	append/2,
+	is_list/1,
 	last/2,
 	rev/2
     ]).
@@ -186,151 +189,37 @@ Subsequent aa tokens will have the same [<aadef token>] argument as the example
 above but with different positions for the <AA> and <position> arguments.
 */
 
-form_field_tokens([], _ExtraChars, []).
-form_field_tokens([[Field,TokenizedField]|Rest], ExtraCharsIn, [[Field,Tokens]|TokenizedRest]) :-
+form_field_tokens([], []).
+form_field_tokens([[Field,TokenizedField]|Rest], [[Field,Tokens]|TokenizedRest]) :-
         lowercase_list(TokenizedField, LCTokenizedField),
-	ExtraCharsConsumed is 0,
 	CurrentPos is 0,
-        form_simple_tokens_1(TokenizedField, LCTokenizedField, ExtraCharsIn,
-			     ExtraCharsConsumed, CurrentPos, Tokens, ExtraCharsNext),
-        form_field_tokens(Rest, ExtraCharsNext, TokenizedRest).
+        form_simple_tokens(TokenizedField, LCTokenizedField, CurrentPos, Tokens),
+        form_field_tokens(Rest, TokenizedRest).
 
-form_simple_tokens(Tokenized, LCTokenized, StartPos, SimpleTokens) :-
-	ExtraCharsIn = [],
-	ExtraCharsConsumed is 0,
-	form_simple_tokens_1(Tokenized, LCTokenized, ExtraCharsIn, ExtraCharsConsumed,
-			     StartPos, SimpleTokens, _ExtraCharsOut).
-
-form_simple_tokens_1([], [], ExtraChars, _ExtraCharsConsumed, _CurrentPos, [], ExtraChars).
-form_simple_tokens_1([Text|RestText], [LCText|RestLCText], ExtraCharsIn, ExtraCharsConsumedIn,
-		     CurrentPos, [tok(Type,Text,LCText,pos(StartPos,EndPos))|RestTokens],
-		     ExtraCharsOut) :-
+form_simple_tokens([], [], _CurrentPos, []).
+form_simple_tokens([Text|RestText], [LCText|RestLCText], CurrentPos,
+		   [tok(Type,Text,LCText,pos(StartPos,EndPos))|RestTokens]) :-
         set_token_type(Text, Type),
-        set_start_and_end_pos(CurrentPos, Text, ExtraCharsIn, ExtraCharsConsumedIn,
-			      StartPos, EndPos, NextPos, ExtraCharsConsumedNext, ExtraCharsNext),
-        form_simple_tokens_1(RestText, RestLCText, ExtraCharsNext,
-			     ExtraCharsConsumedNext, NextPos, RestTokens, ExtraCharsOut).
+        set_start_and_end_pos(CurrentPos, Text, StartPos, EndPos, NextPos),
+        form_simple_tokens(RestText, RestLCText, NextPos, RestTokens).
 
 % If CurrentPos is specified as X/Y, we want to explicitly specify
 % the StartPos and EndPos of each token created as those specific values;
 % otherwise, use CurrentPos as the StartPos, and StartPos + TextLength as the EndPos.
+% CurrentPos is set to X/Y in the call of form_simple_tokens/4
+% in annotate_with_UDAs_1/5 in text_objects.pl.
 
-% CurrentPos is the current character position in the original UTF-8 text!
+% CurrentPos is the current character position in the original text!
 
-set_start_and_end_pos(CurrentPos, Text, ExtraCharsIn, ExtraCharsConsumedIn,
-		      StartPos, EndPos, NextPos, ExtraCharsConsumedOut, ExtraCharsOut) :-
-	  length(Text, TextLength),
-	  % When is CurrentPos ever = StartPos/EndPos?!
-%	( CurrentPos = StartPos/EndPos ->
-%	  % format(user_input, 'HERE: ~w~n', [CurrentPos]), ttyflush, halt,
-%	  NextPos = CurrentPos
-%	; integer(CurrentPos),
-	  % If there are no extraASCII chars to deal with
-	( ExtraCharsIn == [] ->
-	  StartPos is CurrentPos,
-	  ExtraCharsConsumedOut is ExtraCharsConsumedIn,
-	  ExtraCharsOut = ExtraCharsIn,
-	  EndPos is StartPos + TextLength
-	; % Are there extra ASCII chars to take into account because of a UTF-8 conversion?
-	  % If so, ExtraCharsIn is a list of Pos-ExtraChars tokens, e.g., [ 4-2, 33-2, ... ]
-	  set_start_end_pos_1(ExtraCharsIn, ExtraCharsConsumedIn,
-			      TextLength, CurrentPos, StartPos, EndPos,
-			      ExtraCharsConsumedOut, ExtraCharsOut)
-	),
-	NextPos is EndPos.
-
-% This needs to be more fully documented!!
-
-% Suppose the original UTF8 input text is
-% the ⅞ Sjögren's syndrome
-% 0123456789|123456789|123456
-
-% The ASCII version will be
-% the 7/8 Sjögren's syndrome
-% 0123456789|123456789|123456
-
-% and the ExtraChars will be [4-2], meaning that 2 extra ASCII chars were added at CharPos 4,
-% where the UTF-8 char "⅞" is expanded to "7/8". In this case, LastExtraCharPos will be 6.
-
-% The problem is that MetaMap never sees "⅞", because it's expanded to "7/8",
-% so MetaMap needs to adjust the positional info by subtracting char positions as needed.
-% The "7", "/", and "8" tokens must have StartPos = 4 and EndPos = 5, and
-% the "Sjögren's" token must have StartPos = 6 and EndPos = 15.
-% Moreover, after we've passed position 4, we must delete the ExtraChar info 4-2
-% because it's no longer relevant.
-
-set_start_end_pos_1(ExtraCharsIn, ExtraCharsConsumedIn, TextLength, CurrentPos,
-		    StartPos, EndPos, ExtraCharsConsumedOut, ExtraCharsOut) :-
-	ExtraCharsIn = [FirstExtraCharPos-NumExtraChars|RestExtraCharsIn], 
-	  % Case #1:
-	  % If the CurrentPos is < FirstExtraCharPos, i.e., we're strictly before the char pos
-	  % of the next UTF-8 char adjustment, then do nothing different:
-	  %  * Set the StartPos of the current token to CurrentPos,
-	  %  * Do not increment ExtraCharsConsumed, and
-	  %  * Return the ExtraChars listunchanged in ExtraCharsOut.
-
-	  % CurrentPos is STRICTLY BEFORE first UTF=8 char; do nothing special
-	( CurrentPos < FirstExtraCharPos ->
+set_start_and_end_pos(CurrentPos, Text, StartPos, EndPos, NextPos) :-
+	( CurrentPos = StartPos/EndPos ->
+	  NextPos = CurrentPos
+	; length(Text, TextLength),
 	  StartPos is CurrentPos,
 	  EndPos is StartPos + TextLength,
-	  ExtraCharsConsumedOut is ExtraCharsConsumedIn,
-	  ExtraCharsOut = ExtraCharsIn
-	  % Case #2:
-	  % CurrentPos is AT first UTF=8 char, which is exactly one character long
-	; CurrentPos =:= FirstExtraCharPos ->
-	  % We are AT the char pos of the first UTF-8 char,
-	  % so use CurrentPos as StartPos of the current ASCII token
-	  % the UTF-8 char is one character long, so EndPos is StartPos + 1
-	  StartPos is CurrentPos, % which is =:= FirstExtraCharPos
-	  EndPos is StartPos + 1,
-	  % Now it gets tricky, because there can be multiple ASCII tokens,
-	  % e.g., when "⅞" is replaced by "7/8" (three tokens), or only a single token,
-	  % e.g., when "â" is replaced by "a", or "ƛ" is replaced by "lambda".
-	    
-	  % If no extra chars have been consumed and TextLength =:= NumExtraChars,
-	  % that means there's only one ASCII token (regardless of its length):
-	  % Remove the first element of ExtraCharsIn, i.e.,FirstExtraCharPos-NumExtraChars,
-	  % and proceed with the rest of the ExtraCharsIn list.
-	  % Also reset ExtraCharsConsumed to 0, because we're done with this UTF-8 char.
-          ( ExtraCharsConsumedIn =:= 0,
-	    TextLength =:= NumExtraChars + 1 ->
-            ExtraCharsOut = RestExtraCharsIn,
-            ExtraCharsConsumedOut is 0
-	    % There are multiple ASCII tokens, so we're not yet done with this UTF-8 char:
-	    % Keep the ExtraChars list the same, and increment ExtraCharsConsumed by
-	    % one less than the length of the current ASCII token. (One less because
-	    % one char is matched by the single-char UTF-8 token).	    
-          ; ExtraCharsOut = [FirstExtraCharPos-NumExtraChars|RestExtraCharsIn],
-            ExtraCharsConsumedOut is ExtraCharsConsumedIn + TextLength - 1
-          )
-	  % Case #3:
-	  % We are past the first CharPos of the UTF-8 char, which means there must be
-	  % multiple ASCII tokens (e.g., when "⅞" is replaced by "7/8").
-	  %  * set StartPos of current token to FirstExtraCharPos (e.g., 4);
-	  %    for our example above, the "7", "/", and "8" tokens should all have 4 as StartPos;
-	  %  * set EndPos of current token to StartPos+1 b/c the UTF-8 char is one character long;
-	  %    Also, count the number of extra chars consumed (ExtraCharsConsumedIn + TextLength).
-	  %  * If that sum is equal to NumExtraChars, we've consumed all the extra chars
-	  %    ("7", "/", and "8" in our example), and this UTF-8 adjustment is done, so
-	  %    pass back the rest of the ExtraChars list (RestExtraCharsIn), and
-	  %    set ExtraCharsConsumed to 0 (for this UTF-8 character);
-	  %    otherwise pass back the ExtraChars list unchanged in ExtraCharsOut,
-	  %    and add TextLength to ExtraCharsConsumedIn to get ExtraCharsConsumedOut.
-
-	  % CurrentPos > FirstExtraCharPos means we've passed the original UTF-8 position
-	  % CurrentPos is INSIDE ASCII expansion, but not at end
-	  % This condition is redundant, but included for clarity.
-        ; CurrentPos > FirstExtraCharPos,
-          StartPos is FirstExtraCharPos,
-	  EndPos is StartPos + 1,
-          ( ExtraCharsConsumedIn + TextLength =:= NumExtraChars ->
-            ExtraCharsOut = RestExtraCharsIn,
-            ExtraCharsConsumedOut is 0
-          ; ExtraCharsOut = [FirstExtraCharPos-NumExtraChars|RestExtraCharsIn],
-            ExtraCharsConsumedOut is ExtraCharsConsumedIn + TextLength
-          )
-        ).
-
+	  NextPos is EndPos
+	).
+	
 
 % ws is space, tab or newline
 set_token_type(Token, ws) :-
@@ -428,7 +317,7 @@ compute_token_position([First|Rest], pos(Begin,End)) :-
 	get_token_position(Last, pos(_,End)).
 compute_token_position(Tokens, pos(0,0)) :-
 	( control_option(warnings) ->
-	  extract_text(Tokens, TText),
+	  extract_text_from_tokens(Tokens, TText),
 	  write_warning(TText, wpos, '','Cannot compute token position')
 	; true
 	).
@@ -475,26 +364,39 @@ remove_bracketing([First|Rest],ModifiedTokens) :-
     rev(RevModifiedTokens,ModifiedTokens).
 
 
-/* extract_text(+Tokens, -Text)
+/* extract_text_from_tokens(+Tokens, -Text)
 
-extract_text/2 extracts the Text of Tokens.  */
+extract_text_from_tokens/2 extracts the Text of Tokens.  */
 
-extract_text(Tokens, Text) :-
-	extract_text_aux(Tokens, TokensText),
-	TokensText = [First|_],
-	( atom(First) ->
-	  concat_atom(TokensText, Text)
-	; append(TokensText, Text)
-	).
+extract_text_from_tokens(Tokens, TextAtom) :-
+	extract_text_from_tokens_aux(Tokens, TokenStrings),
+	TokenStrings = [First|_Rest],
+	( is_list(First),
+	  First \== [] ->
+	  atom_codes_list(TokenAtoms, TokenStrings)
+	; TokenAtoms = TokenStrings
+	),
+	concat_atom(TokenAtoms, TextAtom).
 
-extract_text_aux([],[]).
+% TokensText = [First|_],
+% 	( atom(First) ->
+% 	  concat_atom(TokensText, TextAtom)
+% 	; append(TokensText, TextString),
+% 	  atom_codes(TextAtom, TextString)
+% 	).
+
+extract_text_from_tokens_aux([],[]).
 % not currently needed
-%extract_text_aux([tok(Type,_,_,_)|Rest],ExtractedRest) :-
+%extract_text_from_tokens_aux([tok(Type,_,_,_)|Rest],ExtractedRest) :-
 %    higher_order_type(Type),
 %    !,
-%    extract_text_aux(Rest,ExtractedRest).
-extract_text_aux([tok(_,Text,_,_)|Rest],[Text|ExtractedRest]) :-
-    extract_text_aux(Rest,ExtractedRest).
+%    extract_text_from_tokens_aux(Rest,ExtractedRest).
+extract_text_from_tokens_aux([tok(TokenType,Text,_,_)|RestTokens], ExtractedText) :-
+	( higher_order_or_annotation_type(TokenType) ->
+	  ExtractedText = RestExtractedText
+	; ExtractedText = [Text|RestExtractedText]
+	),
+	extract_text_from_tokens_aux(RestTokens, RestExtractedText).
 
 /* filter_out_field_comments(+FieldTokens, -FilteredFieldTokens)
    filter_out_comments(+Label, +Tokens, -FilteredTokens)
@@ -542,7 +444,7 @@ remove_abstract_truncation_note(_, Tokens, Tokens).
 
 /* split_tokens(+Tokens, +Pattern, -Left, +Right)
 
-split_tokens/4 is similar to nls_strings:split_string/4 except that
+split_tokens/4 is simlar to nls_strings:split_string/4 except that
 tokens rather than strings are involved.
 
 split_tokens/4 looks for Pattern in Tokens, where '.' matches anything,
@@ -586,7 +488,6 @@ token_component_matches_pattern_component(PatternComponent, TokenComponent) :-
 
 trim_ws_tokens/2 filters out whitespace tokens
 from the beginning and end of TokensIn producing TokensOut.  */
-
 
 trim_ws_tokens([], []).
 trim_ws_tokens([FirstToken|RestTokens], TokensOut) :-

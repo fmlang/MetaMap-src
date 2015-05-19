@@ -35,7 +35,8 @@
 
 
 :- module(efficiency,[
-	maybe_atom_gc/2
+	maybe_atom_gc/2,
+     	maybe_atom_gc/3
    ]).
 
 :- use_module(skr(skr_utilities), [
@@ -56,58 +57,61 @@
    maybe_atom_gc/2 calls maybe_atom_gc/3 with Notify set to 'no'.  */
 
 maybe_atom_gc(DidGC, SpaceCollected) :-
-	maybe_atom_gc(no, DidGC, SpaceCollected).
+	maybe_atom_gc(no, other, DidGC, SpaceCollected).
 
-maybe_atom_gc(Notify, DidGC, SpaceCollected) :-
+maybe_atom_gc(Call, DidGC, SpaceCollected) :-
+		maybe_atom_gc(no, Call, DidGC, SpaceCollected).
+
+maybe_atom_gc(Notify, Call, DidGC, SpaceCollected) :-
 	atom_gc_threshold(Threshold),
 	statistics(atoms, [NAtoms0,SpaceInUse0,SpaceFree0|_]),
 	( SpaceInUse0 > Threshold ->
-	  maybe_notify_1(Notify, Threshold, NAtoms0, SpaceInUse0, SpaceFree0),
+	  maybe_notify_1(Notify, Call, Threshold, NAtoms0, SpaceInUse0, SpaceFree0),
 	  garbage_collect_atoms,
 	  DidGC = yes,
 	  statistics(atoms, [NAtoms,SpaceInUse,SpaceFree|_]),
 	  SpaceCollected is SpaceInUse0 - SpaceInUse,
-	  maybe_notify_2(Notify, NAtoms, SpaceInUse, SpaceFree),
+	  maybe_notify_2(Notify, Call, NAtoms, SpaceInUse, SpaceFree, SpaceCollected),
 	  NewThreshold is SpaceInUse + (SpaceFree // 2),
-	  maybe_update_threshold(Notify, NewThreshold)
+	  maybe_update_threshold(Notify, Call, NewThreshold)
 	; DidGC = no,
 	  SpaceCollected = 0
 	),
 	!.
-maybe_atom_gc(_Notify,_DidGC,_SpaceCollected) :-
-    fatal_error('maybe_atom_gc/3 did not finish normally.~n',[]).
+maybe_atom_gc(_Notify, Call, _DidGC, _SpaceCollected) :-
+    fatal_error('maybe_atom_gc/3 call ~w did not finish normally.~n', [Call]).
 
 
-maybe_notify_1(Notify, Threshold, NAtoms0, SpaceInUse0, SpaceFree0) :-
+maybe_notify_1(Notify, Call, Threshold, NAtoms0, SpaceInUse0, SpaceFree0) :-
 	( Notify == yes ->
-          send_message('~Nmaybe_atom_gc threshold = ~d~n',[Threshold]),
+          send_message('~Nmaybe_atom_gc call ~w threshold = ~d~n',[Call,Threshold]),
           TotalSpace0 is SpaceInUse0 + SpaceFree0,
-          send_message('~Nmaybe_atom_gc before = ~d  ~d + ~d = ~d~n',
-		       [NAtoms0,SpaceInUse0,SpaceFree0,TotalSpace0])
+          send_message('~Nmaybe_atom_gc before call ~w = ~d  ~d + ~d = ~d~n',
+		       [Call,NAtoms0,SpaceInUse0,SpaceFree0,TotalSpace0])
         ; true
         ).
 
-maybe_notify_2(Notify, NAtoms, SpaceInUse, SpaceFree) :-
+maybe_notify_2(Notify, Call, NAtoms, SpaceInUse, SpaceFree, SpaceCollected) :-
         ( Notify == yes ->
           TotalSpace is SpaceInUse + SpaceFree,
-          send_message('~Nmaybe_atom_gc  after = ~d  ~d + ~d = ~d~n',
-		       [NAtoms,SpaceInUse,SpaceFree,TotalSpace])
+          send_message('~Nmaybe_atom_gc  after call ~w = ~d  ~d + ~d = ~d (~d)~n',
+		       [Call,NAtoms,SpaceInUse,SpaceFree,TotalSpace,SpaceCollected])
         ; true
         ).
 
-maybe_notify_3(Notify, NewThreshold) :-
+maybe_notify_3(Notify, Call, NewThreshold) :-
 	( Notify == yes ->
-	  send_message('~Nmaybe_atom_gc new threshold = ~d~n',
-		       [NewThreshold])
+	  send_message('~Nmaybe_atom_gc new threshold call ~w = ~d~n~n',
+		       [Call,NewThreshold])
 	; true
 	).
 
-maybe_update_threshold(Notify, NewThreshold) :-
+maybe_update_threshold(Notify, Call, NewThreshold) :-
 	( atom_gc_threshold(NewThreshold) ->
 	  true
 	; retractall(atom_gc_threshold(_)),
 	  assert(atom_gc_threshold(NewThreshold)),
-	  maybe_notify_3(Notify, NewThreshold)
+	  maybe_notify_3(Notify, Call, NewThreshold)
 	).
 
 

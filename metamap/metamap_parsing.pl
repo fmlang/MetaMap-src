@@ -48,6 +48,10 @@
 	assemble_definitions/3
     ]).
 
+:- use_module(metamap(metamap_tokenization), [
+	tokenize_text_utterly/2
+    ]).
+
 :- use_module(skr_lib(consulttt), [
 	consult_tagged_text/5
    ]).
@@ -60,6 +64,10 @@
 	minimal_commitment_analysis/4
     ]).
 
+:- use_module(skr_lib(nls_strings), [
+	atom_codes_list/2
+   ]).
+
 :- use_module(skr_lib(nls_system), [
 	control_option/1
    ]).
@@ -67,6 +75,7 @@
 :- use_module(skr_lib(retokenize), [
 	remove_null_atom_defns/2,
 	retokenize/2
+	% retokenize_for_apostrophe/2
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -86,10 +95,17 @@
    ************************************************************************
    ************************************************************************ */
 
+%%% get_tagger_atoms([], []).
+%%% get_tagger_atoms([[H,_]|RestTagList], [H|RestAtoms]) :-
+%%% 	get_tagger_atoms(RestTagList, RestAtoms).
+
 generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions) :-
-	tokenize_string(ListOfAscii, Words0),
+ 	tokenize_string(ListOfAscii, Words0),
 	re_attach_apostrophe_s_syntax(Words0, TagList, Words1),
 	retokenize(Words1, Words),
+	% retokenize_for_apostrophe(Words1, Words),
+	% modify_tag_list_for_apostrophe(TagList0, TokenLists, TagList),
+	% assemble_definitions(TokenLists, TagList0, Definitions0),
 	assemble_definitions(Words, TagList, Definitions0),
 	remove_null_atom_defns(Definitions0, Definitions),
 	generate_variant_info(Definitions, VarInfoList),
@@ -99,7 +115,42 @@ generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions
 	% update_taglist(TagList, Definitions, PrevTagWord,
 	% 	       ChromosomeFound, LeftOverWords, TagList),
 	maybe_consult_tagged_text(TagList, Definitions, VarInfoList, LabeledText, 1),
+	!,
 	minimal_commitment_analysis(TagList, VarInfoList, LabeledText, SyntAnalysis).
+
+% This predicate is intentionally nondeterminate; must be backtrackable.
+% The choice points are removed by the cut after maybe_consult_tagged_text/5
+% in the definition of generate_syntactic_analysis_plus/4.
+%%% modify_tag_list_for_apostrophe([], _TokenLists, []).
+%%% modify_tag_list_for_apostrophe(TagListIn, TokenLists, TagListOut) :-
+%%% 	TagListIn =  [[_AtomBefore,_LexCatBefore],['\'',ap],[_AtomAfter,_LexCatAfter] | _RestTagListIn],
+%%% 	concat_all_apostrophe_atoms(TagListIn, [[ConcatAtom,ConcatLexCat] | RestTagListNext]),
+%%% 	member(ThisTokenList, TokenLists),
+%%% 	memberchk(ConcatAtom, ThisTokenList),
+%%%  	TagListOut = [[ConcatAtom,ConcatLexCat] | RestTagListOut],
+%%% 	modify_tag_list_for_apostrophe(RestTagListNext, TokenLists, RestTagListOut).
+%%% modify_tag_list_for_apostrophe([H|RestTagListIn], TokenLists, [H|RestTagListOut]) :-
+%%% 	modify_tag_list_for_apostrophe(RestTagListIn, TokenLists, RestTagListOut).
+%%% 
+%%% 
+%%% % This predicate is intentionally nondeterminate; must be backtrackable.
+%%% concat_all_apostrophe_atoms(TagListIn, TagListNext) :-
+%%% 	TagListIn =  [[AtomBefore,LexCatBefore],['\'',ap],[AtomAfter,LexCatAfter] | RestTagListIn],
+%%% 	concat_atom([AtomBefore, '\'', AtomAfter], ConcatAtom0),
+%%% 	choose_lexcat(AtomBefore, LexCatBefore, AtomAfter, LexCatAfter, ConcatLexCat),
+%%% 	concat_all_apostrophe_atoms([[ConcatAtom0,ConcatLexCat]|RestTagListIn], TagListNext).
+%%% concat_all_apostrophe_atoms(TagListIn, TagListNext) :-
+%%% 	TagListNext = TagListIn.
+
+
+% Assign to the combined atom the lexical category of the longer of the two atoms
+choose_lexcat(AtomBefore, LexCatBefore, AtomAfter, LexCatAfter, CombinedLexCat) :-
+	atom_length(AtomBefore, AtomBeforeLength),
+	atom_length(AtomAfter,  AtomAfterLength),
+	( AtomBeforeLength > AtomAfterLength ->
+	  CombinedLexCat = LexCatBefore
+	; CombinedLexCat = LexCatAfter
+	).
 
 % First arg is TagList: Call consult_tagged_text iff TagList is not []
 maybe_consult_tagged_text([], _Definitions, _VarInfoList, [], _1).
@@ -126,6 +177,22 @@ re_attach_apostrophe_s_syntax(WordListsIn, TagList, WordListsOut) :-
 % [finkelstein, '\'', s, test, positive] --> [finkelstein's, test, positive]
 % We do not have to worry about glomming the apostrophe onto a previous token
 % ending in a punctuation mark here...I think...
+
+% The tagger output for "alzheimer's disease" is
+% [[alzheimer,noun],['\'',ap],[s,noun],[disease,noun]]
+% but the tokenization is
+% [['alzheimer\'s',disease]]
+% We must glue together the tagger components for compatibility with the tokenization.
+% This process must be recursive because of tokens like
+% D'ALEMBERT'S PRINCIPLE
+% PRESIDENT O'Shea's report.
+% use of D'Herelle's technique
+% C.D. O'Malley's Vesalius
+% D'Arnaud's barbet
+% O'Sullivan's oral glucose tolerance procedure
+% O'Brien's actinic granuloma
+% using O'Farrell's system
+
 re_attach_apostrophe_s_to_prev_word([], _TagList, []).
 re_attach_apostrophe_s_to_prev_word([OrigWord, '''', s | RestWordsIn], TagList, WordListOut) :-	
 	concat_atom([OrigWord, '''', s], WordWithApostropheS),

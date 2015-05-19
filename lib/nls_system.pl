@@ -141,9 +141,9 @@ is_control_option(metamap, 'J', restrict_to_sts, no,
                   aspec(restrict_to_sts, mandatory, list, none, no_default,
                         'List of semantic types to use for output')).
 is_control_option(metamap, 'K', ignore_stop_phrases, 		no, none).
-is_control_option(metamap, 'L', lexicon_year, 	 		no,
-                  aspec(lexicon_year, mandatory, none, none, no_default,
-                        'Lexicon year')).
+% is_control_option(metamap, 'L', lexicon_year, 	 		no,
+%                   aspec(lexicon_year, mandatory, none, none, no_default,
+%                        'Lexicon year')).
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
 is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
@@ -204,6 +204,7 @@ is_control_option(metamap,   z, term_processing, 		no, none).
 is_control_option(metamap,  '', debug, 			 	no,
                   aspec(debug, mandatory, list, none, no_default, 'Debugging settings')).
 is_control_option(metamap,  '', help, 		 	 	no, none).
+is_control_option(metamap,  '', tokenize_only, 		 	no, none).
 is_control_option(metamap,  '', negex,		 	 	no, none).
 is_control_option(metamap,  '', negex_st_add, 		 	no,
                   aspec(negex_st_add, mandatory, list, none, no_default, 'SemTypes to add to NegEx')).
@@ -253,7 +254,6 @@ is_control_option(metamap,  '', sldiID,	 	 		no, none).
 % is_control_option(metamap,  '', restore, 	 	 	no, none).
 is_control_option(metamap,  '', 'UDA',   			no,
 		  aspec('UDA', mandatory, file, read, no_default, 'File containing UDAs')).
-% is_control_option(metamap,  '', 'UTF8',		 		no, none).
 is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
@@ -261,8 +261,8 @@ is_control_option(metamap,  '', 'XMLn1',		 	no, none).
 
 % is_control_option(metamap,  '', 'allcats',		 	no, none).
 
-is_control_option(metamap,  '', lexicon, no,
-                   aspec(lexicon, mandatory, none, none, no_default,
+is_control_option(metamap,  '', lexicon, yes,
+                   aspec(lexicon, mandatory, none, yes, db,
                          'Specify "c" or "db" for lexicon version.')).
 
 is_control_option(metamap,  '', map_thresh, no,
@@ -282,6 +282,45 @@ is_control_option(metamap,  '', 'negex_trigger_file', no,
 is_control_option(metamap,  '', 'nomap', no,
 		  aspec(nomap, mandatory, file, read, no_default,
 			'File containing String/CUI pairs to exclude.')).
+is_control_option(metamap,  '', 'utterances_only',	 	no, none).
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% USemRep %%%%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+is_control_option(usemrep, 'A', anaphora_resolution,   no,  none).
+is_control_option(usemrep,  '',  domain, no,
+                   aspec(domain, mandatory, none, no, no_default,
+                         'Specify a non-generic domain.')).
+
+is_control_option(usemrep, 'D', dysonym_processing,   no,  none).
+is_control_option(usemrep, 'E', indicate_citation_end,  no,  none).
+is_control_option(usemrep, 'F', full_fielded_output_format,   no,  none).
+is_control_option(usemrep, 'G', genetics_processing,         no,  none).
+is_control_option(usemrep,   h, help,                        no,  none).
+is_control_option(usemrep, 'L', lexicon_year, 	 		no,
+                  aspec(lexicon_year, mandatory, none, none, no_default,
+                        'Lexicon year [2006,2012,2014]')).
+is_control_option(usemrep, 'M', relaxed_model,              no, none).
+is_control_option(usemrep, 'P', extract_phrases_only,       no, none).
+is_control_option(usemrep, 'R', write_syntax,              no,  none).
+is_control_option(usemrep, 'r', write_syntax_only,         no,  none).
+is_control_option(usemrep, 'S', generic_processing,          no,  none).
+is_control_option(usemrep, 'U', expanded_utterances_only,    no,  none).
+is_control_option(usemrep,  u,  unexpanded_utterances_only,  no, none).
+is_control_option(usemrep, 'V', mm_data_version, no,
+                  aspec(mm_data_version, mandatory, none, none, no_default,
+                        'Version of MetaMap data to use [USAbase,NLM]')).
+is_control_option(usemrep,   w, warnings,                    no,  none).
+is_control_option(usemrep, 'X', xml_output_format, no, none).
+is_control_option(usemrep,   x, debug_call,                  no,
+                  aspec(debug_call,mandatory,integer,none,no_default,debug_call)).
+is_control_option(usemrep, 'Z', mm_data_year, no,
+                  aspec(mm_data_year,mandatory, none, none, no_default,
+                        'Release of MetaMap data to use, e.g., 2015AA]')).
+is_control_option(usemrep,  '', usemrep_processing,   yes, none).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Other programs %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1014,7 +1053,7 @@ parse_command_line/1 constructs CommandLine=command_line(Options,Args)
 where Options is a list of options and Args a list of non-options.  A sequence
 of single-character options is signalled by an initial '-'; a verbose option is
 signalled by '--'.  Thus, for
-             parser -vt --semantics infile outfile
+1             parser -vt --semantics infile outfile
 parse_command_line would produce
              command_line([v,t,semantics], [infile,outfile]).
 parse_command_line/3 is both an auxiliary predicate and an alternative used

@@ -34,8 +34,7 @@
 
 
 :- module(skr_text_processing, [
-	convert_all_utf8_to_ascii/4,
-	extract_sentences/13,
+	extract_sentences/12,
 	get_skr_text/2,
 	get_skr_text_2/2,
 	medline_field_separator_char/1,
@@ -97,12 +96,8 @@
     ]).
 
 :- use_module(text(text_objects), [
-	find_and_coordinate_sentences/9
+	find_and_coordinate_sentences/8
     ]).
-
-:- use_module(text(utf8_to_ascii), [
-	utf8_to_ascii/3
-   ]).
 
 :- use_module(library(lists), [
 	append/2,
@@ -244,26 +239,27 @@ whitespace_only_field([FirstChar|RestChars]) :-
 	local_ws(FirstChar),
 	whitespace_only_field(RestChars).
 
-extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFields,
-		  Sentences, CoordinatedSentences, UniqueIDAtom, AAs, UDAListIn, UDA_AVL, Lines) :-
+extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
+		  Sentences, CoordinatedSentences,
+		  UniqueIDAtom, AAs, UDAListIn, UDA_AVL, Lines) :-
 	Lines0 = [FirstLine|RestLines],
 	% This is for Steven Bedrick's --blanklines idea
 	glom_whitespace_fields(RestLines, FirstLine, Lines00),
 	replace_tabs_in_strings(Lines00, Lines1),
 	replace_nonprints_in_strings(Lines1, Lines2),
 	( medline_citation(Lines2) ->
-	  extract_coord_sents_from_citation(Lines2, ExtraChars, TextFields, NonTextFields,
+	  extract_coord_sents_from_citation(Lines2, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
 					    UniqueIDString, AAs, UDAListIn, UDAListOut, UDA_AVL),
 	  InputType = citation
 	; is_smart_fielded(Lines2) ->
-	  extract_coord_sents_from_smart(Lines2, ExtraChars, TextFields, NonTextFields,
+	  extract_coord_sents_from_smart(Lines2, TextFields, NonTextFields,
 					 Sentences, CoordinatedSentences,
 					 UniqueIDString, AAs, UDAListIn, UDAListOut, UDA_AVL),
 	  InputType = smart,
 	  NonTextFields = []
 	; form_dummy_citation(Lines2, TextID, CitationLines),
-	  extract_coord_sents_from_citation(CitationLines, ExtraChars, TextFields, NonTextFields,
+	  extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
 					    UniqueIDString, AAs, UDAListIn, UDAListOut, UDA_AVL),
 	  InputType = simple
@@ -360,8 +356,7 @@ set_text_id_and_field_type(TempTextID, TextID, FieldType) :-
    				     -Sentences, -CoordinatedSentences, AAs)
 */
 
-extract_coord_sents_from_citation(CitationLines, ExtraChars,
-				  TextFields, NonTextFields,
+extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
 				  Sentences, CoordinatedSentences,
 				  UniqueID, AAs, UDAListIn, UDAListOut, UDA_AVL) :-
     extract_all_fields(CitationLines, CitationFields),
@@ -372,8 +367,7 @@ extract_coord_sents_from_citation(CitationLines, ExtraChars,
         extract_document_unique_identifier(Field, UniqueID)
     ;   UniqueID = "00000000"
     ),
-    extract_coord_sents_from_fields(UniqueID, ExtraChars, CitationFields,
-				    TextFields, NonTextFields,
+    extract_coord_sents_from_fields(UniqueID, CitationFields, TextFields, NonTextFields,
 				    Sentences, CoordinatedSentences,
 				    AAs, UDAListIn, UDAListOut, UDA_AVL),
     !.
@@ -826,7 +820,7 @@ medline_field('UOF',
 medline_field('VI',
 	      'Volume', 'Journal volume').
 
-extract_coord_sents_from_smart(SmartLines, ExtraChars, TextFields, NonTextFields,
+extract_coord_sents_from_smart(SmartLines, TextFields, NonTextFields,
 			       Sentences, CoordinatedSentences,
 			       UniqueID, AAs, UDAListIn, UDAListOut, UDA_AVL) :-
 	extract_all_smart_fields(SmartLines, CitationFields),
@@ -834,7 +828,7 @@ extract_coord_sents_from_smart(SmartLines, ExtraChars, TextFields, NonTextFields
 	  extract_document_unique_identifier(UIField, UniqueID)
 	; UniqueID = "00000000"
 	),
-	extract_coord_sents_from_fields(UniqueID, ExtraChars, CitationFields, TextFields,
+	extract_coord_sents_from_fields(UniqueID, CitationFields, TextFields,
 					NonTextFields, Sentences, CoordinatedSentences,
 					AAs, UDAListIn, UDAListOut, UDA_AVL),
 	!.
@@ -921,15 +915,33 @@ extract_document_unique_identifier(Field, UniqueID) :-
 	; UniqueID  = "00000000"
 	).
 
-extract_coord_sents_from_fields(UniqueID, ExtraChars, Fields, TextFields, NonTextFields, Sentences,
+extract_coord_sents_from_fields(UniqueID, Fields, TextFields, NonTextFields, Sentences,
 				CoordinatedSentences, AAs, UDAListIn, UDAListOut, UDA_AVL) :-
 	extract_text_fields(Fields, TextFields0, NonTextFields),
+	% need to add an extra " ", because there's a <CR> to take into account
+	% between the end of the TI and the beginning of the AB!
+	add_whitespace_to_end_of_title(TextFields0, TextFields1), 
 	padding_string(Padding),
-	unpad_fields(TextFields0, Padding, TextFields1),
-	right_trim_last_string(TextFields1, TextFields2),
-	find_and_coordinate_sentences(UniqueID, ExtraChars, TextFields2, Sentences, CoordinatedSentences,
+	unpad_fields(TextFields1, Padding, TextFields2),
+	right_trim_last_string(TextFields2, TextFields3),
+	find_and_coordinate_sentences(UniqueID, TextFields3, Sentences, CoordinatedSentences,
 				      AAs, UDAListIn, UDAListOut, UDA_AVL),
 	update_text_fields_with_UDAs(UDAListOut, TextFields0, TextFields).
+
+add_whitespace_to_end_of_title(TextFields0, TextFields1) :-
+	( TextFields0 = [["TI",TitleStrings]|Rest] ->
+	  TitleStrings = [FirstTitleString|RestTitleStrings],
+	  add_ws_to_last_title_string(RestTitleStrings, FirstTitleString, NewTitleStrings),
+	  TextFields1 = [["TI",NewTitleStrings]|Rest]
+	; TextFields1 = TextFields0
+	).
+
+add_ws_to_last_title_string([], LastTitleString, [LastTitleStringWithFinalWS]) :-
+	append(LastTitleString, " ", LastTitleStringWithFinalWS).
+add_ws_to_last_title_string([NextTitleString|RestTitleStrings],
+			    TitleString, [TitleString|RestNewTitleStrings]) :-
+	add_ws_to_last_title_string(RestTitleStrings, NextTitleString, RestNewTitleStrings).
+
 
 right_trim_last_string([], []).
 right_trim_last_string([H|T], TextFieldsOut) :-
@@ -1026,46 +1038,3 @@ unpad_lines([First|Rest], Padding, [UnPaddedFirst|UnPaddedRest]) :-
 	; UnPaddedFirst = First
 	),
 	unpad_lines(Rest, Padding, UnPaddedRest).
-
-convert_all_utf8_to_ascii(UTF8Strings, CurrPos, ExtraChars, ASCIIStrings) :-
-	( control_option('UTF8') ->
-	  convert_all_utf8_to_ascii_1(UTF8Strings, CurrPos, ExtraChars, ASCIIStrings)
-	; ExtraChars = [],
-	  ASCIIStrings = UTF8Strings
-	).
-
-convert_all_utf8_to_ascii_1([], _CurrPos, [], []).
-convert_all_utf8_to_ascii_1([OneUTF8|RestUTF8], CurrPos,
-			    [OneExtraChars|RestExtraChars], [OneASCIIString|RestASCIIStrings]) :-
-	convert_one_utf8_to_ascii(OneUTF8, CurrPos, OneExtraChars, OneASCIICodes),
-	% sum the Ys in X-Y list, and subtract sum from length of OneUTF8?
-	append(OneASCIICodes, OneASCIIString),
-	length(OneUTF8, OneUTF8Length),
-	NextPos is CurrPos + OneUTF8Length + 1,
-	convert_all_utf8_to_ascii_1(RestUTF8, NextPos, RestExtraChars, RestASCIIStrings).
-
-convert_one_utf8_to_ascii([], _Pos, [], []).
-convert_one_utf8_to_ascii([OneUTF8Code|RestUTF8Codes], CurrPos,
-			  ExtraChars, [OneASCIICodes|RestASCIIChars]) :-
-	utf8_to_ascii(OneUTF8Code, ASCIIChar, ExtraLength),
-	atom_codes(ASCIIChar, OneASCIICodes),
-	( ExtraLength > 0 ->
-	  ExtraChars = [CurrPos-ExtraLength|RestExtraChars]
-	; ExtraChars = RestExtraChars
-	),
-	NextPos is CurrPos + 1,
-	convert_one_utf8_to_ascii(RestUTF8Codes, NextPos, RestExtraChars, RestASCIIChars).
-
-
-% convert_utf8_to_ascii_old(AllStringsUTF8, AllStringsASCII) :-
-% 	(  foreach(OneStringUTF8,  AllStringsUTF8),
-% 	   foreach(OneStringASCII, AllStringsASCII)
-% 	do ( foreach(UTF8Code,  OneStringUTF8),
-% 	     foreach(ASCIIChar, TempCharsASCII)
-% 	   do utf8_to_ascii(UTF8Code, ASCIIChar)
-% 	      % atom_codes(ASCIIChar, ASCIICode)
-% 	   ),
-% 	   concat_atom(TempCharsASCII, OneAtomASCII),
-% 	   atom_codes(OneAtomASCII, OneStringASCII)
-% 	).
-% 

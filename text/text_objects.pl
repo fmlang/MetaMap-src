@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -34,14 +33,18 @@
 % Purpose:  To provide support for text objects (sentences, parentheticals, AAs, ...)
 
 :- module(text_objects, [
-	create_UDAs/2,
+	create_nomap_pairs/2,
 	dump_all_AAs/4,
 	extract_token_atoms/2,
 	extract_an_lc_atoms/2,
-	find_and_coordinate_sentences/9,
+	find_and_coordinate_sentences/8,
         get_UDAs/1,
         maybe_dump_AAs/3,
 	reformat_AA_list_for_output/3
+    ]).
+
+:- use_module(skr_db(db_access), [
+	all_digits/1
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -56,7 +59,6 @@
 
 
 :- use_module(skr(skr_text_processing), [
-	convert_all_utf8_to_ascii/4,
 	get_skr_text_2/2
    ]).
 
@@ -64,6 +66,7 @@
 	check_valid_file_type/2,
 	fatal_error/2,
 	token_template/5,
+	send_message/2,
 	write_token_list/3
     ]).
 
@@ -102,9 +105,9 @@
 
 :- use_module(text(text_object_tokens), [
 	compute_token_position/2,
-	extract_text/2,
+	extract_text_from_tokens/2,
 	filter_out_field_comments/2,
-	form_field_tokens/3,
+	form_field_tokens/2,
 	form_simple_tokens/4,
 	get_token_position/2,
 	position_contains/2,
@@ -221,12 +224,12 @@ is_at_sentence_boundary([Token|Rest], RevPre, RBWSs, NewRest) :-
 	  ( control_value(debug, DebugFlags),
 	    memberchk(2, DebugFlags) ->
 	    rev(RevNWSs,NWSs),
-	    extract_text(NWSs,PreT0),
+	    extract_text_from_tokens(NWSs,PreT0),
 	    % Token = tok(_,T,_,_),
 	    token_template(Token, _Type, T,_LCT, _PosInfo),
-	    extract_text(RBWSs,RBWSsT0),
+	    extract_text_from_tokens(RBWSs,RBWSsT0),
 	    non_ws_seq(NewRest,NRNWSs,_),
-	    extract_text(NRNWSs,PostT0),
+	    extract_text_from_tokens(NRNWSs,PostT0),
 	    append([PreT0,T,RBWSsT0,PostT0],AllT0),
 	    translate_newlines_to_backslash(AllT0,AllT),
 	      ( to_io_global(warnings_stream,Stream) ->
@@ -266,12 +269,12 @@ is_at_parenthetical_sentence_boundary(Tokens,RevPre,RBWSs,NewTokens) :-
 	( control_value(debug, DebugFlags),
 	  memberchk(2, DebugFlags) ->
           rev(RevNWSs,NWSs),
-          extract_text(NWSs,PreT0),
+          extract_text_from_tokens(NWSs,PreT0),
 	  Token = tok(_,T,_,_),
           token_template(Token, _Type, T, _LCT, _PosInfo),
-          extract_text(RBWSs,RBWSsT0),
+          extract_text_from_tokens(RBWSs,RBWSsT0),
           non_ws_seq(NewTokens,NRNWSs,_),
-          extract_text(NRNWSs,PostT0),
+          extract_text_from_tokens(NRNWSs,PostT0),
           append([PreT0,T,RBWSsT0,PostT0],AllT0),
           translate_newlines_to_backslash(AllT0,AllT),
           ( to_io_global(warnings_stream,Stream) ->
@@ -403,7 +406,7 @@ find_sentences([], RevPre, Level, Label, [SnTok|Sentence]) :-
 	!,
 	construct_sentence_token(RevPre, Level, SnTok, Sentence),
 	( control_option(warnings) ->
-	  extract_text(Sentence, SentenceText),
+	  extract_text_from_tokens(Sentence, SentenceText),
 	  write_warning(SentenceText, wsb, Label, 'Missing sentence boundary')
 	; true
 	).
@@ -419,8 +422,8 @@ find_sentences([Token|Rest], RevPre, Level, Label, Sentences) :-
 	% Token=tok(pn,LB,LB,_),
 	token_template(Token, pn, LB, LB, _PosInfo),
 	NewLevel is Level + 1,
-	NumTokensConsumed is 0,
-	find_bracketing(Rest, NumTokensConsumed, [Token], NewLevel, [LB], Label, _, RevPE, NewRest),
+	ConsumedTokenCount is 0,
+	find_bracketing(Rest, ConsumedTokenCount, [Token], NewLevel, [LB], Label, _, RevPE, NewRest),
 	% make sure the bracketing doesn't skip ahead more than 2000 characters;
 	% analying > 90,000 citations revealed no gap > 1371 chars.
 	test_bracketing_distance(Rest, NewRest),
@@ -472,7 +475,7 @@ test_bracketing_distance(Rest, NewRest) :-
 	  CharPosDiff < 2000
 	).
 
-find_bracketing([Token|Rest], _NumTokensConsumed, RevPre, _Level,
+find_bracketing([Token|Rest], _ConsumedTokenCount, RevPre, _Level,
 		[LB|_RestLB], _Label, LBToClear, [Token|RevPre], Rest) :-
 	% look for closing bracket (BEFORE looking for another opening bracket)
 	rbracket_tok(Token),
@@ -496,7 +499,7 @@ find_bracketing([Token|Rest], _NumTokensConsumed, RevPre, _Level,
 	; true
 	),
 	!.
-find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
+find_bracketing([Token|RestIn], ConsumedTokenCount, RevPre, Level,
 		LBList, Label, LBToClearOut, RevBExpr, RestOut) :-
 	% look for nested bracketing expression (AFTER looking for closing bracket)
 	lbracket_tok(Token),
@@ -536,9 +539,9 @@ find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
 	%    length(RevPre,LPre),
 	%    length(RevSubBExpr,LCur),
 	% 2. character length
-	%extract_text(RevPre,PT),
+	%extract_text_from_tokens(RevPre,PT),
 	%length(PT,LPre),
-	%extract_text(RevSubBExpr,SubT),
+	%extract_text_from_tokens(RevSubBExpr,SubT),
 	%length(SubT,LCur),
 	% 1. and 2.
 	%    (LCur < LPre ->
@@ -555,17 +558,17 @@ find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
 	; append([RevSubBExpr, [BETok],RevPre], NewRevPre),
 	  length([Token|RestIn], OrigTokenListLength),
 	  length(RestInOut, NewTokenListLength),
-	  NumTokensConsumedNext is NumTokensConsumed + OrigTokenListLength - NewTokenListLength,
-          find_bracketing(RestInOut, NumTokensConsumedNext, NewRevPre, Level, LBList, Label,
+	  ConsumedTokenCountNext is ConsumedTokenCount + OrigTokenListLength - NewTokenListLength,
+          find_bracketing(RestInOut, ConsumedTokenCountNext, NewRevPre, Level, LBList, Label,
 			  LBToClearOut, RevBExpr, RestOut)
 	).
-find_bracketing([Token|RestIn], NumTokensConsumed, RevPre, Level,
+find_bracketing([Token|RestIn], ConsumedTokenCount, RevPre, Level,
 		LBList, Label, LBToClear, RevBExpr, RestOut) :-
-	% NumTokensConsumed < 4600,
-	% format(user_output, 'NTC = ~d~n', [NumTokensConsumed]),
-	% format(user_output, '~d:~*c~n', [NumTokensConsumed,NumTokensConsumed,42]),
-	NumTokensConsumed1 is NumTokensConsumed + 1,
- 	find_bracketing(RestIn, NumTokensConsumed1, [Token|RevPre], Level,
+	% ConsumedTokenCount < 4600,
+	% format(user_output, 'NTC = ~d~n', [ConsumedTokenCount]),
+	% format(user_output, '~d:~*c~n', [ConsumedTokenCount,ConsumedTokenCount,42]),
+	ConsumedTokenCount1 is ConsumedTokenCount + 1,
+ 	find_bracketing(RestIn, ConsumedTokenCount1, [Token|RevPre], Level,
 			LBList, Label, LBToClear, RevBExpr, RestOut).
 
 construct_sentence_token(RevPre, Level, Token, Pre) :-
@@ -583,7 +586,7 @@ construct_parenthetical_token(RevPre, Level, Token, Pre) :-
    get_aa_cutoff_value(-Cutoff)
    default_aa_cutoff_value(?Cutoff)
 
-get_aa_cutoff_value/1 gets the current AA cutoff value. If there is none,
+get_aa_cutoff_value/1 gets the current AA cutoff value. If there is none
 it uses default_aa_cutoff_value/1 to provide one.
 default_aa_cutoff_value/1 is a factual predicate defining the default AA
 cutoff value. */
@@ -663,11 +666,11 @@ reformat_AA_list_for_output([AA-Expansion|RestTokenListPairs], UI, [FirstAAData|
 	reformat_AA_list_for_output(RestTokenListPairs, UI, RestAAData).
 
 reformat_one_AA_for_output(AA, Expansion, UI, ReformattedAAData) :-
-	extract_text(AA, AATextAtom),
+	extract_text_from_tokens(AA, AATextAtom),
 	atom_length(AATextAtom, AATextLength),
 	get_AA_startpos_and_endpos(AA, AATextLength, StartPos, _EndPos),
 	length(AA, AATokenLength),
-	extract_text(Expansion, ExpansionTextAtom),
+	extract_text_from_tokens(Expansion, ExpansionTextAtom),
 	length(Expansion, ExpansionTokenLength),
 	atom_length(ExpansionTextAtom, ExpansionTextLength),
 	ReformattedAAData = UI-AATextAtom-ExpansionTextAtom-
@@ -719,13 +722,13 @@ find_aas_1([PE_Token|Rest], LastPos, RevPre, AAsIn, AAsOut) :-
 	!,
 	arg(4, PE_Token, PosTerm),
 	% format('~nfind_aas (pe)~n',[]),
-	% extract_text([PE_Token|Rest],Text),
+	% extract_text_from_tokens([PE_Token|Rest],Text),
 	% format(OutputStream,'~s~n~p~n',[Text,[PE_Token|Rest]]),
 	split_scope(Rest, PosTerm, Scope0, NewRest),
-	% extract_text(Scope0,Scope0Text),
+	% extract_text_from_tokens(Scope0,Scope0Text),
 	% format(OutputStream,'Scope0:~n~s~n~p~n',[Scope0Text,Scope0]),
 	remove_bracketing(Scope0, Scope),
-	% extract_text(Scope,ScopeText),
+	% extract_text_from_tokens(Scope,ScopeText),
 	% format(OutputStream,'Scope:~n~s~n~p~n',[ScopeText,Scope]),
 	% recurse within the parenthetical
 	find_aas_1(Scope, LastPos, [], AAsIn, AAsNext1),
@@ -771,7 +774,10 @@ test_valid_aa(AATokens, LastCitationPos) :-
 	test_valid_aa_15(AATokens),
 	test_valid_aa_16(AATokens),
 	test_valid_aa_17(AATokens, LastCitationPos),
-	test_valid_aa_18(AATokens).
+	test_valid_aa_18(AATokens),
+	test_valid_aa_19(AATokens),
+	test_valid_aa_20(AATokens).
+
 
 	
 % Proposed AA must not contain > 20 chars; that rules out less than 0.04% of AAs
@@ -982,6 +988,27 @@ test_valid_aa_18(AATokens) :-
 	!,
 	fail.
 test_valid_aa_18(_AATokens).
+
+% Proposed AA cannot begin or end with a punc token
+test_valid_aa_19(AATokens) :-
+	AATokens = [FirstAAToken|_RestAATokens],
+	last(AATokens, LastAAToken),
+	( pn_tok(FirstAAToken) ->
+	  true
+	; pn_tok(LastAAToken)
+	),
+	!,
+	fail.
+test_valid_aa_19(_AATokens).
+
+% Proposed AA cannot consist of a single character
+test_valid_aa_20(AATokens) :-
+	AATokens = [SingleToken],
+	token_template(SingleToken, _TokenType, TokenString, _LCTokenString, _PosInfo),
+	TokenString = [_SingleChar],
+	!,
+	fail.
+test_valid_aa_20(_AATokens).	
 
 count_tokens_of_type([], _Type, Count ,Count).
 count_tokens_of_type([FirstToken|RestTokens], Type, CountIn, CountOut) :-
@@ -1429,7 +1456,8 @@ test_valid_aa_and_expansion(AATokens, ScopeTokens) :-
 	test_valid_aa_and_expansion_06(AATokens, ScopeTokens),
 	test_valid_aa_and_expansion_07(AATokens, ScopeTokens),
 	test_valid_aa_and_expansion_08(AATokens, ScopeTokens),
-	test_valid_aa_and_expansion_09(AATokens, ScopeTokens).
+	test_valid_aa_and_expansion_09(AATokens, ScopeTokens),
+	test_valid_aa_and_expansion_10(AATokens, ScopeTokens).
 
 % Proposed AA contains more chars than proposed Scope
 test_valid_aa_and_expansion_01(AATokens, ScopeTokens) :-
@@ -1544,6 +1572,15 @@ test_valid_aa_and_expansion_09(AATokens, ScopeTokens) :-
 	!,
 	fail.
 test_valid_aa_and_expansion_09(_, _).
+
+
+% Proposed AA cannot contain > 2 punc tokens
+test_valid_aa_and_expansion_10(_AATokens, ScopeTokens) :-
+	count_tokens_of_type(ScopeTokens, pn, 0, Count),
+	Count > 3,
+	!,
+	fail.
+test_valid_aa_and_expansion_10(_AATokens, _ScopeTokens).
 
 announce_aa_failure(Rule, Tokens) :- announce_failure(Rule, Tokens).
 
@@ -1770,6 +1807,11 @@ find_aa(AATokensIn, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut
 
 	find_initial_scope(AATokens, AATokensLength, RevPre,
 			   TempRevScope0, AlphaNumericChar, TempRestTokens),
+	% This next call prevents an AA expansion from beginning or ending with a stop word;
+	% this blocks potential AAs like
+	% "and acquired immune deficiency syndrome (AIDS)"
+	% "combinations of [Ca]"
+	block_stop_words(TempRevScope0),
 	% We may have gobbled up some ws and punc tokens
 	% that need to go back onto RestTokens;
 	% also check to make sure scope doesn't begin with a lex_stop_word.
@@ -1792,11 +1834,13 @@ find_aa(AATokensIn, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut
 
 	\+ deconstructing_known_AA(Scope, PE_Token, AATokensWithParens, AAsIn),
 	\+ proposed_AA_overlaps_prev_scope(AATokensWithParens, AAsIn),
+	check_shared_token(AAsIn, Scope, AAsNext),
 	test_valid_scope(AATokens, Scope),
 	test_valid_aa_and_expansion(AATokens, Scope),
 	% test on 16249374 16463099
 	% This test is necessary for downstream processing.
-	no_overlapping_aas(AAsIn, Scope, RestTokens),
+	% no_overlapping_aas(AAsIn, Scope, RestTokens),
+	no_overlapping_aas(AAsNext, Scope, RestTokens),
 	% announce_tokens_and_scope(AATokens, Scope),
 	initialize_aa_matching(AATokens, Scope, AATokens0, AAScope0),
 	perform_aa_matching(AATokens0, AAScope0, AATokens1, AAScope1, AAMatch1),
@@ -1823,18 +1867,64 @@ find_aa(AATokensIn, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut
 	% skr_utilities:write_token_list(AATokens, 0, 1),
 	% format(user_output, 'SCO: ', []),
 	% skr_utilities:write_token_list(Scope, 0, 1),	
-	store_aa(AATokens, LastUnwantedToken, Scope, AAsIn, AAsOut),
+%	store_aa(AATokens, LastUnwantedToken, Scope, AAsIn, AAsOut),
+	store_aa(AATokens, LastUnwantedToken, Scope, AAsNext, AAsOut),
 	!.
+
 %%    repeat find_initial_scope ..., if necessary
 %%    don't forget reverse aas (i.e., when the defn, not the aa, is
 %%    parenthesized and the aa precedes it but not necessarily immediately)
 find_aa(_AATokens, _AATokensWithParens, _PE_Token,  _LastPos, _RevPre, AAsIn, AAsIn).
 
+% This test is a stopgap designed to handle pathological cases such as
+% "immunoliposomal doxorubicin (DXR) (ILD)" (PMID 14562030)
+% We have already identified the AA "doxorubicin (DXR)",
+% and we want to prefent "doxorubicin" from being re-used
+% in the proposed AA "immunoliposomal doxorubicin (ILD)",
+% even though it should be allowed. This is simply because
+% the downstream code in create_EXP_raw_token_list can't
+% properly handle such cases.
+% That is the implementation based on \+ shared_token(AAsIn, Scope),
+% which will block the longer AA ("immunoliposomal doxorubicin (ILD)").
+% Instead, calling check_shared_token(AAsIn, Scope, AAsNext)
+% will delete the already-created shorter AA ("doxorubicin (DXR)"),
+% and allow the longer one to be created.
+
+check_shared_token(AAsIn, Scope, AAsNext) :-
+	( avl_member(ShortForm, AAsIn, [ExpansionTokenList]),
+	  member(SharedToken, Scope),
+	  memberchk(SharedToken, ExpansionTokenList) ->
+	  avl:avl_delete(ShortForm, AAsIn, [ExpansionTokenList], AAsNext)
+	; AAsNext = AAsIn
+	).
+
+shared_token(AAsIn, Scope) :-
+	avl_member(_ShortForm, AAsIn, [ExpansionTokenList]),
+	member(SharedToken, Scope),
+	memberchk(SharedToken, ExpansionTokenList),
+	!.
+
+block_stop_words(TempRevScope0) :-
+	trim_ws_tokens(TempRevScope0, TempRevScope),	
+	TempRevScope = [First|_],
+	\+ stop_word_token(First),
+	last(TempRevScope, Last),
+	\+ stop_word_token(Last).
+
+stop_word_token(Token) :-
+	token_template(Token, TokenType, TokenString, _LCTokenString, _PosInfo),
+	an_type(TokenType),
+	atom_codes(TokenAtom, TokenString),
+	lex_stop_word(TokenAtom).
+
+
 % push_back_unwanted_tokens(Scope0, RestTokens0, Scope, RestTokens),
 push_back_unwanted_tokens([FirstToken|RestTokens], RestTokensIn,
 			  LastUwantedTokenIn, RevScope,
 			  RestTokensOut, LastUnwantedTokenOut) :-
-	( skip_tok(FirstToken) ->
+	( skip_tok(FirstToken, Result),
+	  Result =\= 4,
+	  Result =\= 2 ->
 	  RevScope = RestRevScope,
 	  RestTokensNext = [FirstToken|RestTokensIn],
 	  LastUnwantedTokenNext = FirstToken,
@@ -1849,8 +1939,10 @@ push_back_unwanted_tokens([FirstToken|RestTokens], RestTokensIn,
 ensure_first_letter_match(Scope0, AlphaNumericChar) :-
 	Scope0 = [FirstToken|_RestTokens],
 	FirstToken = tok(TokenType, _String, LCString, _PosInfo),
-	an_type(TokenType),
-	LCString = [AlphaNumericChar|_].
+	token_matches_char(TokenType, LCString, AlphaNumericChar).
+
+%	an_type(TokenType),
+%	LCString = [AlphaNumericChar|_].
 
 % push_back_unwanted_tokens([], RestTokens, [], RestTokens).
 % push_back_unwanted_tokens([FirstScopeIn|RestScopeIn], RestTokensIn, ScopeOut, RestTokensOut) :-
@@ -1995,8 +2087,8 @@ find_initial_scope(Tokens, AATokensLength, RevPre, RevScope0, AlphaNumericChar, 
 	find_first_an(Tokens, AlphaNumericChar),
 	% Initialize PreviousMatchingText to ''
 	State is 0,
-	TokensConsumed is 0,
-	match_initial_to_char(State, TokensConsumed, AATokensLength, RevPre,
+	ConsumedTokenCount is 0,
+	match_initial_to_char(State, ConsumedTokenCount, AATokensLength, RevPre,
 			      AlphaNumericChar, '', RevScope0, RestTokens).
 
 find_first_an([tok(Type,_,[AN|_],_)|_], AN) :-
@@ -2023,45 +2115,74 @@ find_first_an([_|Rest], AN) :-
 % of the first token in the AA TokenList has been found.
 
 % MatchFound == 0 means that no matching token has yet been found.
-match_initial_to_char(0, TokensConsumed, AALength, [Token|RestTokens], Char, '',
-		      [Token|RestMatchingTokens], LeftOverTokens) :-
-	% If the first char of current token (LCText) is Char,
-	% then we've found a matching token, so change the state to 1,
-	% and continue looking for more matching tokens.
-	( Token = tok(_,_,LCText,_),	    
-	  LCText = [Char|_] ->
+
+match_initial_to_char(State, ConsumedTokenCount, AATokensLength, RevPre, InitialChar,
+		      PreviousMatchingText, RevScope1, RestTokens) :-
+	( ConsumedTokenCount > 2*AATokensLength ->
+	  RevScope1 = [],
+	  RestTokens = RevPre
+	; RevPre == [] ->
+	  RevScope1 = [],
+	  RestTokens = []
+	; match_initial_to_char_1(State, ConsumedTokenCount, AATokensLength, RevPre, InitialChar,
+				  PreviousMatchingText, RevScope1, RestTokens)
+	).
+	
+match_initial_to_char_1(0, ConsumedTokenCount, AALength, [Token|RestTokens], InitialChar, '',
+			MatchingTokens, LeftOverTokens) :-
+	Token = tok(TokenType,_,LCText,_),
+	  % Skip whitespace tokens
+	( ws_tok(Token) ->
+	  NextState is 0,
+	  NextConsumedTokenCount is ConsumedTokenCount,
+	  PreviousMatchingText = '',
+	  MatchingTokens = [Token|RestMatchingTokens]
+	  % If the first char of current token (LCText) is InitialChar,
+	  % then we've found a matching token, so change the state to 1,
+	  % and continue looking for more matching tokens.
+	; token_matches_char(TokenType, LCText, InitialChar) ->
+%	  ( ConsumedTokenCount =:= 0 ->
+%	    NextState is 0
+%	  ; NextState is 1
+%	  ),
 	  NextState is 1,
-	  NextTokensConsumed is TokensConsumed + 1,
-	  PreviousMatchingText = LCText
-	% Token does match, so keep the state at 0, and continue
+	  NextConsumedTokenCount is ConsumedTokenCount + 1,
+	  PreviousMatchingText = '',
+	  MatchingTokens = [Token|RestMatchingTokens]
+	% Token does not match, so keep the state at 0, and continue
 	; NextState is 0,
-	  NextTokensConsumed is TokensConsumed,
-	  PreviousMatchingText = ''
+	  NextConsumedTokenCount is ConsumedTokenCount + 1,
+	  PreviousMatchingText = '',
+	  MatchingTokens = [Token|RestMatchingTokens]
 	),
-	match_initial_to_char(NextState, NextTokensConsumed, AALength, RestTokens, Char,
+	match_initial_to_char(NextState, NextConsumedTokenCount, AALength, RestTokens, InitialChar,
 			      PreviousMatchingText, RestMatchingTokens, LeftOverTokens).
-% MatchFound == 1 means that a matching token has already been found.
-match_initial_to_char(1, TokensConsumed, AALength, Tokens, Char, PreviousMatchingText,
-		      MatchingTokens, LeftOverTokens) :-
+
+% MatchFound == 1 means that a token matching InitialChar has already been found.
+% Keep on going, looking for more matching tokens, skipping over skip tokens,
+% as long as we don't consume more tokens than the length of the AA.
+match_initial_to_char_1(1, ConsumedTokenCount, AALength, Tokens, InitialChar,
+			PreviousMatchingText, MatchingTokens, LeftOverTokens) :-
 	% Once a match has been found, it's OK to quit, as long as the previous matching token
-	% was not a prep/conj/det; we don't want to allow, e.g., "AMI" to expand to
+	% was not a stop word; we don't want to allow, e.g., "AMI" to expand to
 	% "and acute myocardial infarction".
 	( Tokens = [Token|RestTokens],
-	  skip_tok(Token),
+	  skip_tok(Token, Result),
+	  Result \== 4,
 	  % If the token is skippable, don't count it against the length of the AA.
-	  NextTokensConsumed is TokensConsumed,
+	  maybe_increase_token_count(Result, ConsumedTokenCount, NextConsumedTokenCount),
 	  MatchingTokens = [Token|RestMatchingTokens],
-	  match_initial_to_char(1, NextTokensConsumed, AALength, RestTokens, Char, " ",
+	  match_initial_to_char(1, NextConsumedTokenCount, AALength, RestTokens, InitialChar, " ",
 				RestMatchingTokens, LeftOverTokens)
 	  % Allow skipping over non-matching tokens to allow e.g., "Department of Defense (DoD)".
-	; TokensConsumed < AALength,
-	  Tokens = [Token|RestTokens],
-	  Token = tok(_,_,LCText,_),
-	  an_tok(Token),
-	  NextTokensConsumed is TokensConsumed + 1,
-	  MatchingTokens = [Token|RestMatchingTokens],
-	  match_initial_to_char(1, NextTokensConsumed, AALength, RestTokens, Char,
-				LCText, RestMatchingTokens, LeftOverTokens)
+%	; ConsumedTokenCount < AALength,
+%	  Tokens = [Token|RestTokens],
+%	  Token = tok(_,_,LCText,_),
+%	  an_tok(Token),
+%	  NextConsumedTokenCount is ConsumedTokenCount + 1,
+%	  MatchingTokens = [Token|RestMatchingTokens],
+%	  match_initial_to_char(1, NextConsumedTokenCount, AALength, RestTokens, InitialChar,
+%				LCText, RestMatchingTokens, LeftOverTokens)
 	 % We've found a matching token, so stop.
 	 % This must NOT be an if-then-else, because we must be able to backtrack
 	 % over non-matching tokens so the algorithm doesn't give up prematurely,
@@ -2069,17 +2190,20 @@ match_initial_to_char(1, TokensConsumed, AALength, Tokens, Char, PreviousMatchin
 	; Tokens = [Token|RestTokens],
 	  Token = tok(_,_,LCText,_),
 	  an_tok(Token),
-	  LCText = [Char|_],
+%	  LCText = [InitialChar|_],
 	  % format(user_output, 'PMT: ~w~n', [LCText]),
 	  \+ lex_stop_word(LCText),
-	  MatchingTokens = [Token],
-	  RestMatchingTokens = [],
-	  LeftOverTokens = RestTokens
-	  % match_initial_to_char(1, NextTokensConsumed, AALength, RestTokens, Char, LCText,
-	  % 			  RestMatchingTokens, LeftOverTokens)
-	  ; \+ lex_stop_word(PreviousMatchingText),
-	    MatchingTokens = [],
-	    LeftOverTokens = Tokens
+	  MatchingTokens = [Token|RestMatchingTokens],
+%	  MatchingTokens = [Token],
+%	  RestMatchingTokens = [],
+	  % LeftOverTokens = RestTokens,
+	  NextConsumedTokenCount is ConsumedTokenCount + 1,
+	  NextConsumedTokenCount =< AALength,
+	  match_initial_to_char(1, NextConsumedTokenCount, AALength, RestTokens, InitialChar,
+				LCText, RestMatchingTokens, LeftOverTokens)
+	; \+ lex_stop_word(PreviousMatchingText),
+	  MatchingTokens = [],
+	  LeftOverTokens = Tokens
 	).
 
 %	; % Token does not match, so quit.
@@ -2090,13 +2214,33 @@ match_initial_to_char(1, TokensConsumed, AALength, Tokens, Char, PreviousMatchin
 %	  LeftOverTokens = [Token|RestTokens]
 %	).
 
-skip_tok(Token) :-
+% Increase the token count if the non-matching token is a stop word
+maybe_increase_token_count(Result, ConsumedTokenCount, NextConsumedTokenCount) :-
+	( Result =:= 4 ->
+	  NextConsumedTokenCount is ConsumedTokenCount
+	; NextConsumedTokenCount is ConsumedTokenCount
+	).
+
+token_matches_char(TokenType, LCText, Char) :-
+       ( TokenType \== nu ->
+	 LCText = [Char|_]
+       % TokenType == nu ->
+       ; number_codes(Integer, LCText),
+	 number_word(Integer, NumberString),
+	 NumberString = [Char|_]
+       ).
+
+skip_tok(Token, Result) :-
 	( ws_tok(Token) ->
-	  true
+	  Result is 1
 	; hyphen_or_slash_tok(Token) ->
-	  true
+	  Result is 2
 	; pe_tok(Token) ->
-	  true
+	  Result is 3
+	; token_template(Token, _TokenType, _TokenString, LCTokenString, _PosInfo),
+	  atom_codes(LCTokenAtom, LCTokenString),
+	  lex_stop_word(LCTokenAtom) ->
+	  Result is 4
 	).
 
 /* initialize_aa_matching(+Tokens, +Scope, -AATokens, -AAScope)
@@ -2844,11 +2988,23 @@ representing the expanded sentences in which the fifth argument is the position
 of the corresponding token(s) in the original Sentences (generally, a
 many-to-many relationship). */
 
-find_and_coordinate_sentences(UI, ExtraChars, Fields, Sentences, CoordinatedSentences,
+%%% EXPLANATION of Sentences/CoordSentences:
+%%% Sentences captures the character positions in the original literal text,
+%%% WITHOUT taking into account the 6 blank spaces at the beginning
+%%% of most TI/AB MEDLINE lines, but otherwise respecting all whitespace in the text.
+%%% I.e., multiple blank spaces are converted to just one.
+%%% There is also no blank space between the TI and the AB.
+%%% This positional information is obviously not useful for indexing into
+%%% the character positions of the original input text of MEDLINE citations.
+
+%%% CoordSentences tokens' 4th argument modifies the PosInfo by omitting AAdefs.
+%%% However, it also INCORRECTLY expands UDAs. This needs to be fixed.
+
+find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences,
 			      AAs, UDAListIn, UDAListOut, UDA_AVL) :-
 	tokenize_fields_utterly(Fields, TokenizedFields),
 	% format(user_output, 'TokenizedFields: ~p~n', [TokenizedFields]),
-	form_field_tokens(TokenizedFields, ExtraChars, FieldTokens0),
+	form_field_tokens(TokenizedFields, FieldTokens0),
 	% format(user_output, '~nFieldTokens0: ~p~n', [FieldTokens0]),
 	filter_out_field_comments(FieldTokens0, FieldTokens),
 	% format(user_output, '~nFieldTokens: ~p~n', [FieldTokens]),
@@ -2875,13 +3031,31 @@ find_and_coordinate_sentences(UI, ExtraChars, Fields, Sentences, CoordinatedSent
 	% format(user_output, '~nSentences1:~n', []),
 	add_sentence_labels(Sentences2, UI, "TX", 0, Sentences),
 	% format(user_output, '~nSentences:~n', []),
-	coordinate_sentences(Sentences, UI, TempCoordinatedSentences),
+	% extract_UDA_tokens(UDATermList, UDATokens),
+	coordinate_sentences(Sentences, UI, UDA_AVL, TempCoordinatedSentences),
 	CoordinatedSentences  = TempCoordinatedSentences,
 	% format(user_output, user_output, 'TempCoordinatedSentences:~n', []),
 	% skr_fe:write_token_list(TempCoordinatedSentences, 0, 1),
 	% format(user_output, user_output, 'CoordinatedSentences:~n', []),
 	% skr_fe:write_token_list(CoordinatedSentences, 0, 1),
 	!.
+
+
+% UDATermList is a list of terms of the form UDA-Tokens, e.g.,
+%   [tok(uc,"CAT","cat",pos(59,62))]-
+%     [[tok(ic,"Computerized","computerized",pos(59,62)),
+%       tok(ws," "," ",pos(59,62)),
+%       tok(ic,"Axial","axial",pos(59,62)),
+%       tok(ws," "," ",pos(59,62)),
+%       tok(ic,"Tomography","tomography",pos(59,62))]
+
+%% extract_UDA_tokens(UDATermList, UDATokens) :-
+%% 	(  foreach(UDATerm, UDATermList),
+%% 	   foreach(UDATermTokens, UDATokenList)
+%% 	do UDATerm = _UDA-[UDATermTokens]
+%% 	),
+%% 	append(UDATokenList, UDATokens).
+
 
 skip_over_position([],_,[]) :-
     !.
@@ -2975,16 +3149,17 @@ using add_sentence_labels/5 to keep track of the current Fieeld and N
 % add_sentence_labels(Sentences0,UI,Sentences) :-
 %     add_sentence_labels(Sentences0,UI,"TX",0,Sentences).
 
-add_sentence_labels([],_UI,_Field,_N,[]) :-
-    !.
+add_sentence_labels([],_UI,_Field,_N,[]) :- !.
 add_sentence_labels([tok(field,Field,LCField,Pos)|Rest],UI,_OldField,_N,
 		    [tok(field,Field,LCField,Pos)
 		     |ModifiedRest]) :-
+    !,
     add_sentence_labels(Rest,UI,Field,0,ModifiedRest).
 add_sentence_labels([tok(sn,Arg2,Arg3,Pos)|Rest],UI,Field,N,
 		    [tok(label,Label,LCLabel,Pos),
 		     tok(sn,Arg2,Arg3,Pos)
 		     |ModifiedRest]) :-
+    !,
     NewN is N + 1,
     form_label(UI,Field,NewN,Label,LCLabel),
     add_sentence_labels(Rest,UI,Field,NewN,ModifiedRest).
@@ -3005,30 +3180,29 @@ and current offset within a given field.
 Besides changing the focus from unexpanded to expanded form,
 coordinate_sentences/3 also adds a label token at the start of each sentence. */
 
-coordinate_sentences(Sentences,UI,CoordinatedSentences) :-
-    coordinate_sentences(Sentences,UI,"TX",0,0,_OffsetOut,
-			     CoordinatedSentences).
+coordinate_sentences(Sentences, UI, UDA_AVL, CoordinatedSentences) :-
+	coordinate_sentences(Sentences, UI, UDA_AVL, "TX", 0, 0,
+			     _OffsetOut, CoordinatedSentences).
 
-coordinate_sentences([],_UI,_Field,_N,OffsetIn,OffsetIn,[]).
+coordinate_sentences([], _UI, _UDA_AVL, _Field, _N, OffsetIn, OffsetIn, []).
 
-coordinate_sentences([tok(field,Field,LCField,Pos)|Rest],UI,_OldField,N,
-		     OffsetIn,OffsetOut,
-		     [tok(field,Field,LCField,FieldPos,Pos)
-		      |CoordinatedRest]) :-
+coordinate_sentences([tok(field,Field,LCField,Pos)|Rest], UI, UDA_AVL, _OldField, N,
+		     OffsetIn, OffsetOut,
+		     [tok(field,Field,LCField,FieldPos,Pos)|CoordinatedRest]) :-
     !,
     gather_tokens_for_position(Rest,Pos,FieldTokens,NewRest),
-    coordinate_sentences(FieldTokens,UI,Field,0,OffsetIn,OffsetInOut,
+    coordinate_sentences(FieldTokens,UI,UDA_AVL,Field,0,OffsetIn,OffsetInOut,
 			 CoordinatedFieldSentences),
     FieldPos=pos(OffsetIn,OffsetInOut),
     append(CoordinatedFieldSentences,CoordinatedNewRest,CoordinatedRest),
-    coordinate_sentences(NewRest,UI,Field,N,OffsetInOut,OffsetOut,
+    coordinate_sentences(NewRest, UI, UDA_AVL, Field, N, OffsetInOut, OffsetOut,
 			 CoordinatedNewRest).
-coordinate_sentences([tok(label,_Label,_LCLabel,_Pos)|Rest],UI,Field,N,
+coordinate_sentences([tok(label,_Label,_LCLabel,_Pos)|Rest],UI,UDA_AVL,Field,N,
 		     OffsetIn,OffsetOut,CoordinatedRest) :-
     % ignore an existing label; a new one will be created from an sn token
     !,
-    coordinate_sentences(Rest,UI,Field,N,OffsetIn,OffsetOut,CoordinatedRest).
-coordinate_sentences([tok(sn,Arg2,Arg3,Pos)|Rest],UI,Field,N,
+    coordinate_sentences(Rest, UI, UDA_AVL, Field, N, OffsetIn, OffsetOut, CoordinatedRest).
+coordinate_sentences([tok(sn,Arg2,Arg3,Pos)|Rest], UI, UDA_AVL, Field, N,
 		     OffsetIn,OffsetOut,
 		     [tok(label,Label,LCLabel,SentencePos,Pos),
 		      tok(sn,Arg2,Arg3,SentencePos,Pos)
@@ -3036,25 +3210,25 @@ coordinate_sentences([tok(sn,Arg2,Arg3,Pos)|Rest],UI,Field,N,
     !,	
     gather_tokens_for_position(Rest,Pos,SentenceTokens,NewRest),
     NewN is N + 1,
-    coordinate_sentences(SentenceTokens,UI,Field,NewN,OffsetIn,OffsetInOut,
+    coordinate_sentences(SentenceTokens,UI, UDA_AVL, Field, NewN, OffsetIn, OffsetInOut,
 			 CoordinatedSentenceSentences),
     form_label(UI,Field,NewN,Label,LCLabel),
     SentencePos=pos(OffsetIn,OffsetInOut),
     append(CoordinatedSentenceSentences,CoordinatedNewRest,CoordinatedRest),
-    coordinate_sentences(NewRest,UI,Field,NewN,OffsetInOut,OffsetOut,
+    coordinate_sentences(NewRest, UI, UDA_AVL, Field, NewN, OffsetInOut, OffsetOut,
 			 CoordinatedNewRest).
-coordinate_sentences([tok(aadef,_Def,_AA,Pos)|Rest], UI, Field, N,
+coordinate_sentences([tok(aadef,_Def,_AA,Pos)|Rest], UI, UDA_AVL, Field, N,
 		     OffsetIn, OffsetOut, CoordinatedRest) :-
 	!,
 	gather_tokens_for_position(Rest, Pos, AADefTokens, NewRest0),
-	coordinate_sentences(AADefTokens, UI, Field, N,
+	coordinate_sentences(AADefTokens, UI, UDA_AVL, Field, N,
 			     OffsetIn, OffsetInOut, CoordinatedAADefTokens),
 	skip_over_ws_parenthetical(NewRest0, NewRest),
 	append(CoordinatedAADefTokens, CoordinatedNewRest, CoordinatedRest),
-	coordinate_sentences(NewRest, UI, Field, N,
+	coordinate_sentences(NewRest, UI, UDA_AVL, Field, N,
 			     OffsetInOut, OffsetOut, CoordinatedNewRest).
-coordinate_sentences([tok(aa,_AAToks,RelatedAAToks,Pos)|Rest],UI,Field,N,
-		     OffsetIn,OffsetOut,CoordinatedRest) :-
+coordinate_sentences([tok(aa,_AAToks,RelatedAAToks,Pos)|Rest], UI, UDA_AVL, Field, N,
+		     OffsetIn, OffsetOut, CoordinatedRest) :-
     !,
     gather_tokens_for_position(Rest,Pos,AATokens,NewRest),
     % use ExpandedTokens, not AATokens (unless there is a problem)
@@ -3067,7 +3241,7 @@ coordinate_sentences([tok(aa,_AAToks,RelatedAAToks,Pos)|Rest],UI,Field,N,
 %    format('RelatedAAToks: ~p~n',[RelatedAAToks]),
 %    format('AATokens: ~p~n',[AATokens]),
 %    format('ExpandedTokens: ~p~n',[ExpandedTokens]),
-    coordinate_sentences(ExpandedTokens,UI,Field,N,OffsetIn,OffsetInOut,
+    coordinate_sentences(ExpandedTokens, UI, UDA_AVL, Field, N, OffsetIn, OffsetInOut,
 			 CoordinatedExpandedTokens0),
 %    format('CoordinatedExpandedTokens0: ~p~n',[CoordinatedExpandedTokens0]),
     compute_token_position(AATokens,AATokensPos),
@@ -3075,10 +3249,10 @@ coordinate_sentences([tok(aa,_AAToks,RelatedAAToks,Pos)|Rest],UI,Field,N,
 			   CoordinatedExpandedTokens),
 %    format('CoordinatedExpandedTokens: ~p~n',[CoordinatedExpandedTokens]),
     append(CoordinatedExpandedTokens,CoordinatedNewRest,CoordinatedRest),
-    coordinate_sentences(NewRest,UI,Field,N,OffsetInOut,OffsetOut,
+    coordinate_sentences(NewRest, UI, UDA_AVL, Field, N, OffsetInOut, OffsetOut,
 			 CoordinatedNewRest).
-coordinate_sentences([tok(Type,Arg2,Arg3,Pos)|Rest],UI,Field,N,
-		     OffsetIn,OffsetOut,
+coordinate_sentences([tok(Type,Arg2,Arg3,Pos)|Rest], UI, UDA_AVL, Field, N,
+		     OffsetIn, OffsetOut,
 		     [tok(Type,Arg2,Arg3,TypePos,Pos)|CoordinatedRest]) :-
     % field and label are handled above, so this is for sn and pe
     higher_order_type(Type),
@@ -3088,20 +3262,38 @@ coordinate_sentences([tok(Type,Arg2,Arg3,Pos)|Rest],UI,Field,N,
     % in quotation marks is an AA expansion. Something like "heart attack" (HA)/
     % GROSS.
     conditionally_skip_over_ws_parenthetical(TypeTokens, NewRest0, NewRest),
-    coordinate_sentences(TypeTokens,UI,Field,N,OffsetIn,OffsetInOut,
+    coordinate_sentences(TypeTokens, UI, UDA_AVL, Field, N, OffsetIn, OffsetInOut,
 			 CoordinatedTypeTokens),
     TypePos=pos(OffsetIn,OffsetInOut),
     append(CoordinatedTypeTokens,CoordinatedNewRest,CoordinatedRest),
-    coordinate_sentences(NewRest,UI,Field,N,OffsetInOut,OffsetOut,
+    coordinate_sentences(NewRest, UI, UDA_AVL,  Field, N, OffsetInOut, OffsetOut,
 			 CoordinatedNewRest).
-coordinate_sentences([tok(Type,Text,LCText,Pos)|Rest],UI,Field,N,
+coordinate_sentences([tok(Type,Text,LCText,Pos)|Rest], UI, UDA_AVL, Field, N,
 		     OffsetIn,OffsetOut,
 		     [tok(Type,Text,LCText,TypePos,Pos)|CoordinatedRest]) :-
     % Non-higher-order types
-    length(Text,TokenLength),
-    OffsetInOut is OffsetIn + TokenLength,
-    TypePos=pos(OffsetIn,OffsetInOut),
-    coordinate_sentences(Rest,UI,Field,N,OffsetInOut,OffsetOut,CoordinatedRest).
+    % length(Text,TokenLength),
+    % OffsetInOut is OffsetIn + TokenLength,
+    set_type_pos(tok(Type,Text,LCText,Pos),
+		 UDA_AVL, OffsetIn, OffsetInOut, TypePos),
+    %%% Must take into account UDAs here; need to pass in UDA_AVL
+    % TypePos=pos(OffsetIn,OffsetInOut),
+
+    % format(user_error, '~p~n', [tok(Type,Text,LCText,Pos)]),
+    % format(user_error, '~p~n~n', [tok(Type,Text,LCText,TypePos,Pos)]),
+    coordinate_sentences(Rest, UI, UDA_AVL, Field, N, OffsetInOut, OffsetOut, CoordinatedRest).
+
+set_type_pos(Token, UDA_AVL, OffsetIn, OffsetInOut, TypePos) :-
+	Token = tok(_Type,Text,_LCText,Pos),
+	( avl_member(_UDAShortFormTokenList, UDA_AVL, [UDALongFormTokenList]),	  
+	  memberchk(Token, UDALongFormTokenList) ->
+	  Token = tok(_Type,Text,_LCText,Pos),
+	  TypePos = Pos,
+	  Pos = pos(_, OffsetInOut)
+	; length(Text, TokenLength),
+	  OffsetInOut is OffsetIn + TokenLength,
+	  TypePos = pos(OffsetIn, OffsetInOut)
+	).
 
 conditionally_skip_over_ws_parenthetical(TypeTokens, NewRest0, NewRest) :-
 	( member(Token, TypeTokens),
@@ -3151,27 +3343,38 @@ remove_aa_expansion_overlap([AA1-[Expansion1]|Rest], AAListIn, [AA1-[Expansion1]
 	remove_aa_expansion_overlap(Rest, AAListIn, AAListOut).
 
 
-% WARNING This predicate will do nothing about CONFLICTING definitions
+% Remove any subsequent AAs that share either the AA or the expansion with the first AA
+
 remove_aa_redundancy([], []).
 remove_aa_redundancy([Singleton], [Singleton]) :- !.
-remove_aa_redundancy([AA-Def|Rest], [AA-Def|ModifiedRest]) :-
-	extract_text(AA, AAText0),
+remove_aa_redundancy([AA-[Def]|Rest], [AA-[Def]|ModifiedRest]) :-
+	extract_text_from_tokens(AA, AAText0),
 	lower(AAText0, AAText),
-	remove_each_aa_redundancy(Rest, AAText, NewRest),
+	extract_text_from_tokens(Def, DefText0),
+	lower(DefText0, DefText),
+	remove_each_aa_redundancy(Rest, AAText, DefText, NewRest),
 	remove_aa_redundancy(NewRest, ModifiedRest).
 
-remove_each_aa_redundancy([], _, []).
-remove_each_aa_redundancy([FirstAA-_FirstDef|Rest], AAText, ModifiedRest) :-
-	extract_text(FirstAA, FirstAAText),
-	lower(FirstAAText, AAText),
+remove_each_aa_redundancy([], _, _, []).
+remove_each_aa_redundancy([FirstAA-[FirstDef]|Rest], AAText, DefText, ModifiedRest) :-
+	extract_text_from_tokens(FirstAA, FirstAAText0),
+	lower(FirstAAText0, FirstAAText),
+	( FirstAAText == AAText ->
+	  true
+	; extract_text_from_tokens(FirstDef, FirstDefText0),
+	  lower(FirstDefText0, FirstDefText),
+	  FirstDefText == DefText
+	),	
 	!,
-	remove_each_aa_redundancy(Rest, AAText, ModifiedRest).
-remove_each_aa_redundancy([First|Rest], AAText, [First|ModifiedRest]) :-
-	remove_each_aa_redundancy(Rest, AAText, ModifiedRest).
+	remove_each_aa_redundancy(Rest, AAText, DefText, ModifiedRest).
+remove_each_aa_redundancy([First|Rest], AAText, DefText, [First|ModifiedRest]) :-
+	remove_each_aa_redundancy(Rest, AAText, DefText, ModifiedRest).
 
-% order_aas/2 orders the aas alphabetically but preferring longer AAs. It
-% does this by extracting AA text and appending 127 (DEL) to each AA text string
-% and then performing a normal sort.
+% order_aas/2 orders the aas alphabetically but preferring longer AAs.
+% Implement the preference for longer strings by extracting the AA text
+% and appending 127 (DEL) to each AA text string, and then performing a normal sort.
+% Appending 127 will ensure that "ABCD" will appear before "ABC".
+% If we go to UTF8, the 127 should change to 9999 or something else.
 order_aas(AAListIn, AAListOut) :-
 	augment_aas(AAListIn, AugAAList0),
 	sort(AugAAList0, AugAAList),
@@ -3179,8 +3382,9 @@ order_aas(AAListIn, AAListOut) :-
 
 augment_aas([], []).
 augment_aas([AA-Def|Rest], [AAText-AA-Def|AugmentedRest]) :-
-	extract_text(AA, AAText0),
-	append(AAText0, [127], AAText),
+	extract_text_from_tokens(AA, AAText0),
+	atom_codes(Atom127, [127]),
+	concat_atom([AAText0,Atom127], AAText),
 	augment_aas(Rest, AugmentedRest).
 
 deaugment_aas([], []).
@@ -3199,15 +3403,15 @@ annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedToke
 	  AVLNext = AVLIn,
 	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens]
 	% The first token is alphanumeric, so get its String
-	; FirstToken = tok(_TokenType,String,_LCString,pos(StartPos,_EndPos)),
+	; FirstToken = tok(_TokenType,String,_LCString,pos(StartPos,EndPos)),
 	  % Is String one of the UDAs?
-	  member(ThisUDA:ThisExpansion, UDAs),
-	  String = ThisUDA ->
+	  member(String:ThisExpansion, UDAs) ->
+	  % String = ThisUDA ->
 	  lower(ThisExpansion, LCThisExpansion),
 	  tokenize_text_utterly(ThisExpansion, TokenizedThisExpansion),
 	  tokenize_text_utterly(LCThisExpansion, LCTokenizedThisExpansion),
 	  form_simple_tokens(TokenizedThisExpansion, LCTokenizedThisExpansion,
-			     StartPos, ExpansionTokens),
+			     StartPos/EndPos, ExpansionTokens),
 	  LastUnwantedToken = '',
 	  store_aa([FirstToken], LastUnwantedToken, ExpansionTokens, AVLIn, AVLNext),
 	  append(ExpansionTokens, RestAnnotatedTokens, AnnotatedTokens)
@@ -3344,20 +3548,20 @@ match_tokens_ignore_ws_ho_aux([FirstAAToken|RestAATokens],
 
 
 get_UDAs(UDAs) :-
-	( control_value('UDA', FileName) ->
-	  check_valid_file_type(FileName, 'User-defined AA'),
+	( control_value('UDA', FileName),
+	  check_valid_file_type(FileName, 'User-defined AA') ->
+	  send_message('~NReading default AAs from file ~w~n', [FileName]),
 	  open(FileName, read, InputStream),
-	  create_UDAs(InputStream, UDAs),
+	  create_UDAs(InputStream, 'UDA', UDAs),
 	  close(InputStream)
 	; UDAs = []
 	).
 
-create_UDAs(InputStream, UDAs) :-
+% Type is either 'NoMap' or 'UDA'
+create_UDAs(InputStream, Type, UDAs) :-
 	% read in the contents of the UDA file
-	get_skr_text_2(InputStream, UDALinesUTF8),
-	convert_all_utf8_to_ascii(UDALinesUTF8, _, _, UDALinesASCII),
-	UDALinesASCII = UDALinesUTF8,
-	(  foreach(Line, UDALinesASCII),
+	get_skr_text_2(InputStream, UDALines),
+	(  foreach(Line, UDALines),
 	   fromto(Strings, S0, S, [])
 	   % remove all leading and trailing blanks from the entire line
 	do trim_whitespace(Line, TrimmedLine),
@@ -3368,11 +3572,41 @@ create_UDAs(InputStream, UDAs) :-
 	   ; S0 = [TrimmedLine|S]
 	   )
 	),
+	split_UDA_and_NoMap_pairs(Type, Strings, UDAs).
+
+split_UDA_and_NoMap_pairs('UDA', Strings, UDAs) :-
 	(  foreach(String, Strings),
 	   foreach(UDA,    UDAs)
 	do get_UDA_short_and_long_forms(String, AACodes, ExpansionCodes),	   
 	   UDA = AACodes:ExpansionCodes
 	).
+
+split_UDA_and_NoMap_pairs('NoMap', Strings, NoMapPairs) :-
+	(  foreach(String,    Strings),
+	   foreach(NoMapPair, NoMapPairs)
+	do get_NoMap_string_and_CUI(String, StringCodes, CUICodes),
+	   NoMapPair = StringCodes:CUICodes
+	).
+
+get_NoMap_string_and_CUI(String, StringCodes, CUICodes) :-
+	% The NoMapString and the CUI can appear in either order,
+	% i.e., NoMapString|CUI or CUI|NoMapString;
+	% take the one that looks like a CUI as the CUI!
+	( split_string_completely(String, "|", [Before,After]) ->
+	  true
+	; fatal_error('Each data line in NoMap file must contain exactly one "|" char!~n', []),
+	  stop_and_halt
+	),
+	( looks_like_CUI(Before) ->
+	  CUICodes = Before,
+	  StringCodes = After
+	; CUICodes = After,
+	  StringCodes = Before
+	).	
+
+looks_like_CUI(String) :-
+	append("C", Digits, String),
+	all_digits(Digits).
 
 get_UDA_short_and_long_forms(String, AACodes, ExpansionCodes) :-
 	% The UDA and the expansion can appear in either order,
@@ -3387,11 +3621,23 @@ get_UDA_short_and_long_forms(String, AACodes, ExpansionCodes) :-
 	trim_and_compress_whitespace(After, TrimmedAfter),
 	determine_AA_and_expansion(TrimmedBefore, TrimmedAfter, AACodes, ExpansionCodes).
 
-% The shorter string is deemed to be the AA, and the longer, the expansion.
+% Use the same code to create NoMap pairs as for creating UDAs!
+create_nomap_pairs(InputStream, StringNoMapPairs) :-
+	create_UDAs(InputStream, 'NoMap', StringNoMapPairs).
+
+% The shorter string is deemed to be the AA, and the longer, the expansion,
+% unless either is zero length (this is for NoMap pairs), in which case
+% keep them in the existing order.
 determine_AA_and_expansion(String1, String2, Shorter, Longer) :-
 	length(String1, Length1),
 	length(String2, Length2),
-	( Length1 < Length2 ->
+	( Length1 =:= 0 ->
+	  Shorter = String1,
+	  Longer  = String2
+	; Length2 =:= 0 ->
+	  Shorter = String1,
+	  Longer  = String2
+	; Length1 < Length2 ->
 	  Shorter = String1,
 	  Longer  = String2
 	; Shorter = String2,
@@ -3482,3 +3728,104 @@ section_header('STATEMENT').
 section_header('STUDY').
 section_header('SUBJECTS').
 section_header('SUMMARY').
+
+
+number_word(1, "one").
+number_word(2, "two").
+number_word(3, "three").
+number_word(4, "four").
+number_word(5, "five").
+number_word(6, "six").
+number_word(7, "seven").
+number_word(8, "eight").
+number_word(9, "nine").
+number_word(10, "ten").
+number_word(11, "eleven").
+number_word(12, "twelve").
+number_word(13, "thirteen").
+number_word(14, "fourteen").
+number_word(15, "fifteen").
+number_word(16, "sixteen").
+number_word(17, "seventeen").
+number_word(18, "eighteen").
+number_word(19, "nineteen").
+number_word(20, "twenty").
+% number_word(21, "twenty-one").
+% number_word(22, "twenty-two").
+% number_word(23, "twenty-three").
+% number_word(24, "twenty-four").
+% number_word(25, "twenty-five").
+% number_word(26, "twenty-six").
+% number_word(27, "twenty-seven").
+% number_word(28, "twenty-eight").
+% number_word(29, "twenty-nine").
+% number_word(30, "thirty").
+% number_word(31, "thirty-one").
+% number_word(32, "thirty-two").
+% number_word(33, "thirty-three").
+% number_word(34, "thirty-four").
+% number_word(35, "thirty-five").
+% number_word(36, "thirty-six").
+% number_word(37, "thirty-seven").
+% number_word(38, "thirty-eight").
+% number_word(39, "thirty-nine").
+% number_word(40, "forty").
+% number_word(41, "forty-one").
+% number_word(42, "forty-two").
+% number_word(43, "forty-three").
+% number_word(44, "forty-four").
+% number_word(45, "forty-five").
+% number_word(46, "forty-six").
+% number_word(47, "forty-seven").
+% number_word(48, "forty-eight").
+% number_word(49, "forty-nine").
+% number_word(50, "fifty").
+% number_word(51, "fifty-one").
+% number_word(52, "fifty-two").
+% number_word(53, "fifty-three").
+% number_word(54, "fifty-four").
+% number_word(55, "fifty-five").
+% number_word(56, "fifty-six").
+% number_word(57, "fifty-seven").
+% number_word(58, "fifty-eight").
+% number_word(59, "fifty-nine").
+% number_word(60, "sixty").
+% number_word(61, "sixty-one").
+% number_word(62, "sixty-two").
+% number_word(63, "sixty-three").
+% number_word(64, "sixty-four").
+% number_word(65, "sixty-five").
+% number_word(66, "sixty-six").
+% number_word(67, "sixty-seven").
+% number_word(68, "sixty-eight").
+% number_word(69, "sixty-nine").
+% number_word(70, "seventy").
+% number_word(71, "seventy-one").
+% number_word(72, "seventy-two").
+% number_word(73, "seventy-three").
+% number_word(74, "seventy-four").
+% number_word(75, "seventy-five").
+% number_word(76, "seventy-six").
+% number_word(77, "seventy-seven").
+% number_word(78, "seventy-eight").
+% number_word(79, "seventy-nine").
+% number_word(80, "eighty").
+% number_word(81, "eighty-one").
+% number_word(82, "eighty-two").
+% number_word(83, "eighty-three").
+% number_word(84, "eighty-four").
+% number_word(85, "eighty-five").
+% number_word(86, "eighty-six").
+% number_word(87, "eighty-seven").
+% number_word(88, "eighty-eight").
+% number_word(89, "eighty-nine").
+% number_word(90, "ninety").
+% number_word(91, "ninety-one").
+% number_word(92, "ninety-two").
+% number_word(93, "ninety-three").
+% number_word(94, "ninety-four").
+% number_word(95, "ninety-five").
+% number_word(96, "ninety-six").
+% number_word(97, "ninety-seven").
+% number_word(98, "ninety-eight").
+% number_word(99, "ninety-nine").
