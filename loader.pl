@@ -62,7 +62,7 @@
 	file_property/3
     ]).
 
-:- use_module(library(random), [s
+:- use_module(library(random), [
 	random/1,
 	setrand/1
     ]).
