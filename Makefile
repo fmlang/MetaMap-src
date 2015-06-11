@@ -55,11 +55,11 @@ include Makefile.include
 # For source release
 # SICSTUSARGS=-f -l $(SKR_SRC_HOME)/sicstus.ini
 
-APPNAME=metamap14
+APPNAME=metamap15
 SAVED_STATE=$(APPNAME).sav
 BINEXEC=$(APPNAME).BINARY.$(ARCH)
 
-MSAPPNAME=mmserver14
+MSAPPNAME=mmserver15
 MSSAVED_STATE=$(MSAPPNAME).sav
 MSBINEXEC=$(MSAPPNAME).BINARY.$(ARCH)
 
