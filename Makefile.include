@@ -24,8 +24,8 @@ export GIT = git
 export C__DEBUG = -D__DEBUG
 export PROLOG = sicstus
 export SPLD = spld
-export SICSTUS_VERSION = 4.2.1
-export SICSTUS_VERSION_DASHED = 4-2-1
+export SICSTUS_VERSION = 4.3.2
+export SICSTUS_VERSION_DASHED = 4-3-2
 export GLIBC_VERSION = 2.5
 export PREFIX='$$SP_APP_DIR'
 
