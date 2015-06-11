@@ -166,18 +166,21 @@ evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, 
 	% length(EvaluationsIn, EvaluationsInLength),
 	% format(user_output, '~n### Appending Length ~w~n', [EvaluationsInLength]),
 	append(EvaluationsIn, Evaluations, EvaluationsOut),
-	debug_call(candidates, length(Candidates, CandidatesLength)),
-	debug_message(candidates,
+	debug_call([3,4,trace,candidates], length(Candidates, CandidatesLength)),
+	length(Candidates, CandidatesLength),
+	debug_message([trace,candidates],
 		      '~n### Evaluating Generator ~q; potential candidate list length ~w',
 		      [Generator, CandidatesLength]),
-	evaluate_candidate_list(Candidates, DebugFlags, Label, UtteranceText,
+	evaluate_candidate_list(Candidates, 1, CandidatesLength,
+				DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength,
 				TokenHeadWords, PhraseTokens, RawTokensOut,
 				AAs, InputmatchPhraseWords,
 				CCsIn, CCsOut, Evaluations).
 	% format(user_output, '~n### Generator evaluation DONE!~n', []).
 
-evaluate_candidate_list([], _DebugFlags, _Label, _UtteranceText, _Variants, _TokenPhraseWords,
+evaluate_candidate_list([], _N, _CandidatesLength,
+			_DebugFlags, _Label, _UtteranceText, _Variants, _TokenPhraseWords,
 			_PhraseTokenLength, _Headwords,
 			_PhraseTokens, _RawTokensOut, _AAs,
 			_InputmatchPhraseWords,
@@ -186,12 +189,14 @@ evaluate_candidate_list([], _DebugFlags, _Label, _UtteranceText, _Variants, _Tok
 % MetaString    = the actual Metathesaurus string
 % MetaConcept   = the preferred name of the concept
 evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
+			N, CandidatesLength,
 			DebugFlags, Label, UtteranceText,
 			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 			PhraseTokens, RawTokensOut, AAs,
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
-	debug_evaluate_candidate_list_1(DebugFlags, MetaCanonical, MetaString, MetaConcept),
+	debug_evaluate_candidate_list_1(DebugFlags, N, CandidatesLength,
+					MetaCanonical, MetaString, MetaConcept),
 	% avl_size(CCsIn, CCsInSize),
 	% format(user_output,'~N### CCsIn Length: ~w~n', [CCsInSize]),
 	avl_fetch(MetaCanonical, CCsIn, SavedValues),
@@ -200,9 +205,10 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	% eliminate_multiple_meaning_designator(MetaConcept, MetaConcept),
 	!,
 	% format(user_output, '~N### FOUND ~q|~q in cache~n', [MetaCanonical,MetaConcept]),
-	debug_evaluate_candidate_list_2(DebugFlags),
+	debug_evaluate_candidate_list_2(DebugFlags, N, CandidatesLength),
 	% format('~N### Eval 1: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
-	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
+	N1 is N + 1,
+	evaluate_candidate_list(Rest, N1, CandidatesLength, DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 				PhraseTokens, RawTokensOut, AAs,
 				InputmatchPhraseWords,
@@ -212,6 +218,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 % MetaString    is the non-normalized string
 % MetaConcept   is the preferred name of the concept
 evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
+			N, CandidatesLength,
 			DebugFlags, Label, UtteranceText,
 			Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 			PhraseTokens, RawTokensOut, AAs,
@@ -221,7 +228,8 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	% format(user_output, '~n### USC ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
 	!,
 	% format(user_output, '### IN: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
-	( compute_one_evaluation(MetaCanonical, DebugFlags, Label, UtteranceText,
+	( compute_one_evaluation(MetaCanonical, N, CandidatesLength,
+				 DebugFlags, Label, UtteranceText,
 				 MetaString, MetaConcept,
 				 Variants, TokenPhraseWords, PhraseTokenLength,
 				 RawTokensOut, AAs,
@@ -230,19 +238,21 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	  % format(user_output, '### OUT: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
 	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]),
 	  % format(user_output, '~q~n', [Evaluation]),
-	  debug_evaluate_candidate_list_3(DebugFlags, Evaluation),
+	  debug_evaluate_candidate_list_3(DebugFlags, N, CandidatesLength, Evaluation),
 	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
 	  % format(user_output, '     ~q~n', [Evaluation]),	    
 	  Evaluations = [Evaluation|RestEvaluations],
 	  add_to_avl(MetaCanonical, MetaConcept, CCsIn, CCsNext)
 	; Evaluations = RestEvaluations,
 	  % format(user_output, ' NO: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
-	  debug_evaluate_candidate_list_4(DebugFlags),
+	  debug_evaluate_candidate_list_4(DebugFlags, N, CandidatesLength),
 	  CCsNext = CCsIn
 	),
 	% format('~N### Eval 2: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
 	% 
-	evaluate_candidate_list(Rest, DebugFlags, Label, UtteranceText,
+	N1 is N + 1,
+	evaluate_candidate_list(Rest, N1, CandidatesLength,
+				DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
 				PhraseTokens, RawTokensOut, AAs,
 				InputmatchPhraseWords,
@@ -264,11 +274,16 @@ compute_all_evaluations/14 allows for multiple results (in the non-standard case
 in which multiple CUIs can have the same preferred name).
 */
 
-compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaString, MetaConcept,
+% foo(CallNum, N, CandidatesLength, MetaWords) :-
+%  	format(user_error, 'FOO|~d|~d|~d|~w~n', [CallNum, N, CandidatesLength, MetaWords]).
+
+compute_one_evaluation(MetaWords, N, CandidatesLength,
+		       DebugFlags, Label, UtteranceText, MetaString, MetaConcept,
 		       Variants, TokenPhraseWords, PhraseTokenLength,
 		       RawTokensOut, _AAs, _InputmatchPhraseWords,
 		       TokenHeadWords, PhraseTokens, Evaluation) :-
 	% filter_out_multiple_meaning_designators(MetaWords0,MetaWords),
+	% foo(1, N, CandidatesLength, MetaWords),
 	compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 			     TokenPhraseWords, MetaWords,
 			     Variants, PhraseTokenLength,
@@ -282,7 +297,9 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaString, 
 	% format(user_output,'MetaString      = ~q~n', [MetaString]),	
 	% format(user_output,'MetaConcept   = ~q~n', [MetaConcept]),
 	test_minimum_length(TokenPhraseWords, MatchMap),
-	debug_message(trace, '~N### computing one evaluation: ~q~n', [MetaWords]),
+	% foo(2, N, CandidatesLength, MetaWords),
+	debug_message(trace, '~N### computing evaluation ~d of ~d: ~q~n',
+		      [N, CandidatesLength,MetaWords]),
 	% format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
 	MatchMap \== [],
 	compute_connected_components(MatchMap, MatchCCs),
@@ -317,7 +334,7 @@ compute_one_evaluation(MetaWords, DebugFlags, Label, UtteranceText, MetaString, 
 
 debug_candidate_term(DebugFlags, Evaluation) :-
 	( memberchk(ev, DebugFlags) ->
-	  format('~q~n', [Evaluation])
+	  format(user_error, '~q~n', [Evaluation])
 	; true
 	).
 
@@ -499,25 +516,39 @@ get_pos_info_from_token(tok(_Type, _TokenString, _LCTokenString, _Pos1, pos(Star
 			StartPos, Length).
 
 % Matching-Case token match
-matching_token(mc, MatchingPhraseWordAtom,
-               tok(_Type, TokenString, _LCTokenString, _Pos1, _Pos2)) :-
-        atom_codes(MatchingPhraseWordAtom, TokenString).
+matching_token(TokenType, MatchingPhraseWordAtom,
+               tok(_Type, TokenString, LCTokenString, _Pos1, _Pos2)) :-
+	atom_codes(MatchingPhraseWordAtom, MatchingPhraseWordCodes),
+	( TokenType == lc ->
+	  RelevantTokenString = LCTokenString
+	; RelevantTokenString = TokenString
+	),
+	( MatchingPhraseWordCodes = RelevantTokenString ->
+	  true
+	; append(MatchingPhraseWordCodes, [39,0's], RelevantTokenString) -> % 39 is apostrophe
+	  true
+	; MatchingPhraseWordAtom = 's'
+        ).
 
-% Lower-Case token match
-matching_token(lc, MatchingPhraseWordAtom,
-               tok(Type, _TokenString, LCTokenString, _Pos1, _Pos2)) :-
-        atom_codes(MatchingPhraseWordAtom, MatchingPhraseWordCodes),
-        % apostrophe-s token should match the token w/o the apostrophe-s
-        ( Type = xx ->
-	    % This match is for synthetic tokens like "omega3"
-          ( MatchingPhraseWordCodes = LCTokenString ->
-	    true
-	  ; append(MatchingPhraseWordCodes, [39,0's], LCTokenString) -> % 39 is apostrophe
-	    true
-	  ; MatchingPhraseWordAtom = 's'
-          )
-        ; MatchingPhraseWordCodes = LCTokenString
-        ).        
+% matching_token(mc, MatchingPhraseWordAtom,
+%                tok(_Type, TokenString, _LCTokenString, _Pos1, _Pos2)) :-
+%         atom_codes(MatchingPhraseWordAtom, TokenString).
+% 
+% % Lower-Case token match
+% matching_token(lc, MatchingPhraseWordAtom,
+%                tok(Type, _TokenString, LCTokenString, _Pos1, _Pos2)) :-
+%         atom_codes(MatchingPhraseWordAtom, MatchingPhraseWordCodes),
+%         % apostrophe-s token should match the token w/o the apostrophe-s
+% %        ( Type = xx ->
+% 	    % This match is for synthetic tokens like "omega3"
+%           ( MatchingPhraseWordCodes = LCTokenString ->
+% 	    true
+% 	  ; append(MatchingPhraseWordCodes, [39,0's], LCTokenString) -> % 39 is apostrophe
+% 	    true
+% 	  ; MatchingPhraseWordAtom = 's'
+%           ).
+%  %       ; MatchingPhraseWordCodes = LCTokenString
+% %        ).        
 
 compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords) :-
 	extract_components(MatchMap, _PhraseComponents, MetaComponents),
@@ -606,12 +637,27 @@ compute_phrase_match_aux([], _Label, _UtteranceText, _AllMetaWords, _TokenPhrase
 			 _MinPhraseLength, _MaxGapSize,
 			 MatchMapIn, MatchMapIn,
 			 InvolvesHeadIn, InvolvesHeadIn).
+compute_phrase_match_aux([First|Rest], _Label, _UtteranceText, _AllMetaWords, _TokenPhraseWords,
+			 _NMeta, _Variants, _PhraseTokenLength,
+			 _MinPhraseLength, _MaxGapSize,
+			 _MatchMapIn, _MatchMapOut,
+			 _InvolvesHeadIn, _InvolvesHeadOut) :-
+	% efficiency hack to get past PMID 24592066, which contains this horror:
+	% The HPV test detected 35types of HPV
+        % (HPV-6/-11/-16/-18/-26/-31/-33/-35/-39/-40/-42/-43/-44/-45/-51/-52/-53/-54/-56/-
+        % 58/-59/-61/-62/-66/-70/-71/-72/-73/-81/-83/84/-85/-89).
+	length([First|Rest], Length),
+	Length > 15,
+	memberchk('70', [First|Rest]),
+	!,
+	fail.	
 compute_phrase_match_aux([First|Rest], Label, UtteranceText, AllMetaWords, TokenPhraseWords,
 			 NMeta, Variants, PhraseTokenLength,
 			 MinPhraseLength, MaxGapSize,
 			 MatchMapIn, MatchMapOut,
 			 InvolvesHeadIn, InvolvesHeadOut) :-
 	extract_components(MatchMapIn, PhraseComponents, _MetaComponents),
+	% format(user_error, 'CPMA|~w~n', [[First|Rest]]),
 	get_one_from_avl(First, PhraseComponents, Variants, VariantInfo),
 	VariantInfo = vinfo(_Generator,GeneratorPosition,GeneratorInvolvesHead,
 			    Variant,[First|RestVariantWords],_LastVariantWord),
@@ -1146,41 +1192,44 @@ combine_values(CenValue, VarValue, CovValue, CohValue, Value) :-
 %    Value is integer(1000*Value0).
 
 
-debug_evaluate_candidate_list_1(DebugFlags, MetaCanonical,MetaString,MetaConcept) :-
+debug_evaluate_candidate_list_1(DebugFlags, N, CandidatesLength,
+				MetaCanonical,MetaString,MetaConcept) :-
 	( memberchk(3, DebugFlags) ->
-	  format('::~p|~p|~p::', [MetaCanonical,MetaString,MetaConcept])
+	  format(user_error,
+		 '::~d|~d|~p|~p|~p::',
+		 [N, CandidatesLength,MetaCanonical,MetaString,MetaConcept])
 	; true
 	).
 
-debug_evaluate_candidate_list_2(DebugFlags) :-
+debug_evaluate_candidate_list_2(DebugFlags, N, CandidatesLength) :-
 	( memberchk(3, DebugFlags) ->
-	  format('  DUP~n',[])
+	  format(user_error, '  ~d|~d|DUP~n',[N, CandidatesLength])
 	; true
 	).
 
-debug_evaluate_candidate_list_3(DebugFlags, Evaluation) :-
+debug_evaluate_candidate_list_3(DebugFlags, N, CandidatesLength, Evaluation) :-
 	  ( memberchk(3, DebugFlags) ->
-	    format('  YES~n    ~p~n',[Evaluation])
+	    format(user_error, '  ~d|~d|YES~n    ~p~n',[N,CandidatesLength,Evaluation])
 	  ; true
 	  ).
 
 
-debug_evaluate_candidate_list_4(DebugFlags) :-
+debug_evaluate_candidate_list_4(DebugFlags, N, CandidatesLength) :-
 	  ( memberchk(3, DebugFlags) ->
-	    format('  NO~n',[])
+	    format(user_error, '  ~d|~d|NO~n',[N, CandidatesLength])
 	  ; true
 	  ).
 
 debug_compute_one_evaluation_1(DebugFlags, TokenPhraseWords, MetaWords,
 			       MatchMap,MatchCCs,ExtraMetaWords) :-
 	( memberchk(5, DebugFlags) ->
-	  format('~n~p~n~p~n~p~n~p~n~p~n',
+	  format(user_error, '~n~p~n~p~n~p~n~p~n~p~n',
 		 [TokenPhraseWords,MetaWords,MatchMap,MatchCCs,ExtraMetaWords])
 	; true
 	).
 
 debug_compute_one_evaluation_2(DebugFlags, MetaString) :-
 	( memberchk(5, DebugFlags) ->    % see compute_match_value
-	  format(' <-- ~p~n',[MetaString])
+	  format(user_error, ' <-- ~p~n',[MetaString])
 	; true
 	).

@@ -266,7 +266,11 @@ compute_variant_generators_for_word(Word, VariantGenerators) :-
 
 % create_generators(LexicalCategories, Word, VariantGenerators)
 create_generators([], Word, VariantGenerators) :-
-        VariantGenerators = [gvc(v(Word,0,[],"",_,_),_,_)].
+	VariantGenerators = [gvc(v(Word,0,[],"",_,_),_,_)].
+%	( is_a_number(Word)->
+%	  VariantGenerators = []
+%	; VariantGenerators = [gvc(v(Word,0,[],"",_,_),_,_)]
+%	).
 create_generators([H|T], Word, VariantGenerators) :-
         split_generator([H|T], Word, 0, [], _Roots, _NFR, VariantGenerators).
         
@@ -331,7 +335,7 @@ no_variants_word(static, Word, [Category]) :-
 	  WordLength =< 2
 	).
 
-augment_GVCs_with_variants_aux([], __GenerationMode).
+augment_GVCs_with_variants_aux([], _GenerationMode).
 % Words of invariant category have no variants but themselves.
 augment_GVCs_with_variants_aux([GVC|Rest], GenerationMode) :-
 	GVC = gvc(Generator,Variants,_Candidates),
@@ -1376,10 +1380,10 @@ gather_variants_var([Variant|RestVariants], NFR, Generator,
 		    GeneratorPosition, GeneratorInvolvesHead, VAVLIn, VAVLOut) :-
 	% instantiate NFR!
 	Variant = v(Word,_,_,_,_,NFR),
-	tokenize_text_mm_lc(Word, Words),
-	last(Words, LastWord),
-	VInfo = vinfo(Generator,GeneratorPosition,GeneratorInvolvesHead,Variant,Words,LastWord),
-	( Words = [FirstWord|_] ->
+	tokenize_text_mm_lc(Word, WordList),
+	last(WordList, LastWord),
+	VInfo = vinfo(Generator,GeneratorPosition,GeneratorInvolvesHead,Variant,WordList,LastWord),
+	( WordList = [FirstWord|_] ->
 	  % format(user_output, '      VAR: ~q:~q~n', [FirstWord,VInfo]),
 	  add_to_avl(FirstWord, VInfo, VAVLIn, VAVLInOut)
 	; VAVLInOut = VAVLIn
@@ -1470,6 +1474,9 @@ compute_all_subsequence_positions_1([FirstGeneratorWord|RestGeneratorWords], Wor
 all_positions([], _GeneratorWord, _Index, []).
 all_positions([H|T], GeneratorWord, Index, AllPositions) :-
 	( H == GeneratorWord ->
+	  AllPositions = [Index|Rest]
+	  % to handle possessives
+	; atom_concat(GeneratorWord, '''s', H) ->
 	  AllPositions = [Index|Rest]
 	; AllPositions = Rest
 	),

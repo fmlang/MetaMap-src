@@ -80,7 +80,7 @@ assemble_definitions(Input, TagList, Recs) :-
 maybe_display_defns(Defns) :-
 	( control_option(show_lex) ->
 	  (  foreach(LexicalRecord, Defns)
-	  do format(user_output, 'LEXICON: ~q~n', [LexicalRecord])
+	  do format(user_error, 'LEXICON: ~q~n', [LexicalRecord])
 	  )
 	; true
 	).

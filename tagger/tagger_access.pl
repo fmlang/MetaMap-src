@@ -77,6 +77,7 @@
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/2,
+	lower/2,
 	replist/3,
 	ttyflush/0,
 	with_input_from_chars/3
@@ -141,7 +142,8 @@ tag_text_with_options(Input, TaggerServerStream, ModeOption, PrologOption, Tagge
 	call_tagger(Options, TaggerServerStream, QueryAtom, TaggedTextList0),
 	TaggedTextList0 \== '',
 	TaggedTextList0 \== end_of_file,
-	postprocess_apostrophe_s(TaggedTextList0, TaggedTextList),
+	% TaggedTextList = TaggedTextList0,
+	postprocess_tagger_apostrophe_s(TaggedTextList0, TaggedTextList),
 	!.
 tag_text_with_options(Input, _, _, _Tagger, []) :-
 	format('tagger_access:tag_text_with_options/4 failed for ~p~n', [Input]).
@@ -303,8 +305,9 @@ get_chars_tagger(Stream, Input) :-
 % In other words, by deMorgan's laws, do the glomming IF the preceeding token
 % (1) is not a he/she/it pronoun AND
 % (2) does not end in a punctuation char
-postprocess_apostrophe_s([], []).
-postprocess_apostrophe_s(TaggedTextList0, TaggedTextList) :-
+
+postprocess_tagger_apostrophe_s([], []).
+postprocess_tagger_apostrophe_s(TaggedTextList0, TaggedTextList) :-
 	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap], [s,'noun/3']|RestTaggedTextList0],
 	\+ no_combine_pronoun(OrigWord),
 	atom_codes(OrigWord, OrigWordCodes),
@@ -313,6 +316,59 @@ postprocess_apostrophe_s(TaggedTextList0, TaggedTextList) :-
 	!,
 	concat_atom([OrigWord, '''', s], Noun),
 	TaggedTextList = [[Noun,LexCat]|RestTaggedTextList],
-	postprocess_apostrophe_s(RestTaggedTextList0, RestTaggedTextList).
-postprocess_apostrophe_s([H|RestIn], [H|RestOut]) :-
-	postprocess_apostrophe_s(RestIn, RestOut).
+	postprocess_tagger_apostrophe_s(RestTaggedTextList0, RestTaggedTextList).
+postprocess_tagger_apostrophe_s([H|RestIn], [H|RestOut]) :-
+	postprocess_tagger_apostrophe_s(RestIn, RestOut).
+
+%%% postprocess_tagger_apostrophe_s([], _QueryAtom, []).
+%%% postprocess_tagger_apostrophe_s(TaggedTextList0, QueryAtom, TaggedTextList) :-
+%%% % 	TaggedTextList0 = [['\'',ap],[OrigWord,LexCat], ['\'',ap]|RestTaggedTextList0],
+%%% % 	concat_atom(['''', OrigWord, ''''], OrigWordWithSingleQuotes),
+%%% % 	sub_atom(QueryAtom, _Before, _Length, _After, OrigWordWithSingleQuotes),
+%%% % 	!,
+%%% % 	TaggedTextList = [[OrigWordWithSingleQuotes,LexCat]|RestTaggedTextList],
+%%% % 	postprocess_tagger_apostrophe_s(RestTaggedTextList0, QueryAtom, RestTaggedTextList).
+%%% postprocess_tagger_apostrophe_s(TaggedTextList0, QueryAtom, TaggedTextList) :-
+%%% 	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap], [s,'noun/3']|RestTaggedTextList0],
+%%% 	\+ no_combine_pronoun(OrigWord),
+%%% 	atom_codes(OrigWord, OrigWordCodes),
+%%% 	last(OrigWordCodes, LastCode),
+%%% 	\+ local_punct(LastCode),
+%%% 	!,
+%%% 	concat_atom([OrigWord, '''', s], Noun),
+%%% 	TaggedTextList = [[Noun,LexCat]|RestTaggedTextList],
+%%% 	postprocess_tagger_apostrophe_s(RestTaggedTextList0, QueryAtom, RestTaggedTextList).
+%%% postprocess_tagger_apostrophe_s(TaggedTextList0, QueryAtom, TaggedTextList) :-
+%%% 	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap], [t,noun]|RestTaggedTextList0],
+%%% 	combines_with_t(OrigWord),
+%%% 	atom_codes(OrigWord, OrigWordCodes),
+%%% 	last(OrigWordCodes, LastCode),
+%%% 	\+ local_punct(LastCode),
+%%% 	!,
+%%% 	concat_atom([OrigWord, '''', t], Noun),
+%%% 	TaggedTextList = [[Noun,LexCat]|RestTaggedTextList],
+%%% 	postprocess_tagger_apostrophe_s(RestTaggedTextList0, QueryAtom, RestTaggedTextList).
+%%% % postprocess_tagger_apostrophe_s(TaggedTextList0, QueryAtom, TaggedTextList) :-
+%%% % 	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap]|RestTaggedTextList0],
+%%% % 	concat_atom([OrigWord, ''''], OrigWordWithSingleQuotes),
+%%% % 	sub_atom(QueryAtom, _Before, _Length, _After, OrigWordWithSingleQuotes),
+%%% % 	!,
+%%% % 	TaggedTextList = [[OrigWordWithSingleQuotes,LexCat]|RestTaggedTextList],
+%%% % 	postprocess_tagger_apostrophe_s(RestTaggedTextList0, QueryAtom, RestTaggedTextList).
+%%% postprocess_tagger_apostrophe_s([H|RestIn], QueryAtom, [H|RestOut]) :-
+%%% 	postprocess_tagger_apostrophe_s(RestIn, QueryAtom, RestOut).
+%%% 
+%%% no_combine_pronoun(he).
+%%% no_combine_pronoun(she).
+%%% no_combine_pronoun(it).
+%%% 
+%%% 
+%%% combines_with_t(Word) :-
+%%% 	lower(Word, LowerWord),
+%%% 	combines_with_t_1(LowerWord).
+%%% 
+%%% combines_with_t_1(don).
+%%% combines_with_t_1(doesn).
+%%% combines_with_t_1(isn).
+%%% combines_with_t_1(shouldn).
+%%% combines_with_t_1(won).

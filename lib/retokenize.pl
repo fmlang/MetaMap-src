@@ -34,8 +34,9 @@
 % Purpose:  predicates to retokenize before lexical lookup to solve the "in patients" problem
 
 :- module(retokenize,[
+	remove_null_atom_defns/2,
 	retokenize/2,
-	remove_null_atom_defns/2
+	retokenize_for_apostrophe/2
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -80,6 +81,42 @@ retokenize_word(has,   been,      [''|Tail], Tail) :- !.
 retokenize_word(in,    InWord,    [''|Tail], Tail) :- in_patients_in_word(InWord), !.
 retokenize_word(over,  long,      [''|Tail], Tail) :- !.
 retokenize_word(_First, _Next,     Tail,     Tail).
+
+% retokenize_for_apostrophe([], []).
+% retokenize_for_apostrophe([FirstList|RestLists], [RetokenizedFirstList|RetokenizedRestLists]) :-
+% 	retokenize_list_for_apostrophe(FirstList, RetokenizedFirstList),
+% 	retokenize_for_apostrophe(RestLists, RetokenizedRestLists).
+% 
+% 
+% % keep separate any apostrophe that appears at the beginning or end of a token
+% retokenize_list_for_apostrophe([], []).
+% retokenize_list_for_apostrophe([First|Rest], RetokenizedWords) :-
+% 	( First == 39 ->
+% 	  RetokenizedWords = [First|RetokenizedRestWords],
+% 	  NewRest = Rest
+% 	; apostrophe_token(First, X, Y) ->
+% 	  RetokenizedWords = RetokenizedRestWords,
+% 	  NewRest = [X,Y|Rest]
+% 	; RetokenizedWords = [First|RetokenizedRestWords],
+% 	  NewRest = Rest
+% 	),
+% 	retokenize_list_for_apostrophe(NewRest, RetokenizedRestWords).
+% 
+% apostrophe_token(First, X, Y) :-
+% 	atom_codes(First, Codes),
+% 	( Codes = [39|RestCodes],
+% 	  RestCodes \== [] ->
+% 	  X = '\'',
+% 	  atom_codes(NewFirst, RestCodes),
+% 	  Y = NewFirst
+% 	; append(PrefixString, [39], Codes) ->
+% 	  PrefixString \== [],
+% 	  atom_codes(PrefixAtom, PrefixString),
+% 	  X = PrefixAtom,
+% 	  Y = '\''
+% 	).
+
+
 
 % in_patients_in_word('-').
 in_patients_in_word(and).

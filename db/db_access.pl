@@ -34,6 +34,7 @@
 
 
 :- module(db_access, [
+	all_digits/1,
 	db_get_all_acros_abbrs/2,
 	db_get_concept_cui/2,
 	% db_get_concept_sts/2,
@@ -231,8 +232,8 @@ default_version(DefaultVersion) :-
 	  DefaultVersion = 'USAbase'
 	; DefaultVersion = 'NLM'
 	).
-	
-default_release('2014AA').
+
+default_release('2015AA').
 
 initialize_db_access :-
 	get_data_release(Release, 1),

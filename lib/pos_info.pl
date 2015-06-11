@@ -34,8 +34,9 @@
 
 
 :- module(pos_info, [
+	adjust_AAs_pos_info/4,
 	collapse_pos_info/3,
-	create_EXP_raw_token_list/8,
+	create_EXP_raw_token_list/7,
 	create_UNEXP_raw_token_list/6,
 	get_next_token_state/3
     ]).
@@ -85,6 +86,14 @@
 	ws_char/1
    ]).
 
+:- use_module(text(text_objects), [
+	maybe_dump_AAs/3
+   ]).
+
+:- use_module(library(avl), [
+	avl_member/3
+    ]).
+
 :- use_module(library(lists),[
 	append/2,
 	append_length/3,
@@ -98,23 +107,19 @@
 % one-off: aa aadef ws
 % hoa: field label sn pe
 % an/pn: an ic lc mc nu pn uc
-create_EXP_raw_token_list([], _PreviousToken, _ExtraCharsIn, _ExtraCharsConsumed,
-			  _CurrentPos, _TokenState, _InputString, []).
-create_EXP_raw_token_list([CurrentToken|RestTokensIn], PreviousToken,
-			  _ExtraCharsIn, _ExtraCharsConsumedIn,
-			  CurrentPos, TokenState,
-		          InputStringIn, NewTokens) :-
+create_EXP_raw_token_list([], _UDA_AVL, _PreviousToken, _CurrentPos, _TokenState, _InputString, []).
+create_EXP_raw_token_list([CurrentToken|RestTokensIn], UDA_AVL, PreviousToken,
+			  CurrentPos, TokenState, InputStringIn, NewTokens) :-
 	% CurrentToken  = tok(CurrentTokenType, _CurrentString, _CurrentLCString, _CurrentPI),
 	% format(user_output, 'TOK: ~p~n', [CurrentToken]),
 	token_template(CurrentToken, CurrentTokenType,
 		       _CurrentString, _CurrentLCString, _CurrentPos),
 	% format(user_output, '~w|~s|~nIN |~s|~nOUT|',
 	%        [CurrentTokenType,CurrentString,InputStringIn]),
-	handle_token_type(CurrentTokenType, PreviousToken,
-			  _ExtraCharsIn, _ExtraCharsConsumedIn, TokenState,
+	handle_token_type(CurrentTokenType, UDA_AVL, PreviousToken, TokenState,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-			  _ExtraCharsNext, _ExtraCharsConsumedNext, RestNewTokens),
+			  RestNewTokens),
 	% write_token_list([CurrentToken], 0, 1),
 	% format(user_output, 'IN |~s|~nOUT|~s|~n~n', [InputStringIn,InputStringNext]),
 	% ( member(ThisToken, NewTokens),
@@ -126,13 +131,11 @@ create_EXP_raw_token_list([CurrentToken|RestTokensIn], PreviousToken,
 	% ),
 	% format(user_output, '~s|~n', [InputStringNext]),
 	get_next_token_state(TokenState, CurrentTokenType, NextTokenState),
-	create_EXP_raw_token_list(RestTokensNext, CurrentToken,
-				  _ExtraCharsNext, _ExtraCharsConsumedNext,
-				  NextPos, NextTokenState,
+	create_EXP_raw_token_list(RestTokensNext, UDA_AVL, CurrentToken, NextPos, NextTokenState,
 				  InputStringNext, RestNewTokens).
 
-create_UNEXP_raw_token_list([], _CurrentPos, _ExtraChars, _TokenState, _InputString, []).
-create_UNEXP_raw_token_list([CurrentToken|RestTokens], CurrentPos, _ExtraCharsIn, TokenState,
+create_UNEXP_raw_token_list([], _UDA_AVL,_CurrentPos, _TokenState, _InputString, []).
+create_UNEXP_raw_token_list([CurrentToken|RestTokens], UDA_AVL, CurrentPos, TokenState,
 			    InputStringIn, [NewCurrentToken|NewRestTokens]) :-
 	% arg(1, CurrentToken, CurrentTokenType),
 	token_template(CurrentToken, CurrentTokenType, _String, _LCString, _PosInfo),
@@ -145,7 +148,11 @@ create_UNEXP_raw_token_list([CurrentToken|RestTokens], CurrentPos, _ExtraCharsIn
 	  % e.g., in MedLine citations, that do not get tokenized
 	  remove_untokenized_whitespace(RestTokens, InputStringTemp,
 	  				InputStringNext, NumBlanksRemoved),
-	  NextPos is CurrentPos + 1 + NumBlanksRemoved
+	  ( avl_member(_UDAShortFormToken, UDA_AVL, [UDALongFormTokenList]),
+	    memberchk(CurrentToken, UDALongFormTokenList) ->
+	    NextPos is CurrentPos + NumBlanksRemoved
+	  ; NextPos is CurrentPos + 1 + NumBlanksRemoved
+	  )
 	; higher_order_or_annotation_type(CurrentTokenType) ->
 	  % CurrentToken    = tok(Type, ExpTokens, AcroTokens, Pos1),
 	  % NewCurrentToken = tok(Type, ExpTokens, AcroTokens, Pos1, Pos1),
@@ -154,15 +161,14 @@ create_UNEXP_raw_token_list([CurrentToken|RestTokens], CurrentPos, _ExtraCharsIn
 	  NextPos is CurrentPos,
 	  InputStringNext = InputStringIn
 	  % for tokens that have content (uc, lc, etc.)
-	; add_raw_pos_info_2(CurrentToken, an, _PrevTokenType, CurrentPos, InputStringIn, 
-			     _ExtraCharsIn, _ExtraCharsConsumedIn, NewCurrentToken, NextPos,
-			     _ExtraCharsNext, _ExtraCharsConsumedNext, InputStringNext),
+	; add_raw_pos_info_2(CurrentToken, an, UDA_AVL, _PrevTokenType, CurrentPos, InputStringIn, 
+			     NewCurrentToken, NextPos, InputStringNext),
 	  test_for_adjacency(TokenState, NewCurrentToken, CurrentPos)
         ),
 	% format(user_output, 'Current Token: ~q~n', [CurrentToken]),
 	% format(user_output, '    New Token: ~q~n', [NewToken]),
 	get_next_token_state(TokenState, CurrentTokenType, NextTokenState),
-	create_UNEXP_raw_token_list(RestTokens, NextPos, _ExtraCharsNext, NextTokenState,
+	create_UNEXP_raw_token_list(RestTokens, UDA_AVL, NextPos, NextTokenState,
 				    InputStringNext, NewRestTokens).
 
 
@@ -209,36 +215,32 @@ create_UNEXP_raw_token_list([CurrentToken|RestTokens], CurrentPos, _ExtraCharsIn
 special_token_type(aa).
 special_token_type(aadef).
 
-handle_token_type(TokenType, PrevToken, _ExtraCharsIn, _ExtraCharsConsumedIn,
-		  TokenState, InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
-		  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-		  _ExtraCharsOut, _ExtraCharsConsumedOut, RestNewTokens) :-
+handle_token_type(TokenType, UDA_AVL, PrevToken, TokenState, InputStringIn,
+		  CurrentToken, CurrentPos, RestTokensIn,
+		  InputStringNext, NewTokens,    NextPos, RestTokensNext, RestNewTokens) :-
 	( TokenType == ws ->
-	  handle_ws_token_type(TokenState, PrevToken, _ExtraCharsIn,
+	  handle_ws_token_type(TokenState, UDA_AVL, PrevToken,
 			       InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			       InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-			       _ExtraCharsOut, RestNewTokens)
+			       RestNewTokens)
 	; special_token_type(TokenType) ->
-	  handle_special_token_type(TokenType, PrevToken, _ExtraCharsIn,
+	  handle_special_token_type(TokenType, PrevToken,
 				    InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 				    InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-				    _ExtraCharsOut, RestNewTokens)
+				    RestNewTokens)
 	; % aadef and aa are higher-order types, but they'll be caught by the first branch
 	  higher_order_or_annotation_type(TokenType) ->
 	  handle_hoa_type(InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
-			  InputStringNext, NewTokens, NextPos, RestTokensNext, RestNewTokens),
-	  _ExtraCharsOut = _ExtraCharsIn,
-	  _ExtraCharsConsumedOut = _ExtraCharsConsumedIn
-	; handle_an_pn_type(InputStringIn, CurrentToken, _ExtraCharsIn, _ExtraCharsConsumedIn,
-			    CurrentPos, RestTokensIn, TokenState,
-			    InputStringNext, NewTokens, NextPos, RestTokensNext,
-			    _ExtraCharsOut, _ExtraCharsConsumedOut, RestNewTokens)
+			  InputStringNext, NewTokens, NextPos, RestTokensNext, RestNewTokens)
+	; handle_an_pn_type(InputStringIn, UDA_AVL, CurrentToken, CurrentPos,
+			    RestTokensIn, TokenState, InputStringNext, NewTokens,
+			    NextPos, RestTokensNext, RestNewTokens)
 	),
 	!.
-handle_token_type(_TokenType, PrevToken, _ExtraCharsIn, _ExtraCharsConsumedIn, _TokenState,
+handle_token_type(_TokenType, PrevToken, _TokenState,
 		  InputStringIn, CurrentToken, CurrentPos, _RestTokensIn,
 		  _InputStringNext, _NewTokens, _NextPos, _RestTokensNext,
-		  _ExtraCharsOut, _ExtraCharsConsumedIn, _RestNewTokens) :-
+		  _RestNewTokens) :-
 	fatal_error('Token ~p failed after token ~p at position ~d with input string "~s"~n',
 		    [CurrentToken,PrevToken,CurrentPos,InputStringIn]).
 	
@@ -247,10 +249,10 @@ handle_token_type(_TokenType, PrevToken, _ExtraCharsIn, _ExtraCharsConsumedIn, _
 %   * the current input string does not begin with a ws,
 % that means that the AA was something like "(TGF )" (e.g., from PMID 14704634),
 % so allow that anyway.
-handle_ws_token_type(_TokenState, PrevToken, _ExtraCharsIn,
-		     InputStringIn,   CurrentToken, CurrentPos, RestTokens,
+handle_ws_token_type(_TokenState, _UDA_AVL, PrevToken, InputStringIn,
+		     CurrentToken, CurrentPos, RestTokens,
 		     InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-		     _ExtraCharsOut, RestNewTokens) :-
+		     RestNewTokens) :-
 	% If the input string does NOT begin with a ws char...
 	InputStringIn \= [32|_],
 	% ...and the previous token is an AA ...
@@ -269,24 +271,26 @@ handle_ws_token_type(_TokenState, PrevToken, _ExtraCharsIn,
 	add_raw_pos_info_1(CurrentToken, CurrentPos, NewCurrentToken),
 	NewTokens = [NewCurrentToken|RestNewTokens],
 	RestTokensNext = RestTokens.	
-handle_ws_token_type(_TokenState, _PrevToken, _ExtraCharsIn,
-		     InputStringIn,   CurrentToken, CurrentPos, RestTokens,
-		     InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-		     _ExtraCharsOut, RestNewTokens) :-
-	  InputStringIn = [WhiteSpaceChar|InputStringTemp],
-	  local_ws(WhiteSpaceChar),
- 	  add_raw_pos_info_1(CurrentToken, CurrentPos, NewCurrentToken),
-	  % Handle blank spaces at the beginning of lines,
-	  % e.g., in MedLine citations, that do not get tokenized
-	  remove_untokenized_whitespace(RestTokens, InputStringTemp,
-	  				InputStringNext, NumBlanksRemoved),
-	  NextPos is CurrentPos + 1 + NumBlanksRemoved,
-	  % NewTokens is the top-level output;
-	  % the top-level predicate recurses on RestNewTokens.
-	  NewTokens = [NewCurrentToken|RestNewTokens],
-	  % The top-level predicate recurses on RestTokensNext,
-	  % which, in this case, happens to be just RestTokens.
-	  RestTokensNext = RestTokens.
+handle_ws_token_type(_TokenState, UDA_AVL, _PrevToken, InputStringIn, CurrentToken, CurrentPos, RestTokens,
+		     InputStringNext, NewTokens,    NextPos, RestTokensNext, RestNewTokens) :-
+	InputStringIn = [WhiteSpaceChar|InputStringTemp],
+	local_ws(WhiteSpaceChar),
+ 	add_raw_pos_info_1(CurrentToken, CurrentPos, NewCurrentToken),
+	% Handle blank spaces at the beginning of lines,
+	% e.g., in MedLine citations, that do not get tokenized
+	remove_untokenized_whitespace(RestTokens, InputStringTemp,
+				      InputStringNext, NumBlanksRemoved),
+	( avl_member(_UDAShortFormToken, UDA_AVL, [UDALongFormTokenList]),	  
+	  memberchk(CurrentToken, UDALongFormTokenList) ->
+	  NextPos is CurrentPos
+	; NextPos is CurrentPos + 1 + NumBlanksRemoved
+	),
+	% NewTokens is the top-level output;
+	% the top-level predicate recurses on RestNewTokens.
+	NewTokens = [NewCurrentToken|RestNewTokens],
+	% The top-level predicate recurses on RestTokensNext,
+	% which, in this case, happens to be just RestTokens.
+	RestTokensNext = RestTokens.
 
 % Here's what happens when we hit an aadef token. Suppose the text is
 % With time-of-flight secondary ion mass-spectrometry (ToF
@@ -383,10 +387,10 @@ handle_ws_token_type(_TokenState, _PrevToken, _ExtraCharsIn,
 %     * an and pn tokens match the beginning of the input string,
 %       and the tokens strings are walked off the input string.
 
-handle_special_token_type(aadef, _PrevToken, _ExtraChars,
+handle_special_token_type(aadef, _PrevToken,
 			  InputStringIn,   _CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-			  _ExtraCharsOut, RestNewTokens) :-
+			  RestNewTokens) :-
 	% Special case for aadef(_) and aa(_) being consecutive tokens,
 	% which means the AA is user-defined
 	RestTokensIn = [FirstRestTokensIn|_],
@@ -402,10 +406,10 @@ handle_special_token_type(aadef, _PrevToken, _ExtraChars,
 	RestNewTokens = NewTokens,
 	NextPos is CurrentPos,
 	RestTokensNext = RestTokensIn.
-handle_special_token_type(aadef, PrevToken, _ExtraCharsIn,
+handle_special_token_type(aadef, PrevToken,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-			  _ExtraCharsOut, RestNewTokens) :-
+			  RestNewTokens) :-
 	arg(2, CurrentToken, AADefTokens0),
 	% Add tokens in the first aadef list, e.g.,
 	% tok(lc,heart,heart,pos(0,5))
@@ -425,7 +429,8 @@ handle_special_token_type(aadef, PrevToken, _ExtraCharsIn,
 	% Removed this call to handle strings like
 	% "Vasoactive Intestinal Peptide - (VIP) like immunoreactive nerves"
 	% in PMID- 3891693
-	remove_final_hyphen_and_ws_tokens(AADefTokens1, AADefTokens),
+	% remove_final_hyphen_and_ws_tokens(AADefTokens1, AADefTokens),
+	remove_final_ws_tokens(AADefTokens1, AADefTokens),
 	% AADefTokens = AADefTokens1,
 	% AADefTokens = AADefTokens0,
 	create_new_tokens_and_consume_strings(AADefTokens, PrevTokenType, RestTokensIn,
@@ -436,7 +441,8 @@ handle_special_token_type(aadef, PrevToken, _ExtraCharsIn,
 	% the first argument must be AADefTokens1, and not AADefTokens.
 	remove_tokens_no_consume(AADefTokens1, RestTokensIn, RestTokens1),
 	InputString1 \== '',
-	consume_ws_tokens(RestTokens1, RestTokens2, 0, _NumWSTokens1),
+	% consume_ws_tokens(RestTokens1, RestTokens2, 0, _NumWSTokens1),
+	remove_leading_hyphen_and_ws_tokens(RestTokens1, RestTokens2),
 	trim_ws_and_hyphens_left(InputString1, InputString2, 0, NumBlanksTrimmed1),
 	NextPos2 is NextPos1 + NumBlanksTrimmed1,
 	% Remove all following tokens up to and including the matching
@@ -462,16 +468,15 @@ handle_special_token_type(aadef, PrevToken, _ExtraCharsIn,
 	NextPos is NextPos3 + NumBlanksTrimmed3,
 	!.
 	% fail.
-handle_special_token_type(aadef, _PrevToken, _ExtraCharsIn,
+handle_special_token_type(aadef, _PrevToken,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-			  _ExtraCharsOut, RestNewTokens) :-
-	send_message('#### WARNING: aadef token failed:~n', []),
+			  RestNewTokens) :-
+	send_message('### WARNING: aadef token failed:~n', []),
 	write_token_list([CurrentToken], 0, 1),
 	InputStringNext = InputStringIn,
 	RestNewTokens = NewTokens,
 	NextPos is CurrentPos,
-	_ExtraCharsOut = _ExtraCharsIn,
 	RestTokensNext = RestTokensIn.
 
 
@@ -571,10 +576,10 @@ handle_special_token_type(aadef, _PrevToken, _ExtraCharsIn,
 % (5) consume_aa_token_strings/4 removes the strings in the AA tokens
 %     from the input string.
 
-handle_special_token_type(aa, _PrevToken, _ExtraCharsIn,
+handle_special_token_type(aa, _PrevToken,
 			  InputStringIn,   CurrentToken, CurrentPos, RestTokensIn,
 			  InputStringNext, NewTokens,    NextPos,    RestTokensNext,
-			  _ExtraCharsOut, RestNewTokens) :-
+			  RestNewTokens) :-
 	  % AADefExpansionTokenList is a list containing these three tokens:
 	  % tok(lc,heart,heart,pos(0,5))
 	  % tok(ws,' ',' ',pos(5,6))
@@ -612,7 +617,7 @@ handle_special_token_type(aa, _PrevToken, _ExtraCharsIn,
 % 			  InputStringIn,   _CurrentToken, CurrentPos, RestTokensIn,
 % 			  InputStringNext, NewTokens,     NextPos,    RestTokensNext,
 % 			  RestNewTokens) :-
-% 	send_message('#### WARNING: aa token failed:~n', []),
+% 	send_message('### WARNING: aa token failed:~n', []),
 % 	write_token_list([CurrentToken], 0, 1),
 % 	ttyflush,
 % 	InputStringNext = InputStringIn,
@@ -643,13 +648,11 @@ trim_ws_and_hyphens_left([H|T], InputStringOut, TrimmedCharCountIn, TrimmedCharC
 
 
 % Token types an, ic, lc, mc, nu, pn, uc are handled identically via handle_an_pn_type.
-handle_an_pn_type(InputStringIn, CurrentToken, _ExtraCharsIn, _ExtraCharsConsumedIn,
-		  CurrentPos, RestTokensIn, TokenState,
+handle_an_pn_type(InputStringIn, UDA_AVL, CurrentToken, CurrentPos, RestTokensIn, TokenState,
 		  InputStringNext, NewTokens, NextPos, RestTokensNext,
-		  _ExtraCharsNext, _ExtraCharsConsumedNext, RestNewTokens) :-
-	  add_raw_pos_info_2(CurrentToken, an, _PrevTokenType, CurrentPos, InputStringIn,
-			     _ExtraCharsIn, _ExtraCharsConsumedIn, NewCurrentToken, NextPos,
-			     _ExtraCharsNext, _ExtraCharsConsumedNext, InputStringNext),
+		  RestNewTokens) :-
+	  add_raw_pos_info_2(CurrentToken, an, UDA_AVL, _PrevTokenType, CurrentPos, InputStringIn,
+			     NewCurrentToken, NextPos, InputStringNext),
 	  test_for_adjacency(TokenState, NewCurrentToken, NextPos),
 	  NewTokens = [NewCurrentToken|RestNewTokens],
 	  RestTokensNext = RestTokensIn.
@@ -667,11 +670,22 @@ remove_leading_hyphen_and_ws_tokens([H|T], AADefTokens) :-
 	( hyphen_or_ws_token(H) ->
 	  remove_leading_hyphen_and_ws_tokens(T, AADefTokens)
 	; AADefTokens = [H|T]
+	).
+
+remove_leading_ws_tokens([H|T], AADefTokens) :-
+	( ws_tok(H) ->
+	  remove_leading_ws_tokens(T, AADefTokens)
+	; AADefTokens = [H|T]
 	).	    
 	
 remove_final_hyphen_and_ws_tokens(AADefTokensIn, AADefTokensOut) :-
 	rev(AADefTokensIn, RevAADefTokensIn0),
 	remove_leading_hyphen_and_ws_tokens(RevAADefTokensIn0, RevAADefTokensIn1),
+	rev(RevAADefTokensIn1, AADefTokensOut).
+
+remove_final_ws_tokens(AADefTokensIn, AADefTokensOut) :-
+	rev(AADefTokensIn, RevAADefTokensIn0),
+	remove_leading_ws_tokens(RevAADefTokensIn0, RevAADefTokensIn1),
 	rev(RevAADefTokensIn1, AADefTokensOut).
 
 hyphen_or_ws_token(Token) :-
@@ -1016,7 +1030,9 @@ remove_tokens_no_consume([FirstAADefToken|RestAADefTokens],
 			 [FirstToken|RestTokensIn], RestTokensOut) :-
 	( FirstAADefToken == FirstToken ->
 	  remove_tokens_no_consume(RestAADefTokens, RestTokensIn, RestTokensOut)
-	; aa_tok(FirstToken)->
+	; ( aa_tok(FirstToken)
+	  ; aadef_tok(FirstToken)
+	  ) ->
 	  arg(2, FirstToken, [FirstAAToken|RestAATokens]),
 	  FirstAAToken == FirstAADefToken,
 	  remove_tokens_no_consume([FirstAAToken|RestAATokens], RestTokensIn, _RestTokensOut1),
@@ -1041,9 +1057,9 @@ consume_tokens_up_to_ws_tok([FirstToken|RestTokens], PrevTokenType,
 	  PosOut is PosIn,
 	  InputStringOut = InputStringIn,
 	  NewTokensIn = NewTokensOut
-	; add_raw_pos_info_2(FirstToken, aadef, PrevTokenType, PosIn, InputStringIn, 
-			     _ExtraCharsIn, _ExtraCharsConsumedIn, NewToken, PosNext,
-			     _ExtraCharsNext, _ExtraCharsConsumedNext, InputStringNext),
+	; UDA_AVL = empty,
+	  add_raw_pos_info_2(FirstToken, aadef, UDA_AVL, PrevTokenType, PosIn, InputStringIn, 
+			     NewToken, PosNext, InputStringNext),
 	  NewTokensIn = [NewToken|NewTokensNext],
 	  consume_tokens_up_to_ws_tok(RestTokens, PrevTokenType,
 				      PosNext,  InputStringNext, NewTokensNext,
@@ -1058,12 +1074,16 @@ consume_tokens_up_to_ws_tok([FirstToken|RestTokens], PrevTokenType,
 % (when the quotation marks appear in the text!!),
 % we have to create new tokens for tokens occurring after the end
 % of the AADef tokens and before the next whitespace token. GROSS.
-create_new_tokens_and_consume_strings([], PrevTokenType, RestTokens, PosIn,
-				      InputStringIn, NewTokensIn, NewTokensOut, PosOut,
-				      InputStringOut) :-
-	consume_tokens_up_to_ws_tok(RestTokens, PrevTokenType,
-				    PosIn,  InputStringIn,  NewTokensIn,
-				    PosOut, InputStringOut, NewTokensOut).
+create_new_tokens_and_consume_strings([], _PrevTokenType, _RestTokens, PosIn,
+				      InputStringIn, NewTokensIn, NewTokensIn, PosIn,
+				      InputStringIn).
+
+%create_new_tokens_and_consume_strings([], PrevTokenType, RestTokens, PosIn,
+%				      InputStringIn, NewTokensIn, NewTokensOut, PosOut,
+%				      InputStringOut) :-	
+%	consume_tokens_up_to_ws_tok(RestTokens, PrevTokenType,
+%				    PosIn,  InputStringIn,  NewTokensIn,
+%				    PosOut, InputStringOut, NewTokensOut).
 	
 create_new_tokens_and_consume_strings([FirstAADefToken|RestAADefTokens], PrevTokenType,
 				      [NextToken|RestTokensIn],
@@ -1071,9 +1091,9 @@ create_new_tokens_and_consume_strings([FirstAADefToken|RestAADefTokens], PrevTok
 				      NewTokensIn, NewTokensOut, PosOut,
 				      InputStringOut) :-
 	( FirstAADefToken == NextToken ->
-	  add_raw_pos_info_2(FirstAADefToken, aadef, PrevTokenType, PosIn,   InputStringIn, 
-			     _ExtraCharsIn, _ExtraCharsConsumedIn, NewToken,   PosNext,
-			     _ExtraCharsNext, _ExtraCharsConsumedNext, InputStringNext),
+	  UDA_AVL = empty,
+	  add_raw_pos_info_2(FirstAADefToken, aadef, UDA_AVL, PrevTokenType, PosIn,   InputStringIn, 
+			     NewToken,   PosNext, InputStringNext),
 	  NewTokensIn = [NewToken|NewTokensNext],
 	  RemainingAADefTokens = RestAADefTokens,
 	  RestTokensNext = RestTokensIn
@@ -1086,18 +1106,27 @@ create_new_tokens_and_consume_strings([FirstAADefToken|RestAADefTokens], PrevTok
 	  RestTokensNext = RestTokensIn
 	  % If an aa token appears in the expansion of an aadef token,
 	  % then the fun begins...
-	; aa_tok(NextToken),
-	  arg(2, NextToken, AATokens),
+	; ( aa_tok(NextToken) ->
+	    ArgNum is 2
+	  ; aadef_tok(NextToken) ->
+	    ArgNum is 2
+	  ),
+	  arg(ArgNum, NextToken, AATokens),
 	  % Ensure that the first FirstAADefToken is also the first AA token;
 	  % see the example below!
 	  AATokens = [FirstAAToken|RestAATokens],
-	  FirstAAToken == FirstAADefToken,
+	  FirstAAToken == FirstAADefToken ->
 	  % Can't simply append here, because RestAADefTokens can contain ws tokens
 	  % that aren't in RestAATokens. GRRR.
 	  match_aa_tokens(RestAATokens, RestAADefTokens, LeftOverAADefTokens),
 	  match_aa_tokens(AATokens, RestTokensIn, RestTokensNext),
+	  % The 3rg arg of the AA token is not the AADef token itself,
+	  % but rather a singleton list CONTAINING the AADef token!
 	  arg(3, NextToken, [AADefSubToken]),
-	  arg(2, AADefSubToken, ExpansionTokens),
+	  ( aa_tok(NextToken) ->
+	    arg(2, AADefSubToken, ExpansionTokens)
+	  ; AADefSubToken = ExpansionTokens
+	  ),
 	  consume_strings(AATokens, 1, FirstPrefixLength, InputStringIn, InputStringNext),
 	  % Can't just use PosIn here if the abstract begins with an aadef/aa,
 	  % as in the example below, because PosIn will still be at the end of the title!
@@ -1107,6 +1136,7 @@ create_new_tokens_and_consume_strings([FirstAADefToken|RestAADefTokens], PrevTok
 	  RealPosIn is PosIn + FirstPrefixLength,
 	  token_sequence_length(RestAATokens, FirstAAToken, AAStartPos, AATokensLength),
 	  create_new_tokens(ExpansionTokens, RealPosIn, AATokensLength, NewTokensIn, NewTokensNext),
+	  % create_new_tokens(AATokens, RealPosIn, AATokensLength, NewTokensIn, NewTokensNext),
 	  PosNext is RealPosIn + AATokensLength,
 	  RemainingAADefTokens = LeftOverAADefTokens
 	),
@@ -1297,9 +1327,8 @@ get_next_token_state(1, TokenType, NextTokenState) :-
 % For tokens that consume characters (i.e., an, ic, lc, mc, nu, pn, uc, ws).
 % CurrentTokenType is the type of token that is being handled when
 % add_raw_pos_info_2/8 is called. Right now, it's only an (alphanumeric) or aadef.
-add_raw_pos_info_2(CurrentToken, CurrentTokenType, PrevTokenType,
-		   CurrentPos, InputString, _ExtraCharsIn, _ExtraCharsConsumedIn,
-		   NewToken, NextPos, _ExtraCharsNext, _ExtraCharsConsumedNext, RestInputString) :-
+add_raw_pos_info_2(CurrentToken, CurrentTokenType, UDA_AVL, PrevTokenType,
+		   CurrentPos, InputString, NewToken, NextPos, RestInputString) :-
 	token_template(CurrentToken, TokenType, CurrentTokenText,
 		       LCCurrentTokenText, CurrentPosTerm),
 	% CurrentTokenText is a substring of InputString.
@@ -1319,14 +1348,35 @@ add_raw_pos_info_2(CurrentToken, CurrentTokenType, PrevTokenType,
 	% format(user_output, 'SKIPPED:>~q<~n', [Prefix]),
 	% StartPos is the starting position of CurrentTokenText in InputString
 	StartPos is PrefixLength + CurrentPos,	
-	create_new_pos_term_2(StartPos, CurrentTokenTextLength, NewPosTerm),
+	( avl_member([UDAShortFormToken], UDA_AVL, [UDALongFormTokenList]),	  
+	  memberchk(CurrentToken, UDALongFormTokenList) ->
+	  token_template(UDAShortFormToken, _UDATokenType,
+			 _UDATokenText,_LCUDATokenText, UDAPosTerm),
+	  UDAPosTerm = pos(UDAStartPos,UDAEndPos),
+	  RealTokenTextLength is UDAEndPos - UDAStartPos,
+	  % See comment below explaining this mess
+	  ( last(UDALongFormTokenList, CurrentToken) ->
+	    NextPos is CurrentPos + PrefixLength + RealTokenTextLength
+	  ; NextPos is StartPos
+	  )
+	; RealTokenTextLength is CurrentTokenTextLength,
+	  NextPos is CurrentPos + PrefixLength + RealTokenTextLength
+	),
+	create_new_pos_term_2(StartPos, RealTokenTextLength, NewPosTerm),
 	token_template(NewToken, TokenType, CurrentTokenText,
 		       LCCurrentTokenText, CurrentPosTerm, NewPosTerm),
 	% NumCharsConsumed is the number of chars to lop off
 	% the beginning of InputString to get RestInputString
 	NumCharsConsumed is PrefixLength + CurrentTokenTextLength,
-	NextPos is CurrentPos + PrefixLength + CurrentTokenTextLength,
 	append_length(RestInputString, InputString, NumCharsConsumed).
+
+%% If CurrentToken is in a UDA: 
+%%  * If CurrentToken IS the last token in the UDA expansion,
+%%    then NextPos should be incremented by RealTokenTextLength.
+%%  * If CurrentToken is NOT the last token in the UDA expansion,
+%%    then NextPos should not change (i.e., it should be StartPos). 
+
+
 
 % sublist_ws/4 succeeds if sublist/4 succeeds, or
 % if the TokenType is xx and ends in "'s",
@@ -1427,4 +1477,117 @@ collapse_pos_info([Next|Rest], First, CollapsedPosInfo) :-
 	; CollapsedPosInfo = [First|RestCollapsed],
 	  collapse_pos_info(Rest, Next, RestCollapsed)
 	).
+
+
+% The code below updates the pos info contained in AAs
+% by using the corrected pos info in UnExpRawTokenList.
+
+adjust_AAs_pos_info(AAList, UnExpRawTokenList, UniqueID, AdjustedAAs) :-
+	sort_AAs_by_position(AAList, SortedAtomizedAAs),
+	adjust_AAs_pos_info_aux(SortedAtomizedAAs, UnExpRawTokenList, AdjustedAAs),
+	maybe_dump_AAs(UniqueID, AdjustedAAs, _).
+
+sort_AAs_by_position(AAs, SortedAtomizedAAs) :-
+	prefix_init_pos(AAs, PrefixedAAs),
+	sort(PrefixedAAs, PrefixedSortedAAs),
+	prefix_init_pos(SortedAAs, PrefixedSortedAAs),
+	(  foreach(AATokens-ExpansionTokens,                 SortedAAs),
+	   foreach(AtomizedAATokens-AtomizedExpansionTokens, SortedAtomizedAAs)
+	do atomize_tokens(AATokens,        AtomizedAATokens),
+	   ExpansionTokens = [ExpansionTokensList],
+	   atomize_tokens(ExpansionTokensList, AtomizedExpansionTokens)
+	).
+	    
+prefix_init_pos([], []).
+prefix_init_pos([AA-Expansion|Rest], [PosInfo-AA-Expansion|PrefixedRest]) :-
+	AA = [tok(_,_,_,PosInfo)|_],
+	prefix_init_pos(Rest, PrefixedRest).
+
+atomize_tokens(TokensWithStrings, TokensWithAtoms) :-
+	(  foreach(StringToken, TokensWithStrings),
+	   foreach(AtomToken,   TokensWithAtoms)
+	do StringToken = tok(Type,String,StringLC,PosInfo),
+	   maybe_atom_codes(Atom,   String),
+	   maybe_atom_codes(AtomLC, StringLC),
+	   AtomToken = tok(Type,Atom,AtomLC,PosInfo)
+	).
+
+maybe_atom_codes(Atom, String) :-
+	( atomic(String) ->
+	  Atom = String
+	; atom_codes(Atom, String)
+	).
+
+adjust_AAs_pos_info_aux([], _UnExpRawTokenList, []).
+% adjust_AAs_pos_info_aux([FirstAA|RestAAs], UnExpRawTokenListIn, [FirstAdjustedAA|RestAdjustedAAs]) :-
+adjust_AAs_pos_info_aux([FirstAA|RestAAs], UnExpRawTokenList, [FirstAdjustedAA|RestAdjustedAAs]) :-
+	FirstAA = AATokenList-ExpTokenList,
+%	( earlier_pos(AATokenList, ExpTokenList) ->
+%	  adjust_2_token_lists(AATokenList, ExpTokenList, UnExpRawTokenListIn,
+%			       AdjustedAATokenList, AdjustedExpTokenList, UnExpRawTokenListNext)
+%	; adjust_2_token_lists(ExpTokenList, AATokenList, UnExpRawTokenListIn,
+%			       AdjustedExpTokenList, AdjustedAATokenList, UnExpRawTokenListNext)
+%	),
+	adjust_1_token_list(AATokenList, UnExpRawTokenList, AdjustedAATokenList),
+	adjust_1_token_list(ExpTokenList, UnExpRawTokenList, AdjustedExpTokenList),
+	FirstAdjustedAA = AdjustedAATokenList-AdjustedExpTokenList,
+	adjust_AAs_pos_info_aux(RestAAs, UnExpRawTokenList, RestAdjustedAAs).
+
+/*
+adjust_2_token_lists(FirstList, SecondList, UnExpRawTokenListIn,
+		     AdjustedFirstList, AdjustedSecondList, UnExpRawTokenListOut) :-
+	adjust_1_token_list(FirstList, UnExpRawTokenListIn,
+			    AdjustedFirstList, UnExpRawTokenListNext),
+	adjust_1_token_list(SecondList, UnExpRawTokenListNext,
+			    AdjustedSecondList, UnExpRawTokenListOut).
+
+
+adjust_1_token_list([], UnExpRawTokenList, [], UnExpRawTokenList).
+adjust_1_token_list([FirstAAToken|RestAATokens], [FirstUnExpToken|RestUnExpTokens],
+		    [FirstAdjustedToken|RestAdjustedTokens], RemainingUnExpTokens) :-
+		    FirstAAToken    = tok(Type, Atom, LCAtom, pos(StartPos1,EndPos1)),
+		      % We've found the token in UnExpTokenList that matches the AA token!
+		    ( FirstUnExpToken = tok(Type, _String, _LCString,
+					    pos(StartPos1,EndPos1), pos(StartPos2,EndPos2)) ->
+		      FirstAdjustedToken = tok(Type, Atom, LCAtom, pos(StartPos2,EndPos2)),
+		      adjust_1_token_list(RestAATokens, RestUnExpTokens,
+					  RestAdjustedTokens, RemainingUnExpTokens)
+		    ; adjust_1_token_list([FirstAAToken|RestAATokens], RestUnExpTokens,
+					  [FirstAdjustedToken|RestAdjustedTokens], RemainingUnExpTokens)
+		    ).
+*/
+
+% adjust_1_token_list([], UnExpRawTokenList, [], UnExpRawTokenList).
+% adjust_1_token_list([FirstAAToken|RestAATokens], UnExpTokenListIn,
+% 		    [FirstAdjustedToken|RestAdjustedTokens], RemainingUnExpTokens) :-
+% 	adjust_one_token(FirstAAToken, UnExpTokenListIn,
+% 			 FirstAdjustedToken, UnExpTokenListNext),
+% 	adjust_1_token_list(RestAATokens, UnExpTokenListNext,
+% 			    RestAdjustedTokens, RemainingUnExpTokens).
+
+adjust_1_token_list([], _UnExpRawTokenList, []).
+adjust_1_token_list([FirstAAToken|RestAATokens], UnExpTokenListIn,
+		    [FirstAdjustedToken|RestAdjustedTokens]) :-
+	adjust_one_token(FirstAAToken, UnExpTokenListIn,
+			 FirstAdjustedToken, UnExpTokenListNext),
+	adjust_1_token_list(RestAATokens, UnExpTokenListNext,
+			    RestAdjustedTokens).
+
+
+adjust_one_token(FirstAAToken, [FirstUnExpToken|RestUnExpTokens],
+		 FirstAdjustedToken, UnExpTokenListOut) :-
+	FirstAAToken    = tok(Type, Atom, LCAtom, pos(StartPos1,EndPos1)),
+	  % We've found the token in UnExpTokenList that matches the AA token!
+	( FirstUnExpToken = tok(Type, _String, _LCString,
+				pos(StartPos1,EndPos1), pos(StartPos2,EndPos2)) ->
+	  FirstAdjustedToken = tok(Type, Atom, LCAtom, pos(StartPos2,EndPos2)),
+	  UnExpTokenListOut = RestUnExpTokens
+	; adjust_one_token(FirstAAToken, RestUnExpTokens,
+			   FirstAdjustedToken, UnExpTokenListOut)
+	).
+
+% earlier_pos(AATokenList, ExpTokenList) :-
+% 	AATokenList =  [tok(_,_,_,pos(StartPos1,_))|_],
+% 	ExpTokenList = [tok(_,_,_,pos(StartPos2,_))|_],
+% 	StartPos1 < StartPos2.
 

@@ -96,7 +96,7 @@ is_ws_only([Code|Rest]) :-
 fget_lines_until_skr_break/2 reads Lines from Stream until it encounters
 a "blank" line consisting of whitespace characters only (if any) */
 
-fget_lines_until_skr_break(Stream, _NumBlankLines, _NumBlankLines, Lines) :-
+fget_lines_until_skr_break(Stream, _NumBlankLinesOrig, _NumBlankLines, Lines) :-
 	% At end of stream, peek_code returns -1
 	peek_code(Stream, Code),
 	Code is -1,
@@ -143,10 +143,10 @@ fget_lines_until_skr_break(Stream, NumBlankLinesOrig, NumBlankLinesIn, Lines) :-
 fget_line(Stream, Codes) :-
 	fget_line(Stream, Line, Terminator),
 	Terminator >= 0,		% not end-of-file
-	Codes = Line,
+	Codes = Line.
 	% format(user_output, 'Read in line "~s"~n', [Codes]),
 	% true.
-	halt_if_non_ASCII(Codes).
+
 
 % fget_line(+Stream, ?Codes, ?Terminator)
 % reads a line from the given input Stream, and returns the characters in
@@ -175,33 +175,3 @@ terminator_code(13).
 % eof in case user does not have a <CR> at the end of the file!!
 terminator_code(-1).
 
-halt_if_non_ASCII(Codes) :-
-	( member(C, Codes),
-	  \+ local_ascii(C) ->
-	  get_non_ASCII_codes(Codes, NonASCIICodes),
-	  length(NonASCIICodes, NonASCIILength),
-	  get_plural_marker(NonASCIILength, Plural),
-	  Msg1 = 'MetaMap supports ASCII-only input; the input line~n',
-	  Msg2 = '       ~s~n',
-	  Msg3 = 'contains ~d non-ASCII char~w: "~s".~n',
-	  Msg4 = 'Remove all non-ASCII chars from input before trying again!~n',
-	  concat_atom([Msg1,Msg2,Msg3,Msg4], Message),
-	  Args = [Codes,NonASCIILength,Plural,NonASCIICodes],
-          fatal_error(Message, Args)
-	; true
-	).
-
-get_non_ASCII_codes(Codes, NonASCIICodes) :-
-	(  foreach(C, Codes),
-	   fromto(NonASCIICodes, S0, S, [])
-	do ( \+ local_ascii(C) ->
-	     S0 = [C|S]
-	   ; S0 = S
-	   )
-	).
-
-get_plural_marker(NonASCIILength, Plural) :-
-	( NonASCIILength is 1 ->
-	  Plural = ''
-	; Plural = 's'
-	).
