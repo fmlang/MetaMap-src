@@ -51,13 +51,10 @@
 	model_location/5
     ]).
 
-:- use_module(skr_lib(semtype_translation_2014AA), [
-	is_abbrev_semtype/1
-    ]).
-
-:- use_module(skr_lib(sicstus_utils), [
-	concat_atom/2
-    ]).
+:- use_module(library(file_systems), [
+	file_exists/1,
+	file_exists/2
+   ]).
 
 :- use_module(skr(skr_utilities), [
 	fatal_error/2,
@@ -65,9 +62,19 @@
 	set_message/5
     ]).
 
-:- use_module(library(file_systems), [
-	file_exists/2
-   ]).
+:-   absolute_file_name(skr_lib(semtype_translation_2015AA),
+			AbsFileName,
+			[extensions(['.pl'])]),
+     file_exists(AbsFileName) ->
+     use_module(skr_lib(semtype_translation_2015AA),
+		[expand_semtypes/2,
+		 is_abbrev_semtype/1]),
+     format(user_error, 'File skr_umls_info.pl is loading ~w~n', [AbsFileName])
+   ; format(user_error, 'File skr_umls_info.pl is NOT loading ~w~n', [AbsFileName]).
+
+:- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2
+    ]).
 
 
 /* verify_sources(+Sources)

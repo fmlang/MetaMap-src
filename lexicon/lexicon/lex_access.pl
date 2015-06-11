@@ -142,6 +142,7 @@ get_im_varlist_TOGGLE(BaseForm, _Categories, VarInfo) :-
 	  lex_form_ci_vars(BaseForm, VarInfo)
 	; control_value(lexicon, db) ->
 	  get_im_varlist_for_form(BaseForm, VarInfo, [])
+	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
 	).
 
 % get_im_varlist_for_all_forms([], []).
@@ -165,6 +166,7 @@ get_variants_for_form_TOGGLE(Form, VarList) :-
 	  lex_form_ci_vars(Form, VarList)
  	; control_value(lexicon, db) ->
 	  get_im_varlist_for_form(Form, VarList, [])
+	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
 	).
 
 get_im_varlist_for_form(BaseForm, VarList, VarListTail) :-
@@ -202,6 +204,7 @@ get_categories_for_form_TOGGLE(Form, LexCats) :-
 	  lex_form_ci_cats(Form, LexCats)
  	; control_value(lexicon, db) ->
 	  db_get_lex_cats(Form, LexCats)
+	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
 	).
 
 get_spellings_and_inflections_for_form(Term, Categories, Spelling, Inflections) :-
@@ -275,6 +278,7 @@ get_base_forms_for_form_with_cats_TOGGLE(Form, CategoryList, BaseFormList) :-
 	  % BDB version
  	; control_value(lexicon, db) ->
 	  get_base_forms_for_form_with_cats_apostrophe_s(Form, CategoryList, BaseFormList)
+	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
  	).
 
 get_base_forms_for_form_with_cats_apostrophe_s(FormAtom, CategoryList, BaseFormList) :-

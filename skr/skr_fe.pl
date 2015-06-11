@@ -35,9 +35,11 @@
 
 :- module(skr_fe, [
 	% must be exported for SemRep
-	form_expanded_sentences/3,
+	form_expanded_utterances/3,
 	% must be exported for SemRep
-	form_original_sentences/7,
+	form_original_utterances/7,
+	get_nomap_pairs/1,
+	get_output_stream/1,
 	fg/0,
 	go/0,
 	go/1,
@@ -70,28 +72,31 @@
 	generate_syntactic_analysis_plus/4
    ]).
 
+:- use_module(metamap(metamap_tokenization), [
+	local_ascii/1
+   ]).
+
 :- use_module(mmi(mmi), [
         do_MMI_processing/4
    ]).
 
 :- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/17,
-	stop_skr/0
+	skr_phrases/19,
+	stop_and_halt/0
    ]).
 
 :- use_module(skr(skr_utilities), [
+	check_valid_file_type/2,
+	convert_non_text_fields_to_blanks/6,
         fatal_error/2,
 	get_all_candidate_features/3
    ]).
 
 :- use_module(skr(skr_text_processing), [
-	convert_all_utf8_to_ascii/4,
 	extract_sentences/12,
 	get_skr_text/2,
 	medline_field_separator_char/1
-	% is_sgml_text/1
-	% warn_remove_non_ascii_from_input_lines/2
    ]).
 
 :- use_module(skr(skr_utilities), [
@@ -102,7 +107,6 @@
 	do_sanity_checking_and_housekeeping/4,
 	generate_bracketed_output/2,
 	generate_candidates_output/7,
-	generate_EOT_output/1,
 	% generate_header_output/6,
 	generate_mappings_output/5,
 	generate_phrase_output/7,
@@ -129,7 +133,7 @@
    ]).
 
 :- use_module(skr_lib(efficiency), [
-	maybe_atom_gc/2
+	maybe_atom_gc/3
    ]).
 
 :- use_module(skr_lib(negex), [
@@ -139,18 +143,17 @@
    ]).
 
 :- use_module(skr_lib(nls_strings), [
-	eliminate_multiple_meaning_designator_string/2,
+	% OBSOLETE
+	% eliminate_multiple_meaning_designator_string/2,
 	form_one_string/3,
 	normalized_syntactic_uninvert_string/2,
 	split_atom_completely/3,
-	trim_whitespace/2,
-	trim_whitespace_left_count/3,
-	trim_whitespace_left/2,
-	trim_whitespace_right/2
+	trim_whitespace/2
    ]).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
+	control_value/2,
 	get_control_options_for_modules/2,
 	get_from_iargs/4,
 	interpret_args/4,
@@ -163,7 +166,8 @@
    ]).
 
 :- use_module(skr_lib(pos_info), [
-	create_EXP_raw_token_list/8,
+	adjust_AAs_pos_info/4,
+	create_EXP_raw_token_list/7,
 	create_UNEXP_raw_token_list/6,
 	get_next_token_state/3
    ]).
@@ -173,6 +177,7 @@
    ]).
 
 :- use_module(skr_lib(sicstus_utils), [
+	concat_atom/2,
 	lower/2,
 	subchars/4
    ]).
@@ -186,11 +191,13 @@
    ]).
 
 :- use_module(text(text_objects), [
+	create_nomap_pairs/2,
 	get_UDAs/1
    ]).
 
 :- use_module(library(avl), [
-	empty_avl/1
+	empty_avl/1,
+	avl_to_list/2
    ]).
 
 :- use_module(library(file_systems), [
@@ -199,7 +206,6 @@
 
 :- use_module(library(lists), [
 	append/2,
-	prefix/2,
 	rev/2
    ]).
 
@@ -236,15 +242,15 @@ go(HaltOption, command_line(OptionsIn, ArgsIn)) :-
 	close_all_streams,
 	( initialize_skr(OptionsOut, ArgsOut, InterpretedArgs, IOptions) ->
 	    get_UDAs(UDAList),
-          ( skr_fe(InterpretedArgs, ProgramName, UDAList, Release, IOptions) ->
+	    get_nomap_pairs(NoMapPairs),
+          ( skr_fe(InterpretedArgs, ProgramName, UDAList, NoMapPairs, Release, IOptions) ->
 	    true
 	  ; true
 	  )
 	; usage
 	),
 	( HaltOption == halt ->
-	  stop_skr,
-	  halt
+	  stop_and_halt
 	; true
 	).
 
@@ -278,7 +284,7 @@ initialize_skr(InitialOptions, InitialArgs, FinalArgs, FinalOptions) :-
 skr_fe/1 calls either process_all/1 or batch_skr/1 (which redirects
 I/O streams and then calls process_all/1) depending on InterpretedArgs.  */
 
-skr_fe(InterpretedArgs, ProgramName, UDAList, DefaultRelease, IOptions) :-
+skr_fe(InterpretedArgs, ProgramName, UDAList, NoMapPairs, DefaultRelease, IOptions) :-
 	set_tag_option_and_mode(TagOption, TagMode),
 	% XML header will be printed here (and XML footer several lines below) iff
 	% (1) XML command-line option is on, and
@@ -294,17 +300,16 @@ skr_fe(InterpretedArgs, ProgramName, UDAList, DefaultRelease, IOptions) :-
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
           process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-		      UDAList, ServerStreams,
+		      UDAList, NoMapPairs, ServerStreams,
 		      TagOption, InterpretedArgs, IOptions)
           % batch_skr is for batch processing
-        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease, UDAList,
+        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease, UDAList, NoMapPairs,
 		    ServerStreams, TagOption, TagMode, IOptions, InputStream)
 	),
 	% conditionally_print_xml_footer/4 will be called here
 	% only if MetaMap is in batch mode, because otherwise (in interactive use)
 	% the user will have control-C-ed the program or exited it altogether.
-	conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream),
-	generate_EOT_output(OutputStream).
+	conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream).
 
 get_output_stream(OutputStream) :-
 	( current_stream(_File, write, OutputStream) ->
@@ -329,7 +334,7 @@ Meta concepts are computed for each noun phrase in the input.  */
 
 
 batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
-	  UDAList, ServerStreams, TagOption, TagMode, IOptions, InputStream) :-
+	  UDAList, NoMapPairs, ServerStreams, TagOption, TagMode, IOptions, InputStream) :-
 	get_from_iargs(infile,  name,   InterpretedArgs, InputFile),
 	get_from_iargs(infile,  stream, InterpretedArgs, InputStream),
 	get_from_iargs(outfile, name,   InterpretedArgs, OutputFile),
@@ -338,7 +343,8 @@ batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 	set_input(InputStream),
 	set_output(OutputStream),
 	( process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-		      UDAList, ServerStreams, TagOption, InterpretedArgs, IOptions) ->
+		      UDAList, NoMapPairs,
+		      ServerStreams, TagOption, InterpretedArgs, IOptions) ->
 	  true
 	; true
 	),
@@ -353,27 +359,28 @@ processing (MetaMapping, MMI processing, Semantic interpretation).
 user_input and user_output may have been redirected to files.)
 If TagOption is 'tag', then tagging is done. */
 
-process_all(ProgramName, DefaultRelease, InputStream, OutputStream, UDAList,
+process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
+	    UDAList, NoMapPairs,
 	    ServerStreams, TagOption, InterpretedArgs, IOptions) :-
 	do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream),
-	process_all_1(OutputStream, UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions).
+	process_all_1(OutputStream, UDAList, NoMapPairs,
+		      TagOption, ServerStreams, InterpretedArgs, IOptions).
 
-
-process_all_1(OutputStream, UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions) :-
-	get_skr_text(StringsUTF8, TextID),
-	convert_all_utf8_to_ascii(StringsUTF8, 0, TempExtraChars, Strings0),
-	append(TempExtraChars, ExtraChars),
+process_all_1(OutputStream, UDAList, NoMapPairs, TagOption,
+	      ServerStreams, InterpretedArgs, IOptions) :-
+	get_skr_text(Strings, TextID),
+	% append(TempExtraChars, ExtraChars),
 	% Strings0 = [FirstString|RestStrings],
 	% trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
 	% Removed call for Steven Bedrick
-	TrimmedStrings = Strings0,
-	( TrimmedStrings \== [] ->
-	  process_text(TrimmedStrings, TextID, ExtraChars, TagOption, ServerStreams,
-		       ExpRawTokenList, AAs, UDAList, MMResults),
+	( Strings \== [] ->
+	  process_text(Strings, TextID, TagOption, ServerStreams,
+		       ExpRawTokenList, AAs, UDAList, NoMapPairs, MMResults),
 	  output_should_be_bracketed(BracketedOutput),
- 	  postprocess_text(OutputStream, TrimmedStrings, BracketedOutput, InterpretedArgs,
+ 	  postprocess_text(OutputStream, Strings, BracketedOutput, InterpretedArgs,
 			   IOptions, ExpRawTokenList, AAs, MMResults),
-	  process_all_1(OutputStream, UDAList, TagOption, ServerStreams, InterpretedArgs, IOptions)
+	  process_all_1(OutputStream, UDAList, NoMapPairs,
+			TagOption, ServerStreams, InterpretedArgs, IOptions)
 	; true
 	),
 	!.
@@ -444,33 +451,37 @@ in Sentences in case the original text is preferred. */
 % 	 aphrases(APhrases))
 
 %%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
-process_text(Text, TextID, ExtraChars, TagOption, ServerStreams,
-	     RawTokenList, AAs, UDAList, MMResults) :-
-	( process_text_1(Text, TextID, ExtraChars, TagOption, ServerStreams,
-			 RawTokenList, AAs, UDAList, MMResults) ->
+process_text(Text, TextID, TagOption, ServerStreams,
+	     RawTokenList, AAs, UDAList, NoMapPairs, MMResults) :-
+	halt_if_non_ASCII(Text),
+	( process_text_1(Text, TextID, TagOption, ServerStreams,
+			 RawTokenList, AAs, UDAList, NoMapPairs, MMResults) ->
 	  true
- 	; fatal_error('process_text/4 failed for~n~p~n', [Text])
+ 	; fatal_error('process_text/4 failed for ~p~n', [Text])
 	).
 
-process_text_1(Lines0, TextID, ExtraChars, TagOption, ServerStreams,
-	       ExpRawTokenList, AAs, UDAListIn, MMResults) :-
+process_text_1(Lines0, TextID, TagOption, ServerStreams,
+	       ExpRawTokenList, AdjustedAAs, UDAListIn, NoMapPairs, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
 	% Sentences and CoordSentences are the token lists
 	% CoordSentences includes the positional information for the original text
 	% format(user_output, 'Processing PMID ~w~n', [PMID]),
-	extract_sentences(Lines0, TextID, InputType, ExtraChars, TextFields, NonTextFields,
-			  Sentences, CoordSentences, AAs, UDAListIn, UDAs, Lines),
+	extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
+			  Sentences, CoordSentences,
+			  UniqueID, AAs, UDAListIn, UDA_AVL, Lines),
 	% need to update Lines
 	% fail,
 	% RawTokenList is the copy of Sentences that includes an extra pos(_,_) term
 	% showing the position of each token in the raw, undoctored text.
+	form_one_string(Lines0, " ", OrigInputStringWithBlanks),
 	form_one_string(Lines, [10], InputStringWithCRs),
 	form_one_string(Lines, " ",  InputStringWithBlanks),
 
 	% '' is just the previous token type, which, for the initial call, is null
 	TokenState is 0,
+	atom_codes(OrigCitationTextAtomWithBlanks, OrigInputStringWithBlanks),
 	atom_codes(CitationTextAtomWithCRs, InputStringWithCRs),
 	% Here I need to change to blanks everything other than then text of text fields
  	convert_non_text_fields_to_blanks(InputType, InputStringWithBlanks,
@@ -478,16 +489,14 @@ process_text_1(Lines0, TextID, ExtraChars, TagOption, ServerStreams,
 					  TrimmedTextFieldsOnlyString, NumBlanksTrimmed),
 	CurrentPos is NumBlanksTrimmed,
  	% format(user_output, '~n~s~n~n~s~n', [InputStringWithBlanks,TextFieldsOnlyString]),
-        write_sentences(CoordSentences, Sentences),
+        write_sentences(Sentences, CoordSentences),
 	PrevToken = '',
-	ExtraCharsConsumed is 0,
-	create_EXP_raw_token_list(Sentences, PrevToken, ExtraChars, ExtraCharsConsumed,
-				  CurrentPos, TokenState,
+	create_EXP_raw_token_list(Sentences, UDA_AVL, PrevToken, CurrentPos, TokenState,
 				  TrimmedTextFieldsOnlyString, TempExpRawTokenList),
 		
 				  % InputStringWithBlanks, TempExpRawTokenList),
 	ExpRawTokenList = TempExpRawTokenList,
-	create_UNEXP_raw_token_list(Sentences, CurrentPos, ExtraChars, TokenState,
+	create_UNEXP_raw_token_list(Sentences, UDA_AVL, CurrentPos, TokenState,
 				    TrimmedTextFieldsOnlyString, UnExpRawTokenList),
 				   % InputStringWithBlanks, UnExpRawTokenList),
 	!,
@@ -504,17 +513,17 @@ process_text_1(Lines0, TextID, ExtraChars, TagOption, ServerStreams,
 	% 	 CoordSentencesLength,ExpRawTokenListLength]),
 
 	write_raw_token_lists(ExpRawTokenList, UnExpRawTokenList),
-	form_original_sentences(Sentences, 1, 0, 0, CitationTextAtomWithCRs,
-				UnExpRawTokenList, OrigUtterances),
-	% format(user_output, '~n~n#### ~w OrigUtterances:~n', [PMID]),
+	form_original_utterances(Sentences, 1, 0, 0, CitationTextAtomWithCRs,
+				 UnExpRawTokenList, OrigUtterances),
+	% format(user_output, '~n~n### ~w OrigUtterances:~n', [PMID]),
 	% write_utterances(OrigUtterances),
-	% form_original_sentences(Sentences, OrigUtterances),
+	% form_original_utterances(Sentences, OrigUtterances),
 	% temp
 	%    format('OrigUtterances:~n',[]),
 	%    wl(OrigUtterances),
-	% form_expanded_sentences(CoordSentences, 1, 0, 0, ExpRawTokenList, ExpandedUtterances),
-	form_expanded_sentences(CoordSentences, OrigUtterances, ExpandedUtterances),
-	% format(user_output, '~n~n#### ~w ExpandedUtterances:~n', [PMID]),
+	% form_expanded_utterances(CoordSentences, 1, 0, 0, ExpRawTokenList, ExpandedUtterances),
+	form_expanded_utterances(CoordSentences, OrigUtterances, ExpandedUtterances),
+	% format(user_output, '~n~n### ~w ExpandedUtterances:~n', [PMID]),
 	% write_utterances(ExpandedUtterances),
 	% format(user_output, '~n~n', []),
 	compare_utterance_lengths(OrigUtterances, ExpandedUtterances),
@@ -522,24 +531,45 @@ process_text_1(Lines0, TextID, ExtraChars, TagOption, ServerStreams,
 	ExpRawTokenList \== '',
 	empty_avl(WordDataCacheIn),
 	empty_avl(USCCacheIn),
+	avl_to_list(AAs, AAList),
+	% Only the UnExpRawTokenList contains correct absolute posinfo,
+	% which is necessary for dump_avl in MMI processing.
+	adjust_AAs_pos_info(AAList, UnExpRawTokenList, UniqueID, AdjustedAAs),
 	process_text_aux(ExpandedUtterances, TagOption, ServerStreams,
-			 CitationTextAtomWithCRs, AAs, UDAs,
+			 OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
+			 AdjustedAAs, UDA_AVL, NoMapPairs,
 			 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut, MMOutput),
-        !.
+	!.
 
-process_text_aux([],
+process_text_aux(ExpandedUtterances, TagOption, ServerStreams,
+		 OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
+		 AdjustedAAs, UDA_AVL, NoMapPairs,
+		 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
+		 RawTokenListOut, WordDataCacheOut, USCacheOut, MMOutput) :-
+	( control_option(aas_only) ->
+	  true
+	; do_process_text(ExpandedUtterances, TagOption, ServerStreams,
+			  OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
+			  AdjustedAAs, UDA_AVL, NoMapPairs,
+			  ExpRawTokenList, WordDataCacheIn, USCCacheIn,
+			  RawTokenListOut, WordDataCacheOut, USCacheOut, MMOutput)
+	).
+
+do_process_text([],
 		 _TagOption, _ServerStreams,
-		 _CitationTextAtom, _AAs, _UDAs,
+		 _OrigCitationTextAtom, _CitationTextAtom,
+		_AAs, _UDA_AVL, _NoMapPairs,
 		 ExpRawTokenList, WordDataCache, USCCache,
 		 ExpRawTokenList, WordDataCache, USCCache, []).
-process_text_aux([ExpandedUtterance|Rest],
+do_process_text([ExpandedUtterance|Rest],
 		 TagOption, ServerStreams,
-		 CitationTextAtom, AAs, UDAs,
+		 OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL, NoMapPairs,
 		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
 		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
 		 [mm_output(ExpandedUtterance,CitationTextAtom,ModifiedText,Tagging,AAs,
 			    Syntax,DisambiguatedMMOPhrases,ExtractedPhrases)|RestMMOutput]) :-
+	maybe_atom_gc(2, _DidGC,_SpaceCollected),
 	% Construct output terms
 	ModifiedText = modified_text(UtteranceText),
 	Tagging = tagging(TagOption,FullTagList,TagList,HRTagStrings),
@@ -549,21 +579,23 @@ process_text_aux([ExpandedUtterance|Rest],
 	% Decompose input terms
 	ExpandedUtterance = utterance(InputLabel,Text0,_PosInfo,_ReplacementPos),
 	conditionally_announce_processing(InputLabel, Text0),
-	maybe_atom_gc(_DidGC,_SpaceCollected),
-	set_utterance_text(Text0, UtteranceText),
-	do_syntax_processing(TagOption, ServerStreams,
-			     UtteranceText, FullTagList, TagList,
-			     HRTagStrings, Definitions, SyntAnalysis0),
-	conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
-	skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-		    AAs, UDAs, SyntAnalysis, TagList,
-		    WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
-		    ServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
-		    DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases),
-	process_text_aux(Rest, TagOption, ServerStreams,
-			 CitationTextAtom, AAs, UDAs,
-			 ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
-			 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
+	( control_option(utterances_only) ->
+	  true
+	; set_utterance_text(Text0, UtteranceText),
+	  do_syntax_processing(TagOption, ServerStreams,
+			       UtteranceText, FullTagList, TagList,
+			       HRTagStrings, Definitions, SyntAnalysis0),
+	  conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
+	  skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
+		      AAs, UDA_AVL, NoMapPairs, SyntAnalysis, TagList,
+		      WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
+		      ServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
+		      DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases)
+	),
+	do_process_text(Rest, TagOption, ServerStreams,
+			OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL, NoMapPairs,
+			ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
+			ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
 
 postprocess_text(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 		 IOptions,  ExpRawTokenList, AAs, MMResults) :-
@@ -601,10 +633,10 @@ postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 % DO NOT MODIFY post_process_sentences/11 without checking with the maintainer of the MetaMap API.
 % PrintMMO is 1 for printing MMO (as MetaMap does), and 0 for not print MMO (as the Java API does).
 postprocess_sentences(OutputStream, OrigUtterances, NegExList, IArgs, IOptions, AAs,
-		      Sentences, BracketedOutput, DisambMMOutput, PrintMMO, AllMMO) :-
+		      _Sentences, BracketedOutput, DisambMMOutput, PrintMMO, AllMMO) :-
 	% HeaderMMO = [ArgsMMO,AAsMMO,NegExMMO|HeaderMMORest],
 	% HeaderMMORest is the (as yet) uninstantiated tail of HeaderMMO
-	postprocess_sentences_1(OrigUtterances, Sentences, NegExList,
+	postprocess_sentences_1(OrigUtterances, NegExList,
 				BracketedOutput, 1, AAs, DisambMMOutput, UtteranceMMO, []),
 	AllMMO = HeaderMMO,
 	HeaderMMORest = UtteranceMMO,
@@ -613,9 +645,9 @@ postprocess_sentences(OutputStream, OrigUtterances, NegExList, IArgs, IOptions, 
 	generate_MMO_terms(IArgs, IOptions, NegExList, DisambMMOutput,
 			   HeaderMMO, HeaderMMORest, OutputStream, PrintMMO, AllMMO).
 
-postprocess_sentences_1([], _Sentences, _NegExList,
+postprocess_sentences_1([], _NegExList,
 			_BracketedOutput, _N, _AAs, [], MMO, MMO).
-postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences, NegExList,
+postprocess_sentences_1([OrigUtterance|RestOrigUtterances], NegExList,
 			BracketedOutput, N, AAs, [MMOutput|RestMMOutput], MMOIn, MMOOut) :-
 	% Decompose input
 	OrigUtterance = utterance(Label, TextString, StartPos/Length, ReplPos),
@@ -627,24 +659,24 @@ postprocess_sentences_1([OrigUtterance|RestOrigUtterances], Sentences, NegExList
 	MMOIn = [UtteranceMMO|MMONext1],
 	output_tagging(BracketedOutput, HRTagStrings, FullTagList),
 	postprocess_phrases(MMOPhrases, ExtractedPhrases, NegExList,
-			    Sentences, BracketedOutput, N, 1, AAs, Label, MMONext1, MMONext2),
+			    BracketedOutput, N, 1, AAs, Label, MMONext1, MMONext2),
 	!,
 	NextN is N + 1,
-	postprocess_sentences_1(RestOrigUtterances, Sentences, NegExList,
+	postprocess_sentences_1(RestOrigUtterances, NegExList,
 				BracketedOutput, NextN, AAs, RestMMOutput,
 				MMONext2, MMOOut).
-postprocess_sentences_1([FailedUtterance|_], _Sentences, _NegExList,
+postprocess_sentences_1([FailedUtterance|_], _NegExList,
 			_BracketedOutput, _N, _AAs, _MMOutput, _MMOIn, _MMOOut) :-
 	FailedUtterance = utterance(UtteranceID,UtteranceText,_PosInfo,_ReplPos),
 	fatal_error('postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
 		    [UtteranceID,UtteranceText]).
 
 
-postprocess_phrases([], [], _NegExList, _Sentences, _BracketedOutput,
+postprocess_phrases([], [], _NegExList, _BracketedOutput,
 		    _N, _M, _AAs, _Label, MMO, MMO).
 postprocess_phrases([MMOPhrase|RestMMOPhrases],
 		    [_ExtractedPhrase|RestExtractedPhrases], NegExList,
-		    Sentences, BracketedOutput, N, M, AAs, Label, MMOIn, MMOOut) :-
+		    BracketedOutput, N, M, AAs, Label, MMOIn, MMOOut) :-
 	MMOPhrase = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
 			   candidates(TotalCandidateCount,
 				      ExcludedCandidateCount,
@@ -677,7 +709,7 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 	MMOIn = [PhraseMMO,CandidatesMMO,MappingsMMO|MMONext],
 	NextM is M + 1,
 	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases, NegExList,
-			    Sentences, BracketedOutput, N, NextM, AAs, Label, MMONext, MMOOut).
+			    BracketedOutput, N, NextM, AAs, Label, MMONext, MMOOut).
 
 
 % If show_candidates is on, the candidate terms will be present in the big MMOPhrase term, and
@@ -718,12 +750,12 @@ instantiate_negated(CUI, MetaTerm, PosInfo, Negated, NegExList) :-
 	; Negated is 0
 	).
 /*
-   form_original_sentences(+Sentences, +StartPos, +EndPos, +TokenState, +CitationTextAtom,
-			   +RawTokenList, -OrigUtterances)
-   form_original_sentences_aux(+Sentences, +StartPos, +EndPos, +TokenState, +CitationTextAtom,
-   			       +RawTokenList, +Label, +RevTexts, -OrigUtterances)
+   form_original_utterances(+Sentences, +StartPos, +EndPos, +TokenState, +CitationTextAtom,
+			    +RawTokenList, -OrigUtterances)
+   form_original_utterances_aux(+Sentences, +StartPos, +EndPos, +TokenState, +CitationTextAtom,
+   			        +RawTokenList, +Label, +RevTexts, -OrigUtterances)
 
-form_original_sentences/7 extracts OrigUtterances from Sentences.
+form_original_utterances/7 extracts OrigUtterances from Sentences.
 (See skr_text_processing:extract_sentences/4 for a description of Sentences.)
 
 OrigUtterances is a list of terms of the form
@@ -735,7 +767,7 @@ where <Label> is an atom identifying the sentence, e.g., UI.<field>.<n>,
           * the number of characters of the utterance in the original text
       <ReplacementPos> is a list of integers representing the character positions
           in Text in which <CR>s have been replaced by blanks
-form_original_sentences_aux/9 is an auxiliary that keeps track of the Label to use
+form_original_utterances_aux/9 is an auxiliary that keeps track of the Label to use
 for each sentence and the accumulated text strings, RevTexts.
 
 TokenState represents if we're in the middle of a sentence.
@@ -745,23 +777,23 @@ TokenState == 1 means that we have ALREADY consumed a regular token in the curre
 
 The terms here are utterance/3 for historical reasons. */
 
-form_original_sentences(Sentences, StartPos, EndPos, TokenState, CitationTextAtom,
-			RawTokenList, OrigUtterances) :-
-	form_original_sentences_aux(Sentences, StartPos, EndPos, TokenState, CitationTextAtom,
-				    RawTokenList, '', [], OrigUtterances).
+form_original_utterances(Sentences, StartPos, EndPos, TokenState, CitationTextAtom,
+			 RawTokenList, OrigUtterances) :-
+	form_original_utterances_aux(Sentences, StartPos, EndPos, TokenState, CitationTextAtom,
+				     RawTokenList, '', [], OrigUtterances).
 
 % If there are no more tokens in the sentence list (first arg == [])
 % and the RevText list is empty, because we haven't been accumulating any text,
 % then just terminate, and return [] as the final tail of OrigUtterances.
 
-form_original_sentences_aux([], _StartPos, _EndPos, _TokenState, _CitationTextAtom,
-			    _RawTokenList, _Label, [], []) :-
+form_original_utterances_aux([], _StartPos, _EndPos, _TokenState, _CitationTextAtom,
+			     _RawTokenList, _Label, [], []) :-
 	!.
 % Add StartPos/EndPos to the utterance term
 % because we're at the end of the token list.
-form_original_sentences_aux([], StartPos, EndPos, _TokenState, CitationTextAtom, _RawTokenList, 
-			    Label, _RevTexts,
-			    [utterance(Label,OrigText,StartPos/Length,ReplPos)]) :-
+form_original_utterances_aux([], StartPos, EndPos, _TokenState, CitationTextAtom, _RawTokenList,
+			     Label, _RevTexts,
+			     [utterance(Label,OrigText,StartPos/Length,ReplPos)]) :-
 	!,
 	% rev(RevTexts, Texts),
 	% append(Texts, Text0),
@@ -775,22 +807,22 @@ form_original_sentences_aux([], StartPos, EndPos, _TokenState, CitationTextAtom,
 	Length is TempLength - LengthDiff.	
 % Skip a "label" field if there is no previous RevText,
 % but convert the Label text to an atom and pass it along.
-% form_original_sentences_aux([tok(label,TokLabel,_,_)|Rest], StartPos, EndPos,
-form_original_sentences_aux([Token|Rest], StartPos, EndPos,
-			    TokenState,  CitationTextAtom,
-			    [_|RestRawTokenList], _Label, [], OrigUtterances) :-
+% form_original_utterances_aux([tok(label,TokLabel,_,_)|Rest], StartPos, EndPos,
+form_original_utterances_aux([Token|Rest], StartPos, EndPos,
+			     TokenState,  CitationTextAtom,
+			     [_|RestRawTokenList], _Label, [], OrigUtterances) :-
 	token_template(Token, label, TokLabel, _PosInfo1, _PosInfo2),
 	!,
 	atom_codes(NewLabel, TokLabel),
-	form_original_sentences_aux(Rest, StartPos, EndPos, TokenState, CitationTextAtom,
-				    RestRawTokenList, NewLabel, [], OrigUtterances).
+	form_original_utterances_aux(Rest, StartPos, EndPos, TokenState, CitationTextAtom,
+				     RestRawTokenList, NewLabel, [], OrigUtterances).
 % Add StartPos/EndPos to the utterance term
 % because the current token is a label, and thus begins the next utterance.
-% form_original_sentences_aux([tok(label,TokLabel,_,_)|Rest], StartPos, EndPos,
-form_original_sentences_aux([Token|Rest], StartPos, EndPos,
-			    TokenState, CitationTextAtom,
-			    [_|RestRawTokenList], Label, _RevTexts,
-			    [utterance(Label,OrigText,StartPos/Length,ReplPos)|RestOrigUtterances]) :-
+% form_original_utterances_aux([tok(label,TokLabel,_,_)|Rest], StartPos, EndPos,
+form_original_utterances_aux([Token|Rest], StartPos, EndPos,
+			     TokenState, CitationTextAtom,
+			     [_|RestRawTokenList], Label, _RevTexts,
+			     [utterance(Label,OrigText,StartPos/Length,ReplPos)|RestOrigUtterances]) :-
 	token_template(Token, label, TokLabel, _PosInfo1, _PosInfo2),
 	!,
 	% rev(RevTexts, Texts),
@@ -805,12 +837,12 @@ form_original_sentences_aux([Token|Rest], StartPos, EndPos,
 	length(OrigText, OrigTextLength),
 	LengthDiff is OrigTextWithCRsLength - OrigTextLength,
 	Length is TempLength - LengthDiff,
-	form_original_sentences_aux(Rest, StartPos, EndPos, TokenState, CitationTextAtom,
-				    RestRawTokenList, NewLabel, [], RestOrigUtterances).
-% form_original_sentences_aux([tok(TokenType,_,_,_)|Rest], StartPos, EndPos,
-form_original_sentences_aux([Token|Rest], StartPos, EndPos,
-			    TokenState, CitationTextAtom,
-			    [RawToken|RestRawTokens], Label, RevTexts, OrigUtterances) :-
+	form_original_utterances_aux(Rest, StartPos, EndPos, TokenState, CitationTextAtom,
+				     RestRawTokenList, NewLabel, [], RestOrigUtterances).
+% form_original_utterances_aux([tok(TokenType,_,_,_)|Rest], StartPos, EndPos,
+form_original_utterances_aux([Token|Rest], StartPos, EndPos,
+			     TokenState, CitationTextAtom,
+			     [RawToken|RestRawTokens], Label, RevTexts, OrigUtterances) :-
 	% skip token types
 	% field, sn, pe (higher order), and
 	% aa, and aadef (annnotation) altogether
@@ -819,19 +851,19 @@ form_original_sentences_aux([Token|Rest], StartPos, EndPos,
 	!,
 	get_next_token_state(TokenState, TokenType, NextTokenState),
 	consume_matching_raw_token(TokenType, RawToken, RestRawTokens, NewRestRawTokens),
-	form_original_sentences_aux(Rest, StartPos, EndPos, NextTokenState, CitationTextAtom,
-				    NewRestRawTokens, Label, RevTexts, OrigUtterances).
+	form_original_utterances_aux(Rest, StartPos, EndPos, NextTokenState, CitationTextAtom,
+				     NewRestRawTokens, Label, RevTexts, OrigUtterances).
 % Token here is a normal token (an, ic, uc, mc, ws, pn, etc.)
 % Set the StartPos (the starting character position of the utterance) IFF
 % (1) the token is not a higher_order_or_annotation_type (which is this clause), and
 % (2) the TokenState is 0 (meaning we're not currently in a sentence).
 % In other words, set the utterance's StartPos
 % at the first normal token after an sn token.
-% form_original_sentences_aux([tok(TokenType,TokenText,_,_)|Rest],
-form_original_sentences_aux([Token|Rest],
-			    CurrStartPos, _CurrEndPos, TokenState, CitationTextAtom,
-			    [RawToken|RestRawTokenList],
-			    Label, RevTexts, OrigUtterances) :-
+% form_original_utterances_aux([tok(TokenType,TokenText,_,_)|Rest],
+form_original_utterances_aux([Token|Rest],
+			     CurrStartPos, _CurrEndPos, TokenState, CitationTextAtom,
+			     [RawToken|RestRawTokenList],
+			     Label, RevTexts, OrigUtterances) :-
 	token_template(Token, TokenType, TokenText, _PosInfo1, _PosInfo2),
 	get_next_token_state(TokenState, TokenType, NextTokenState),
 	RawToken = tok(_Type, _String, _LCStr, _Pos1, pos(RawTokStartPos,RawTokLength)),
@@ -839,9 +871,9 @@ form_original_sentences_aux([Token|Rest],
 				    RawTokStartPos, RawTokLength,
 				    CurrStartPos, NewStartPos, NewEndPos),
 	% format(user_output, 'Orig: ~s ~w~n', [TokenText, NewEndPos]),
-	form_original_sentences_aux(Rest, NewStartPos, NewEndPos, NextTokenState, CitationTextAtom,
-				    RestRawTokenList, Label,
-				    [TokenText|RevTexts], OrigUtterances).
+	form_original_utterances_aux(Rest, NewStartPos, NewEndPos, NextTokenState, CitationTextAtom,
+				     RestRawTokenList, Label,
+				     [TokenText|RevTexts], OrigUtterances).
 
 consume_matching_raw_token(TokenType, RawToken, RestRawTokens, NewRestRawTokens) :-
 	token_template(RawToken, TokenType, _TokenString, _LCTokenString, _PosInfo1, _PosInfo2),
@@ -864,13 +896,13 @@ set_utterance_start_end_pos(1, RawTokStartPos, RawTokLength,
 	NewEndPos is RawTokStartPos + RawTokLength.
 % The calculation of NewEndPos needs some explanation:
 
-/* form_expanded_sentences(+CoordSentences, +OrigUtterances, -ExpandedSentences)
-   form_expanded_sentences(+CoordSentences, +OrigUtterances, +Label, +RevTexts,
-                           -ExpandedSentences)
+/* form_expanded_utterances(+CoordSentences, +OrigUtterances, -ExpandedSentences)
+   form_expanded_utterances(+CoordSentences, +OrigUtterances, +Label, +RevTexts,
+                            -ExpandedSentences)
 
 OrigUtterances is passed in simply to copy the positional information.
 
-form_expanded_sentences/3 extracts ExpandedSentences from CoordSentences.
+form_expanded_utterances/3 extracts ExpandedSentences from CoordSentences.
 (See skr_text_processing:extract_sentences/4 for a description of
 CoordSentences.
 
@@ -879,18 +911,18 @@ ExpandedSentences is a list of terms of the form
 where <label> is an atom identifying the sentence, e.g., UI.<field>.<n> and
       <text> is a string consisting of the expanded sentence.
 
-form_expanded_sentences/4 is an auxiliary that keeps track of the Label to use
+form_expanded_utterances/4 is an auxiliary that keeps track of the Label to use
 for each sentence and the accumulated text strings, RevTexts.
 
 The terms here are utterance/2 for historical reasons. */
 
-form_expanded_sentences(CoordSentences, OrigUtterances, ExpandedSentences) :-
-        form_expanded_sentences_aux(CoordSentences, OrigUtterances, '', [], ExpandedSentences).
+form_expanded_utterances(CoordSentences, OrigUtterances, ExpandedSentences) :-
+        form_expanded_utterances_aux(CoordSentences, OrigUtterances, '', [], ExpandedSentences).
 
-form_expanded_sentences_aux([], [],_Label, [], []) :-
+form_expanded_utterances_aux([], [],_Label, [], []) :-
         !.
-form_expanded_sentences_aux([], [utterance(Label,_OrigText,StartPos/Length,ReplPos)],
-			    Label, RevTexts, [utterance(Label,Text,StartPos/Length,ReplPos)]) :-
+form_expanded_utterances_aux([], [utterance(Label,_OrigText,StartPos/Length,ReplPos)],
+			     Label, RevTexts, [utterance(Label,Text,StartPos/Length,ReplPos)]) :-
         !,
         rev(RevTexts,Texts),
         append(Texts,Text0),
@@ -898,19 +930,19 @@ form_expanded_sentences_aux([], [utterance(Label,_OrigText,StartPos/Length,ReplP
 % This is for the first label token in a citation,
 % because the next-to-last argument,
 % which holds the previous utterance's RevTexts, is [].
-% form_expanded_sentences_aux([tok(label,Label,_LCLabel,_,_)|Rest], OrigUtterances,
-form_expanded_sentences_aux([Token|Rest], OrigUtterances,
-			    _NoPrevLabel, [], ExpandedSentences) :-
+% form_expanded_utterances_aux([tok(label,Label,_LCLabel,_,_)|Rest], OrigUtterances,
+form_expanded_utterances_aux([Token|Rest], OrigUtterances,
+			     _NoPrevLabel, [], ExpandedSentences) :-
 	token_template(Token, label, Label, _LCLabel, _PosInfo1, _PosInfo2),
         !,
         atom_codes(NewLabel, Label),
-        form_expanded_sentences_aux(Rest, OrigUtterances, NewLabel, [], ExpandedSentences).
-% form_expanded_sentences_aux([tok(label,NextLabel,_NextLCLabel,_,_)|Rest],
-form_expanded_sentences_aux([Token|Rest],
-			    [utterance(PrevLabel,_OrigText,StartPos/Length,ReplPos)
+        form_expanded_utterances_aux(Rest, OrigUtterances, NewLabel, [], ExpandedSentences).
+% form_expanded_utterances_aux([tok(label,NextLabel,_NextLCLabel,_,_)|Rest],
+form_expanded_utterances_aux([Token|Rest],
+			     [utterance(PrevLabel,_OrigText,StartPos/Length,ReplPos)
 			        |RestOrigUtterances],
-			    PrevLabel, RevTexts,
-			    [utterance(PrevLabel,Text,StartPos/Length,ReplPos)
+			     PrevLabel, RevTexts,
+			     [utterance(PrevLabel,Text,StartPos/Length,ReplPos)
 			        |RestExpandedSentences]) :-
 	token_template(Token, label, NextLabel, _LCNextLabel, _PosInfo1, _PosInfo2),
 	!,
@@ -918,39 +950,40 @@ form_expanded_sentences_aux([Token|Rest],
         append(Texts,Text0),
         trim_whitespace(Text0,Text),
         atom_codes(NewLabel,NextLabel),
-        form_expanded_sentences_aux(Rest, RestOrigUtterances, NewLabel, [], RestExpandedSentences).
-% form_expanded_sentences_aux([tok(Type,_,_,_,_)|Rest], OrigUtterances,
-form_expanded_sentences_aux([Token|Rest], OrigUtterances,
-			    Label, RevTexts, ExpandedSentences) :-
+        form_expanded_utterances_aux(Rest, RestOrigUtterances, NewLabel, [], RestExpandedSentences).
+% form_expanded_utterances_aux([tok(Type,_,_,_,_)|Rest], OrigUtterances,
+form_expanded_utterances_aux([Token|Rest], OrigUtterances,
+			     Label, RevTexts, ExpandedSentences) :-
 	token_template(Token, Type, _TokenString, _LCTokenString, _PosInfo1, _PosInfo2),
         higher_order_or_annotation_type(Type),
         !,
-        form_expanded_sentences_aux(Rest, OrigUtterances, Label, RevTexts, ExpandedSentences).
-% form_expanded_sentences_aux([tok(_Type,TokenText,_,_,_)|Rest], OrigUtterances,
-form_expanded_sentences_aux([Token|Rest], OrigUtterances,
-			    Label, RevTexts, ExpandedSentences) :-
+        form_expanded_utterances_aux(Rest, OrigUtterances, Label, RevTexts, ExpandedSentences).
+% form_expanded_utterances_aux([tok(_Type,TokenText,_,_,_)|Rest], OrigUtterances,
+form_expanded_utterances_aux([Token|Rest], OrigUtterances,
+			     Label, RevTexts, ExpandedSentences) :-
 	token_template(Token, _TokenType, TokenText, _LCTokenText, _PosInfo1, _PosInfo2),
         % temp
         %    format('  ~a:"~s"~n',[Type,TokenText]),
-        form_expanded_sentences_aux(Rest, OrigUtterances,
-				    Label, [TokenText|RevTexts], ExpandedSentences).
+        form_expanded_utterances_aux(Rest, OrigUtterances,
+				     Label, [TokenText|RevTexts], ExpandedSentences).
 
 conditionally_announce_processing(InputLabel, Text0) :-
 	telling(CurrentOutput),
 	( CurrentOutput == user ->
 	  true
 	; \+ control_option(silent) ->
-	  format(user_output,'~nProcessing ~a: ~s~n', [InputLabel,Text0]),
-	  flush_output(user_output)
+	  send_message('~nProcessing ~a: ~s~n', [InputLabel,Text0]),
+	  flush_output(user_error)
 	; true
 	),
 	flush_output(CurrentOutput).
 
-set_utterance_text(Text0, UtteranceText) :-
+set_utterance_text(Text, UtteranceText) :-
 	( control_option(term_processing) ->
-	  eliminate_multiple_meaning_designator_string(Text0, Text1),
-	  normalized_syntactic_uninvert_string(Text1, UtteranceText)
-	; UtteranceText = Text0
+	  % OBSOLETE
+	  % eliminate_multiple_meaning_designator_string(Text0, Text1),
+	  normalized_syntactic_uninvert_string(Text, UtteranceText)
+	; UtteranceText = Text
 	).
 
 do_syntax_processing(TagOption, ServerStreams, UtteranceText, FullTagList, TagList,
@@ -973,141 +1006,64 @@ conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis) :-
 	; SyntAnalysis = SyntAnalysis0
 	).
 
-convert_non_text_fields_to_blanks(InputType, InputStringWithBlanks,
-				  TextFields, NonTextFields,
-				  TrimmedTextFieldsOnlyString, NumBlanksTrimmed) :-
-	( InputType == citation ->
-	  cntfb(InputStringWithBlanks, TextFields, NonTextFields, TextFieldsOnly)
-	; TextFieldsOnly = [InputStringWithBlanks]
-	),
-	append(TextFieldsOnly, TextFieldsOnlyString0),
-	trim_whitespace_right(TextFieldsOnlyString0, TextFieldsOnlyString),
-	trim_whitespace_left_count(TextFieldsOnlyString, TrimmedTextFieldsOnlyString, NumBlanksTrimmed).
-
-
-% "cntfb" == "Convert Non-Text Fields to Blanks"
-cntfb([], [], [], []).
-cntfb([FirstChar|RestChars], TextFieldsIn, NonTextFieldsIn, [ConvertedField|RestConvertedFields]) :-
-	convert_one_field_to_blanks([FirstChar|RestChars], TextFieldsIn, NonTextFieldsIn,
-				    TextFieldsNext, NonTextFieldsNext, ConvertedField, CharsNext),
-	cntfb(CharsNext, TextFieldsNext, NonTextFieldsNext, RestConvertedFields).
-	
-convert_one_field_to_blanks(CharsIn,
-			    TextFieldsIn, NonTextFieldsIn,
-			    TextFieldsNext, NonTextFieldsNext,
-			    ConvertedField, CharsNext) :-
-	get_field_components(TextFieldsIn,
-			     FirstTextField, FirstTextFieldLines, RestTextFields),
-	get_field_components(NonTextFieldsIn,
-			     FirstNonTextField, FirstNonTextFieldLines, RestNonTextFields),
-	( FirstTextField \== [],
-	  prefix(CharsIn, FirstTextField) ->
-	  convert_text_field(FirstTextField, FirstTextFieldLines, CharsIn,
-			     ConvertedField, CharsNext),
-	  TextFieldsNext = RestTextFields,
-	  NonTextFieldsNext = NonTextFieldsIn
-	; FirstNonTextField \== [],
-	  trim_whitespace_left(CharsIn, TrimmedCharsIn),
-	  prefix(TrimmedCharsIn, FirstNonTextField) ->
-	  convert_non_text_field(FirstNonTextField, FirstNonTextFieldLines, TrimmedCharsIn,
-				 ConvertedField, CharsNext),
-	  TextFieldsNext = TextFieldsIn,
-	  NonTextFieldsNext = RestNonTextFields
+get_nomap_pairs(AtomNoMapPairs) :-
+	( control_value(nomap, FileName) ->
+	  check_valid_file_type(FileName, 'NoMap Strings'),
+	  open(FileName, read, InputStream),
+	  % Use the same code to create NoMap pairs as for creating UDAs!
+	  create_nomap_pairs(InputStream, StringNoMapPairs),
+	  ( foreach(StringPair, StringNoMapPairs),
+	    foreach(AtomPair,   AtomNoMapPairs)
+	  do StringPair = StringString:CUIString,
+	     create_string_atom_or_var(StringString, StringAtomOrVar),
+	     create_string_atom_or_var(CUIString, CUIAtomOrVar),
+	     % atom_codes(StringAtom, StringString),
+	     % atom_codes(CUIAtom, CUIString),
+	     AtomPair = StringAtomOrVar:CUIAtomOrVar
+	  ),
+	  close(InputStream)
+	; AtomNoMapPairs = []
 	).
 
-get_field_components([], [], [], []).
-get_field_components([[FirstField|RestFirstField]|RestFields],
-		     FirstField, FirstFieldLines, RestFields) :-
-	( RestFirstField \== [] ->
-	  RestFirstField = [FirstFieldLines]
-	; FirstFieldLines = []
+create_string_atom_or_var(String, AtomOrVar) :-
+	( String == "" ->
+	  AtomOrVar = _
+	; atom_codes(AtomOrVar, String)
 	).
 
-convert_text_field(TextField, TextFieldLines, CharsIn, ConvertedField, CharsNext) :-
-	trim_field_name_prefix(TextField, CharsIn, TextFieldLength, NumBlanksTrimmed, CharsNext3),
-	form_one_string(TextFieldLines, " ", PaddedTextFieldLines0),
-	append(PaddedTextFieldLines0, " ", PaddedTextFieldLines),
-	% each line has a blank space after it corresponding to the original <CR>
-	% NumBlanks is TextFieldLength + NumBlanksTrimmed + TextFieldLinesLength,
-	NumBlanks is TextFieldLength + NumBlanksTrimmed,
-	% create a string of blanks whose length is equal to the length of the
-	% field name, blanks, etc. up to the actual text
-	length(BlanksList, NumBlanks),
-	% format(user_output, 'LINE ~d >~s:~p~n', [NumBlanks,TextField,TextFieldLines]),
-	( foreach(X, BlanksList) do X is 32 ),
-	% This is where I'm missing a character?
-	append(BlanksList, PaddedTextFieldLines, ConvertedField),
-	walk_off_field_lines(TextFieldLines, CharsNext3, CharsNext).
-	% format(user_output, 'AFTER >~s<:>~s<~n', [TextField,CharsNext]).
-  
-% Calculate how many characters are taken up by
-%  * the text field (e.g., "TI", "AB", "PG", "OWN", "STAT", etc.,
-%  * any blanks immediately after the text field,
-%  * the following hyphen, and
-%  * any blanks immediately after the hyphen.
-% Currently, this prefix always (?) contains exactly 6 chars,
-% but who knows if this might someday change!
-trim_field_name_prefix(Field, CharsIn, FieldLength, NumBlanksTrimmed, CharsNext3) :-
-	% trim off the text field, e.g., "TI", "AB", etc.
-	append(Field, CharsNext0, CharsIn),
-	% determine the length of the text field
-	length(Field, FieldLength),
-	% trim off any whitespace immediately after the text field
-	trim_whitespace_left_count(CharsNext0, CharsNext1, NumBlanksTrimmed1),
-	% trim off the hyphen after the blanks
-	CharsNext1 = [FirstChar|CharsNext2],
-	medline_field_separator_char(FirstChar),
-	% trim off any whitespace immediately after the hyphen
-	trim_whitespace_left_count(CharsNext2, CharsNext3, NumBlanksTrimmed2),
-	% The "+1" is for the hyphen
-	NumBlanksTrimmed is NumBlanksTrimmed1 + NumBlanksTrimmed2 + 1.
+halt_if_non_ASCII(Lines) :-
+	get_all_non_ASCII_codes(Lines, NonASCIICodesList),
+	append(NonASCIICodesList, AllNonASCIICodes),
+	( AllNonASCIICodes \= [] ->
+	  length(AllNonASCIICodes, NonASCIILength),
+	  get_plural_marker(NonASCIILength, Plural),
+	  Msg1 = 'MetaMap supports ASCII-only input.~n',
+	  Msg2 = 'The input contains ~d non-ASCII char~w: "~s".~n',
+	  Msg3 = 'Remove all non-ASCII chars from input before trying again!~n',
+	  concat_atom([Msg1,Msg2,Msg3], Message),
+	  Args = [NonASCIILength,Plural,AllNonASCIICodes],
+          fatal_error(Message, Args)
+	; true
+	).
 
+get_all_non_ASCII_codes(Lines, NonASCIICodesList) :-
+	(  foreach(Codes, Lines),
+	   foreach(NonASCIICodes, NonASCIICodesList)
+	do get_non_ASCII_codes(Codes, NonASCIICodes)
+	).
 
-convert_non_text_field(NonTextField, NonTextFieldLines, CharsIn, ConvertedField, CharsNext) :-
-	trim_field_name_prefix(NonTextField, CharsIn, NonTextFieldLength, NumBlanksTrimmed, CharsNext3),
-	% convert_strings_to_blanks(NonTextFieldLines, BlanksLines),
-	% length(BlanksLines, BlanksLinesLength),
-	% must add 1 blank for each line
-	% length(NonTextFieldLines, NonTextFieldLinesLength),
+get_non_ASCII_codes(Codes, NonASCIICodes) :-
+	(  foreach(C, Codes),
+	   fromto(NonASCIICodes, S0, S, [])
+	do ( \+ local_ascii(C) ->
+	     S0 = [C|S]
+	   ; S0 = S
+	   )
+	).
 
-	form_one_string(NonTextFieldLines, " ", PaddedNonTextFieldLines0),
-	% This is an ad-hoc hack to handle empty "AU" lines such as
-	% AU  - Niven CF Jr
-	% AU  - 
-	% LA  - eng
-	% from
-	% PMID- 16561135
-	% as of 02/24/2014
-	append_blank_if_nonnull(PaddedNonTextFieldLines0, PaddedNonTextFieldLines),
-	length(PaddedNonTextFieldLines, PNTFLength),
-	NumBlanks is NonTextFieldLength + NumBlanksTrimmed + PNTFLength,
-	length(BlanksList, NumBlanks),
-	% format(user_output, 'LINE ~d >~s:~p~n', [NumBlanks,NonTextField,NonTextFieldLines]),
-	( foreach(X, BlanksList) do X is 32 ),
-	ConvertedField = BlanksList,
-	walk_off_field_lines(NonTextFieldLines, CharsNext3, CharsNext).
-	% format(user_output, 'AFTER >~s<:>~s<~n', [NonTextField,CharsNext]).
+get_plural_marker(NonASCIILength, Plural) :-
+	( NonASCIILength is 1 ->
+	  Plural = ''
+	; Plural = 's'
+	).
 
-append_blank_if_nonnull([], []).
-append_blank_if_nonnull([H|T], PaddedNonTextFieldLines) :-
-	append([H|T], " ", PaddedNonTextFieldLines).
-
-walk_off_field_lines([], Chars, Chars).
-walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-
-	append(FieldLine, CharsNext0, CharsIn),
-	( CharsNext0 = [32|CharsNext1] ->
-	  true
-	; CharsNext1 = []
-	),
-	walk_off_field_lines(RestFieldLines, CharsNext1, CharsOut).
-
-% convert each string in NonTextFieldLines to a string of blanks of the same length
-%%% convert_strings_to_blanks(NonTextFieldLines, BlanksLines) :-
-%%% 	(  foreach(Line, NonTextFieldLines),
-%%% 	   foreach(BlanksLine, BlanksLines)
-%%% 	do length(Line, LineLength),
-%%% 	   length(BlanksLine, LineLength),
-%%% 	   (  foreach(Blank, BlanksLine)
-%%% 	   do Blank is 32
-%%% 	   )
-%%% 	).

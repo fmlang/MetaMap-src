@@ -59,7 +59,8 @@
    	conditionally_skr_end_write/2,
 	fatal_error/2,
 	get_all_candidate_features/3,
-	get_candidate_feature/3
+	get_candidate_feature/3,
+	send_message/2
     ]).
 
 :- use_module(skr_db(db_access),[
@@ -96,8 +97,7 @@
 	debug_message/3,
 	ensure_number/2,
 	skr_begin_write/1,
-	skr_end_write/1,
-	token_template/5
+	skr_end_write/1
     ]).
 
 :- use_module(skr(skr_xml), [
@@ -109,9 +109,8 @@
    ]).		     
 
 :- use_module(text(text_objects),[
-	dump_all_avl/4,
-	extract_token_strings/2,
-	reformat_aa_output_list/3
+	dump_all_AAs/4,
+	reformat_AA_list_for_output/3
    ]).		     
 
 :- use_module(library(avl),[
@@ -140,7 +139,7 @@ do_MMI_processing(OrigUtterances, BracketedOutput, AAs, DisambMMOutput) :-
           current_output(OutputStream),
 	  get_UIAtom(OrigUtterances, UIAtom),
 	  % The "pmid" argument specifies that the PMID should be the first field in he AA output
-	  dump_all_avl(AAs, pmid, UIAtom, OutputStream),
+	  dump_all_AAs(AAs, pmid, UIAtom, OutputStream),
 	  process_citation(UIAtom, DisambMMOutput, OutputStream),
 	  conditionally_skr_end_write(BracketedOutput, 'MMI')
         ; true
@@ -226,12 +225,11 @@ get_pre_tf_in_all_utterances([Utterance|Rest], PreTFInfo) :-
 
 get_pre_tf_in_utterance(Utterance, PreTFInfo) :-
 	Utterance = mm_output(utterance(Label,_Text,_PosInfo,_ReplPos),
-			      CitationTextAtom,_ModifiedText,_Tagging,AAs,
+			      CitationTextAtom,_ModifiedText,_Tagging,AAList,
 			      _Syntax,Phrases,_ExtractedPhrases),
 	determine_field_nsent(Label, Field, NSent),
-	avl_to_list(AAs, AAList),
 	UI = 'empty',
-	reformat_aa_output_list(AAList, UI, SortedAAList),
+	reformat_AA_list_for_output(AAList, UI, SortedAAList),
 	get_pre_tf_in_phrases(Phrases, CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo).
 
 determine_field_nsent(Label, Field, NSent) :-
@@ -307,6 +305,7 @@ add_pairs([], _Tag, Pairs, Pairs).
 add_pairs([H|T], Tag, [LowerHNoApostropheS-Tag|RemainingPairs], RestPairs) :-
 	lower(H, LowerH),
 	remove_apostrophe_s(LowerH, LowerHNoApostropheS),
+	% LowerHNoApostropheS = LowerH,
 	add_pairs(T, Tag, RemainingPairs, RestPairs).
 
 remove_apostrophe_s(LowerH, LowerHNoApostropheS) :-
@@ -448,7 +447,7 @@ get_lexcat(TextString0, SortedAAList, MetaWords, Syntax, Candidate, LexCat) :-
 	  SortedLexCats = [_Weight-LexCat|_Rest] ->
 	  true
 	; LexCat = 'UNKNOWN',
-	  fml_format(user_output, '### UNKNOWN lexcat for ~q|~q|~q~n', [AtomWordList,Candidate,Syntax])
+	  send_message('### UNKNOWN lexcat for ~q|~q|~q~n', [AtomWordList,Candidate,Syntax])
 	).
 
 % The lower the weight, the better

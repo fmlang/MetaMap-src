@@ -328,6 +328,7 @@ lex_form_ci_var_lists_5_TOGGLE(Form, Categories, Lexicon, Index, VarList) :-
 	  append(VarLists0, VarList)
 	; control_value(lexicon, db) ->
 	  get_im_varlist_with_cats(Form, Categories, VarList)
+	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
 	).
 
 %%% generic record retrieval predicate
@@ -584,19 +585,19 @@ remove_final_blank(LexMatchTokens0, LexMatchTokens) :-
 % InputMatch             = [cancer,'\'',s]
 % RemainingInputTokens   = ['\'',s,cure]
 
-% move an apostrophe + "s" from the beginning of RemainingInputTokens to the end of InputMatch
-move_apostrophe_s_to_inputmatch(InputMatch0, RemainingInputTokens0,
-				InputMatch, RemainingInputTokens) :-
-	( RemainingInputTokens0 = ['''', 's'|RestRemainingInputTokens0] ->
-	  append(InputMatch0, ['''', 's'], InputMatch),
-	  RemainingInputTokens = RestRemainingInputTokens0
-	; RemainingInputTokens0 = ['s'|RestRemainingInputTokens0],
-	  last(InputMatch0, '''') ->
-	  append(InputMatch0, ['s'], InputMatch),
-	  RemainingInputTokens = RestRemainingInputTokens0
-	; InputMatch = InputMatch0,
-	  RemainingInputTokens = RemainingInputTokens0
-	).
+%%% % move an apostrophe + "s" from the beginning of RemainingInputTokens to the end of InputMatch
+%%% move_apostrophe_s_to_inputmatch(InputMatch0, RemainingInputTokens0,
+%%% 				InputMatch, RemainingInputTokens) :-
+%%% 	( RemainingInputTokens0 = ['''', 's'|RestRemainingInputTokens0] ->
+%%% 	  append(InputMatch0, ['''', 's'], InputMatch),
+%%% 	  RemainingInputTokens = RestRemainingInputTokens0
+%%% 	; RemainingInputTokens0 = ['s'|RestRemainingInputTokens0],
+%%% 	  last(InputMatch0, '''') ->
+%%% 	  append(InputMatch0, ['s'], InputMatch),
+%%% 	  RemainingInputTokens = RestRemainingInputTokens0
+%%% 	; InputMatch = InputMatch0,
+%%% 	  RemainingInputTokens = RemainingInputTokens0
+%%% 	).
 
 remove_zero_EUI([H|T], RealEUIList) :-
 	( H == '0' ->
@@ -987,8 +988,34 @@ token_match([FirstLexToken|RestLexTokens], [FirstInputToken|RestInputTokens],
 	  MatchingLexTokens = [],
  	  AdditionalInputTokenCount is 1,
  	  MatchScore is 1
+%%% 	; % allow matching of "isn t" and "isn't"
+%%% 	  match_modulo_ws_and_apostrophe(FirstLexToken, FirstInputToken) ->
+%%% 	  RemainingLexTokens = RestLexTokens,
+%%% 	  RemainingInputTokens = RestInputTokens,
+%%% 	  AdditionalInputTokenCount is 1,
+%%% 	  MatchingLexTokens = [FirstLexToken],
+%%% 	  MatchScore is -2
 	).
 	  
+%%% match_modulo_ws_and_apostrophe(FirstLexToken, FirstInputToken) :-
+%%% 	  atom_codes(FirstLexToken, FirstLexTokenCodes),
+%%% 	  atom_codes(FirstInputToken, FirstInputTokenCodes),
+%%% 	  remove_ws_and_apostrophe(FirstLexTokenCodes, ModFirstLexTokenCodes),
+%%% 	  remove_ws_and_apostrophe(FirstInputTokenCodes, ModFirstInputTokenCodes),
+%%% 	  atom_codes(ModFirstLexToken, ModFirstLexTokenCodes),
+%%% 	  atom_codes(ModFirstInputToken, ModFirstInputTokenCodes),
+%%% 	  ModFirstLexToken == ModFirstInputToken.
+%%% 
+%%% remove_ws_and_apostrophe([], []).
+%%% remove_ws_and_apostrophe([H|T], ModifiedToken) :-
+%%% 	( ws_or_apostophe(H) ->
+%%% 	  ModifiedToken = RestModifiedToken
+%%% 	; ModifiedToken = [H|RestModifiedToken]
+%%% 	),
+%%% 	remove_ws_and_apostrophe(T, RestModifiedToken).
+%%% 	
+%%% ws_or_apostophe(32).
+%%% ws_or_apostophe(39).
 
 %	  % ## Case (1): Exact match; score is -2
 % 	( FirstLexToken == FirstInputToken ->
@@ -1184,6 +1211,7 @@ lex_form_ci_recs_input_6_C(InputTokens, LexicalEntries, RemainingInput, TagList,
 	  %    format('### LEX    lex_rec:~w~n', [EUI])
 	  % ),
 	  skip_n_tokens(BestLength, InputTokens, InputMatch0, RemainingInput),
+	  % InputMatch = InputMatch0,
 	  re_attach_apostrophe_s_to_prev_word(InputMatch0, TagList, InputMatch),
 	  % re-glue the apostrophe-s in InputMatch?
 	  % just to avoid compiler warning about singleton var!
@@ -1194,12 +1222,24 @@ lex_form_ci_recs_input_6_C(InputTokens, LexicalEntries, RemainingInput, TagList,
 	; % Must remove all punct tokens because the norm_lex table,
 	  % which is queried by db_get_prefix_EUIs/2, includes no punctuation chars.
 	  PrefixLength is 1,
+	  % separate_apostrophe(InputTokens, InputTokens1),
 	  longest_prefix(InputTokens, PrefixLength, LexRecs, InputMatch, LexMatch, RemainingInput),
 	  LexicalEntries = lexicon:[lexmatch:[LexMatch],
 				    inputmatch:InputMatch,
 				    records:LexRecs]
 	  % format(user_output, 'LM: ~q~nIM: ~q~n~n', [LexMatch,InputMatch])
 	).
+
+%%% separate_apostrophe([], []).
+%%% separate_apostrophe([H|RestInputTokensIn], InputTokensOut) :-
+%%% 	atom_codes(H, HCodes),
+%%% 	( append([BeforeCodes, "'", AfterCodes], HCodes) ->
+%%% 	  atom_codes(BeforeAtom, BeforeCodes),
+%%% 	  atom_codes(AfterAtom, AfterCodes),
+%%% 	  InputTokensOut = [BeforeAtom, '''', AfterAtom|RestInputTokensOut]
+%%% 	; InputTokensOut = [H|RestInputTokensOut]
+%%% 	),
+%%% 	separate_apostrophe(RestInputTokensIn, RestInputTokensOut).
 
 %%% gets the best match, and collapses all offsets
 get_best_match([FirstMatch|RestMatches], N) :-

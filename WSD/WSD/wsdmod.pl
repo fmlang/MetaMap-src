@@ -97,6 +97,7 @@
 
 :- use_module(library(lists),[
 	append/2,
+	last/2,
 	max_member/2,
 	rev/2
    ]).
@@ -122,13 +123,14 @@
 do_WSD(UtteranceText, InputLabel, CitationTextAtom, AAs, Tokens,
        WSDServerStream, MMOPhrases, DisambMMOPhrases, SemRepPhrasesWithWSD) :-
 	( control_option(word_sense_disambiguation) ->
+	  maybe_do_SemRep_WSD(MMOPhrases, MMOPhrases1),
 	  generate_AAs_MMO_term([mm_output(utterance, citation, modifiedtext, tagging,
-				      AAs, syntax, MMOPhrases, extractedphrases)],
+				      AAs, syntax, MMOPhrases1, extractedphrases)],
 			   AATerm),
 	  MMOutput = mm_output(utterance(InputLabel, UtteranceText, PosInfo, ReplPos),
 			       citation(CitationTextAtom), modifiedtext, tagging,
 			       AATerm, syntax,
-			       MMOPhrases, extractedphrases),
+			       MMOPhrases1, extractedphrases),
 	 % format(user_output, 'BEFORE disambiguate_mmoutput~n', []), ttyflush,
 	 disambiguate_mmoutput([MMOutput], WSDServerStream, [DisambMMOutput]),
 	 % format(user_output, 'AFTER disambiguate_mmoutput~n', []), ttyflush,
@@ -137,9 +139,24 @@ do_WSD(UtteranceText, InputLabel, CitationTextAtom, AAs, Tokens,
 				    AATerm, syntax,
 				    DisambMMOPhrases, _ExtractedPhrases),
 	 get_utterance_token_list(Tokens, TokensThisUtterance, _CharOffset, _TokensOut),
+
+	 % skr_utilities:write_raw_token_lists(Tokens, []),
+	 % skr_utilities:write_raw_token_lists(TokensThisUtterance, []),
+
 	 extract_SemRep_phrases(DisambMMOutput, TokensThisUtterance, SemRepPhrasesWithWSD)
        ; DisambMMOPhrases = MMOPhrases
        ).
+
+maybe_do_SemRep_WSD(MMOPhrases, MMOPhrases1) :-
+	( control_option(usemrep_processing) ->
+	  do_SemRep_WSD(MMOPhrases, MMOPhrases1)
+	; MMOPhrases1 = MMOPhrases
+	).
+
+do_SemRep_WSD(MMOPhrasesIn,MMOPhrasesOut) :-
+	preferred_name_synonym_equality(MMOPhrasesIn,MMOPhrases0),
+	remove_ftcn_inpr_semtypes(MMOPhrases0,MMOPhrasesOut).
+%	format('MMOPhrase: ~q~n', [MMOPhrasesOut]).
 
 extract_SemRep_phrases(mm_output(_Utt,_CitText,_MT,_TG,_AA,_Sx,MMOPhrases,_Ex),
 		       Tokens, SemRepPhrases) :-
@@ -151,12 +168,18 @@ extract_SemRep_phrases_aux([phrase(Phrase,_,_,_,_,_,aphrases(APhrases))|RestPhra
 	Phrase = phrase(_,PhraseList,_,_),
 	get_inputmatch_atoms_from_phrase(PhraseList, InputMatchPhraseWords),
 	get_phrase_tokens(InputMatchPhraseWords, Tokens, PhraseTokens, TokensRest),
-	extract_SemRep_phrases_1(APhrases, PhraseTokens, SemRepPhrases),
+	(APhrases == [] ->
+	  extract_SemRep_phrases_1([ap(_,PhraseList,_,[])], PhraseTokens, SemRepPhrases)
+	;
+	  APhrases = [APhrases0|_],
+	  extract_SemRep_phrases_1([APhrases0], PhraseTokens, SemRepPhrases)
+	),
 	!,
 	extract_SemRep_phrases_aux(RestPhraseTerms, TokensRest, RestSemRepPhrases).
 extract_SemRep_phrases_aux([phrase(_,_,_,_,_,_,aphrases(APhrases))|RestPhraseTerms],
 	                   Tokens, [SemRepPhrases|RestSemRepPhrases]) :-
-	extract_phrases_from_aps(APhrases, SemRepPhrases),
+	APhrases = [APhrases0|_],
+	extract_phrases_from_aps([APhrases0], SemRepPhrases),
 	extract_SemRep_phrases_aux(RestPhraseTerms, Tokens, RestSemRepPhrases).
 
 extract_SemRep_phrases_1([], _Tokens, []).
@@ -250,13 +273,15 @@ match_token([_Token|RestTokens],InputMatch,MatchTokens,TokensOut) :-
 
 compute_positions(Tokens, StartPos, EndPos) :-
 	Tokens = [FirstToken|_],
-	arg(4, FirstToken, FirstPos),
-	FirstPos = pos(StartPos0,_),
-	rev(Tokens, RevTokens),
-	RevTokens = [LastToken|_],
-	arg(4, LastToken, LastPos),
-	LastPos = pos(_,EndPos),
-	StartPos is StartPos0 + 1,
+	arg(5, FirstToken, FirstPos),
+	FirstPos = pos(StartPos,_),
+%	rev(Tokens, RevTokens),
+%	RevTokens = [LastToken|_],
+	last(Tokens,LastToken),
+	arg(5, LastToken, LastPos),
+	LastPos = pos(LastStartPos,Length),
+	EndPos is LastStartPos + Length,
+%	StartPos is StartPos0 + 1,
 	!.
 
 find_word_with_gap(_WordAtom, [], [], [], []) :- !.
@@ -333,6 +358,149 @@ unambiguous_phrase(PhraseTerm) :-
 	Mappings = mappings(MapTermList),
 	length(MapTermList, Length),
 	Length =< 1.
+
+% Avoid WSD machinery if one of the candidate mappings
+% has as its synonym the same string as the preferred name
+% First implemented for "Infective endocarditis", 
+% which was ambiguous between "Infective endocarditis" and "Bacterial endocarditis"
+preferred_name_synonym_equality([],[]):- !.
+preferred_name_synonym_equality([MMOPhrase|RestMMOPhrases],[MMOPhraseOut|RestMMOPhrasesOut]) :-
+	MMOPhrase = phrase(Phrase,Candidates,Mappings,PWI,GVCs,EV0,APhrases),
+	Mappings = mappings(MapTermList),
+	preferred_name_synonym_equal(MapTermList,MapTerm),
+	update_aps(APhrases,MapTerm,APhrasesOut),
+	!,
+	MMOPhraseOut = phrase(Phrase,Candidates,mappings([MapTerm]),PWI,GVCs,EV0,APhrasesOut),
+	preferred_name_synonym_equality(RestMMOPhrases,RestMMOPhrasesOut).
+preferred_name_synonym_equality([MMOPhrase|RestMMOPhrases],[MMOPhrase|RestMMOPhrasesOut]) :-
+	preferred_name_synonym_equality(RestMMOPhrases,RestMMOPhrasesOut).
+
+preferred_name_synonym_equal([MapTerm|_MapTermRest],MapTerm) :-
+	MapTerm = map(_NegScore,[ev(_,_,Syn,Syn,_,_,_,_,_,_,_,_,_,_)]),
+	!.
+preferred_name_synonym_equal([_MapTerm|MapTermRest],MapTermOut) :-
+	preferred_name_synonym_equal(MapTermRest,MapTermOut).
+
+% Apply the update to APhrases, since it is later used by
+% extract_SemRep_phrases
+update_aps_list(aphrases(APhrases), MapTermList, ModMapTermList,
+		aphrases(APhrasesOut)) :-
+	update_aps_list_aux(APhrases,MapTermList,ModMapTermList,APhrasesOut),
+	!.
+
+update_aps_list_aux(_,[],[],[]) :- !.
+update_aps_list_aux([APhrase|RestAPhrases],[MapTerm|RestMapTerm],
+		    [MapTerm|RestModMapTerm],[APhrase|RestAPhrasesOut]) :-
+	!,
+	update_aps_list_aux(RestAPhrases,RestMapTerm,RestModMapTerm,RestAPhrasesOut).
+update_aps_list_aux(APhrases,[_MapTerm|RestMapTerm],RestModMapTerm,APhrasesOut) :-
+	update_aps_list_aux(APhrases,RestMapTerm,RestModMapTerm,APhrasesOut).
+
+update_aps(aphrases(APhrases),MapTerm,aphrases(APhrasesOut)) :-
+	update_aps_aux(APhrases,MapTerm,APhrasesOut),
+	!.
+
+update_aps_aux([APhrase|_RestAPhrases],MapTerm, [APhrase]) :-
+	APhrase = ap(_NegValue,_Phrase,_PhraseMap,Mapping),
+	MapTerm = map(_NegMapScore,Mapping),
+	!.
+update_aps_aux([_APhrase|RestAPhrases],MapTerm,APhrasesOut) :-
+	update_aps_aux(RestAPhrases,MapTerm,APhrasesOut).
+
+% If one of the candidates has the semantic type ftcn (Functional Concept) or inpr (Intellectual Product)
+% ignore it,
+% This is based on Antonio's work, so it his WSD method (AEC) is used, this should already be
+% done, but we still want to do it in general.
+remove_ftcn_inpr_semtypes([],[]):- !.
+remove_ftcn_inpr_semtypes([MMOPhrase|RestMMOPhrases],[MMOPhraseOut|RestMMOPhrasesOut]) :-
+	MMOPhrase = phrase(Phrase,Candidates,Mappings,PWI,GVCs,EV0,APhrases),
+	Mappings = mappings(MapTermList),
+	length(MapTermList,Len),
+	Len > 1,
+	% Mappings in Mappings term and APhrases are ordered differently
+	% Since update_aps_list looks at term differences later to reconcile mappings
+	% we first sort the mappings in Mappings term
+	APhrases = aphrases(APhraseList),
+	sort_by_aphrases(APhraseList,MapTermList,MapTermList,MapTermListSorted),
+	remove_ftcn_inpr_evaluations(MapTermListSorted,MapTermListSorted,MapTermListSortedOut),
+	update_aps_list(APhrases,MapTermListSorted,MapTermListSortedOut,APhrasesOut),
+	% And now, mappings list is out of whack, so correct that, as well
+	% The reason is the order of mappings matter for the rest of WSD process 
+	% If we do not correct the order here, we will get different WSD results
+	% this got too convoluted, investigate a simpler way
+	update_mapping_list(MapTermList,MapTermListSortedOut,MapTermListOut),
+	!,
+	MMOPhraseOut = phrase(Phrase,Candidates,mappings(MapTermListOut),PWI,GVCs,EV0,APhrasesOut),
+	remove_ftcn_inpr_semtypes(RestMMOPhrases,RestMMOPhrasesOut).
+remove_ftcn_inpr_semtypes([MMOPhrase|RestMMOPhrases],[MMOPhrase|RestMMOPhrasesOut]) :-
+	remove_ftcn_inpr_semtypes(RestMMOPhrases,RestMMOPhrasesOut).
+
+sort_by_aphrases([],_RestMapTermList,_MapTermList,[]) :- !.
+sort_by_aphrases([APhrase|RestAPhrases],[MapTerm|_RestMapTermList],MapTermList,[MapTerm|RestMapTermListOut]) :-
+	APhrase = ap(_NegValue,_Phrase,_PhraseMap,Mapping),
+	MapTerm = map(_NegMapScore,Mapping),
+	!,
+	sort_by_aphrases(RestAPhrases,MapTermList,MapTermList,RestMapTermListOut).
+sort_by_aphrases(APhrases,[_MapTerm|RestMapTermList],MapTermList,MapTermListOutSorted) :-
+	sort_by_aphrases(APhrases,RestMapTermList,MapTermList,MapTermListOutSorted).
+
+update_mapping_list([],_SortedList,[]) :- !.
+update_mapping_list([MapTerm|RestMapTerms],SortedList,[MapTerm|RestMapTermsOut]) :-
+	memberchk(MapTerm,SortedList),
+	!,
+	update_mapping_list(RestMapTerms,SortedList,RestMapTermsOut).
+update_mapping_list([_MapTerm|RestMapTerms],SortedList,RestMapTermsOut) :-
+	update_mapping_list(RestMapTerms,SortedList,RestMapTermsOut).
+
+% remove map(_) terms if they have ftcn/inpr ambiguity
+% need to keep the integrity of the map(_) term, so we need to look at other map(_) terms.
+remove_ftcn_inpr_evaluations([],_MapTerms,[]) :- !.
+remove_ftcn_inpr_evaluations([MapTerm|MapTermRest],MapTermList,MapTermRestOut) :-
+	MapTerm = map(_NegScore,Evaluations),
+	append(Preceding,[MapTerm|MapTermRest],MapTermList),
+	append(Preceding,MapTermRest,OtherMapTerms),
+	adjust_evaluations(Evaluations,OtherMapTerms,EvaluationsOut),
+%	EvaluationsOut == [],
+	\+ Evaluations == EvaluationsOut,
+	!,
+	remove_ftcn_inpr_evaluations(MapTermRest,MapTermList,MapTermRestOut).
+%remove_ftcn_inpr_evaluations([MapTerm|MapTermRest],MapTermList,[MapTermOut|MapTermRestOut]) :-
+%	MapTerm = map(NegScore,Evaluations),
+%	adjust_evaluations(Evaluations,MapTermList,EvaluationsOut),
+%	MapTermOut = map(NegScore,EvaluationsOut),
+%	!,
+%	remove_ftcn_inpr_evaluations(MapTermRest,MapTermList,MapTermRestOut).
+remove_ftcn_inpr_evaluations([MapTerm|MapTermRest],MapTermList,[MapTerm|MapTermRestOut]) :-
+	remove_ftcn_inpr_evaluations(MapTermRest,MapTermList,MapTermRestOut).
+
+% MapTermList consists of other map(_) terms and is used for comparison.
+adjust_evaluations([],_MapTermList,[]) :- !.
+adjust_evaluations([Evaluation|EvaluationRest],MapTermList,EvaluationRestOut) :-
+	Evaluation = ev(_,_,_,_,_,SemTypeList,_,_,_,_,_,_,PosList,_,_),
+	subtract(SemTypeList,[inpr,ftcn],Diff),
+	length(Diff,0),
+	ambiguous_with_non_ftcn_inpr(PosList,Evaluation,MapTermList),
+	!,
+	adjust_evaluations(EvaluationRest,MapTermList,EvaluationRestOut).
+adjust_evaluations([Evaluation|EvaluationRest],MapTermList,[Evaluation|EvaluationRestOut]) :-
+	adjust_evaluations(EvaluationRest,MapTermList,EvaluationRestOut).
+
+% Is the given Evaluation with the PosList ambiguous with non-{ftcn/inpr} concepts?
+ambiguous_with_non_ftcn_inpr(PosList,Evaluation,[MapTerm|_Rest]) :-
+	MapTerm = map(_NegScore,Evaluations),
+	ambiguous_with_non_ftcn_inpr_aux(PosList,Evaluation,Evaluations),
+	!.
+ambiguous_with_non_ftcn_inpr(PosList,Evaluation,[_MapTerm|Rest]) :-
+	ambiguous_with_non_ftcn_inpr(PosList,Evaluation,Rest).
+
+ambiguous_with_non_ftcn_inpr_aux(PosList,Evaluation,[Eval|_RestEval]) :-
+	Evaluation = ev(_,_,_,_,_,_,_,_,_,_,_,_,PosList,_,_),
+	Eval = ev(_,_,_,_,_,SemTypeList,_,_,_,_,_,_,PosList,_,_),
+	\+ Evaluation == Eval,
+	subtract(SemTypeList,[inpr,ftcn],Diff),
+	length(Diff,DiffLen), DiffLen > 0.
+ambiguous_with_non_ftcn_inpr_aux(PosList,Evaluation,[_Eval|RestEval]) :-
+	ambiguous_with_non_ftcn_inpr_aux(PosList,Evaluation,RestEval).
 
 /*
 extract_mmo/8 takes MMOutput, a list of MMO_Terms [MMOTerm1, MMOTerm2, ..., MMOTermN]
@@ -894,24 +1062,23 @@ display_WSD_methods :-
 	fail
       ; true.
 
-
-get_WSD_methods(Methods) :-
-	call_WSD_server("<?xml version=""1.0""?><rdf:RDF xmlns:rdf=""http://www.w3.org/1999/02/22-rdf-syntax-ns#""           xmlns:wsd=""http://wsd.nlm.nih.gov/wsdserver#"">      <rdf:description about=""methodslistrequest"">      </rdf:description></rdf:RDF>",'ii-server2',0,5554, ResponseString),
-	xml_parse(ResponseString, ResponseTerm, [format(false)]),
-	arg(2, ResponseTerm, [_,NS,_]),
-	arg(3, NS, RDFElement),
-	arg(3, RDFElement, List1),
-	memberchk(element(description,_,List2), List1),
-	memberchk(element('Bag',_,List3), List2),
-	(  foreach(Member, List3),
-	   fromto([], S0, S, Methods)
-	do ( Member = element(li, [], _) ->
-	     arg(3, Member, [NameSpaceTerm]),
-	     arg(3, NameSpaceTerm, MethodElement),
-	     arg(2, MethodElement, [id=MethodShortName]),
-	     arg(3, MethodElement, [pcdata(MethodLongName)]),
-	     S = [MethodShortName-MethodLongName|S0]
-	   ; S = S0
-	   )
-	).	
-
+%%% not yet implemented, because call_WSD_server/5 doesn't yet exist
+%%% get_WSD_methods(Methods) :-
+%%% 	call_WSD_server("<?xml version=""1.0""?><rdf:RDF xmlns:rdf=""http://www.w3.org/1999/02/22-rdf-syntax-ns#""           xmlns:wsd=""http://wsd.nlm.nih.gov/wsdserver#"">      <rdf:description about=""methodslistrequest"">      </rdf:description></rdf:RDF>",'ii-server2',0,5554, ResponseString),
+%%% 	xml_parse(ResponseString, ResponseTerm, [format(false)]),
+%%% 	arg(2, ResponseTerm, [_,NS,_]),
+%%% 	arg(3, NS, RDFElement),
+%%% 	arg(3, RDFElement, List1),
+%%% 	memberchk(element(description,_,List2), List1),
+%%% 	memberchk(element('Bag',_,List3), List2),
+%%% 	(  foreach(Member, List3),
+%%% 	   fromto([], S0, S, Methods)
+%%% 	do ( Member = element(li, [], _) ->
+%%% 	     arg(3, Member, [NameSpaceTerm]),
+%%% 	     arg(3, NameSpaceTerm, MethodElement),
+%%% 	     arg(2, MethodElement, [id=MethodShortName]),
+%%% 	     arg(3, MethodElement, [pcdata(MethodLongName)]),
+%%% 	     S = [MethodShortName-MethodLongName|S0]
+%%% 	   ; S = S0
+%%% 	   )
+%%% 	).	

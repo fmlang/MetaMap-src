@@ -40,7 +40,8 @@
 	atom_codes_list_list/2,
 	concatenate_items_to_atom/2,
 	concatenate_items_to_string/2,
-	eliminate_multiple_meaning_designator_string/2,
+	% OBSOLETE
+	% eliminate_multiple_meaning_designator_string/2,
 	% must be exported for mwi_utilities
 	eliminate_nos_string/2,
 	form_one_string/3,
@@ -207,14 +208,15 @@ convert_item_to_string(Item, String) :-
 eliminate_multiple_meaning_designator_string/2 removes an expression of the
 form <n> where n is an integer from String producing ModifiedString.  */
 
-eliminate_multiple_meaning_designator_string(String, ModifiedString) :-
-	split_string_backtrack(String, "<", Base, A1),
-	split_string_backtrack(A1, ">", Integer, Tail),
-	is_integer_string(Integer),
-	trim_whitespace(Tail, ""),
-	!,
-	trim_whitespace(Base, ModifiedString).
-eliminate_multiple_meaning_designator_string(String, String).
+% OBSOLETE
+% eliminate_multiple_meaning_designator_string(String, ModifiedString) :-
+% 	split_string_backtrack(String, "<", Base, A1),
+% 	split_string_backtrack(A1, ">", Integer, Tail),
+% 	is_integer_string(Integer),
+% 	trim_whitespace(Tail, ""),
+% 	!,
+% 	trim_whitespace(Base, ModifiedString).
+% eliminate_multiple_meaning_designator_string(String, String).
 
 eliminate_nos_string(String, NormString) :-
 	eliminate_nos_acros(String, NormString0),
@@ -492,7 +494,7 @@ is_print_string_aux([First|Rest]) :-
 
 uninvert_string/2 simply calls lexical:string_uninvert/2.
 normalized_uninvert_text/2 first normalizes  and then uninverts String.
-normalize_string/2 first eliminates multiple meaning designators (<n>)
+normalize_string/2 first eliminates multiple meaning designators (<n>) (OBSOLETE)
 and then eliminates all forms of NOS.
 syntactic_uninvert_string/2 calls uninvert_string/2 on String if it
 contains ", " and does not contain a preposition or conjunction.
@@ -502,32 +504,44 @@ syntactically uninverts String.  */
 uninvert_string(String,UninvString) :-
     string_uninvert(String,UninvString).
 
-normalize_string(String,NormString) :-
-    eliminate_multiple_meaning_designator_string(String,String1),
-    eliminate_nos_string(String1,NormString).
+% eliminate_multiple_meaning_designator_string/2 is OBSOLETE,
+% so normalize_string/2 is simply eliminate_nos_string now.
+% normalize_string(String,NormString) :-
+%     eliminate_multiple_meaning_designator_string(String,String1),
+%     eliminate_nos_string(String1,NormString).
 
-normalized_syntactic_uninvert_string(String,NormSUninvString) :-
-    normalize_string(String,NormString),
-    syntactic_uninvert_string(NormString,NormSUninvString).
+normalize_string(String, NormString) :-
+	eliminate_nos_string(String, NormString).
 
-syntactic_uninvert_string(String,SUninvString) :-
-    split_string(String,", ",_,_),
-    !,
-    (contains_prep_or_conj(String) ->
-        SUninvString=String
-    ;   uninvert_string(String,SUninvString)
+normalized_syntactic_uninvert_string(String, NormSUninvString) :-
+	normalize_string(String, NormString),
+	syntactic_uninvert_string(NormString, NormSUninvString).
+
+syntactic_uninvert_string(String, SUninvString) :-
+	split_string(String, ", ", _Before, After),
+	!,
+	( contains_comma(After) ->
+	  SUninvString = String
+	; contains_stop_word(String, StopWord),
+	  StopWord \== 'a' ->
+	  SUninvString = String
+	; uninvert_string(String,SUninvString)
     ).
-syntactic_uninvert_string(String,String).
+syntactic_uninvert_string(String, String).
 
-contains_prep_or_conj(String) :-
+contains_comma(After) :-
+	memberchk(0',, After).
+
+contains_stop_word(String, StopWord) :-
     tokenize_text_more_lc(String,LCTokens),
-    contains_prep_or_conj_aux(LCTokens).
+    contains_stop_word_aux(LCTokens, StopWord).
 
-contains_prep_or_conj_aux([FirstString|Rest]) :-
+contains_stop_word_aux([FirstString|Rest], StopWord) :-
 	atom_codes(FirstAtom, FirstString),
-	( prep_or_conj(FirstAtom) ->
-	  true
-	; contains_prep_or_conj_aux(Rest)
+	  % don't use the lexicon here for efficiency
+	( lex_stop_word_atom(FirstAtom) ->
+	  StopWord = FirstAtom
+	; contains_stop_word_aux(Rest, StopWord)
 	).
 
 /* prep_or_conj(?PrepOrConj)
@@ -538,281 +552,157 @@ special characters (blank, period, slash) that is either a preposition or
 a conjunction. See .../Support/LexLab/ for details.  */
 
 %% some clauses have been commented out to see if better results are obtained
-%% The data were updated using 2013 lex_form.txt file.
+%% The data were updated using the 2013 lex_form.txt file.
+%% The data were updated using the 2014 lex_form.txt file.
 
+% Use lex_stop_word_atom/1 instead
 
-prep_or_conj('a').
-prep_or_conj('aboard').
-prep_or_conj('about').
-prep_or_conj('above').
-prep_or_conj('according to').
-prep_or_conj('across').
-prep_or_conj('across from').
-prep_or_conj('after').
-prep_or_conj('against').
-prep_or_conj('ahead of').
-prep_or_conj('aka').
-prep_or_conj('all').
-prep_or_conj('all over').
-prep_or_conj('allover').
-prep_or_conj('along').
-prep_or_conj('along with').
-prep_or_conj('alongside').
-prep_or_conj('alongside of').
-prep_or_conj('amid').
-prep_or_conj('amidst').
-prep_or_conj('among').
-prep_or_conj('amongst').
-prep_or_conj('an').
-prep_or_conj('another').
+% prep_or_conj('aboard').
+% prep_or_conj('about').
+% prep_or_conj('above').
+% prep_or_conj('across').
+% prep_or_conj('after').
+% prep_or_conj('against').
+% prep_or_conj('aka').
+% prep_or_conj('albeit').
+% prep_or_conj('allover').
+% prep_or_conj('along').
+% prep_or_conj('alongside').
+% prep_or_conj('although').
+% prep_or_conj('amid').
+% prep_or_conj('amidst').
+% prep_or_conj('among').
+% prep_or_conj('amongst').
+% prep_or_conj('and').
 % prep_or_conj('anti').
-prep_or_conj('any').
-prep_or_conj('apart from').
-prep_or_conj('apropos of').
-prep_or_conj('around').
-prep_or_conj('as').
-prep_or_conj('as far as').
-prep_or_conj('as for').
-prep_or_conj('as of').
-prep_or_conj('as regards').
-prep_or_conj('as to').
-prep_or_conj('aside from').
-prep_or_conj('astride').
-prep_or_conj('at').
-prep_or_conj('at odds with').
-prep_or_conj('at risk of').
-prep_or_conj('at the behest of').
-prep_or_conj('at variance with').
-prep_or_conj('atop').
-prep_or_conj('away from').
-prep_or_conj('back of').
-% prep_or_conj('bar').
-prep_or_conj('because of').
-prep_or_conj('before').
-prep_or_conj('behind').
-prep_or_conj('below').
-prep_or_conj('beneath').
-prep_or_conj('beside').
-prep_or_conj('besides').
-prep_or_conj('between').
-prep_or_conj('betwixt').
-prep_or_conj('beyond').
-prep_or_conj('both').
-prep_or_conj('but').
-prep_or_conj('but for').
-prep_or_conj('by').
-prep_or_conj('by comparison with').
-prep_or_conj('by dint of').
-prep_or_conj('by force of').
-prep_or_conj('by means of').
-prep_or_conj('by virtue of').
-prep_or_conj('by way of').
-prep_or_conj('ca.').
-prep_or_conj('certain').
-prep_or_conj('circa').
-prep_or_conj('concerning').
-prep_or_conj('contra').
-prep_or_conj('despite').
-% prep_or_conj('down').
-prep_or_conj('downstream from').
-prep_or_conj('downstream of').
-prep_or_conj('due to').
-prep_or_conj('during').
-prep_or_conj('each').
-prep_or_conj('either').
-prep_or_conj('enough').
-prep_or_conj('every').
-prep_or_conj('ex').
-prep_or_conj('except').
-prep_or_conj('except for').
-prep_or_conj('excluding').
-prep_or_conj('exclusive of').
-prep_or_conj('failing').
-prep_or_conj('few').
-prep_or_conj('fewer').
-prep_or_conj('following').
-prep_or_conj('for').
-prep_or_conj('for sake of').
-prep_or_conj('for want of').
-prep_or_conj('from').
-prep_or_conj('from among').
-prep_or_conj('from want of').
-prep_or_conj('given').
-prep_or_conj('in').
-prep_or_conj('in accordance with').
-prep_or_conj('in addition to').
-prep_or_conj('in aid of').
-prep_or_conj('in back of').
-prep_or_conj('in behalf of').
-prep_or_conj('in between').
-prep_or_conj('in case of').
-prep_or_conj('in common with').
-prep_or_conj('in comparison to').
-prep_or_conj('in compliance with').
-prep_or_conj('in conformity with').
-prep_or_conj('in conjunction with').
-prep_or_conj('in contact with').
-prep_or_conj('in contrast to').
-prep_or_conj('in default of').
-prep_or_conj('in exchange for').
-prep_or_conj('in face of').
-prep_or_conj('in favor of').
-prep_or_conj('in favour of').
-prep_or_conj('in front of').
-prep_or_conj('in league with').
-prep_or_conj('in lieu of').
-prep_or_conj('in light of').
-prep_or_conj('in line with').
-prep_or_conj('in place of').
-prep_or_conj('in quest of').
-prep_or_conj('in reference to').
-prep_or_conj('in regard to').
-prep_or_conj('in relation to').
-prep_or_conj('in respect of').
-prep_or_conj('in respect to').
-prep_or_conj('in return for').
-prep_or_conj('in search of').
-prep_or_conj('in spite of').
-prep_or_conj('in step with').
-prep_or_conj('in terms of').
-prep_or_conj('in to').
-prep_or_conj('in view of').
-prep_or_conj('inbetween').
-prep_or_conj('incl').
-prep_or_conj('incl.').
-prep_or_conj('including').
-prep_or_conj('inclusive of').
-prep_or_conj('independent of').
-prep_or_conj('independently of').
-prep_or_conj('inside').
-prep_or_conj('inside of').
-prep_or_conj('instead of').
-prep_or_conj('into').
-prep_or_conj('irregardless of').
-prep_or_conj('irrespective of').
-prep_or_conj('last').
-prep_or_conj('less').
-% prep_or_conj('like').
-prep_or_conj('many').
-% prep_or_conj('mid').
-prep_or_conj('minus').
-prep_or_conj('modulo').
-prep_or_conj('more').
-prep_or_conj('most').
-prep_or_conj('much').
-prep_or_conj('nary a').
-prep_or_conj('nary an').
-% prep_or_conj('near').
-prep_or_conj('nearby').
-prep_or_conj('neath').
-prep_or_conj('neither').
-prep_or_conj('next to').
-prep_or_conj('no').
-prep_or_conj('notwithstanding').
-prep_or_conj('of').
-% prep_or_conj('off').
-prep_or_conj('off of').
-prep_or_conj('on').
-prep_or_conj('on account of').
-prep_or_conj('on behalf of').
-prep_or_conj('on board').
-prep_or_conj('on grounds of').
-prep_or_conj('on the basis of').
-prep_or_conj('on to').
-prep_or_conj('on top of').
-prep_or_conj('on-board').
-prep_or_conj('onboard').
-prep_or_conj('onto').
-prep_or_conj('other').
-prep_or_conj('other than').
-prep_or_conj('out').
-prep_or_conj('out of').
-prep_or_conj('outside of').
-prep_or_conj('outwith').
-prep_or_conj('over').
-prep_or_conj('over against').
-prep_or_conj('over and above').
-prep_or_conj('overagainst').
-prep_or_conj('owing to').
-prep_or_conj('past').
-prep_or_conj('pending').
-prep_or_conj('per').
-prep_or_conj('plus').
-prep_or_conj('previous to').
-prep_or_conj('prior to').
-prep_or_conj('pursuant to').
-prep_or_conj('qua').
-prep_or_conj('reg.').
-prep_or_conj('regarding').
-prep_or_conj('regardless of').
-prep_or_conj('respecting').
-prep_or_conj('round').
-prep_or_conj('s/p').
-prep_or_conj('sans').
-prep_or_conj('sensu').
-prep_or_conj('several').
-prep_or_conj('short of').
-prep_or_conj('since').
-prep_or_conj('some').
-prep_or_conj('status post').
-prep_or_conj('subject to').
-prep_or_conj('subsequent to').
-prep_or_conj('such').
-prep_or_conj('such as').
-prep_or_conj('suchlike').
-prep_or_conj('than').
-prep_or_conj('that').
-prep_or_conj('the').
-prep_or_conj('these').
-prep_or_conj('this').
-prep_or_conj('those').
-prep_or_conj('through').
-prep_or_conj('throughout').
-prep_or_conj('thru').
-prep_or_conj('thy').
-prep_or_conj('til').
-prep_or_conj('till').
-prep_or_conj('to').
-prep_or_conj('to within').
-prep_or_conj('together with').
-prep_or_conj('toward').
-prep_or_conj('towards').
-prep_or_conj('unbeknown to').
-prep_or_conj('unbeknownst to').
-prep_or_conj('under').
-prep_or_conj('underneath').
-prep_or_conj('unlike').
-prep_or_conj('until').
-prep_or_conj('unto').
-prep_or_conj('up').
-prep_or_conj('up to').
-prep_or_conj('upon').
-prep_or_conj('upside').
-prep_or_conj('upstream from').
-prep_or_conj('upstream of').
-prep_or_conj('upto').
-prep_or_conj('via').
-prep_or_conj('vis-a-vis').
-prep_or_conj('w').
-prep_or_conj('w/o').
-prep_or_conj('wanting').
-prep_or_conj('what').
-prep_or_conj('whatever').
-prep_or_conj('which').
-prep_or_conj('whichever').
-prep_or_conj('with').
-prep_or_conj('with reference to').
-prep_or_conj('with regard to').
-prep_or_conj('with repect to').
-prep_or_conj('with respect to').
-prep_or_conj('within').
-prep_or_conj('without').
-prep_or_conj('worth').
-
-
-
+% prep_or_conj('around').
+% prep_or_conj('as').
+% prep_or_conj('astride').
+% prep_or_conj('at').
+% prep_or_conj('atop').
+% % prep_or_conj('bar').
+% prep_or_conj('because').
+% prep_or_conj('before').
+% prep_or_conj('behind').
+% prep_or_conj('below').
+% prep_or_conj('beneath').
+% prep_or_conj('beside').
+% prep_or_conj('besides').
+% prep_or_conj('between').
+% prep_or_conj('betwixt').
+% prep_or_conj('beyond').
+% prep_or_conj('but').
+% prep_or_conj('by').
+% prep_or_conj('circa').
+% prep_or_conj('concerning').
+% prep_or_conj('contra').
+% prep_or_conj('despite').
+% % prep_or_conj('down').
+% prep_or_conj('during').
+% prep_or_conj('ex').
+% prep_or_conj('except').
+% prep_or_conj('excluding').
+% prep_or_conj('failing').
+% prep_or_conj('following').
+% prep_or_conj('for').
+% prep_or_conj('from').
+% prep_or_conj('given').
+% prep_or_conj('however').
+% prep_or_conj('if').
+% prep_or_conj('in').
+% prep_or_conj('inbetween').
+% prep_or_conj('incl').
+% prep_or_conj('including').
+% prep_or_conj('inside').
+% prep_or_conj('into').
+% prep_or_conj('less').
+% prep_or_conj('lest').
+% % prep_or_conj('like').
+% % prep_or_conj('mid').
+% prep_or_conj('minus').
+% prep_or_conj('modulo').
+% % prep_or_conj('near').
+% prep_or_conj('nearby').
+% prep_or_conj('neath').
+% prep_or_conj('nor').
+% prep_or_conj('notwithstanding').
+% prep_or_conj('of').
+% % prep_or_conj('off').
+% prep_or_conj('on').
+% prep_or_conj('onboard').
+% prep_or_conj('once').
+% prep_or_conj('only').
+% prep_or_conj('onto').
+% prep_or_conj('or').
+% prep_or_conj('out').
+% prep_or_conj('outwith').
+% prep_or_conj('over').
+% prep_or_conj('overagainst').
+% prep_or_conj('past').
+% prep_or_conj('pending').
+% prep_or_conj('per').
+% prep_or_conj('plus').
+% prep_or_conj('provided').
+% prep_or_conj('providing').
+% prep_or_conj('qua').
+% prep_or_conj('regarding').
+% prep_or_conj('respecting').
+% prep_or_conj('round').
+% prep_or_conj('sans').
+% prep_or_conj('sensu').
+% prep_or_conj('since').
+% prep_or_conj('so').
+% prep_or_conj('suppose').
+% prep_or_conj('supposing').
+% prep_or_conj('than').
+% prep_or_conj('therefore').
+% prep_or_conj('though').
+% prep_or_conj('through').
+% prep_or_conj('throughout').
+% prep_or_conj('thru').
+% prep_or_conj('til').
+% prep_or_conj('till').
+% prep_or_conj('to').
+% prep_or_conj('toward').
+% prep_or_conj('towards').
+% prep_or_conj('under').
+% prep_or_conj('underneath').
+% prep_or_conj('unless').
+% prep_or_conj('unlike').
+% prep_or_conj('until').
+% prep_or_conj('unto').
+% prep_or_conj('up').
+% prep_or_conj('upon').
+% prep_or_conj('upside').
+% prep_or_conj('upto').
+% prep_or_conj('versus').
+% prep_or_conj('via').
+% prep_or_conj('vs').
+% prep_or_conj('w').
+% prep_or_conj('wanting').
+% prep_or_conj('when').
+% prep_or_conj('whenever').
+% prep_or_conj('where').
+% prep_or_conj('whereafter').
+% prep_or_conj('whereas').
+% prep_or_conj('whereat').
+% prep_or_conj('whereby').
+% prep_or_conj('wherefore').
+% prep_or_conj('wherein').
+% prep_or_conj('whereof').
+% prep_or_conj('whereupon').
+% prep_or_conj('wherever').
+% prep_or_conj('whether').
+% prep_or_conj('while').
+% prep_or_conj('whilst').
+% prep_or_conj('with').
+% prep_or_conj('within').
+% prep_or_conj('without').
+% prep_or_conj('worth').
+% prep_or_conj('yet').
+ 
 /* 
-   portray_strings_double_quoted(+String)
+    portray_strings_double_quoted(+String)
 
 For example, portray_strings_double_quoted/1
 prints strings double-quoted and fails on non-strings.  Note that the

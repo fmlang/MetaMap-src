@@ -34,6 +34,7 @@
 
 
 :- module(db_access, [
+	all_digits/1,
 	db_get_all_acros_abbrs/2,
 	db_get_concept_cui/2,
 	% db_get_concept_sts/2,
@@ -109,7 +110,7 @@
 	atom_codes_list/2,
 	concatenate_items_to_atom/2,
 	concatenate_items_to_string/2,
-	eliminate_multiple_meaning_designator_string/2,
+	% eliminate_multiple_meaning_designator_string/2,
 	is_print_string/1,
 	split_atom_completely/3,
 	split_string_completely/3,
@@ -231,8 +232,8 @@ default_version(DefaultVersion) :-
 	  DefaultVersion = 'USAbase'
 	; DefaultVersion = 'NLM'
 	).
-	
-default_release('2014AA').
+
+default_release('2015AA').
 
 initialize_db_access :-
 	get_data_release(Release, 1),
@@ -258,16 +259,16 @@ initialize_db_access(Version, Release, Model) :-
 
 conditionally_announce_database_info(Version, Release, Model, Location, VarTable) :-
 	( \+ control_option(silent) ->
-	   format('Berkeley DB databases (~a ~a ~a model) are open.~n',
+	   send_message('Berkeley DB databases (~a ~a ~a model) are open.~n',
 		  [Version, Release, Model]),
-	  format('Static variants will come from table ~s in ~w.~n',[VarTable,Location]),
+	  send_message('Static variants will come from table ~s in ~w.~n',[VarTable,Location]),
 	  announce_variant_info
 	; true
 	).
 
 announce_variant_info :-
 	variant_generation_mode(Mode),
-	format('Derivational Variants: ~w.~n',[Mode]).
+	send_message('Derivational Variants: ~w.~n',[Mode]).
 
 variant_generation_mode(Mode) :-
 	( control_option(no_derivational_variants) ->
@@ -539,8 +540,9 @@ normalize_synonyms([[Syn,Cat]|Rest], [NormalizedSyn-Cat|NormalizedRest]) :-
 
 normalize_synonym(Synonym, NormalizedSynonym) :-
 	lower(Synonym, LCSynonym),
-	atom_codes(LCSynonym, LCSynonymString),
-	eliminate_multiple_meaning_designator_string(LCSynonymString, CSString0),
+	atom_codes(LCSynonym, CSString0),
+	% atom_codes(LCSynonym, LCSynonymString),
+	% eliminate_multiple_meaning_designator_string(LCSynonymString, CSString0),
 	trim_whitespace(CSString0, NormalizedSynonymString),
 	atom_codes(NormalizedSynonym, NormalizedSynonymString).
 

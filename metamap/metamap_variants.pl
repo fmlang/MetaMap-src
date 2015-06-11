@@ -79,6 +79,7 @@
 :- use_module(skr(skr_utilities), [
 	expand_split_word_list/2,
 	fatal_error/2,
+	send_message/2,
 	split_word/3
    ]).
 
@@ -168,7 +169,7 @@ initialize_metamap_variants(Mode) :-
 
 conditionally_announce_generation_mode(Mode) :-
 	( \+ control_option(silent) ->
-	  format('Variant generation mode: ~p.~n', [Mode])
+	  send_message('Variant generation mode: ~p.~n', [Mode])
 	; true
 	).
 
@@ -265,7 +266,11 @@ compute_variant_generators_for_word(Word, VariantGenerators) :-
 
 % create_generators(LexicalCategories, Word, VariantGenerators)
 create_generators([], Word, VariantGenerators) :-
-        VariantGenerators = [gvc(v(Word,0,[],"",_,_),_,_)].
+	VariantGenerators = [gvc(v(Word,0,[],"",_,_),_,_)].
+%	( is_a_number(Word)->
+%	  VariantGenerators = []
+%	; VariantGenerators = [gvc(v(Word,0,[],"",_,_),_,_)]
+%	).
 create_generators([H|T], Word, VariantGenerators) :-
         split_generator([H|T], Word, 0, [], _Roots, _NFR, VariantGenerators).
         
@@ -330,7 +335,7 @@ no_variants_word(static, Word, [Category]) :-
 	  WordLength =< 2
 	).
 
-augment_GVCs_with_variants_aux([], __GenerationMode).
+augment_GVCs_with_variants_aux([], _GenerationMode).
 % Words of invariant category have no variants but themselves.
 augment_GVCs_with_variants_aux([GVC|Rest], GenerationMode) :-
 	GVC = gvc(Generator,Variants,_Candidates),
@@ -626,7 +631,7 @@ convert_aa_pairs_to_variants([First|Rest],Categories,VarLevel,History,
 
 convert_aa_pair_to_variant(AA:Type,Categories,VarLevel,History,V) :-
     NewHistory=[Type|History],
-    convert_to_variants([AA],Categories,VarLevel,NewHistory,[V]).
+    convert_to_variants_with_cats([AA],Categories,VarLevel,NewHistory,[V]).
 
 
 /* compute_all_syns(?Vs, -Ss)
@@ -701,10 +706,8 @@ get_synonym_pairs_aux([First|Rest], Categories, Synonyms) :-
 
 
 /* convert_to_variants(+Pairs, +VarLevel, +History, -Variants)
-   convert_to_variants(+Atoms, +Categories, +VarLevel, +History, -Variants)
+   convert_to_variants_with_cats(+Atoms, +Categories, +VarLevel, +History, -Variants)
 
-convert_to_variants/4
-convert_to_variants/5
 Pairs is a list of Word-Category pairs.
 */
 
@@ -713,10 +716,10 @@ convert_to_variants([First-Category|Rest], VarLevel, History,
                     [v(First,VarLevel,[Category],History,_,_)|ConvertedRest]) :-
 	convert_to_variants(Rest, VarLevel, History, ConvertedRest).
 
-convert_to_variants([], _Categories, _VarLevel, _History, []).
-convert_to_variants([First|Rest], Categories, VarLevel, History,
+convert_to_variants_with_cats([], _Categories, _VarLevel, _History, []).
+convert_to_variants_with_cats([First|Rest], Categories, VarLevel, History,
                     [v(First,VarLevel,Categories,History,_,_)|ConvertedRest]) :-
-	convert_to_variants(Rest, Categories, VarLevel, History, ConvertedRest).
+	convert_to_variants_with_cats(Rest, Categories, VarLevel, History, ConvertedRest).
 
 
 /* filter_by_var_level(+VsIn, -VsOut, +FilterIn, -FilterOut)
@@ -812,7 +815,8 @@ get_sp_variants(SPVariantAtoms, Categories, VarLevel, History, SpellingLevel, SP
 	    SPVariants = []
 	  ; NewSPVarLevel is VarLevel + SpellingLevel,
 	    NewSPHistory=[0'p|History],
-	    convert_to_variants(SPVariantAtoms, Categories, NewSPVarLevel, NewSPHistory, SPVariants)
+	    convert_to_variants_with_cats(SPVariantAtoms, Categories,
+					  NewSPVarLevel, NewSPHistory, SPVariants)
 	  ).
 
 get_i_variants(IVariantAtoms,  Categories, VarLevel, History, InflectionLevel, IVariants) :-
@@ -820,7 +824,8 @@ get_i_variants(IVariantAtoms,  Categories, VarLevel, History, InflectionLevel, I
 	    IVariants = []
 	  ; NewIVarLevel is VarLevel + InflectionLevel,
 	    NewIHistory=[0'i|History],
-	    convert_to_variants(IVariantAtoms, Categories, NewIVarLevel, NewIHistory, IVariants)
+	    convert_to_variants_with_cats(IVariantAtoms, Categories,
+					  NewIVarLevel, NewIHistory, IVariants)
 	  ).
 
 get_d_variants(Word, History, SPVariantAtoms2, IVariantAtoms, Categories,
@@ -1012,11 +1017,11 @@ generate_derivational_root_forms([FirstV|RestVs], FilterAtoms, DerivationLevel,
 	generate_derivational_root_forms(NewGVs, NewFilterAtoms, DerivationLevel,
 					 VsInOut, VsOut).
 
-show_single_derivations(Form, Derivations) :-
-	member(D:_, Derivations),
-	format(user_output, '~q -> ~q~n',[Form,D]),
-	fail.
-show_single_derivations(_Form, _Derivations).
+% show_single_derivations(Form, Derivations) :-
+% 	member(D:_, Derivations),
+% 	format(user_output, '~q -> ~q~n',[Form,D]),
+% 	fail.
+% show_single_derivations(_Form, _Derivations).
 
 get_dm_variant_terms([], []).
 get_dm_variant_terms(Form:[cat:Categories], DVariantTerms) :-
@@ -1174,7 +1179,7 @@ compute_synonyms_and_inflect_aux([], __InflectionLevel, []).
 compute_synonyms_and_inflect_aux([V|Rest], InflectionLevel, [SIVs|RestSIVs]) :-
 	get_synonyms_for_variant(V, SVs0),
 	SVs = [V|SVs0],
-	compute_all_inflections(SVs, InflectionLevel, SIVs0),
+	compute_all_inflections_aux(SVs, InflectionLevel, SIVs0),
 	append(SVs0, SIVs0, SIVs),
 	compute_synonyms_and_inflect_aux(Rest, InflectionLevel, RestSIVs).
 
@@ -1214,7 +1219,7 @@ get_synonyms_for_variant([V|Rest], SynonymLevel,
 
 
 /* compute_all_inflections(+Vs, -IVs)
-   compute_all_inflections(+Vs, +InflectionLevel, -IVs)
+   compute_all_inflections_aux(+Vs, +InflectionLevel, -IVs)
 
 compute_all_inflections/2
 compute_all_inflections/3
@@ -1223,17 +1228,17 @@ compute_all_inflections/3
 compute_all_inflections([], []).
 compute_all_inflections([H|T], IVs) :-
 	variant_score(inflection, InflectionLevel),
-	compute_all_inflections([H|T], InflectionLevel, IVs).
+	compute_all_inflections_aux([H|T], InflectionLevel, IVs).
 
-compute_all_inflections([], __InflectionLevel, []).
-compute_all_inflections([V|Rest], InflectionLevel, IVs) :-
+compute_all_inflections_aux([], __InflectionLevel, []).
+compute_all_inflections_aux([V|Rest], InflectionLevel, IVs) :-
 	inflect_variant(V, IAtoms),
 	V = v(_Atom,VarLevel,Categories,History,_Roots,_NFR),
 	NewVarLevel is VarLevel + InflectionLevel,
 	NewHistory = [0'i|History],
-	convert_to_variants(IAtoms, Categories, NewVarLevel, NewHistory, IVs0),
+	convert_to_variants_with_cats(IAtoms, Categories, NewVarLevel, NewHistory, IVs0),
 	append(IVs0, RestIVs, IVs),
-	compute_all_inflections(Rest, InflectionLevel, RestIVs).
+	compute_all_inflections_aux(Rest, InflectionLevel, RestIVs).
 
 %% dump version
 %compute_all_inflections([],_InflectionLevel,[]).
@@ -1375,10 +1380,10 @@ gather_variants_var([Variant|RestVariants], NFR, Generator,
 		    GeneratorPosition, GeneratorInvolvesHead, VAVLIn, VAVLOut) :-
 	% instantiate NFR!
 	Variant = v(Word,_,_,_,_,NFR),
-	tokenize_text_mm_lc(Word, Words),
-	last(Words, LastWord),
-	VInfo = vinfo(Generator,GeneratorPosition,GeneratorInvolvesHead,Variant,Words,LastWord),
-	( Words = [FirstWord|_] ->
+	tokenize_text_mm_lc(Word, WordList),
+	last(WordList, LastWord),
+	VInfo = vinfo(Generator,GeneratorPosition,GeneratorInvolvesHead,Variant,WordList,LastWord),
+	( WordList = [FirstWord|_] ->
 	  % format(user_output, '      VAR: ~q:~q~n', [FirstWord,VInfo]),
 	  add_to_avl(FirstWord, VInfo, VAVLIn, VAVLInOut)
 	; VAVLInOut = VAVLIn
@@ -1469,6 +1474,9 @@ compute_all_subsequence_positions_1([FirstGeneratorWord|RestGeneratorWords], Wor
 all_positions([], _GeneratorWord, _Index, []).
 all_positions([H|T], GeneratorWord, Index, AllPositions) :-
 	( H == GeneratorWord ->
+	  AllPositions = [Index|Rest]
+	  % to handle possessives
+	; atom_concat(GeneratorWord, '''s', H) ->
 	  AllPositions = [Index|Rest]
 	; AllPositions = Rest
 	),

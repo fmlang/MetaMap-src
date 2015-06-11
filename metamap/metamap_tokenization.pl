@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -68,6 +67,7 @@
 	local_ws/1,
 	new_phrase_item/3,
 	no_combine_pronoun/1,
+	normalize_possessives/3,
 	parse_phrase_word_info/3,
 	% whitespace tokenization (break at whitespace and hyphens; ignore colons)
 	tokenize_text/2,
@@ -113,6 +113,7 @@
 
 :- use_module(skr(skr_utilities),[
 	fatal_error/2,
+	send_message/2,
 	token_template/6
     ]).
 
@@ -202,6 +203,7 @@ add_tokens_to_phrase_item(Item, TokenizedItem) :-
 	lowercase_list(InputMatch, InputMatchLC),
 	remove_punct_tokens(InputMatchLC, InputMatchLCNoPunct),
 	undo_possessives(InputMatchLCNoPunct, InputMatchLCNoPunctNoPoss),
+	% InputMatchLCNoPunctNoPoss = InputMatchLCNoPunct,
 	set_phrase_item_feature(Item, tokens, InputMatchLCNoPunctNoPoss, TokenizedItem),
 	!.
 add_tokens_to_phrase_item(Item, Item).
@@ -452,7 +454,7 @@ extract_tokens(PhraseItem, [], []) :-
 extract_tokens_aux(PhraseItems, TokenWords) :-
 	( atom(PhraseItems) ->
 	  TokenWords = [PhraseItems],
-	  format(user_output, "PRIMITIVE: ~q~n", [PhraseItems])
+	  send_message('PRIMITIVE: ~q~n', [PhraseItems])
 	; % PhraseItems = [H|T],
 	  memberchk(tokens(TokenWords), PhraseItems)
 	).
@@ -507,7 +509,7 @@ filter_tokens_1(PhraseItem, TokenWords, []) :-
 	  extract_tokens_aux(SubItemList, TokenWords)
 	; arg(1, PhraseItem, SubItemList),
 	  extract_tokens_aux(SubItemList, TokenWords),
-	  format(user_output, '### WARNING: ~q is an unexpected phrase item!~n', [PhraseItem]),
+	  send_message('### WARNING: ~q is an unexpected phrase item!~n', [PhraseItem]),
 	  ttyflush
 	),
 	!.
@@ -782,6 +784,7 @@ tokenize_text_mm(Text, TokText) :-
 	( atom(Text) ->
 	  atom_codes(Text, String),
 	  tokenize_text_utterly(String, StringToks0),
+	  % normalize_possessives_and_remove_nonwords(StringToks0, StringToks),
 	  remove_possessives_and_nonwords(StringToks0, StringToks),
 	  atom_codes_list(TokText, StringToks)
 	; tokenize_text_utterly(Text, TokText0),
@@ -818,6 +821,65 @@ remove_possessives_and_nonwords([Word,"'",WhiteSpace|Rest], [Word|FilteredRest])
 remove_possessives_and_nonwords([First|Rest], [First|FilteredRest]) :-
 	remove_possessives_and_nonwords(Rest, FilteredRest).
 
+
+%%% normalize_possessives_and_remove_nonwords(TokensIn, TokensOut) :-
+%%% 	KeepWhiteSpace = 0,
+%%% 	normalize_possessives(TokensIn, KeepWhiteSpace, TokensInOut),
+%%% 	remove_nonwords(TokensInOut, TokensOut).
+%%% 
+%%% remove_nonwords([], []).
+%%% remove_nonwords([NonWord|Rest], FilteredRest) :-
+%%% 	% \+ is_ws_word(NonWord),
+%%% 	is_punct_or_ws(NonWord),
+%%% 	!,
+%%% 	remove_nonwords(Rest, FilteredRest).
+%%% remove_nonwords([Word|Rest], [Word|FilteredRest]) :-
+%%% 	remove_nonwords(Rest, FilteredRest).
+%%% 
+% singular possessives
+%%% % remove_possessives_and_nonwords([Word,"'","s"], [Word]) :- !.
+%%% normalize_possessives([], _KeepWhiteSpace, []).
+%%% normalize_possessives([PossessiveWord], _KeepWhiteSpace, [Word]) :-
+%%% 	% append(Word, "'s", WordApostropheS),
+%%% 	append(Word, [C1,C2], PossessiveWord),
+%%% 	atom_codes(Atom, [C1,C2]),
+%%% 	apostrophe_s_or_s_apostrophe(Atom),
+%%% 	!.
+%%% % normalize_possessives([Word,"'","s",WhiteSpace|Rest], [Word|FilteredRest]) :-
+%%% % normalize_possessives([WordApostropheS,WhiteSpace|Rest], KeepWhiteSpace, [Word|FilteredRest]) :-
+%%% normalize_possessives([WordApostropheS,WhiteSpace|Rest], KeepWhiteSpace, NormalizedTokens) :-
+%%% 
+%%% 	% append(Word, "'s", WordApostropheS),
+%%% 	append(Word, [C1,C2], WordApostropheS),
+%%% 	atom_codes(Atom, [C1,C2]),
+%%% 	apostrophe_s_or_s_apostrophe(Atom),
+%%% 	is_ws(WhiteSpace),
+%%% 	!,
+%%% 	( KeepWhiteSpace =:= 1 ->
+%%% 	  NormalizedTokens = [Word,WhiteSpace|FilteredRest]
+%%% 	; NormalizedTokens = [Word|FilteredRest]
+%%% 	),
+%%% 	normalize_possessives(Rest, KeepWhiteSpace, FilteredRest).
+%%% % plural possessives
+%%% % normalize_possessives([Word,"'"], [Word]) :-
+%%% % normalize_possessives([WordSApostrophe], [Word]) :-
+%%% % 	append(Word, "s'", WordSApostrophe),
+%%% %	% ends_with_s(Word),
+%%% % 	!.
+%%% % normalize_possessives([Word,"'",WhiteSpace|Rest], [Word|FilteredRest]) :-
+%%% % normalize_possessives([WordSApostrophe,WhiteSpace|Rest], [Word|FilteredRest]) :-
+%%% % 	append(Word, "s'", WordSApostrophe),
+%%% % 	% ends_with_s(Word),
+%%% % 	is_ws(WhiteSpace),
+%%% % 	!,
+%%% % 	normalize_possessives(Rest, FilteredRest).
+%%% normalize_possessives([First|Rest], KeepWhiteSpace, [First|FilteredRest]) :-
+%%% 	normalize_possessives(Rest, KeepWhiteSpace, FilteredRest).
+%%% 
+%%% apostrophe_s_or_s_apostrophe('''s').
+%%% apostrophe_s_or_s_apostrophe('s''').
+
+
 % ORIG
 % is_ws_word([]).
 % is_ws_word([AlNum|Rest]) :-
@@ -848,11 +910,11 @@ ends_with_s(Word) :-
 is_ws([Char]) :-
 	local_ws(Char).
 
-tokenize_all_text_mm_lc([], []).
-tokenize_all_text_mm_lc([First|Rest], [TokenizedFirst|TokenizedRest]) :-
-	tokenize_text_mm_lc(First, TokenizedFirst),
-	tokenize_all_text_mm_lc(Rest, TokenizedRest).
-
+% tokenize_all_text_mm_lc([], []).
+% tokenize_all_text_mm_lc([First|Rest], [TokenizedFirst|TokenizedRest]) :-
+% 	tokenize_text_mm_lc(First, TokenizedFirst),
+% 	tokenize_all_text_mm_lc(Rest, TokenizedRest).
+ 
 tokenize_text_mm_lc(Text, TokText) :-
 	tokenize_text_mm(Text, TokText0),
 	lowercase_list(TokText0, TokText).
@@ -885,6 +947,7 @@ tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 	concat_strings_with_separator(Lines, " ", FieldText),
 	tokenize_text_utterly(FieldText, TokField0),
 	re_attach_apostrophe_s_tokens(TokField0, TokField),
+	% TokField = TokField0,
 	!.
 
 % form_decimal_numbers([], []).
@@ -906,6 +969,9 @@ tokenize_one_field_utterly([Field,Lines], [Field,TokField]) :-
 
 % There are numerous cases of ill-formed text involving apostrophe-s
 % that need to be handled via special cases.
+
+% Special case for input like "area, wernicke's"
+tokenized_field_in_out(["'", "s"], [], []).
 
 tokenized_field_in_out(["'", "s", TokenAfterS           | RestTokenizedFieldIn],
 		       TokenAfterS, RestTokenizedFieldIn).
@@ -932,7 +998,12 @@ re_attach_apostrophe_s_tokens(TokenizedFieldIn, TokenizedFieldOut) :-
 	TokenizedFieldOut = [StringWithApostropheS|RestTokenizedFieldOut],
 	append([OrigString, "'", "s"], StringWithApostropheS),
 	% TokenizedFieldOut = [StringWithApostropheS | RestTokenizedField],
-	re_attach_apostrophe_s_tokens([TokenAfterS|RestTokenizedFieldIn], RestTokenizedFieldOut).
+	% Special case for input like "area, wernicke's"
+	( TokenAfterS == [],
+	  RestTokenizedFieldIn == [] ->
+	  RestTokenizedFieldOut = []
+	; re_attach_apostrophe_s_tokens([TokenAfterS|RestTokenizedFieldIn], RestTokenizedFieldOut)
+	).
 re_attach_apostrophe_s_tokens([H|Rest], [H|NewRest]) :-
 	re_attach_apostrophe_s_tokens(Rest, NewRest).
 
@@ -953,10 +1024,13 @@ no_combine_pronoun(she).
 no_combine_pronoun(it).
 
 tokenize_text_utterly(Text, TokenizedText) :-
+	% PrevChar = '',
 	( atom(Text) ->
 	  atom_codes(Text, String),
+	  % ttu_string(String, PrevChar, TokenizedString, []),
 	  ttu_string(String, TokenizedString, []),
 	  atom_codes_list(TokenizedText, TokenizedString)
+	% ; ttu_string(Text, PrevChar, TokenizedText, [])
 	; ttu_string(Text, TokenizedText, [])
 	),
 	!.
@@ -1002,7 +1076,6 @@ tokenize_text_utterly(Text, TokenizedText) :-
 % 	; { TS= [] }
 % 	).
 
-% No-DCG version to allow folding ttu_token2/3 into ttu_token/3
 ttu_string([], Remainder, Remainder).
 ttu_string([Char|RestStringIn], TokenizedString, Remainder) :-
 	( local_alnum(Char) ->
@@ -1021,6 +1094,46 @@ ttu_token([Char|RestString], RestTokenIn, RestTokenOut) :-
 	; RestTokenIn = [],
 	  RestTokenOut = [Char|RestString]
 	).
+
+% No-DCG version to allow folding ttu_token2/3 into ttu_token/3
+%%% ttu_string([], _PrevChar, Remainder, Remainder).
+%%% ttu_string([Char|RestStringIn], PrevChar, TokenizedString, Remainder) :-
+%%% 	( Char is 39,
+%%% 	  local_alnum(PrevChar),
+%%% 	  PrevChar \== 39,
+%%% 	  RestStringIn = [NextChar|_],
+%%% 	  local_alnum(NextChar),
+%%% 	  NextChar \== 39 ->
+%%% 	  TokenizedString = [[Char|RestToken]|RemainingTokens],
+%%% 	  ttu_token(RestStringIn, Char, RestToken, LastChar, RestStringOut)
+%%% 	; local_alnum(Char),
+%%% 	  Char \== 39 ->
+%%% 	  TokenizedString = [[Char|RestToken]|RemainingTokens],
+%%% 	  ttu_token(RestStringIn, Char, RestToken, LastChar, RestStringOut)
+%%% 	; TokenizedString = [[Char]|RemainingTokens],
+%%% 	  RestStringOut = RestStringIn,
+%%% 	  LastChar = Char
+%%% 	),
+%%% 	ttu_string(RestStringOut, LastChar, RemainingTokens, Remainder).
+%%% 
+%%% ttu_token([], PrevChar, [], PrevChar, []).
+%%% ttu_token([Char|RestStringIn], PrevChar, RestTokenIn, LastChar, RestTokenOut) :-
+%%% 	( Char is 39,
+%%% 	  local_alnum(PrevChar),
+%%% 	  PrevChar \== 39,
+%%% 	  RestStringIn = [NextChar|_],
+%%% 	  local_alnum(NextChar),
+%%% 	  NextChar \== 39 ->
+%%% 	  RestTokenIn = [Char|RestTokenNext],
+%%% 	  ttu_token(RestStringIn, Char, RestTokenNext, LastChar, RestTokenOut)
+%%% 	; local_alnum(Char),
+%%% 	  Char \== 39 ->
+%%% 	  RestTokenIn = [Char|RestTokenNext],
+%%% 	  ttu_token(RestStringIn, Char, RestTokenNext, LastChar, RestTokenOut)
+%%% 	; RestTokenIn = [],
+%%% 	  LastChar = PrevChar,
+%%% 	  RestTokenOut = [Char|RestStringIn]
+%%% 	).
 
 % MATS
 % ttu_string(TS) -->
@@ -1284,6 +1397,7 @@ local_punct(124). % |
 local_punct(125). % }
 local_punct(126). %  ~
 
+% local_alnum(39).  % '
 local_alnum(48).  % 0
 local_alnum(49).  % 1
 local_alnum(50).  % 2

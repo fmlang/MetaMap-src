@@ -437,6 +437,17 @@ adjust_boundaries_1( [PHead,ing(IngWord)|More],
      \+ First = boundary( _ ),
      \+ First = punc( _ ), !,
      adjust_boundaries_1( More, NewGap, Gap ).
+% The only adverb marking boundary is 'not'. However, in cases
+% like 'the receptor positively regulates BRCA1', positively
+% should be bracketed separately from 'the receptor'. This
+% fixes the issue. --Halil
+adjust_boundaries_1( [adv(Adv),boundary(Boundary)|More], 
+                   [boundary(adv(Adv))|NewGap],Gap) :-
+     functor( Boundary, Label, _ ),
+     memberchk( Label, [modal,verb,aux] ),
+     !,
+     NewMore = [boundary( Boundary )|More],
+     adjust_boundaries_1( NewMore, NewGap, Gap ).
 
 adjust_boundaries_1([PreBoundary,Boundary|More],
                   [PreBoundary,boundary(Boundary)|NewGap],Gap) :-

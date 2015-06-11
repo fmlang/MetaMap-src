@@ -71,6 +71,10 @@
 	datime/1
     ]).
 
+:- prolog_flag(agc_margin, Current), New is 5*Current, prolog_flag(agc_margin, Current, New).
+
+:- prolog_flag(gc_margin,  Current), New is 5*Current, prolog_flag(gc_margin,  Current, New).
+
 %%% Code provided by Mats Carlsson of SICS to FML via e-mail 03/27/2007:
 %%% 
 %%% There are two issues:
@@ -107,10 +111,10 @@ runtime_entry(start) :-
 	go.
     
 runtime_entry(abort) :-
-	format(user_output,'~nDisconnecting servers and closing files...',[]),
+	format(user_error,'~nDisconnecting servers and closing files...',[]),
 	ttyflush,
 	stop_skr,
-	format(user_output,'Done.~n',[]).
+	format(user_error,'Done.~n',[]).
 
 pl_to_po :-
 	source_file(FilePL),
@@ -132,7 +136,7 @@ compile_to_PO_if_necessary(FilePL) :-
 	  file_property(FilePO, modify_timestamp, TimeStampPO),
 	  TimeStampPO > TimeStampPL ->
 	  true
-	; format(user_output, 'Saving ~w to ~w~n', [FilePL,FilePO]),
+	; format(user_error, 'Saving ~w to ~w~n', [FilePL,FilePO]),
 	  save_files(FilePL, FilePO)
 	).
 	   

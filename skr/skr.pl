@@ -45,8 +45,9 @@
 	% but they must still be exported because they're called via debug_call.
 	print_candidate_grid/6,
 	print_duplicate_info/4,
-	skr_phrases/17,
+	skr_phrases/19,
 	print_all_aevs/1,
+	stop_and_halt/0,
 	% called by MetaMap API -- do not change signature!
 	stop_skr/0
     ]).
@@ -117,12 +118,21 @@
 	sab_tables_exist/0
     ]).
 
+:- use_module(skr(skr_utilities),[
+        send_message/2
+    ]).
+
+:- use_module(skr(skr_fe), [
+	get_output_stream/1
+    ]).
+
 :- use_module(skr(skr_utilities), [
 	debug_call/2,
 	debug_message/3,
 	ensure_number/2,
 	expand_split_word_list/2,
 	fatal_error/2,
+	generate_EOT_output/1,
 	get_candidate_feature/3,
 	get_all_candidate_features/3,
 	replace_crs_with_blanks/4,
@@ -148,9 +158,9 @@
 % 	is_alpha/1
 %     ]).
 
-:- use_module(skr_lib(efficiency), [
-	maybe_atom_gc/2
-    ]).
+% :- use_module(skr_lib(efficiency), [
+% 	maybe_atom_gc/3
+%     ]).
 
 :- use_module(skr_lib(nls_strings), [
 	split_string_completely/3,
@@ -165,6 +175,11 @@
 	subtract_from_control_options/1
     ]).
 
+
+:- use_module(skr_lib(semgroup_member), [
+	semrep_semgroup_member/2
+    ]).
+
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/3,
 	interleave_string/3,
@@ -175,13 +190,15 @@
     ]).
 
 :- use_module(text(text_objects), [
-	extract_token_strings/2
+	extract_token_atoms/2
     ]).
 
 :- use_module(text(text_object_util), [
 	an_tok/1,
 	brackets/2,
+	brackets/2,
 	higher_order_or_annotation_tok/1,
+	pe_tok/1,
 	pn_tok/1,
 	ws_or_pn_tok/1,
 	ws_tok/1
@@ -209,6 +226,7 @@
 	append/2,
 	keys_and_values/3,
 	last/2,
+	nth0/3,
 	rev/2,
 	select/3,
 	sumlist/2
@@ -244,31 +262,16 @@ initialize_skr(Options) :-
 initialize_skr(_) :-
 	fatal_error('initialize_skr/1 failed.~n', []).
 
+stop_and_halt :- stop_skr, halt.
 
 stop_skr :-
 	( stop_db_access ->
 	  true
 	; true
 	),
+	get_output_stream(OutputStream),
+	generate_EOT_output(OutputStream),
 	close_all_streams.
-%	( current_stream(File, Mode, Stream),
-%	  stream_property(Stream, Prop),
-%	  stream_position(Stream, Pos),
-%	  format(user_output, '~q-~q-~q-~q-~q~n', [File,Mode,Stream,Prop,Pos]),
-%	  fail
-%	; true
-%	),
-%	nl(user_output),
-%	local_close_all_streams.
-
-local_close_all_streams :-
-	current_stream(File,Mode,Stream),
-	format(user_output, 'Closing stream ~q-~q-~q~n', [File,Mode,Stream]),
-	close(Stream),
-	format(user_output, 'CLOSED  stream ~q-~q-~q~n', [File,Mode,Stream]),
-	fail
-      ; format(user_output, '#####################~n', []),
-        halt.
 
 warn_if_no_sab_files :-
 	% If the sab tables (sab_rv and sab_vr) exist, do not issue a warning.
@@ -282,40 +285,42 @@ warn_if_no_sab_files :-
 	  ( control_option(exclude_sources)
 	  ; control_option(restrict_to_sources)
 	  ) ->
-	  format(user_output, '### WARNING: Validation of UMLS sources specified on command line disabled!~n', [])
+	  send_message('### WARNING: Validation of UMLS sources specified on command line disabled!~n', [])
 	% If neither of the above circumstances hold, then issue no warning.
 	; true
 	).
 
-skr_phrases(InputLabel, UtteranceText, CitationTextAtom,
-	    AAs, UDAs, SyntacticAnalysis, TagList,
+skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
+	    AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
 	    WordDataCacheIn, USCCacheIn, RawTokensIn,
 	    ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 	    MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) :-
-	( skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-			  AAs, UDAs, SyntacticAnalysis, TagList,
+	( skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
+			  AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
 			  WordDataCacheIn, USCCacheIn, RawTokensIn,
 			  ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 			  MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) ->
 	  true
+	  % skr_utilities:write_token_list(RawTokensOut, 0, 1)
         ; fatal_error('skr_phrases/14 failed for text ~p: ~p~n',
 		  [InputLabel,UtteranceText])
         ).
 
-skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
-		AAs, UDAs, SyntacticAnalysis, TagList,
+skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
+		AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
 		WordDataCacheIn, USCCacheIn, RawTokensIn,
 		ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 		DisambiguatedMMOPhrases, ExtractedPhrases,
 		minimal_syntax(SemRepPhrasesWithWSD)) :-
 	ServerStreams = _TaggerServerStream-WSDServerStream,
-	maybe_atom_gc(_DidGC, _SpaceCollected),
 	SyntacticAnalysis = minimal_syntax(Phrases0),
 	add_tokens_to_phrases(Phrases0, Phrases),
 	% UtteranceText contains no AAs. E.g.,
 	% "heart attack (HA)" will become simply "heart attack".
 	skr_phrases_1(Phrases, InputLabel, UtteranceText,
-		      AAs, UDAs, CitationTextAtom, TagList,
+		      AAs, UDAs, NoMapPairs,
+		      OrigCitationTextAtom,
+		      TagList,
 		      WordDataCacheIn, USCCacheIn,
 		      WordDataCacheOut, USCCacheOut,
 		      RawTokensIn, RawTokensOut,
@@ -332,19 +337,23 @@ skr_phrases_aux(InputLabel, UtteranceText, CitationTextAtom,
 % 	nl(user_output).
 
 skr_phrases_1([], _InputLabel,
-	      _AllUtteranceText, _AAs, _UDAs, _CitationTextAtom, _TagList,
+	      _AllUtteranceText, _AAs, _UDAs, _NoMapPairs,
+	      _OrigCitationTextAtom, _TagList,
 	      WordDataCache, USCCache, WordDataCache, USCCache,
 	      RawTokens, RawTokens, [], []).
 skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
-	      AAs, UDAs, CitationTextAtom, TagList,
+	      AAs, UDAs, NoMapPairs, OrigCitationTextAtom,
+	      TagList,
 	      WordDataCacheIn, USCCacheIn,
 	      WordDataCacheOut, USCCacheOut,
 	      RawTokensIn, RawTokensOut,
 	      [FirstMMOPhrase|RestMMOPhrases],
 	      [Phrases|RestPhrases]) :-
-	% NumGlommedPhrases is the number of prep phrases glommed onto the first phrase
+	% TotalPhraseCount is total the number of phrases glommed together
+	% to form the composite phrase.
+	% E.g., TotalPhraseCount for [ [pain] [on the left side] [of the chest] ] is 3
 	get_composite_phrases([PhraseIn|OrigRestPhrasesIn], CompositePhrase,
-			      NumGlommedPhrases, RestCompositePhrases, CompositeOptions),
+			      TotalPhraseCount, RestCompositePhrases, CompositeOptions),
 	% Merge consecutive phrases spanned by an AA
 	% The original composite phrases are the list
 	% [CompositePhrase|RestCompositePhrases];
@@ -354,7 +363,7 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 			 MergedPhrase, RestMergedPhrases, MergeOptions),
 	get_inputmatch_atoms_from_phrase(MergedPhrase, InputMatchMergedPhraseWords),
 	length(InputMatchMergedPhraseWords, Length),
-	( NumGlommedPhrases > 0 ->
+	( TotalPhraseCount > 0 ->
 	  Length < 21
 	; true
 	),	    
@@ -366,11 +375,13 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	% which is no longer used!!
 	% format(user_output, 'Phrase ~w:~n', [MergedPhrase]),
 	skr_phrase(InputLabel, AllUtteranceText,
-		   MergedPhrase, AAs, CitationTextAtom, TagList,
+		   MergedPhrase, AAs, NoMapPairs,
+		   OrigCitationTextAtom, TagList,
 		   RawTokensIn, GVCs,
 		   WordDataCacheIn, USCCacheIn,
 		   WordDataCacheNext, USCCacheNext,
 		   RawTokensNext, APhrases, FirstMMOPhrase),
+	% maybe_atom_gc(1, _DidGC, _SpaceCollected),
 	% format(user_output, 'Tokens Next:~n', []),
 	% skr_utilities:write_token_list(RawTokensNext, 0, 1),
 	set_var_GVCs_to_null(GVCs),
@@ -378,7 +389,8 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	subtract_from_control_options(AllAddedOptions),
 	% add_semtypes_to_phrases_if_necessary(Phrases0,FirstEPPhrases),
 	skr_phrases_1(RestMergedPhrases, InputLabel, AllUtteranceText,
-		      AAs, UDAs, CitationTextAtom, TagList,
+		      AAs, UDAs, NoMapPairs, OrigCitationTextAtom,
+		      TagList,
 		      WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut,
 		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrases).
 
@@ -407,10 +419,10 @@ merge_aa_phrases_1(PhrasesToMerge, [AppendedPhrase1|DemotedPhrases]) :-
 % and assume it's the only one that does. Maybe too simple?
 acronym_expansion_spans_phrases(AAs, UDAs, [FirstPhrase|RestPhrases],
 				[FirstPhrasePrefix|PhrasesToMerge], RemainingPhrases) :-
-	( avl_member(_AATokens, AAs, [ExpansionTokens])
+	( member(_AATokens-ExpansionTokens, AAs)
 	; avl_member(_AATokens, UDAs, [ExpansionTokens])
 	),
-	% extract_token_strings(ExpansionTokens, ExpansionStrings),
+	% extract_token_atoms(ExpansionTokens, ExpansionStrings),
 	append(FirstPhrasePrefix, FirstPhraseSuffix, FirstPhrase),
 	FirstPhraseSuffix \== [],
 	% reversed order of args from QP library version!
@@ -502,8 +514,7 @@ match_tokens_to_inputmatch([FirstExpansionToken|RestExpansionTokens],
 	  match_tokens_to_inputmatch(RestExpansionTokens,
 				     InputMatchAtoms, RemainingExpansionTokens)
 	; InputMatchAtoms = [FirstInputMatchAtom|RestInputMatchAtoms],
-	  token_template(FirstExpansionToken, _TokenType, TokenString, _LCTokenString, _PosInfo),
-	  atom_codes(TokenAtom, TokenString),
+	  token_template(FirstExpansionToken, _TokenType, TokenAtom, _LCTokenAtom, _PosInfo),
 	  TokenAtom == FirstInputMatchAtom,
 	  match_tokens_to_inputmatch(RestExpansionTokens,
 				     RestInputMatchAtoms, RemainingExpansionTokens)
@@ -536,15 +547,15 @@ element of the pair is of the form
      pwi(PhraseWordL,PhraseHeadWordL,PhraseMap).
 */
 
-skr_phrase(Label, UtteranceText, PhraseSyntax, AAs,
-	   CitationTextAtom, TagList,
+skr_phrase(Label, UtteranceText, PhraseSyntax, AAs, NoMapPairs,
+	   OrigCitationTextAtom, TagList,
 	   RawTokensIn, GVCs,
 	   WordDataCacheIn, USCCacheIn,
 	   WordDataCacheOut, USCCacheOut,
 	   RawTokensOut, APhrases, MMOPhraseTerm) :-
 	( skr_phrase_1(Label, UtteranceText,
-		       PhraseSyntax, AAs, RawTokensIn,
-		       CitationTextAtom, TagList, GVCs,
+		       PhraseSyntax, AAs, NoMapPairs, RawTokensIn,
+		       OrigCitationTextAtom, TagList, GVCs,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut,
 		       RawTokensOut, APhrases, MMOPhraseTerm) ->
@@ -554,13 +565,13 @@ skr_phrase(Label, UtteranceText, PhraseSyntax, AAs,
         ).
 
 skr_phrase_1(Label, UtteranceTextString,
-	     PhraseSyntax, AAs,
-	     RawTokensIn, CitationTextAtom, TagList, GVCs,
+	     PhraseSyntax, AAs, NoMapPairs,
+	     RawTokensIn, OrigCitationTextAtom, TagList, GVCs,
 	     WordDataCacheIn, USCCacheIn,
 	     WordDataCacheOut, USCCacheOut,
 	     RawTokensOut, APhrases, MMOPhraseTerm) :-
 	get_pwi_info(PhraseSyntax, PhraseWordInfoPair, TokenPhraseWords, TokenPhraseHeadWords),
-	get_phrase_info(PhraseSyntax, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAtom,
+	get_phrase_info(PhraseSyntax, AAs, InputMatchPhraseWords, RawTokensIn, OrigCitationTextAtom,
 			TagList, PhraseTokens, RawTokensOut, PhraseStartPos, PhraseLength,
 			OrigPhraseTextAtom, ReplacementPositions),
 	% format(user_output, 'OPTA: ~w~n', [OrigPhraseTextAtom]),
@@ -568,20 +579,24 @@ skr_phrase_1(Label, UtteranceTextString,
 	atom_codes(OrigPhraseTextAtom, OrigPhraseTextString),
 	debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords),
 	atom_codes(UtteranceTextAtom, UtteranceTextString),
-	generate_initial_evaluations(Label, UtteranceTextAtom,
-				     OrigPhraseTextString, PhraseSyntax, Variants,
-				     GVCs, WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
+	generate_initial_evaluations(Label, UtteranceTextAtom, OrigPhraseTextString,
+				     PhraseSyntax, Variants, GVCs, WordDataCacheIn, USCCacheIn,
+				     RawTokensOut, AAs,
 				     InputMatchPhraseWords, PhraseTokens, TokenPhraseWords,
 				     TokenPhraseHeadWords, WordDataCacheOut,
 				     USCCacheOut, Evaluations0),
 
-	refine_evaluations(Evaluations0, RefinedEvaluations, FinalEvaluations),
+	refine_evaluations(Evaluations0, NoMapPairs, RefinedEvaluations, FinalEvaluations0),
 	length(RefinedEvaluations, TotalCandidateCount),
-	length(FinalEvaluations, RefinedCandidateCount),
+	length(FinalEvaluations0, RefinedCandidateCount),
 	ExcludedCandidateCount is TotalCandidateCount - RefinedCandidateCount,
 	debug_message(candidates,
-		      '### ~d Initial Candidates~n### ~d Refined Candidates~n',
+		      '###~N ~d Initial Candidates~n### ~d Refined Candidates~n',
 		      [TotalCandidateCount, RefinedCandidateCount]),
+	( control_option(dysonym_processing) ->
+	  exclude_dysonyms(FinalEvaluations0,FinalEvaluations)
+	; FinalEvaluations = FinalEvaluations0
+	),
 	debug_evaluations(FinalEvaluations),
 
 	generate_best_mappings(FinalEvaluations, OrigPhraseTextString, PhraseSyntax, PhraseWordInfoPair,
@@ -593,7 +608,6 @@ skr_phrase_1(Label, UtteranceTextString,
 	% I have here the data structures to call disambiguate_mmo/2
 	% format(user_output, 'Candidates: ~q~n', [candidates(FinalEvaluations)]),
 	% format(user_output, 'Mappings:   ~q~n', [mappings(Mappings)]),
-	% format(user_output, 'PWI:        ~q~n', [pwi(
 	% format(user_output, 'GVCs:       ~q~n', [gvcs(GVCs)]),
 	% format(user_output, 'EV0:        ~q~n', [ev0(Evaluations0)]),
 	% format(user_output, 'APhrases:   ~q~n', [aphrases(APhrases)]),
@@ -631,7 +645,9 @@ mark_excluded_evaluations(RefinedEvaluations) :-
 	do get_candidate_feature(status, Candidate, Status),
 	   % If the Status field is still uninstantiated,
 	   % this candidate was refined out of existence,
-	   % so the Status field can be set to 2
+	   % so the Status field can be set to 1.
+	   % If the Status field is already set,
+	   % "Status is 1" will fail, so just succeed anyway.
 	   ( Status is 1 ->
 	     true
 	   ; true
@@ -647,7 +663,7 @@ debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords) :-
 		 [PMID,TiOrAB,UtteranceNum,TokenPhraseLength,InputMatchPhraseWords]),
 	  flush_output(OutputStream),
 	  % don't duplicate output to user_output
-	  ( OutputStream == user_output ->
+	  ( stream_property(OutputStream, alias(user_output)) ->
 	    true
 	  ; format(user_output, 'Phrase|~s|~s|~s|~d|~q~n',
 		   [PMID,TiOrAB,UtteranceNum,TokenPhraseLength,InputMatchPhraseWords]),
@@ -695,6 +711,7 @@ get_phrase_info(Phrase, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAto
 		PhraseTokens, RawTokensOut, PhraseStartPos, PhraseLength,
 		OrigPhraseTextAtom, ReplacementPositions) :-
 	get_inputmatch_atoms_from_phrase(Phrase, InputMatchPhraseWords0),
+	% InputMatchPhraseWords = InputMatchPhraseWords0,
 	% format(user_output, 'Phrase: ~w~n', [Phrase]),
 	re_attach_apostrophe_s_to_prev_word(InputMatchPhraseWords0,
 					    TagList,
@@ -709,8 +726,17 @@ get_phrase_info(Phrase, AAs, InputMatchPhraseWords, RawTokensIn, CitationTextAto
 	% skr_utilities:write_token_list(RawTokensIn, 0, 1),
 	% format(user_output, '---> ~w~n~n', [InputMatchPhraseWords]),
 	% skr_utilities:write_token_list(RawTokensOut, 0, 1),
-	% format(user_output, '########################~n', []),
 	get_phrase_startpos_and_length(PhraseTokens, PhraseStartPos, PhraseLength0),
+	%% PhraseTokens = [FirstPhraseToken|_RestPhraseTokens],
+	%% last(PhraseTokens, LastPhraseToken),
+	%% % token_template(LastPhraseToken, _TokenType, _TokenString, _LCTokenString, _Pos1, RealPos),
+	%% token_template(FirstPhraseToken, _FirstTokenType,
+	%% 	       _FirstTokenString, _LCFirstTokenString, _FirstPos1, FirstRealPos),
+	%% FirstRealPos = pos(PhraseStartPos, _),
+	%% token_template(LastPhraseToken, _LastTokenType,
+	%% 	       _LastTokenString, _LCLastTokenString, _LastPos1, LastRealPos),
+	%% LastRealPos = pos(LastStartPos, LastLength),
+	%% PhraseLength0 is LastStartPos + LastLength - PhraseStartPos,
 	subchars(CitationTextAtom, PhraseTextStringWithCRs0, PhraseStartPos, PhraseLength0),
 	add_AA_suffix(PhraseTextStringWithCRs0, AAs, PhraseTokens, PhraseLength0,
 		      CitationTextAtom, PhraseTextStringWithCRs, PhraseLength),
@@ -773,8 +799,8 @@ matching_tokens_4(tok(TokenType, TokenString, TokenLCString, Pos1),
 		  
 	
 get_AA_text(AATokens, AATextString) :-
-	extract_token_strings(AATokens, AATextString).
-	% extract_token_strings(AATokens, AATokenStrings),
+	extract_token_atoms(AATokens, AATextString).
+	% extract_token_atoms(AATokens, AATokenStrings),
 	% interleave_string(AATokenStrings, " ", AATextString).
 
 generate_initial_evaluations(Label, UtteranceText,
@@ -840,7 +866,7 @@ generate_initial_evaluations(Label, UtteranceText,
 % 	).
 
 % Short-circuit the analysis if Atom is a stop phrase whose lexical categories
-% overlap with the current phrase's Tags.
+% overlap with the current phrase's StopTags.
 stop_analysis(Atom, String, Tags) :-
 	( stop_phrase(Atom, StopTags),
 	  intersection(Tags, StopTags, [_|_]) ->
@@ -851,6 +877,22 @@ stop_analysis(Atom, String, Tags) :-
 	  Length < MinLength
 	).
 
+refine_evaluations(InitialEvaluations, NoMapPairs, RefinedEvaluations, FinalEvaluations) :-
+	refine_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs,
+					      EvaluationsAfterUserExclusions),
+	refine_evaluations_by_sources(EvaluationsAfterUserExclusions, EvaluationsAfterSources),
+	refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
+	refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
+
+
+refine_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs, EvaluationsAfterUserExclusions) :-
+	( control_value(nomap, _) ->
+	  filter_evaluations_by_user_exclusions(InitialEvaluations,
+						NoMapPairs,
+						EvaluationsAfterUserExclusions)
+	; EvaluationsAfterUserExclusions  = InitialEvaluations
+	).
+	  
 refine_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	( control_value(restrict_to_sources, RestrictedSources) ->
 	  convert_to_root_sources(RestrictedSources, RestrictedRootSources),
@@ -865,26 +907,23 @@ refine_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	; EvaluationsAfterSources = Evaluations0
 	).
 
-refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations) :-
+refine_evaluations_by_semtypes(Evaluations0, RefinedEvaluations) :-
 	( control_option(restrict_to_sts) ->
 	  control_value(restrict_to_sts, STs),
-	  filter_evaluations_restricting_to_sts(EvaluationsAfterSources, STs, RefinedEvaluations)
+	  filter_evaluations_restricting_to_sts(Evaluations0, STs, RefinedEvaluations)
 	; control_option(exclude_sts) ->
 	  control_value(exclude_sts, STs),
-	  filter_evaluations_excluding_sts(EvaluationsAfterSources, STs, RefinedEvaluations)
-	; RefinedEvaluations = EvaluationsAfterSources
+	  filter_evaluations_excluding_sts(Evaluations0, STs, RefinedEvaluations)
+	; RefinedEvaluations = Evaluations0
 	).
 
 refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations) :-
- 	( \+ control_option(compute_all_mappings) ->
- 	  filter_out_subsumed_evaluations(RefinedEvaluations, FinalEvaluations)
- 	; FinalEvaluations = RefinedEvaluations
+ 	( ( control_option(compute_all_mappings)
+	  % ; control_option(hide_mappings)
+	  ; control_option(allow_overmatches) ) ->
+ 	  FinalEvaluations = RefinedEvaluations
+	; filter_out_subsumed_evaluations(RefinedEvaluations, FinalEvaluations)
  	).
-
-refine_evaluations(InitialEvaluations, RefinedEvaluations, FinalEvaluations) :-
-	refine_evaluations_by_sources(InitialEvaluations, EvaluationsAfterSources),
-	refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
-	refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
 
 debug_evaluations(Evaluations) :-
 	( control_value(debug, DebugFlags),
@@ -908,7 +947,7 @@ generate_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair
           Mappings0 = [],
 	  % If no mappings were constructed, no candidates were pruned;
 	  % this next call will assign Status 0 to all candidates.
-	  mark_pruned_evaluations(Evaluations, Evaluations),
+	  maybe_mark_pruned_evaluations(Evaluations, Evaluations),
 	  % Don't prune any candidates if we don't generate mappings!
 	  PrunedCount is 0
 	).
@@ -944,7 +983,9 @@ compute_evaluations(Label, UtteranceText,
 	debug_message(trace, '~N### Calling add_candidates: ~q~n', [TokenPhraseWords]),
 	test_single_char_tokens(InputMatchPhraseWords, IgnoreSingleChars),
 	CandidateCount is 1,
-	add_candidates(GVCs, CandidateCount, Variants, IgnoreSingleChars, DebugFlags,
+	maybe_ignore_GVCs(GVCs, GVCsToEvaluate),
+	add_candidates(GVCsToEvaluate, CandidateCount, Variants, IgnoreSingleChars, DebugFlags,
+
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut),
 	% format(user_output, '~N### add_candidates DONE!~n', []),
@@ -956,7 +997,7 @@ compute_evaluations(Label, UtteranceText,
 		      '~N### Calling evaluate_all_GVCs: ~q~n',
 		      [GeneratorsAndCandidateLengths]),
 	empty_avl(CCsIn),
-	evaluate_all_GVCs(GVCs, DebugFlags, Label, UtteranceText,
+	evaluate_all_GVCs(GVCsToEvaluate, DebugFlags, Label, UtteranceText,
 			  Variants, TokenPhraseWords,
 			  PhraseTokenLength, TokenPhraseHeadWords,
 			  PhraseTokens, RawTokensOut, AAs,
@@ -966,11 +1007,20 @@ compute_evaluations(Label, UtteranceText,
 	sort(Evaluations0, Evaluations1),
 	maybe_filter_evaluations_by_threshold(Evaluations1, Evaluations2),
 	debug_compute_evaluations_4(DebugFlags, Evaluations2),
-	filter_out_redundant_evaluations(Evaluations2, Evaluations),
+	% length(Evaluations2, Length2),
+	% format(user_output, '~d~n', [Length2]),
+	% Evaluations = Evaluations2,
+	maybe_filter_out_redundant_evaluations(Evaluations2, Evaluations),
 	% This is now done in compute_one_evaluation in metamap_evaluation.pl
 	% add_semtypes_to_evaluations(Evaluations),
 	debug_compute_evaluations_5(DebugFlags, Evaluations).
 
+
+maybe_ignore_GVCs(GVCs, GVCsToEvaluate) :-
+	( control_option(tokenize_only) ->
+	  GVCsToEvaluate = []
+	; GVCsToEvaluate = GVCs
+	).
 
 % Determine if at least one-third of the words in the phrase are either
 % single-char alphabetic tokens or hyphens. This special case handles cases like
@@ -1062,13 +1112,13 @@ get_phrase_startpos_and_length([FirstToken|RestTokens], PhraseStartPos, PhraseLe
 	% Initialize MinStartPos, MaxStartPos, and MaxLength
 	% with the values from the first token
 	get_token_startpos_and_length(FirstToken, FirstStartPos, FirstLength),
-	MinStartPos is FirstStartPos,
-	MaxStartPos is FirstStartPos,
-	MaxLength is FirstLength,
-	get_phrase_startpos_and_length_aux(RestTokens,
-					   MinStartPos, MaxStartPos, MaxLength,
-					   PhraseStartPos, PhraseLength).
-
+ 	MinStartPos is FirstStartPos,
+ 	MaxStartPos is FirstStartPos,
+ 	MaxLength is FirstLength,
+ 	get_phrase_startpos_and_length_aux(RestTokens,
+ 					   MinStartPos, MaxStartPos, MaxLength,
+ 					   PhraseStartPos, PhraseLength).
+ 
 % When there are no more tokens,
 % use the current MinStartPos, MaxStartPos, and MaxLength
 % to determine the entire phrase's StartPos and Length.
@@ -1104,7 +1154,7 @@ update_min_startpos(MinStartPosIn, TokenStartPos, MinStartPosOut) :-
 	( TokenStartPos < MinStartPosIn ->
 	  MinStartPosOut is TokenStartPos
 	; MinStartPosOut is MinStartPosIn
-	).
+	). 
 
 % If the current token's StartPos > the MaxStartPos so far,
 % update MaxStartPos and Length to the current token's StartPos and Length;
@@ -1145,19 +1195,41 @@ get_phrase_tokens(InputMatchPhraseWords, RawTokensIn, PhraseTokens, RawTokensOut
 
 get_phrase_tokens_aux([], _PrevTokenStartPos, RestRawTokens, [], RestRawTokens).
 get_phrase_tokens_aux([H|T], PrevTokenStartPos, RawTokensIn, [TokenH|TokensT], RawTokensOut) :-
-	remove_leading_hoa_ws_toks(RawTokensIn, RawTokens1),
+	remove_leading_hoa_ws_toks(RawTokensIn, [H|T], RawTokens1),
         get_word_token(H, PrevTokenStartPos, RawTokens1, TokenH, NewTokenStartPos, RawTokens2),
         get_phrase_tokens_aux(T, NewTokenStartPos, RawTokens2, TokensT, RawTokensOut).
 
 
-% Remove as many tokens from the head of the list that are higher-order or ws
-remove_leading_hoa_ws_toks([], []).
-remove_leading_hoa_ws_toks([FirstToken|RestTokens], FilteredTokens) :-
-	( higher_order_or_annotation_tok(FirstToken) ->
-	  remove_leading_hoa_ws_toks(RestTokens, FilteredTokens)
+% Remove as many tokens from the head of the list that are higher-order or ws.
+% Moreover, if we encounter a PE (parenthetical expression), remove all the tokens
+% to the end of the PE unless the InputMatchPhraseWords includ the PE itself.
+% PE tokens will be removed in the case of an AA, but not if the text contains
+% a real parenthetical expression, including a quoted string.
+remove_leading_hoa_ws_toks([], _InputMatchPhraseWords, []).
+remove_leading_hoa_ws_toks([FirstToken|RestTokens], InputMatchPhraseWords, FilteredTokens) :-
+	( pe_tok(FirstToken),
+	  InputMatchPhraseWords = [FirstPhraseWordAtom|_RestPhraseWordAtoms],
+	  atom_codes(FirstPhraseWordAtom, FirstPhraseWordString),
+	  FirstPhraseWordString = [FirstPhraseWordCode1|_FirstPhraseWordRestCodes],
+	  \+ brackets([FirstPhraseWordCode1], _) ->
+	  token_template(FirstToken, pe, _TokenString, _LCTokenString, PosInfo1, _PosInfo2),
+	  PosInfo1 = pos(_PETokenStartPos, PETokenEndPos),
+	  remove_tokens_to_end_of_pe(RestTokens, PETokenEndPos, RemainingTokens),
+	  remove_leading_hoa_ws_toks(RemainingTokens, InputMatchPhraseWords, FilteredTokens)
+	; higher_order_or_annotation_tok(FirstToken) ->
+	  remove_leading_hoa_ws_toks(RestTokens, InputMatchPhraseWords, FilteredTokens)
 	; ws_tok(FirstToken) ->
-	  remove_leading_hoa_ws_toks(RestTokens, FilteredTokens)
+	  remove_leading_hoa_ws_toks(RestTokens, InputMatchPhraseWords, FilteredTokens)
 	; FilteredTokens = [FirstToken|RestTokens]
+	).
+
+remove_tokens_to_end_of_pe([], _PETokenEndPos, []).
+remove_tokens_to_end_of_pe([FirstToken|RestTokens], PETokenEndPos, RemainingTokens) :-
+	token_template(FirstToken, _TokenType, _TokenString, _LCTokenString, PosInfo1, _PosInfo2),
+	PosInfo1 = pos(_FirstTokenStartPos, FirstTokenEndPos),
+	( FirstTokenEndPos =< PETokenEndPos ->
+	  remove_tokens_to_end_of_pe(RestTokens, PETokenEndPos, RemainingTokens)
+	; RemainingTokens = [FirstToken|RestTokens]
 	).
 
 % First, try to find a token that appears no earlier than the previous token
@@ -1177,22 +1249,31 @@ get_word_token(Word, _PrevTokenStartPos, RawTokensIn, Token, NewTokenStartPos, R
 	PosInfo2 = pos(NewTokenStartPos, _Length),
 	!.
 % If that still doesn't work, then make up a new token on the fly.
-get_word_token(Word, _PrevTokenStartPos, RawTokensIn, CreatedToken, NewTokenStartPos, RestRawTokens) :-
-	create_new_token(Word, RawTokensIn, CreatedToken),
-	token_template(CreatedToken, _TokenType, _String, _LCString, _Pos1, pos(NewTokenStartPos,_)),
-        RestRawTokens = RawTokensIn.
+get_word_token(Word, _PrevTokenStartPos, RawTokensIn, CreatedToken, NewTokenStartPos, RawTokensOut) :-
+	create_new_token(Word, RawTokensIn, CreatedToken, RawTokensOut),
+	token_template(CreatedToken, _TokenType, _String, _LCString, _Pos1, pos(NewTokenStartPos,_)).
 
-create_new_token(Word, RestTokens, CreatedToken) :-
-	RestTokens = [NextToken|_],
-	NextToken = tok(_TokenType, _Text, _LCText,
-			pos(StartPos1, Length1),
-			pos(StartPos2, Length2)),
+create_new_token(Word, RawTokensIn, CreatedToken, RawTokensOut) :-
+	RawTokensIn = [NextToken|_],
+	token_template(NextToken, _TokenType, _Text, _LCText,
+		       pos(StartPos1, Length1), pos(StartPos2, Length2)),
 	lower(Word, LowerWord),
 	atom_codes(Word, WordString),
 	atom_codes(LowerWord, LowerWordString),
-	CreatedToken = tok(xx, WordString, LowerWordString,
-			   pos(StartPos1, Length1),
-			   pos(StartPos2, Length2)).
+	token_template(CreatedToken, xx, WordString, LowerWordString,
+		       pos(StartPos1, Length1),
+		       pos(StartPos2, Length2)),
+	format(user_error, '### Created new token for ~w before ~p~n', [Word, NextToken]),
+	remove_tokens_matching_word(RawTokensIn, WordString, RawTokensOut).
+
+remove_tokens_matching_word([], _WordString, []).
+remove_tokens_matching_word([FirstRawTokenIn|RestRawTokensIn], WordString, RawTokensOut) :-
+	token_template(FirstRawTokenIn, _TokenType, Text, _LCText, _Pos1, _Pos2),
+	append(Text, RemainingWordString, WordString),
+	!,
+	remove_tokens_matching_word(RestRawTokensIn, RemainingWordString, RawTokensOut).
+remove_tokens_matching_word(RawTokensIn, _WordString, RawTokensOut) :- RawTokensOut = RawTokensIn.
+
 
 % % Check to see if the next token matches the word.
 % get_word_token(Word, _PrevTokenStartPos, [Token|RestRawTokens], Token, RestRawTokens) :-
@@ -1244,7 +1325,7 @@ create_new_token(Word, RestTokens, CreatedToken) :-
 % and use the "AIDS" token's PI.
 % 
 % get_word_token(Word, _PrevTokenStartPos, RestTokens, MatchingToken, NewRestTokens) :-
-%         % format(user_output, '#### WARNING: Token mismatch for "~w"; ', [Word]),
+%         % send_message('### WARNING: Token mismatch for "~w"; ', [Word]),
 %         ( find_next_matching_token(5, Word, RestTokens, MatchingToken, NewRestTokens) ->
 % 	  true
 %           % format(user_output, ' FOUND matching token.~n', [])
@@ -1439,6 +1520,21 @@ occurs_in_gvcs([_|Rest], Word, Tags) :-
 	occurs_in_gvcs(Rest, Word, Tags).
 
 
+% ev(-1000,'C0596170','BED','Binge eating disorder',[bed],[mobd],[[[1,1],[1,1],0]],[1],1,yes,no,[],[0/3],_247965,_247967)],
+filter_evaluations_by_user_exclusions([], _UserExclusions, []).
+filter_evaluations_by_user_exclusions([FirstCandidate|RestCandidates],
+				      UserExclusions, Results) :-
+	get_all_candidate_features([cui,metaterm], FirstCandidate, [CUI, MetaTerm]),
+	% This *must* be a not-not to prevent the instantiation of
+	% any variable in the UserExclusions, in case a NoMap pair
+	% is specified with either the string or CUI as empty,
+	% which has the effiect of matching anything.
+	( \+ \+ memberchk(MetaTerm:CUI, UserExclusions) ->
+          Results = RestResults
+	; Results = [FirstCandidate|RestResults]
+	),
+        filter_evaluations_by_user_exclusions(RestCandidates, UserExclusions, RestResults).
+
 /* filter_evaluations_restricting_to_sources(+EvaluationsIn, +Sources, -EvaluationsOut)
 
 filter_evaluations_restricting_to_sources/3 removes those evaluations from EvaluationsIn
@@ -1450,10 +1546,13 @@ the name is included in curly braces. */
 filter_evaluations_restricting_to_sources([], _, []).
 filter_evaluations_restricting_to_sources([FirstCandidate|RestCandidates],
 					  RestrictRootSources, Results) :-
-        candidate_term(NegValue, CUI, MetaTerm, _MetaConcept, MetaWords, SemTypes,
+        candidate_term(NegValue, CUI, _MetaTerm, MetaConcept, MetaWords, SemTypes,
                        MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
                        IsOvermatch, CUISources, PosInfo, Status, Negated, FirstCandidate),
-	convert_to_root_sources(CUISources, CUIRootSources),
+	% convert_to_root_sources(CUISources, CUIRootSources),
+	% The sources in the concept are guaranteed to be the root sources,
+	% so there's no need to check here!
+	CUIRootSources = CUISources,
 	intersection(RestrictRootSources, CUIRootSources, CommonSources),
 	  % If none of this CUI's sources are in the sources to restrict to, discard the candidate.
         ( CommonSources == [] ->
@@ -1461,7 +1560,7 @@ filter_evaluations_restricting_to_sources([FirstCandidate|RestCandidates],
 	; db_get_cui_sourceinfo(CUI, CUISourceInfo0),
 	  extract_relevant_sources(CUISourceInfo0, RestrictRootSources, CUISourceInfo),
 	  extract_name_in_source(CUISourceInfo, ConceptNameInSource),
-          candidate_term(NegValue, CUI, MetaTerm, ConceptNameInSource, MetaWords, SemTypes,
+          candidate_term(NegValue, CUI, ConceptNameInSource, MetaConcept, MetaWords, SemTypes,
                          MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
                          IsOvermatch, CommonSources, PosInfo, Status, Negated, NewCandidate),
           Results = [NewCandidate|ModRest]
@@ -1506,6 +1605,7 @@ filter_evaluations_excluding_sources([FirstCandidate|RestCandidates], ExcludedRo
         ),
         filter_evaluations_excluding_sources(RestCandidates, ExcludedRootSources, RestResults).
 
+
 get_string_sources([], _MetaTerm, []).
 get_string_sources([CUISourceInfo|RestCUISourceInfo], MetaTerm, StringSources) :-
 	( CUISourceInfo = [_I,MetaTerm,StringRootSource,_TTY] ->
@@ -1513,7 +1613,34 @@ get_string_sources([CUISourceInfo|RestCUISourceInfo], MetaTerm, StringSources) :
 	; StringSources = RestStringSources
 	),
 	get_string_sources(RestCUISourceInfo, MetaTerm, RestStringSources).
-	
+
+% filter_evaluations_excluding_sources([], _, []).
+% filter_evaluations_excluding_sources([FirstCandidate|RestCandidates], ExcludedRootSources, Results) :-
+% 	candidate_term(NegValue, CUI, MetaTerm, _MetaConcept, MetaWords, SemTypes,
+% 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+% 		       IsOvermatch, CUISources, PosInfo, Status, Negated, FirstCandidate),
+% 	db_get_cui_sourceinfo(CUI, CUISourceInfo0),
+% 	extract_nonexcluded_sources(CUISourceInfo0, ExcludedRootSources, CUISourceInfo),
+% 	% get_string_sources(CUISourceInfo, MetaTerm, StringSources),
+% 	% convert_to_root_sources(StringSources, StringRootSources),
+% 	% remove_non_string_sources(StringRootSources, CUISourceInfo, StringSourceInfo),
+% 	% RemainingStringSources is the result of deleting
+% 	% all elements of ExcludedRootSources from StringRootSources
+% 	% difference(ExcludedRootSources, StringRootSources, RemainingStringSources),
+% 	% If all of this CUI's sources are excluded sources, then discard the candidate.
+% 	( CUISourceInfo == [] ->
+% 	  Results = RestResults
+%         ; convert_to_root_sources(CUISources, CUIRootSources),
+% 	%  db_get_cui_sourceinfo(CUI, CUISourceInfo),
+% 	%  extract_nonexcluded_sources(CUISourceInfo, ExcludedRootSources, ExtractedSourceInfo),
+% 	  difference(ExcludedRootSources, CUIRootSources, RemainingCUISources),
+% 	  extract_name_in_source(CUISourceInfo, ConceptNameInSource),
+%           candidate_term(NegValue, CUI, MetaTerm, ConceptNameInSource, MetaWords, SemTypes,
+%                          MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+%                          IsOvermatch, RemainingCUISources, PosInfo, Status, Negated, NewCandidate),
+%           Results = [NewCandidate|RestResults]
+%         ),
+%         filter_evaluations_excluding_sources(RestCandidates, ExcludedRootSources, RestResults).
 
 % remove_non_string_sources([], StringSourceInfo, StringSourceInfo).
 % remove_non_string_sources([StringRootSource|RestStringRootSources],
@@ -1910,6 +2037,18 @@ calc_percent_removed(DiscardedAEvaluationsLength, AEvaluationsLength, PercentRem
 	).
 
 maybe_prune_aevs(AEvaluations, PruningThreshold, PhraseTextString, KeptAEvaluations, PrunedCount) :-
+ 	( ( control_option(compute_all_mappings)
+	  % ; control_option(hide_mappings)
+	  ; control_option(allow_overmatches) ) ->
+	  KeptAEvaluations = AEvaluations,
+	  PrunedCount is 0	
+	; maybe_prune_aevs_1(AEvaluations, PruningThreshold,
+			     PhraseTextString, KeptAEvaluations, PrunedCount)
+	).
+
+
+maybe_prune_aevs_1(AEvaluations, PruningThreshold,
+		   PhraseTextString, KeptAEvaluations, PrunedCount) :-	
 	% If pruning been explicitly specified (via --prune), or
 	% default pruning of 30 has not been explicitly disabled (via --no_prune),
 	% then get the pruning threshold PruningThreshold.
@@ -2561,6 +2700,16 @@ test_candidate_grid_sparseness(_AEvaluations,_NoDuplicateCount, _Sparseness) :-
 	debug_message(grid, 'OK~n',  []).	
 	
 % RemainingCandidates is the list of candidates remaining after pruning
+maybe_mark_pruned_evaluations(AllCandidates, RemainingCandidates) :-
+ 	( control_option(allow_overmatches) ->
+	  (  foreach(Candidate, AllCandidates)
+	  do get_candidate_feature(status, Candidate, Status),
+	     Status is 0
+	  )
+	; mark_pruned_evaluations(AllCandidates, RemainingCandidates)
+	).
+	
+
 mark_pruned_evaluations(AllCandidates, RemainingCandidates) :-
 	(  foreach(Candidate, AllCandidates),
 	   param(RemainingCandidates)
@@ -3542,6 +3691,14 @@ filter_evaluations_by_threshold([FirstCandidate|RestCandidates], NegThreshold,
 	filter_evaluations_by_threshold(RestCandidates, NegThreshold, FilteredRest).
 
 
+maybe_filter_out_redundant_evaluations(EvaluationsIn, EvaluationsOut) :-
+ 	( ( control_option(compute_all_mappings)
+	  % ; control_option(hide_mappings)
+	  ; control_option(allow_overmatches) ) ->
+ 	  EvaluationsOut = EvaluationsIn
+	; filter_out_redundant_evaluations(EvaluationsIn, EvaluationsOut)
+ 	).	
+
 /* filter_out_redundant_evaluations(+Evaluations, -FilteredEvaluations)
    filter_out_redundant_evaluations_aux(+Evaluations, -FilteredEvaluations)
 
@@ -3695,36 +3852,45 @@ get_composite_phrases([PhraseIn|RestPhrases], PhraseIn, 0, RestPhrases, []).
 begins_with_composite_phrase/3 determines if Phrases begins with a CompositePhrase,
 and returns it and the Rest of the phrases. A composite phrase is detected if
 the phrase list begins with
- *  a phrase containing a head(_) structure
- *  followed by a prepositional phrase
- *  followed by one or more prepositional phrases introduced by "of".
+(1)  a phrase containing a head(_) structure
+(2)  followed by a prepositional phrase
+(3)  followed by one or more prepositional phrases introduced by "of", e.g.,
+
+(1) pain
+(2) on the left side
+(3) of the chest
 
 */
 
-begins_with_composite_phrase([First,Second|Rest], MaxPrepPhraseCount,
-			     ActualPrepPhraseCount, [First,Second|RestComposite], NewRest) :-
+begins_with_composite_phrase([First,Second|Rest], MaxPrepPhraseCount0,
+			     TotalPhraseCount, [First,Second|RestComposite], NewRest) :-
 	% We want to allow not just "pain on the left side of the chest",
 	% but also "the patient presented with pain on the left side of the chest"!
 	% \+ is_prep_phrase(First),
 	% contains_head(First),
-        \+ ends_with_punc(First),
-        is_prep_phrase(Second),
+        \+ ends_with_punc(First), % "pain"
+        is_prep_phrase(Second),   % "on the left side"
 	% !,
 	% MaxPrepPhraseCount is the total number of prepositional phrases
 	% that can be glommed onto the initial phrase;
-	InitPrepPhraseCount is 1,
+	MaxPrepPhraseCount is MaxPrepPhraseCount0 - 1,
+	InitPrepPhraseCount is 0,
 	initial_of_phrases(Rest, MaxPrepPhraseCount, InitPrepPhraseCount,
-			   ActualPrepPhraseCount0, _RestComposite0, _NewRest0),
+			   _ActualOFPhraseCount0, _RestComposite0, _NewRest0),
 	!,
 	% This looks ugly, but it prevents needless backtracking.
-	% ActualPrepPhraseCount0 is the max # of prep phrases found,
+	% ActualPrepPhraseCount0 is the max # of "of" prep phrases found,
 	% so instead of backtracking from -4 (or whatever the limit is) to 0,
 	% just backtrack from ActualPrepPhraseCount0 to 0.
-	NegActualPrepPhraseCount is -1 * ActualPrepPhraseCount0,
-	between(NegActualPrepPhraseCount, 0, TempNegActualPrepPhraseCount),
+	NegMaxPrepPhraseCount is -1 * MaxPrepPhraseCount,
+%	NegActualPrepPhraseCount is -1 * ActualPrepPhraseCount0,
+%	between(NegActualPrepPhraseCount, 0, TempNegActualPrepPhraseCount),
+	between(NegMaxPrepPhraseCount, 0, TempNegActualPrepPhraseCount),
 	TempActualPrepPhraseCount is -1 * TempNegActualPrepPhraseCount,
+%	TempActualPrepPhraseCount is -1 * TempNegActualPrepPhraseCount,
 	initial_of_phrases(Rest, TempActualPrepPhraseCount, InitPrepPhraseCount,
-			   ActualPrepPhraseCount, RestComposite, NewRest).
+			   ActualOFPhraseCount, RestComposite, NewRest),
+	TotalPhraseCount is ActualOFPhraseCount + 2.
 
 %%%%% begins_with_composite_phrase([First,Second|Rest],
 %%%%% 			     [First,Second|RestComposite],
@@ -3964,3 +4130,95 @@ portray_ev(EvTerm) :-
 	get_candidate_feature(cui, EvTerm, CUI),
 	writeq(ev(CUI)).
 :- add_portray(portray_ev).
+
+% dysonym processing
+exclude_dysonyms([],[]):- !.
+exclude_dysonyms([ev(_,_,Syn,PrefName,_,SemTypes,_,_,_,_,_,_,_,_,_)|RestMapEval], 
+	         RestMapEvalOut) :-
+	is_a_dysonym(Syn, PrefName,SemTypes),
+	!,
+	exclude_dysonyms(RestMapEval, RestMapEvalOut).
+exclude_dysonyms([MapEval|RestMapEval], [MapEval|RestMapEvalOut]) :-
+	exclude_dysonyms(RestMapEval, RestMapEvalOut).
+
+is_a_dysonym(Syn,PrefName,SemTypes) :-
+	remove_useless_suffixes(Syn, Syn0),
+	remove_useless_suffixes(PrefName, PrefName0),
+	atom_to_list(Syn0, SynList, SynLen),
+	atom_to_list(PrefName0, PrefList, PrefLen),
+	SynLen >= 1,
+	PrefLen > SynLen,
+	intersection(SynList, PrefList, Intersection),
+	length(Intersection,SynLen),
+	\+ dysonym_to_allow(Syn,PrefName),
+	\+ head_exception(PrefList), 
+	\+ gapped_dysonym(SynList,PrefList),
+	\+ anatomy_term_with_redundant_mod(SynList,PrefList,SemTypes).
+
+head_exception(PrefList) :-
+	exception_list(Exceptions),
+	last(PrefList,Head),
+	member(Head,Exceptions).
+
+remove_useless_suffixes(Str,StrOut) :-
+	useless_suffixes(Suffixes),
+	remove_suffixes(Str, Suffixes, StrOut).
+
+remove_suffixes(Str,[], Str) :- !.
+remove_suffixes(Str,[Suffix|_RestSuffixes],StrOut) :-
+	atom_codes(Suffix,SuffixStr),
+	length(SuffixStr,SuffixLen),
+	midstring(Str,StrOut,Suffix,0, _,SuffixLen),
+	!.
+remove_suffixes(Str,[_Suffix|RestSuffixes],StrOut) :-
+	remove_suffixes(Str,RestSuffixes,StrOut).
+
+useless_suffixes([', NOS',', NEC', ' NOS', ' NEC']).
+
+% coronary disease -> coronary artery disease
+gapped_dysonym(SynList,PrefList) :-
+	length(SynList,2),
+	length(PrefList,3),
+	nth0(0,SynList,Syn0),
+	nth0(0,PrefList,Syn0),
+	nth0(1,SynList,Syn1),
+	nth0(2,PrefList,Syn1).
+
+% hippocampus->Entire hippocampus	
+anatomy_term_with_redundant_mod(SynList,PrefList,SemTypes) :-
+	length(SynList, SynLen),
+	length(PrefList, PrefLen),
+	PrefLen =:= SynLen + 1,
+	nth0(0,PrefList,'entire'),
+	\+ nth0(0,SynList,'entire'),
+	check_anat(SemTypes).
+
+
+check_anat([]) :- fail.  
+check_anat([SemType|_Rest]) :-
+	semrep_semgroup_member(SemType,anat),
+	!.
+check_anat([_SemType|Rest]) :-
+	check_anat(Rest).
+
+exception_list([gene, genes, proteins, 'protein,', procedure, procedures, regime, regimes, disease, diseases, disorder, disorders]).
+
+% These are dysonym exceptions that cannot be dealt with more general
+% dysonym exception rules. (They seem similar to "anatomy_term_with_redundant_mod" case,
+% but semantically are different.)
+dysonym_to_allow('Fistula','pathologic fistula').
+dysonym_to_allow('computed tomography','X-Ray Computed Tomography').
+dysonym_to_allow('tomography','X-Ray Computed Tomography').
+
+% copied from ssuppserv.pl - halil
+strings_to_atoms([], []).
+strings_to_atoms([String|More], [Atom|Gap]) :-
+	atom_codes(Atom, String),
+	strings_to_atoms(More, Gap).
+
+atom_to_list(Atom, List, Len) :-
+	lower(Atom, LCAtom),
+	atom_codes(LCAtom, LCChars),
+	split_string_completely(LCChars, " ", LCCharList),
+	strings_to_atoms(LCCharList, List),
+	length(List, Len).

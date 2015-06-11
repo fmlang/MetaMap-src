@@ -65,9 +65,18 @@
 	get_all_candidate_features/3
     ]).
 
-:- use_module(skr_lib(semtype_translation_2014AA), [
-	expand_semtypes/2
-    ]).
+
+:- use_module(library(file_systems), [
+	file_exists/1
+   ]).
+
+:-   absolute_file_name(skr_lib(semtype_translation_2015AA),
+			AbsFileName,
+			[extensions(['.pl'])]),
+     file_exists(AbsFileName) ->
+     use_module(skr_lib(semtype_translation_2015AA), [expand_semtypes/2]),
+     format(user_error, 'File metamap_utilities.pl is loading ~w~n', [AbsFileName])
+   ; format(user_error, 'File metamap_utilities.pl is NOT loading ~w~n', [AbsFileName]).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
@@ -315,6 +324,15 @@ dump_evaluations_indented(Candidates, TotalCandidateCount,
 %%% 	construct_related_evaluations(Candidates, CandidatePairs),
 %%% 	dump_evaluations_indented_aux(CandidatePairs).
 
+maybe_construct_related_evaluations(Candidates, CandidatePairs) :-
+	( control_option(allow_overmatches) ->
+	  (  foreach(C, Candidates),
+	     foreach(CP, CandidatePairs)
+	  do CP = C:[]
+	  )
+	; construct_related_evaluations(Candidates, CandidatePairs)
+	).
+
 construct_related_evaluations([], []).
 construct_related_evaluations([FirstCandidate|RestCandidates],
 			      [FirstCandidate:FirstRelated|RestRelated]) :-
@@ -372,7 +390,7 @@ num_dump_evaluations_indented([H|T], TotalCandidateCount,
 		  ExcludedCandidateCount,PrunedCandidateCount,
 		  RemainingCandidateCount])
 	),
-	construct_related_evaluations(Candidates, CandidatePairs),
+	maybe_construct_related_evaluations(Candidates, CandidatePairs),
 	num_dump_evaluations_indented_aux(CandidatePairs, StartNum).
 
 num_dump_evaluations_indented_aux([], _).

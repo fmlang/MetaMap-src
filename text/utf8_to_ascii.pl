@@ -37,10 +37,14 @@
 	utf8_to_ascii/3
    ]).
 
+:- use_module(skr(skr_utilities),[
+        send_message/2
+    ]).
+
 utf8_to_ascii(UTF8, ASCII, ExtraChars) :-
 	( utf8_to_ascii_1(UTF8, ASCII, ExtraChars) ->
 	  true
-	; format(user_output, '### WARNING: UTF8 Char ~w changed to "?"~n', [UTF8]),
+	; send_message('### WARNING: UTF8 Char ~w changed to "?"~n', [UTF8]),
 	  ASCII = '?',
 	  ExtraChars is 0
 	).
