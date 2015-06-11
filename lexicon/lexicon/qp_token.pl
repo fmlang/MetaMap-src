@@ -97,7 +97,6 @@ ttw_tokens(Ts) --> ttw_token(T), !, ttw_tokens(RestTs), {Ts=[T|RestTs]}
 
 ttw_token(T) --> [C], {local_alnum(C)}, !, ttw_alnums(RestCs),
                  {atom_codes(T,[C|RestCs])}
-
               ;  [T].
 
 ttw_alnums(Cs) --> [C], {local_alnum(C)}, !, ttw_alnums(RestCs), {Cs=[C|RestCs]}

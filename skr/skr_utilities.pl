@@ -40,6 +40,7 @@
 	conditionally_skr_begin_write/2,
 	conditionally_skr_end_write/2,
 	conditionally_print_header_info/4,
+	convert_non_text_fields_to_blanks/6,
 	debug_call/2,
 	debug_message/3,
 	do_formal_tagger_output/0,
@@ -91,10 +92,6 @@
 	write_all_variants/4
     ]).
 
-:- use_module(metamap(metamap_tokenization), [
-	tokenize_text_utterly/2
-    ]).
-
 :- use_module(metamap(metamap_utilities), [
 	candidate_term/16,
 	dump_aphrase_mappings/2,
@@ -103,13 +100,42 @@
 	write_list_indented/1
     ]).
 
+:- use_module(skr(skr), [
+	% aev_print_version/2 is not explicitly called here,
+	% but it must still be imported because they're called via debug_call.
+	aev_print_version/2,
+	print_all_aevs/1,
+	% print_candidate_grid/6 and print_duplicate_info/4 are not explicitly called here,
+	% but they must still be imported because they're called via debug_call.
+	print_candidate_grid/6,
+	print_duplicate_info/4,
+	stop_and_halt/0
+    ]).
+
+:- use_module(skr(skr_text_processing), [
+	medline_field_separator_char/1
+    ]).
+
+:- use_module(skr(skr_umls_info), [
+	verify_sources/1,
+	verify_sts/1
+    ]).
+
+:- use_module(skr(skr_xml), [
+	xml_output_format/1
+    ]).
+
 :- use_module(skr_lib(negex), [
 	default_negex_semtypes/1
     ]).
 
 :- use_module(skr_lib(nls_strings), [
 	atom_codes_list/2,
-	is_print_string/1
+	form_one_string/3,
+	is_print_string/1,
+	trim_whitespace_left_count/3,
+	trim_whitespace_left/2,
+	trim_whitespace_right/2
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -128,26 +154,6 @@
 	ttyflush/0
     ]).
 
-:- use_module(skr(skr_umls_info), [
-	verify_sources/1,
-	verify_sts/1
-    ]).
-
-:- use_module(skr(skr), [
-	% aev_print_version/2 is not explicitly called here,
-	% but it must still be imported because they're called via debug_call.
-	aev_print_version/2,
-	print_all_aevs/1,
-	% print_candidate_grid/6 and print_duplicate_info/4 are not explicitly called here,
-	% but they must still be imported because they're called via debug_call.
-	print_candidate_grid/6,
-	print_duplicate_info/4,
-	stop_and_halt/0
-    ]).
-
-:- use_module(skr(skr_xml), [
-	xml_output_format/1
-    ]).
 
 :- use_module(text(text_object_util), [
 	annotation_type/1,
@@ -185,6 +191,7 @@
 :- use_module(library(lists), [
 	append/2,
 	last/2,
+	prefix/2,
 	selectchk/3
    ]).
 
@@ -238,9 +245,9 @@ skr_end_write(Label) :-
 write_sentences(CoordSentences, Sentences) :-
 	( control_value(debug, DebugFlags),
 	  memberchk(sentences, DebugFlags) ->
-	  format(user_output, '#### CoordSentences:~n', []),
+	  format(user_error, '### Sentences:~n', []),
 	  write_token_list(CoordSentences, 0, 1),
-	  format(user_output, '#### Sentences:~n', []),
+	  format(user_error, '### CoordSentences:~n', []),
 	  write_token_list(Sentences, 0, 1)
 	; true
 	).
@@ -248,16 +255,16 @@ write_sentences(CoordSentences, Sentences) :-
 write_raw_token_lists(ExpRawTokenList, UnExpRawTokenList) :-
 	( control_value(debug, DebugFlags),
 	  memberchk(tokens, DebugFlags) ->
-	  format(user_output, '~n~n#### ExpRawTokenList:~n', []),
+	  format(user_error, '~n~n### ExpRawTokenList:~n', []),
 	  write_token_list(ExpRawTokenList, 0, 1),
-	  format(user_output, '~n~n#### UnExpRawTokenList:~n', []),
+	  format(user_error, '~n~n### UnExpRawTokenList:~n', []),
 	  write_token_list(UnExpRawTokenList, 0, 1)
 	; true
 	).
 
 
 write_token_nl(0).
-write_token_nl(1) :- format(user_output, '~n', []).
+write_token_nl(1) :- format(user_error, '~n', []).
 
 write_token_list([], _Indent, NL) :- write_token_nl(NL), ttyflush.
 write_token_list([Token|RestTokens], Indent, NL) :-
@@ -274,29 +281,29 @@ write_token(Token, Indent, NL) :-
 
 write_simple_token_list([SimpleToken|RestSimpleTokens], Indent) :-
 	IndentP1 is Indent + 1,
-	format(user_output, '~*c[', [Indent, 32]),
+	format(user_error, '~*c[', [Indent, 32]),
 	write_simple_token(SimpleToken, 0, 0),
 	write_rest_simple_token_list(RestSimpleTokens, IndentP1).
 
 write_rest_simple_token_list([], _Indent) :-
-	format(user_output, '],~n', []).
+	format(user_error, '],~n', []).
 write_rest_simple_token_list([H|T], Indent) :-
-	format(user_output, ',~n', []),
+	format(user_error, ',~n', []),
 	write_simple_token(H, Indent, 0),
 	write_rest_simple_token_list(T, Indent).
 
 write_pos_term_list([H|T], Indent, NL) :-
-	format(user_output, '~*c~w', [Indent, 32, H]),
+	format(user_error, '~*c~w', [Indent, 32, H]),
 	write_rest_pos_term_list(T, Indent, NL).
 
 write_rest_pos_term_list([], _Indent, NL) :-
 	write_pos_term_list_nl(NL).
 write_rest_pos_term_list([H|T], Indent, NL) :-
-	format(user_output, ',~n~*c~w', [Indent, 32, H]),
+	format(user_error, ',~n~*c~w', [Indent, 32, H]),
 	write_rest_pos_term_list(T, Indent, NL).
 
-write_pos_term_list_nl(0) :- format(user_output, ')', []).
-write_pos_term_list_nl(1) :- format(user_output, ')~n', []).
+write_pos_term_list_nl(0) :- format(user_error, ')', []).
+write_pos_term_list_nl(1) :- format(user_error, ')~n', []).
 
 
 write_complex_token(Token, Indent, NL) :-
@@ -304,23 +311,23 @@ write_complex_token(Token, Indent, NL) :-
 	write_complex_token_1(Type, Indent, TokenList1, TokenList2, PosTerms, NL).
 
 write_complex_token_1(aadef, Indent, TokenList1, TokenList2, PosTerms, _NL) :-
-	format(user_output, '~w~n', ['tok(aadef,']),
+	format(user_error, '~w~n', ['tok(aadef,']),
 	IndentP4 is Indent + 4,
 	write_simple_token_list(TokenList1, IndentP4),
 	write_simple_token_list(TokenList2, IndentP4),
 	write_pos_term_list(PosTerms, IndentP4, 1).
 	       
 write_complex_token_1(aa, Indent, AATokenList1, [AADefToken], AAPosTermList, _NL) :-
-	format(user_output, '~w~n', ['tok(aa,']),
+	format(user_error, '~w~n', ['tok(aa,']),
 	IndentP4 is Indent + 4,
 	write_simple_token_list(AATokenList1, IndentP4),
-	format(user_output, '~*c~w~n', [IndentP4, 32, '[tok(aadef,']),
+	format(user_error, '~*c~w~n', [IndentP4, 32, '[tok(aadef,']),
 	AADefToken =.. [tok, aadef, AADefTokenList1, AADefTokenList2|AADefPosTermList],
 	IndentP8 is Indent + 8,
 	write_simple_token_list(AADefTokenList1, IndentP8),
 	write_simple_token_list(AADefTokenList2, IndentP8),
 	write_pos_term_list(AADefPosTermList, IndentP8, 0),
-	format(user_output, '],~n', []),
+	format(user_error, '],~n', []),
 	write_pos_term_list(AAPosTermList, IndentP4, 1).
 
 write_simple_token(Token, Indent, NL) :-
@@ -328,7 +335,7 @@ write_simple_token(Token, Indent, NL) :-
 	make_atom(TokenString,   TokenAtom),
 	make_atom(LCTokenString, LCTokenAtom),
 	assemble_format_string(PosTerms, FormatString, NL),
-	format(user_output, FormatString, [Indent, 32, Type, TokenAtom, LCTokenAtom|PosTerms]).
+	format(user_error, FormatString, [Indent, 32, Type, TokenAtom, LCTokenAtom|PosTerms]).
 
 assemble_format_string(PosTerms, FormatString, NL) :-
 	PosTerms = [H|T],
@@ -374,7 +381,8 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_composite_phrases_setting(CompositePhrasesSetting),
 	verify_blanklines_setting(BlankLinesSetting),
 	verify_number_the_candidates_setting(NumberTheCandidatesSetting),
-	verify_number_the_mappings_setting(NumberTheCandidatesSetting),
+	verify_number_the_mappings_setting(NumberTheMappingsSetting),
+	verify_hide_mappings_setting(HideMappingsSetting),
 	verify_all_results([ModelSettings, TaggerOutputSettings, SingleOutputFormat,
 			    XMLSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
@@ -383,14 +391,14 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 			    TaggerServerSettings, WSDServerSettings,
 			    PruningSettings, SLDISettings, NegExTriggerSetting, NegExSettings,
 			    LexiconSetting, CompositePhrasesSetting, BlankLinesSetting,
-			    NumberTheCandidatesSetting, NumberTheCandidatesSetting],
+			    NumberTheCandidatesSetting, NumberTheMappingsSetting, HideMappingsSetting],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, DefaultRelease).
 
 verify_model_settings(Result) :-
 	( control_option(strict_model),
 	  control_option(relaxed_model) ->
-	  send_message('~N### MetaMap ERROR: Both strict_model and relaxed_model have been specified.~n', []),
+	  send_message('~n### MetaMap ERROR: Both strict_model and relaxed_model have been specified.~n', []),
 	  Result is 1
 	; Result is 0
 	).
@@ -436,10 +444,10 @@ verify_MMO_settings(0).
 verify_mmi_settings(Result) :-
 	control_option(fielded_mmi_output),
 	!,
-	warning_check([show_cuis,negex,syntax], fielded_mmi_output),
-	fatal_error_check([tagger_output, hide_plain_syntax, show_candidates,
+	warning_check([show_cuis,show_candidates,hide_mappings,negex,syntax], fielded_mmi_output),
+	fatal_error_check([tagger_output, hide_plain_syntax,
 			   number_the_candidates, hide_semantic_types,
-			   show_preferrred_names_only, hide_mappings, sources],
+			   show_preferrred_names_only, sources],
 			  fielded_mmi_output, 0, Result).
 verify_mmi_settings(0).
 
@@ -509,7 +517,7 @@ verify_semantic_type_values(0).
 verify_acros_abbrs_settings(Result) :-
 	( control_option(all_acros_abbrs),
 	  control_option(unique_acros_abbrs_only) ->
-	  send_message('~N### MetaMap ERROR: Only one of --all_acros_abbrs and ', []),
+	  send_message('~n### MetaMap ERROR: Only one of --all_acros_abbrs and ', []),
 	  send_message('--unique_acros_abbrs_only can be specified.~n', []),
 	  Result is 1
 	; Result is 0
@@ -519,7 +527,7 @@ verify_acros_abbrs_settings(Result) :-
 verify_derivational_variants_settings(Result) :-
 	( control_option(all_derivational_variants),
 	  control_option(no_derivational_variants) ->
-	  send_message('~N### MetaMap ERROR: Only one of --all_derivational_variants and ', []),
+	  send_message('~n### MetaMap ERROR: Only one of --all_derivational_variants and ', []),
 	  send_message('--no_derivational_variants can be specified.~n', []),
 	  Result is 1
 	; Result is 0
@@ -528,7 +536,7 @@ verify_derivational_variants_settings(Result) :-
 verify_tagger_server_settings(Result) :-
 	( control_option(no_tagging),
 	  control_value(tagger, ChosenTaggerServer) ->
-	  send_message('~N### MetaMap ERROR: If no_tagging is specified, ', []),
+	  send_message('~n### MetaMap ERROR: If no_tagging is specified, ', []),
 	  send_message('a specific tagger (~s) cannot be chosen.~n', [ChosenTaggerServer]),
 	  Result is 1
 	; Result is 0
@@ -538,7 +546,7 @@ verify_tagger_server_settings(Result) :-
 verify_WSD_server_settings(Result) :-
 	( \+ control_option(word_sense_disambiguation),
 	  control_value('WSD_SERVER', ChosenWSDServer) ->
-	  send_message('~N### MetaMap ERROR: If WSD is not specified, ', []),
+	  send_message('~n### MetaMap ERROR: If WSD is not specified, ', []),
 	  send_message('a specific WSD server (~s) cannot be chosen.~n', [ChosenWSDServer]),
 	  Result is 1
 	; Result is 0
@@ -548,7 +556,7 @@ verify_WSD_server_settings(Result) :-
 verify_pruning_settings(Result) :-
 	( control_value(prune, _),
 	  control_option(no_prune) ->
-	  send_message('## MetaMap ERROR: Cannot specify --prune and --no_prune.~n', []),
+	  send_message('~n### MetaMap ERROR: Cannot specify --prune and --no_prune.~n', []),
 	  Result is 1
 	; Result is 0
 	).			    
@@ -557,7 +565,7 @@ verify_pruning_settings(Result) :-
 verify_sldi_settings(Result) :-
 	( control_option(sldi),
 	  control_option(sldiID) ->
-	  send_message('~N### MetaMap ERROR: Cannot specify --sldi and --sldiID.~n', []),
+	  send_message('~n### MetaMap ERROR: Cannot specify --sldi and --sldiID.~n', []),
 	  Result is 1
 	; Result is 0
 	).			    
@@ -632,7 +640,7 @@ verify_useless_sts(add, SemTypesToAdd) :-
 	intersection(SemTypesToAdd, DefaultNegExSemTypes, Intersection),
 	( Intersection \== [] ->
 	  set_message(Intersection, PluralIndicator, Verb, Pronoun, Determiner),
-	  send_message('~N### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
+	  send_message('~n### WARNING: SemType~w ~p ~w~w default NegEx SemType~w.~n',
 		       [PluralIndicator,Intersection,Verb,Determiner,PluralIndicator]),
 	  send_message('             Adding ~w has no effect.~n', [Pronoun])
 	; true
@@ -642,7 +650,7 @@ verify_useless_sts(del, SemTypesToAdd) :-
 	subtract(SemTypesToAdd, DefaultNegExSemTypes, LeftOvers),
 	( LeftOvers \= [] ->
 	  set_message(LeftOvers, PluralIndicator, Verb, Pronoun, Determiner),
-	  send_message('~N### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
+	  send_message('~n### WARNING: SemType~w ~p ~w not~w default NegEx SemType~w.~n',
 		       [PluralIndicator,LeftOvers,Verb,Determiner,PluralIndicator]),
 	  send_message('             Deleting ~w has no effect.~n', [Pronoun])
 
@@ -660,11 +668,11 @@ verify_all_del(SemTypesToDel) :-
 verify_lexicon_setting(LexiconSetting) :-
 	( \+ control_value(lexicon, c),
 	  \+ control_value(lexicon, db) ->
-	  send_message('~nERROR: --lexicon setting must be either c or db!~n', []),
+	  send_message('~n### MetaMap ERROR: --lexicon setting must be either c or db!~n', []),
 	  LexiconSetting is 1
 	; control_value(lexicon, c),
 	  control_value(lexicon, db) ->
-	  send_message('~nERROR: --lexicon setting must be either c or db!~n', []),
+	  send_message('~n### MetaMap ERROR: --lexicon setting must be either c or db!~n', []),
 	  LexiconSetting is 1
 	; LexiconSetting is 0
 	).
@@ -674,7 +682,7 @@ verify_composite_phrases_setting(CompositePhrasesSetting) :-
 	  CompositePhrasesSetting is 0
 	; control_value(composite_phrases, Value),
 	  ( Value > 12 ->
-	  send_message('~N### WARNING: --composite_phrases (-Q) setting of ~d > maximum of 12; using 12 instead.~n',
+	  send_message('~n### WARNING: --composite_phrases (-Q) setting of ~d > maximum of 12; using 12 instead.~n',
 		       [Value]),
 	    assert_control_value(composite_phrases, 12)
 	  ; true
@@ -687,7 +695,7 @@ verify_blanklines_setting(BlankLinesSetting) :-
 	!,
 	( N >= 0 ->
 	  BlankLinesSetting is 0
-	; send_message('~nERROR: --blanklines setting must be a nonnegative integer.~n', []),
+	; send_message('~n### MetaMap ERROR: --blanklines setting must be a nonnegative integer.~n', []),
 	  BlankLinesSetting is 1
 	).
 verify_blanklines_setting(0).
@@ -695,7 +703,7 @@ verify_blanklines_setting(0).
 verify_number_the_candidates_setting(NumberTheCandidatesSetting) :-
 	( control_option(number_the_candidates),
 	  \+ control_option(show_candidates) ->
-	   send_message('~nERROR: --number_the_candidates cannot be used without --show_candidates!~n', []),
+	   send_message('~n### MetaMap ERROR: --number_the_candidates cannot be used without --show_candidates!~n', []),
 	   NumberTheCandidatesSetting is 1
 	;  NumberTheCandidatesSetting is 0
 	).
@@ -703,10 +711,19 @@ verify_number_the_candidates_setting(NumberTheCandidatesSetting) :-
 verify_number_the_mappings_setting(NumberTheMappingsSetting) :-
 	( control_option(number_the_mappings),
 	  control_option(hide_mappings) ->
-	   send_message('~nERROR: --number_the_mappings cannot be used with --hide_mappings!~n', []),
+	   send_message('~n### MetaMap ERROR: --number_the_mappings cannot be used with --hide_mappings!~n', []),
 	   NumberTheMappingsSetting is 1
 	;  NumberTheMappingsSetting is 0
 	).
+
+verify_hide_mappings_setting(HideMappingsSetting) :-
+	( \+ control_option(show_candidates),
+	  control_option(hide_mappings) ->
+	   send_message('~n### MetaMap ERROR: --hide_mappings cannot be used without --show_candidates!~n', []),
+	   HideMappingsSetting is 1
+	;  HideMappingsSetting is 0
+	).
+
 
 verify_all_results(ValuesList, InputStream, OutputStream) :-
 	compute_sum(ValuesList, 0, Result),
@@ -730,7 +747,7 @@ warning_check([WarningOption|RestOptions], OutputOption) :-
 fatal_error_check([], _OutputOption, Result, Result).
 fatal_error_check([FatalErrorOption|RestOptions], OutputOption, ResultIn, ResultOut) :-
 	( control_option(FatalErrorOption) ->
-	  send_message('~N### MetaMap ERROR: The ~w option cannot be used with ~w output.~n',
+	  send_message('~n### MetaMap ERROR: The ~w option cannot be used with ~w output.~n',
 		       [FatalErrorOption, OutputOption]),
 	  ResultNext is 1
 	; ResultNext is ResultIn
@@ -1424,7 +1441,7 @@ debug_message_1(Flag, String, DebugFlags, Arguments) :-
 	( intersection(FlagList, DebugFlags, [_|_]) ->
 	  format(user_output, String, Arguments)
 	; memberchk('ALL', DebugFlags) ->
-	  format(user_output, String, Arguments)
+	  format(user_error, String, Arguments)
 	; true
 	).
 
@@ -1590,10 +1607,9 @@ get_candidate_feature(negated, Candidate, Negated) :-
 		       _IsOvermatch,_Sources,_PosInfo,_Status,Negated, Candidate).
 
 fatal_error(Message, Args) :-
-	send_message('~N### MetaMap ERROR: ', []),
+	send_message('~n### MetaMap ERROR: ', []),
 	send_message(Message, Args),
-	ttyflush,
-	stop_and_halt.
+	halt.
 
 set_message(SourceList, PluralIndicator, Verb, Pronoun, Determiner) :-
 	length(SourceList, Length),
@@ -1607,3 +1623,142 @@ set_message(SourceList, PluralIndicator, Verb, Pronoun, Determiner) :-
 	  Pronoun = 'them',
 	  Determiner = ''
 	).
+
+convert_non_text_fields_to_blanks(InputType, InputStringWithBlanks,
+				  TextFields, NonTextFields,
+				  TrimmedTextFieldsOnlyString, NumBlanksTrimmed) :-
+	( InputType == citation ->
+	  cntfb(InputStringWithBlanks, TextFields, NonTextFields, TextFieldsOnly)
+	; TextFieldsOnly = [InputStringWithBlanks]
+	),
+	append(TextFieldsOnly, TextFieldsOnlyString0),
+	trim_whitespace_right(TextFieldsOnlyString0, TextFieldsOnlyString),
+	trim_whitespace_left_count(TextFieldsOnlyString, TrimmedTextFieldsOnlyString, NumBlanksTrimmed).
+
+
+% "cntfb" == "Convert Non-Text Fields to Blanks"
+cntfb([], [], [], []).
+cntfb([FirstChar|RestChars], TextFieldsIn, NonTextFieldsIn, [ConvertedField|RestConvertedFields]) :-
+	convert_one_field_to_blanks([FirstChar|RestChars], TextFieldsIn, NonTextFieldsIn,
+				    TextFieldsNext, NonTextFieldsNext, ConvertedField, CharsNext),
+	cntfb(CharsNext, TextFieldsNext, NonTextFieldsNext, RestConvertedFields).
+	
+convert_one_field_to_blanks(CharsIn,
+			    TextFieldsIn, NonTextFieldsIn,
+			    TextFieldsNext, NonTextFieldsNext,
+			    ConvertedField, CharsNext) :-
+	get_field_components(TextFieldsIn,
+			     FirstTextField, FirstTextFieldLines, RestTextFields),
+	get_field_components(NonTextFieldsIn,
+			     FirstNonTextField, FirstNonTextFieldLines, RestNonTextFields),
+	( FirstTextField \== [],
+	  prefix(CharsIn, FirstTextField) ->
+	  convert_text_field(FirstTextField, FirstTextFieldLines, CharsIn,
+			     ConvertedField, CharsNext),
+	  TextFieldsNext = RestTextFields,
+	  NonTextFieldsNext = NonTextFieldsIn
+	; FirstNonTextField \== [],
+	  trim_whitespace_left(CharsIn, TrimmedCharsIn),
+	  prefix(TrimmedCharsIn, FirstNonTextField) ->
+	  convert_non_text_field(FirstNonTextField, FirstNonTextFieldLines, TrimmedCharsIn,
+				 ConvertedField, CharsNext),
+	  TextFieldsNext = TextFieldsIn,
+	  NonTextFieldsNext = RestNonTextFields
+	).
+
+get_field_components([], [], [], []).
+get_field_components([[FirstField|RestFirstField]|RestFields],
+		     FirstField, FirstFieldLines, RestFields) :-
+	( RestFirstField \== [] ->
+	  RestFirstField = [FirstFieldLines]
+	; FirstFieldLines = []
+	).
+
+convert_text_field(TextField, TextFieldLines, CharsIn, ConvertedField, CharsNext) :-
+	trim_field_name_prefix(TextField, CharsIn, TextFieldLength, NumBlanksTrimmed, CharsNext3),
+	form_one_string(TextFieldLines, " ", PaddedTextFieldLines0),
+	append(PaddedTextFieldLines0, " ", PaddedTextFieldLines),
+	% each line has a blank space after it corresponding to the original <CR>
+	% NumBlanks is TextFieldLength + NumBlanksTrimmed + TextFieldLinesLength,
+	NumBlanks is TextFieldLength + NumBlanksTrimmed,
+	% create a string of blanks whose length is equal to the length of the
+	% field name, blanks, etc. up to the actual text
+	length(BlanksList, NumBlanks),
+	% format(user_output, 'LINE ~d >~s:~p~n', [NumBlanks,TextField,TextFieldLines]),
+	( foreach(X, BlanksList) do X is 32 ),
+	% This is where I'm missing a character?
+	append(BlanksList, PaddedTextFieldLines, ConvertedField),
+	walk_off_field_lines(TextFieldLines, CharsNext3, CharsNext).
+	% format(user_output, 'AFTER >~s<:>~s<~n', [TextField,CharsNext]).
+  
+% Calculate how many characters are taken up by
+%  * the text field (e.g., "TI", "AB", "PG", "OWN", "STAT", etc.,
+%  * any blanks immediately after the text field,
+%  * the following hyphen, and
+%  * any blanks immediately after the hyphen.
+% Currently, this prefix always (?) contains exactly 6 chars,
+% but who knows if this might someday change!
+trim_field_name_prefix(Field, CharsIn, FieldLength, NumBlanksTrimmed, CharsNext3) :-
+	% trim off the text field, e.g., "TI", "AB", etc.
+	append(Field, CharsNext0, CharsIn),
+	% determine the length of the text field
+	length(Field, FieldLength),
+	% trim off any whitespace immediately after the text field
+	trim_whitespace_left_count(CharsNext0, CharsNext1, NumBlanksTrimmed1),
+	% trim off the hyphen after the blanks
+	CharsNext1 = [FirstChar|CharsNext2],
+	medline_field_separator_char(FirstChar),
+	% trim off any whitespace immediately after the hyphen
+	trim_whitespace_left_count(CharsNext2, CharsNext3, NumBlanksTrimmed2),
+	% The "+1" is for the hyphen
+	NumBlanksTrimmed is NumBlanksTrimmed1 + NumBlanksTrimmed2 + 1.
+
+
+convert_non_text_field(NonTextField, NonTextFieldLines, CharsIn, ConvertedField, CharsNext) :-
+	trim_field_name_prefix(NonTextField, CharsIn, NonTextFieldLength, NumBlanksTrimmed, CharsNext3),
+	% convert_strings_to_blanks(NonTextFieldLines, BlanksLines),
+	% length(BlanksLines, BlanksLinesLength),
+	% must add 1 blank for each line
+	% length(NonTextFieldLines, NonTextFieldLinesLength),
+
+	form_one_string(NonTextFieldLines, " ", PaddedNonTextFieldLines0),
+	% This is an ad-hoc hack to handle empty "AU" lines such as
+	% AU  - Niven CF Jr
+	% AU  - 
+	% LA  - eng
+	% from
+	% PMID- 16561135
+	% as of 02/24/2014
+	append_blank_if_nonnull(PaddedNonTextFieldLines0, PaddedNonTextFieldLines),
+	length(PaddedNonTextFieldLines, PNTFLength),
+	NumBlanks is NonTextFieldLength + NumBlanksTrimmed + PNTFLength,
+	length(BlanksList, NumBlanks),
+	% format(user_output, 'LINE ~d >~s:~p~n', [NumBlanks,NonTextField,NonTextFieldLines]),
+	( foreach(X, BlanksList) do X is 32 ),
+	ConvertedField = BlanksList,
+	walk_off_field_lines(NonTextFieldLines, CharsNext3, CharsNext).
+	% format(user_output, 'AFTER >~s<:>~s<~n', [NonTextField,CharsNext]).
+
+% convert each string in NonTextFieldLines to a string of blanks of the same length
+%%% convert_strings_to_blanks(NonTextFieldLines, BlanksLines) :-
+%%% 	(  foreach(Line, NonTextFieldLines),
+%%% 	   foreach(BlanksLine, BlanksLines)
+%%% 	do length(Line, LineLength),
+%%% 	   length(BlanksLine, LineLength),
+%%% 	   (  foreach(Blank, BlanksLine)
+%%% 	   do Blank is 32
+%%% 	   )
+%%% 	).
+
+append_blank_if_nonnull([], []).
+append_blank_if_nonnull([H|T], PaddedNonTextFieldLines) :-
+	append([H|T], " ", PaddedNonTextFieldLines).
+
+walk_off_field_lines([], Chars, Chars).
+walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-
+	append(FieldLine, CharsNext0, CharsIn),
+	( CharsNext0 = [32|CharsNext1] ->
+	  true
+	; CharsNext1 = []
+	),
+	walk_off_field_lines(RestFieldLines, CharsNext1, CharsOut).

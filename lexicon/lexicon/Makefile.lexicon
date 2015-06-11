@@ -106,7 +106,7 @@ DYNAMIC_LINK_FLAGS = -- ${LDFLAGS}			        \
 
 # all:		splfr_STATIC splfr_DYNAMIC
 all:		splfr_DYNAMIC
-		mv qp_lexicon.so ../..
+		cp qp_lexicon.so ../..
 
 splfr_STATIC:	functions query miscutil morph
 		${SPLFR} ${SPLFR_STATIC_FLAGS} qp_lexicon.pl c_lexicon.c c_linfl.c ${STATIC_LINK_FLAGS}
