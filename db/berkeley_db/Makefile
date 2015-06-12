@@ -36,7 +36,8 @@ include ../../Makefile.include
 
 CFLAGS= ${DEFAULT_CFLAGS}
 
-DBLIBS1 = ./btreeQlib.a ${BERKELEY_LIB_A}
+# DBLIBS1 = ./btreeQlib.a ${BERKELEY_LIB_A}
+DBLIBS1 = ./btreeQlib.a ${BERKELEY_LIB_SO}
 INCLUDES = -I${BERKELEY_INC}
 
 O_SYSTEM = $(shell uname)
