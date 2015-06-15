@@ -48,7 +48,7 @@ O_SYSTEM = $(shell uname)
 
 C_NLS_DB_STATIC_LIB=c_nls_db.a
 C_NLS_DB_DYNAMIC_LIB=c_nls_db.${SOEXT}	
-SPINCDIR=${SICSTUS}/include/sicstus
+SPINCDIR=${SICSTUS}/include
 
 ifeq '$(O_SYSTEM)' "SunOS"
   LDFLAGS=-G
@@ -69,7 +69,7 @@ BTREE_QLIB_O = ${SKR_BERKELEY_DB}/btreeQlib.o
 # BERKELEY_LIB_XXX is set in SKRenv.XX or ../Makefile.include
 DBLIBS = ${BTREE_QLIB_A} ${BERKELEY_LIB_DYNAMIC} 
 
-LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
+LINK_FLAGS = -- ${BERKELEY_LIB_DYNAMIC}
 
 SPLFR_BASIC_FLAGS =  --vv --keep ${SPCONFIG}
 SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
@@ -108,7 +108,7 @@ splfr_STATIC:	${BTREE_QLIB_A}
 db_access.${SOEXT} : splfr_DYNAMIC
 
 splfr_DYNAMIC:	${BTREE_QLIB_O}
-		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}
+		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${SOFLAGS} ${LINK_FLAGS}
 
 clean:
 		-${RM} -f *.o *.a *.${SOEXT} *glue* && cd berkeley_db && $(MAKE) -f Makefile clean

@@ -36,7 +36,8 @@ include ../../Makefile.include
 
 CFLAGS= ${DEFAULT_CFLAGS}
 
-DBLIBS1 = ./btreeQlib.a ${BERKELEY_LIB_A}
+# DBLIBS1 = ./btreeQlib.a ${BERKELEY_LIB_A}
+DBLIBS1 = ./btreeQlib.a ${BERKELEY_LIB_SO}
 INCLUDES = -I${BERKELEY_INC}
 
 O_SYSTEM = $(shell uname)
@@ -61,7 +62,7 @@ clean:
 		-${RM} -f *.o *.a *.qof *.so core create_bulk sql
 
 btreeQlib.a:	btreeQlib.c embed.h
-		${CC} ${CFLAGS} -O -c ${INCLUDES} btreeQlib.c
+		${CC} ${CFLAGS} ${INCLUDES} -O -c btreeQlib.c
 		${AR} ${ARFLAGS} $@ btreeQlib.o
 
 create_bulk:	create_bulk.c

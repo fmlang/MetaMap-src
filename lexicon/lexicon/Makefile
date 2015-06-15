@@ -87,7 +87,8 @@ STATIC_LINK_FLAGS = -- ../functions/linfl.o		\
 		       ../miscutil/miscutil.o	\
 		       ../../debug/get_val.o
 
-DYNAMIC_LINK_FLAGS = -- $(SOLDFLAGS)			        \
+DYNAMIC_LINK_FLAGS = $(SOLDFLAGS)			        \
+			-- \
 			$(BERKELEY_LIB_SO)			\
 			../functions/linfl.o	\
 		        ../morph/lm.o		\
