@@ -42,9 +42,9 @@
 # Building the 64-bit version
 #   $ make SKR=${ROOT}/specialist/SKR \
 #      APPNAME=metamap12 MSAPPNAME=mmserver12 MACHINE_TYPE=-m64 \
-#      ARCHDIR=x86_64-linux-glibc$(GLIBC_VERSION)
+#      ARCHDIR=x86_64-linux-glibc2.5
 #      BERKELEY=${BERELEY_DB_64bit}/db-4.8.24 \
-#      SICSTUS=/nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86_64-linux-glibc$(GLIBC_VERSION) \
+#      SICSTUS=/nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86_64-linux-glibc2.5 \
 #
 # Possible environment variable values:
 #  ROOT=${HOME}
@@ -55,11 +55,11 @@ include Makefile.include
 # For source release
 # SICSTUSARGS=-f -l $(SKR_SRC_HOME)/sicstus.ini
 
-APPNAME=metamap15
+APPNAME=metamap13
 SAVED_STATE=$(APPNAME).sav
 BINEXEC=$(APPNAME).BINARY.$(ARCH)
 
-MSAPPNAME=mmserver15
+MSAPPNAME=mmserver13
 MSSAVED_STATE=$(MSAPPNAME).sav
 MSBINEXEC=$(MSAPPNAME).BINARY.$(ARCH)
 
@@ -78,13 +78,8 @@ TARGETS=$(DEBUGTARGETS) $(DBTARGETS) $(MISCTARGETS)		\
         $(FUNCTIONTARGETS) $(MORPHTARGETS) $(QUERYTARGETS)	\
         $(LIBTARGETS) $(LEXICONTARGETS)
 
-# sharable libraries needed by SICStus Prolog interpreter
-PROLOGSHOBJS=db_access.$(SOEXT) nls_signal.$(SOEXT) \
-             qp_lexicon.$(SOEXT) qp_morph.$(SOEXT) \
-             c_nls_db.$(SOEXT) debug.$(SOEXT)
-
-debug.$(SOEXT) : debug/debug.$(SOEXT)
-	$(CP) debug/debug.$(SOEXT) debug.$(SOEXT)
+# sharable libraries need by SICStus Prolog interpreter
+PROLOGSHOBJS=db_access.$(SOEXT) nls_signal.$(SOEXT) qp_lexicon.$(SOEXT) qp_morph.$(SOEXT) 
 
 DEBUGTARGETS=debug/debug.a debug/debug.$(SOEXT) debug/debug.o debug/get_val.o
 build_debug : $(DEBUGTARGETS)
@@ -104,9 +99,6 @@ $(LIBTARGETS) :
 
 db_access.$(SOEXT) : db/db_access.$(SOEXT)
 	$(CP) db/db_access.$(SOEXT) db_access.$(SOEXT)
-
-c_nls_db.$(SOEXT) : db/c_nls_db.$(SOEXT)
-	$(CP) db/c_nls_db.$(SOEXT) c_nls_db.$(SOEXT)
 
 DBTARGETS=db/c_nls_db.a db/c_nls_db.$(SOEXT) db/db_access.$(SOEXT)
 build_db :  $(DBTARGETS)
@@ -171,8 +163,11 @@ build_lvar : lexicon/morph/liblm.a
 $(SAVED_STATE) : $(PROLOGSHOBJS)
 	$(PROLOG) $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
 
-$(BINEXEC) : $(SAVED_STATE) 
-	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+$(BINEXEC) : $(SAVED_STATE)
+	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) \
+		--output=$(BINEXEC) --static --main=restore \
+		--embed_rt_sav --resources=$(SAVED_STATE)=/$(SAVED_STATE) \
+		$(LINK_FILES) $(LDFLAGS)
 
 # MetaMap Server targets
 loader.mmserver.pl: mmserver/loader.pl
@@ -185,7 +180,10 @@ $(MSSAVED_STATE) : mmserver.pl loader.mmserver.pl $(PROLOGSHOBJS)
 	LOADER_MODULE=loader.mmserver.pl $(PROLOG) $(SICSTUSARGS) --goal "save_program('$(MSSAVED_STATE)'), halt."
 
 $(MSBINEXEC) : $(MSSAVED_STATE)
-	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(MSSAVED_STATE) --output=$(MSBINEXEC) $(LINK_FILES) $(LDFLAGS)
+	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) \
+		--output=$(MSBINEXEC) --static --main=restore \
+		--embed_rt_sav --resources=$(MSSAVED_STATE)=/$(MSSAVED_STATE) \
+		$(LINK_FILES) $(LDFLAGS)
 
 # arbitrary targets
 # $ make SKR=${HOME}/specialist/SKR A_APPNAME=filter_mrconso
@@ -196,8 +194,11 @@ A_LOADER_MODULE=loader.$(A_APPNAME).pl
 $(A_SAVED_STATE) : $(PROLOGSHOBJS)
 	LOADER_MODULE=$(A_LOADER_MODULE) $(PROLOG) $(SICSTUSARGS) --goal "save_program('$(A_SAVED_STATE)'), halt."
 
-$(A_BINEXEC) : $(ASAVED_STATE) 
-	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(A_SAVED_STATE) --output=$(A_BINEXEC) $(LINK_FILES) $(LDFLAGS)
+$(A_BINEXEC) : $(ASAVED_STATE)
+	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) \
+		--output=$(A_BINEXEC) --static --main=restore \
+		--embed_rt_sav --resources=$(A_SAVED_STATE)=/$(A_SAVED_STATE) \
+		$(LINK_FILES) $(LDFLAGS)
 
 RT_DIR=$(SKR_SRC_HOME)/sp-$(SICSTUS_VERSION)
 RT_BIN=$(RT_DIR)/sicstus-$(SICSTUS_VERSION)/bin
