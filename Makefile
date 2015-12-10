@@ -172,7 +172,12 @@ $(SAVED_STATE) : $(PROLOGSHOBJS)
 	$(PROLOG) $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
 
 $(BINEXEC) : $(SAVED_STATE) 
-	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+	$(SPLD) -vv $(CONF) \
+	--respath=$(RESPATH) \
+	--output=$(BINEXEC) \
+	--static \
+	--main=restore \
+	--resources=$(SAVED_STATE)=/$(SAVED_STATE) $(LINK_FILES) $(LDFLAGS)
 
 # MetaMap Server targets
 loader.mmserver.pl: mmserver/loader.pl
@@ -185,7 +190,12 @@ $(MSSAVED_STATE) : mmserver.pl loader.mmserver.pl $(PROLOGSHOBJS)
 	LOADER_MODULE=loader.mmserver.pl $(PROLOG) $(SICSTUSARGS) --goal "save_program('$(MSSAVED_STATE)'), halt."
 
 $(MSBINEXEC) : $(MSSAVED_STATE)
-	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(MSSAVED_STATE) --output=$(MSBINEXEC) $(LINK_FILES) $(LDFLAGS)
+	$(SPLD) -vv $(CONF) \
+	--respath=$(RESPATH) \
+	--output=$(MSBINEXEC) \
+	--static \
+	--main=restore \
+	--resources=$(MSSAVED_STATE)=/$(MSSAVED_STATE) $(LINK_FILES) $(LDFLAGS)
 
 # arbitrary targets
 # $ make SKR=${HOME}/specialist/SKR A_APPNAME=filter_mrconso
