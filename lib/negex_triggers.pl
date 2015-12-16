@@ -79,6 +79,7 @@ nega_phrase_tokens(no, [significant]).
 nega_phrase_tokens(no, [signs,of]).
 nega_phrase_tokens(no, [suggestion,of]).
 nega_phrase_tokens(no, [suspicious]).
+nega_phrase_tokens(non, []).
 nega_phrase_tokens(not, []).
 nega_phrase_tokens(not, [appear]).
 nega_phrase_tokens(not, [appreciate]).

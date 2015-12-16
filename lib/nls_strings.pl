@@ -518,16 +518,29 @@ normalized_syntactic_uninvert_string(String, NormSUninvString) :-
 	syntactic_uninvert_string(NormString, NormSUninvString).
 
 syntactic_uninvert_string(String, SUninvString) :-
-	split_string(String, ", ", _Before, After),
+	split_string(String, ", ", Before, After),
 	!,
 	( contains_comma(After) ->
 	  SUninvString = String
 	; contains_stop_word(String, StopWord),
 	  StopWord \== 'a' ->
 	  SUninvString = String
-	; uninvert_string(String,SUninvString)
-    ).
+	; alnum_count(Before, 0, AlnumCount),
+	  AlnumCount >= 3 ->
+	  uninvert_string(String,SUninvString)
+	; SUninvString = String
+	).
 syntactic_uninvert_string(String, String).
+
+
+alnum_count([], AlnumCount, AlnumCount).
+alnum_count([H|T], AlnumCountIn, AlnumCountOut) :-
+	( local_alnum(H) ->
+	  AlnumCountNext is AlnumCountIn + 1
+	; AlnumCountNext is AlnumCountIn
+	),
+	alnum_count(T, AlnumCountNext, AlnumCountOut).
+
 
 contains_comma(After) :-
 	memberchk(0',, After).

@@ -37,7 +37,7 @@
 %   Copyright (C) 1988, Quintus Computer Systems, Inc.  All rights reserved.
 
 :- module(print_chars, [
-	plausible_chars/1,
+% 	plausible_chars/1,
 	portray_chars/1
    ]).
 

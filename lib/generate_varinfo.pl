@@ -148,8 +148,9 @@ get_this_variant([H|T], VariantFound, StopGap,
 	get_this_variant_1([H|T], VariantFound, StopGap,
 			   LexMatch, InputMatch, ThisVarInfo, VariantTail).
 
-get_this_variant_1([], VariantFound, StopGap,
-		   LexMatch, InputMatch, [StopGap|ThisVarInfo], ThisVarInfo) :-
+get_this_variant_1([], VariantFound, _StopGap,
+%		   LexMatch, InputMatch, [StopGap|ThisVarInfo], ThisVarInfo) :-
+		   LexMatch, InputMatch, ThisVarInfo, ThisVarInfo) :-
 	( VariantFound =:= 0 ->
 	  send_message('### WARNING: Mismatch in LexMatch "~w" and InputMatch ~w ~n',
 		 [LexMatch,InputMatch])

@@ -64,7 +64,7 @@ SPLFR_BASIC_FLAGS = --verbose --keep
 SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable --conf SPLFR_SHLDFLAGS=${LDFLAGS} 
 SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 
-SPLFR = splfr --conf CC=${CC} ${addprefix --cflag=, ${CFLAGS}}
+DO_SPLFR = ${SPLFR} --conf CC=${CC} ${addprefix --cflag=, ${CFLAGS}}
 
 # all:		nls_signal.o nls_signal.so nls_signal.a
 # 
@@ -78,14 +78,16 @@ SPLFR = splfr --conf CC=${CC} ${addprefix --cflag=, ${CFLAGS}}
 # 		${CC} ${CFLAGS} -c $< -I${SPINCDIR}
 
 # all:		splfr_DYNAMIC splfr_STATIC
-all:		splfr_DYNAMIC
+# all:		splfr_DYNAMIC
+# FML changed 09/30/2015
+all:		splfr_DYNAMIC splfr_STATIC
 		mv nls_signal.so ..
 
 splfr_DYNAMIC:
-		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} nls_signal.pl nls_signal.c
+		${DO_SPLFR} ${SPLFR_DYNAMIC_FLAGS} nls_signal.pl nls_signal.c
 
 splfr_STATIC:
-		${SPLFR} ${SPLFR_STATIC_FLAGS} nls_signal.pl nls_signal.c
+		${DO_SPLFR} ${SPLFR_STATIC_FLAGS} nls_signal.pl nls_signal.c
 
 clean:
 		-${RM} *.o *.a *.so *glue*

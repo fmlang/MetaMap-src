@@ -62,7 +62,7 @@
 	set_message/5
     ]).
 
-:-   absolute_file_name(skr_lib(semtype_translation_2015AA),
+:-   absolute_file_name(skr_lib(semtype_translation_2015AB),
 			AbsFileName,
 			[extensions(['.pl'])]),
      file_exists(AbsFileName) ->

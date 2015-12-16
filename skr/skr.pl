@@ -118,10 +118,6 @@
 	sab_tables_exist/0
     ]).
 
-:- use_module(skr(skr_utilities),[
-        send_message/2
-    ]).
-
 :- use_module(skr(skr_fe), [
 	get_output_stream/1
     ]).
@@ -136,6 +132,7 @@
 	get_candidate_feature/3,
 	get_all_candidate_features/3,
 	replace_crs_with_blanks/4,
+        send_message/2,
 	split_word/3,
 	token_template/5,
 	token_template/6
@@ -198,6 +195,7 @@
 	brackets/2,
 	brackets/2,
 	higher_order_or_annotation_tok/1,
+	label_tok/1,
 	pe_tok/1,
 	pn_tok/1,
 	ws_or_pn_tok/1,
@@ -298,9 +296,10 @@ skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
 	( skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
 			  AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
 			  WordDataCacheIn, USCCacheIn, RawTokensIn,
-			  ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
+			  ServerStreams, RawTokensNext, WordDataCacheOut, USCCacheOut,
 			  MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) ->
-	  true
+	  % clean up token list by removing un-consumed tokens
+	  remove_tokens_until_label_token(RawTokensNext, RawTokensOut)
 	  % skr_utilities:write_token_list(RawTokensOut, 0, 1)
         ; fatal_error('skr_phrases/14 failed for text ~p: ~p~n',
 		  [InputLabel,UtteranceText])
@@ -393,6 +392,13 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 		      TagList,
 		      WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut,
 		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrases).
+
+remove_tokens_until_label_token([], []).
+remove_tokens_until_label_token([FirstToken|RestTokens], ExpRawTokenListNext) :-
+	( label_tok(FirstToken) ->
+	  ExpRawTokenListNext = [FirstToken|RestTokens]
+	; remove_tokens_until_label_token(RestTokens, ExpRawTokenListNext)
+	).
 
 % Determine if an AA Expansion spans two (or more) consecutive phrases.
 % If so, collapse the spanned phrases into one.
@@ -586,18 +592,18 @@ skr_phrase_1(Label, UtteranceTextString,
 				     TokenPhraseHeadWords, WordDataCacheOut,
 				     USCCacheOut, Evaluations0),
 
-	refine_evaluations(Evaluations0, NoMapPairs, RefinedEvaluations, FinalEvaluations0),
-	length(RefinedEvaluations, TotalCandidateCount),
-	length(FinalEvaluations0, RefinedCandidateCount),
-	ExcludedCandidateCount is TotalCandidateCount - RefinedCandidateCount,
-	debug_message(candidates,
-		      '###~N ~d Initial Candidates~n### ~d Refined Candidates~n',
-		      [TotalCandidateCount, RefinedCandidateCount]),
-	( control_option(dysonym_processing) ->
-	  exclude_dysonyms(FinalEvaluations0,FinalEvaluations)
-	; FinalEvaluations = FinalEvaluations0
-	),
-	debug_evaluations(FinalEvaluations),
+	filter_evaluations(Evaluations0, NoMapPairs, RefinedEvaluations, FinalEvaluations0),
+        length(RefinedEvaluations, TotalCandidateCount),
+        length(FinalEvaluations0, RefinedCandidateCount),
+        ExcludedCandidateCount is TotalCandidateCount - RefinedCandidateCount,
+        debug_message(candidates,
+                      '~N### ~d Initial Candidates~n### ~d Refined Candidates~n',
+                      [TotalCandidateCount, RefinedCandidateCount]),
+        ( control_option(dysonym_processing) ->
+          exclude_dysonyms(FinalEvaluations0,FinalEvaluations)
+        ; FinalEvaluations = FinalEvaluations0
+        ),
+        debug_evaluations(FinalEvaluations),
 
 	generate_best_mappings(FinalEvaluations, OrigPhraseTextString, PhraseSyntax, PhraseWordInfoPair,
 			       Variants, APhrases, _BestCandidates, Mappings0, PrunedCandidateCount),
@@ -644,7 +650,7 @@ mark_excluded_evaluations(RefinedEvaluations) :-
 	(  foreach(Candidate, RefinedEvaluations)
 	do get_candidate_feature(status, Candidate, Status),
 	   % If the Status field is still uninstantiated,
-	   % this candidate was refined out of existence,
+	   % this candidate was filtered out,
 	   % so the Status field can be set to 1.
 	   % If the Status field is already set,
 	   % "Status is 1" will fail, so just succeed anyway.
@@ -658,17 +664,9 @@ debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords) :-
 	( phrase_debugging ->
 	  get_label_components(Label, [PMID,TiOrAB,UtteranceNum]),
 	  length(TokenPhraseWords, TokenPhraseLength),
-	  current_output(OutputStream),
-	  format(OutputStream, 'Phrase|~s|~s|~s|~d|~q~n',
+	  format(user_error, 'Phrase|~s|~s|~s|~d|~q~n',
 		 [PMID,TiOrAB,UtteranceNum,TokenPhraseLength,InputMatchPhraseWords]),
-	  flush_output(OutputStream),
-	  % don't duplicate output to user_output
-	  ( stream_property(OutputStream, alias(user_output)) ->
-	    true
-	  ; format(user_output, 'Phrase|~s|~s|~s|~d|~q~n',
-		   [PMID,TiOrAB,UtteranceNum,TokenPhraseLength,InputMatchPhraseWords]),
-	    ttyflush
-	  )
+	  flush_output(user_error)
 	; true
 	).
 
@@ -826,6 +824,13 @@ generate_initial_evaluations(Label, UtteranceText,
 	  Evaluations0 = [],
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
+	; control_option(allow_overmatches),
+	  control_value(min_length, MinLength),
+	  length(PhraseTextString, PhraseTextStringLength),
+	  PhraseTextStringLength < MinLength ->
+	  Evaluations0 = [],
+	  WordDataCacheOut = WordDataCacheIn,
+	  USCCacheOut = USCCacheIn
 	; check_generate_initial_evaluations_control_options_2 ->
  	  compute_evaluations(Label, UtteranceText,
  			      Phrase, Variants, GVCs,
@@ -877,23 +882,23 @@ stop_analysis(Atom, String, Tags) :-
 	  Length < MinLength
 	).
 
-refine_evaluations(InitialEvaluations, NoMapPairs, RefinedEvaluations, FinalEvaluations) :-
-	refine_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs,
+filter_evaluations(InitialEvaluations, NoMapPairs, RefinedEvaluations, FinalEvaluations) :-
+	filter_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs,
 					      EvaluationsAfterUserExclusions),
-	refine_evaluations_by_sources(EvaluationsAfterUserExclusions, EvaluationsAfterSources),
-	refine_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
-	refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
+	filter_evaluations_by_sources(EvaluationsAfterUserExclusions, EvaluationsAfterSources),
+	filter_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
+	filter_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
 
 
-refine_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs, EvaluationsAfterUserExclusions) :-
+filter_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs, EvaluationsAfterUserExclusions) :-
 	( control_value(nomap, _) ->
-	  filter_evaluations_by_user_exclusions(InitialEvaluations,
-						NoMapPairs,
-						EvaluationsAfterUserExclusions)
+	  filter_evaluations_by_user_exclusions_aux(InitialEvaluations,
+						    NoMapPairs,
+						    EvaluationsAfterUserExclusions)
 	; EvaluationsAfterUserExclusions  = InitialEvaluations
 	).
 	  
-refine_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
+filter_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	( control_value(restrict_to_sources, RestrictedSources) ->
 	  convert_to_root_sources(RestrictedSources, RestrictedRootSources),
 	  filter_evaluations_restricting_to_sources(Evaluations0,
@@ -907,17 +912,48 @@ refine_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	; EvaluationsAfterSources = Evaluations0
 	).
 
-refine_evaluations_by_semtypes(Evaluations0, RefinedEvaluations) :-
+filter_evaluations_by_semtypes(Evaluations0, RefinedEvaluations) :-
 	( control_option(restrict_to_sts) ->
 	  control_value(restrict_to_sts, STs),
-	  filter_evaluations_restricting_to_sts(Evaluations0, STs, RefinedEvaluations)
+	  filter_evaluations_restricting_to_sts(Evaluations0, STs,
+						RefinedEvaluations0, Discarded),
+	  maybe_discard_overlapping_evaluations(RefinedEvaluations0, Discarded, RefinedEvaluations)
 	; control_option(exclude_sts) ->
 	  control_value(exclude_sts, STs),
-	  filter_evaluations_excluding_sts(Evaluations0, STs, RefinedEvaluations)
+	  filter_evaluations_excluding_sts(Evaluations0, STs,
+					   RefinedEvaluations, _Discarded)
 	; RefinedEvaluations = Evaluations0
 	).
 
-refine_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations) :-
+maybe_discard_overlapping_evaluations(RefinedEvaluations0, Discarded, RefinedEvaluations) :-
+	( control_option(cascade) ->
+	  discard_overlapping_evaluations(RefinedEvaluations0, Discarded, RefinedEvaluations)
+	; RefinedEvaluations = RefinedEvaluations0
+	).
+
+% This is an idea suggested by Dina.
+% Suppose the text is "logistic regression", and we restict to DISO concepts.
+% Then the concept
+% 1000  C0206031:Logistic Regression  [Research Activity]
+% is ruled out. However, we are left with
+% 1000  Regression (Disease regression) [Pathologic Function]
+% The two concepts share positional information.
+% To rule out "Regression" use the "--cascade" option.
+
+% We'd want to discard "regression" as well.
+discard_overlapping_evaluations([], _DiscardedEvaluations, []).
+discard_overlapping_evaluations([H|T], DiscardedEvaluations, KeptEvaluations) :-
+	( get_candidate_feature(posinfo, H, PosInfoH),
+	  member(Discarded, DiscardedEvaluations),
+	  get_candidate_feature(posinfo, Discarded, PosInfoDiscarded),
+	  posinfo_lists_overlap(PosInfoH, PosInfoDiscarded) ->
+	  KeptEvaluations = RestKeptEvaluations
+	; KeptEvaluations = [H|RestKeptEvaluations]
+	),
+	discard_overlapping_evaluations(T, DiscardedEvaluations, RestKeptEvaluations).
+
+
+filter_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations) :-
  	( ( control_option(compute_all_mappings)
 	  % ; control_option(hide_mappings)
 	  ; control_option(allow_overmatches) ) ->
@@ -929,7 +965,7 @@ debug_evaluations(Evaluations) :-
 	( control_value(debug, DebugFlags),
 	  memberchk(4, DebugFlags) ->
 	  length(Evaluations, NEvals),
-	  format('~nNon-subsumed evaluations (~d):~n', [NEvals]),
+	  format(user_error, '~nNon-subsumed evaluations (~d):~n', [NEvals]),
 	  wl(Evaluations)
 	; true
 	).
@@ -1010,7 +1046,7 @@ compute_evaluations(Label, UtteranceText,
 	% length(Evaluations2, Length2),
 	% format(user_output, '~d~n', [Length2]),
 	% Evaluations = Evaluations2,
-	maybe_filter_out_redundant_evaluations(Evaluations2, Evaluations),
+	filter_out_redundant_evaluations(Evaluations2, Evaluations),
 	% This is now done in compute_one_evaluation in metamap_evaluation.pl
 	% add_semtypes_to_evaluations(Evaluations),
 	debug_compute_evaluations_5(DebugFlags, Evaluations).
@@ -1521,8 +1557,8 @@ occurs_in_gvcs([_|Rest], Word, Tags) :-
 
 
 % ev(-1000,'C0596170','BED','Binge eating disorder',[bed],[mobd],[[[1,1],[1,1],0]],[1],1,yes,no,[],[0/3],_247965,_247967)],
-filter_evaluations_by_user_exclusions([], _UserExclusions, []).
-filter_evaluations_by_user_exclusions([FirstCandidate|RestCandidates],
+filter_evaluations_by_user_exclusions_aux([], _UserExclusions, []).
+filter_evaluations_by_user_exclusions_aux([FirstCandidate|RestCandidates],
 				      UserExclusions, Results) :-
 	get_all_candidate_features([cui,metaterm], FirstCandidate, [CUI, MetaTerm]),
 	% This *must* be a not-not to prevent the instantiation of
@@ -1533,7 +1569,7 @@ filter_evaluations_by_user_exclusions([FirstCandidate|RestCandidates],
           Results = RestResults
 	; Results = [FirstCandidate|RestResults]
 	),
-        filter_evaluations_by_user_exclusions(RestCandidates, UserExclusions, RestResults).
+        filter_evaluations_by_user_exclusions_aux(RestCandidates, UserExclusions, RestResults).
 
 /* filter_evaluations_restricting_to_sources(+EvaluationsIn, +Sources, -EvaluationsOut)
 
@@ -1659,15 +1695,19 @@ difference([H|T], Set0, Difference) :-
 filter_evaluations_restricting_to_sts/3 removes those evaluations from EvaluationsIn
 which do not represent concepts with some ST in STs producing EvaluationsOut. */
 
-filter_evaluations_restricting_to_sts([], _, []).
-filter_evaluations_restricting_to_sts([FirstCandidate|RestCandidates], STs, Filtered) :-
+filter_evaluations_restricting_to_sts([], _, [], []).
+filter_evaluations_restricting_to_sts([FirstCandidate|RestCandidates], STs,
+				      KeptEvaluations, DiscardedEvaluations) :-
 	get_candidate_feature(semtypes, FirstCandidate, FirstCandidateSemTypes),
 	intersection(FirstCandidateSemTypes, STs, Intersection),
 	( Intersection == [] ->
-	  Filtered = FilteredRest
-	; Filtered = [FirstCandidate|FilteredRest]
+	  KeptEvaluations = RestKeptEvaluations,
+	  DiscardedEvaluations = [FirstCandidate|RestDiscardedEvaluations]	  
+	; KeptEvaluations = [FirstCandidate|RestKeptEvaluations],
+	  DiscardedEvaluations = RestDiscardedEvaluations
 	),
-	filter_evaluations_restricting_to_sts(RestCandidates, STs, FilteredRest).
+	filter_evaluations_restricting_to_sts(RestCandidates, STs,
+					      RestKeptEvaluations, RestDiscardedEvaluations).
 
 /* filter_evaluations_excluding_sts(+EvaluationsIn, +STs, -EvaluationsOut)
 
@@ -1675,15 +1715,19 @@ filter_evaluations_excluding_sts/3 removes those evaluations from
 EvaluationsIn which represent concepts with any ST in STs producing
 EvaluationsOut. */
 
-filter_evaluations_excluding_sts([], _, []).
-filter_evaluations_excluding_sts([FirstCandidate|RestCandidates], STs, Filtered) :-
+filter_evaluations_excluding_sts([], _, [], []).
+filter_evaluations_excluding_sts([FirstCandidate|RestCandidates], STs,
+				 KeptEvaluations, DiscardedEvaluations) :-
 	get_candidate_feature(semtypes, FirstCandidate, FirstCandidateSemTypes),
 	intersection(FirstCandidateSemTypes, STs, Intersection),
 	( Intersection == [] ->
-	  Filtered = [FirstCandidate|FilteredRest]
-	; Filtered = FilteredRest
+	  KeptEvaluations = [FirstCandidate|RestKeptEvaluations],
+	  DiscardedEvaluations = RestDiscardedEvaluations
+	; KeptEvaluations = RestKeptEvaluations,
+	  DiscardedEvaluations = [FirstCandidate|RestDiscardedEvaluations]
 	),
-	filter_evaluations_excluding_sts(RestCandidates, STs, FilteredRest).
+	filter_evaluations_excluding_sts(RestCandidates, STs,
+					 RestKeptEvaluations, RestDiscardedEvaluations).
 
 construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
 			Variants, APhrases, Evaluations, BestMaps, PrunedCount) :-
@@ -2677,7 +2721,11 @@ print_candidate_grid_coverage(_CurrPos, _MinPos, _MaxPos, CUI, NegValue, Words, 
 %         fast spin echo magnetic resonance imaging"
 % from PMID 18080213 with JavaLex
 
-test_candidate_grid_sparseness(AEvaluations, NoDuplicateCount, Sparseness) :-
+test_candidate_grid_sparseness(_AEvaluations, _NoDuplicateCount, _Sparseness) :-
+	control_option(allow_overmatches),
+	!.
+	
+test_candidate_grid_sparseness(AEvaluations, NoDuplicateCount, Sparseness) :-	
 	\+ control_option(no_prune),
 	\+ control_option(prune),
 	AEvaluations = [_|_],
@@ -3067,6 +3115,14 @@ spans_overlap(Low1, High1, Low2, High2) :-
 	  Low1 =< High2,
 	  High2 =< High1
 	).
+
+posinfo_lists_overlap(PosInfoList1, PosInfoList2) :-
+	member(StartPos1/Length1, PosInfoList1),
+	EndPos1 is StartPos1 + Length1,
+	member(StartPos2/Length2, PosInfoList2),
+	EndPos2 is StartPos2 + Length2,
+	spans_overlap(StartPos1, EndPos1, StartPos2, EndPos2),
+	!.
 
 /* is_proper_subspan(+Low1, +High1, +Low2, +High2)
 
@@ -3587,16 +3643,16 @@ maybe_debug_mapping_1(Mapping, MatchMap, MatchCCs) :-
 	( control_value(debug, DebugFlags),
 	  memberchk(5, DebugFlags) ->
 	  glean_concepts_from_mapping(Mapping, Concepts),
-	  format('~n',[]),
+	  format(user_error, '~n',[]),
 	  wl(Concepts),
-	  format('~p~n~p~n',[MatchMap,MatchCCs])
+	  format(user_error, '~p~n~p~n',[MatchMap,MatchCCs])
 	; true
 	).
 
 maybe_debug_mapping_2 :-
 	( control_value(debug, DebugFlags),
 	  memberchk(5, DebugFlags) ->
-	  format('~n',[])
+	  format(user_error, '~n',[])
 	; true
 	).
 
@@ -3690,14 +3746,6 @@ filter_evaluations_by_threshold([FirstCandidate|RestCandidates], NegThreshold,
 				[FirstCandidate|FilteredRest]) :-
 	filter_evaluations_by_threshold(RestCandidates, NegThreshold, FilteredRest).
 
-
-maybe_filter_out_redundant_evaluations(EvaluationsIn, EvaluationsOut) :-
- 	( ( control_option(compute_all_mappings)
-	  % ; control_option(hide_mappings)
-	  ; control_option(allow_overmatches) ) ->
- 	  EvaluationsOut = EvaluationsIn
-	; filter_out_redundant_evaluations(EvaluationsIn, EvaluationsOut)
- 	).	
 
 /* filter_out_redundant_evaluations(+Evaluations, -FilteredEvaluations)
    filter_out_redundant_evaluations_aux(+Evaluations, -FilteredEvaluations)
@@ -3936,16 +3984,16 @@ is_of_phrase([PhraseItem|_]) :-
 
 debug_compute_evaluations_1(DebugFlags, GVCs0) :-
 	( memberchk(1, DebugFlags) ->
-	  format('~n~nGs:~n', []),
+	  format(user_error, '~n~nGs:~n', []),
 	  wgvcs(GVCs0)
 	; true
 	).
 
 debug_compute_evaluations_2(DebugFlags, GVCs3, Variants) :-
 	( memberchk(1, DebugFlags) ->
-	  format('~n~nGVs:~n', []),
+	  format(user_error, '~n~nGVs:~n', []),
 	  wgvcs(GVCs3),
-          format('~n~nVariants:~n', []),
+          format(user_error, '~n~nVariants:~n', []),
 	  avl_to_list(Variants, VariantsList),
 	  write_avl_list(VariantsList)
 	; true
@@ -3953,7 +4001,7 @@ debug_compute_evaluations_2(DebugFlags, GVCs3, Variants) :-
 
 debug_compute_evaluations_3(DebugFlags, GVCs) :-
 	( memberchk(2, DebugFlags) ->
-	  format('~n~nGVCs:~n', []),
+	  format(user_error, '~n~nGVCs:~n', []),
 	  wgvcs(GVCs)
 	; true
 	).
@@ -3961,7 +4009,7 @@ debug_compute_evaluations_3(DebugFlags, GVCs) :-
 debug_compute_evaluations_4(DebugFlags, Evaluations2) :-
 	( memberchk(4, DebugFlags) ->
 	  length(Evaluations2, NEvals2),
-	  format('~nPre-filtered evaluations (~d):~n', [NEvals2]),
+	  format(user_error, '~nPre-filtered evaluations (~d):~n', [NEvals2]),
 	  wl(Evaluations2)
 	; true
 	).
@@ -3969,7 +4017,7 @@ debug_compute_evaluations_4(DebugFlags, Evaluations2) :-
 debug_compute_evaluations_5(DebugFlags, Evaluations) :-
 	( memberchk(4, DebugFlags) ->
 	  length(Evaluations, NEvals),
-	  format('~nNon-redundant evaluations (~d):~n', [NEvals]),
+	  format(user_error, '~nNon-redundant evaluations (~d):~n', [NEvals]),
 	  wl(Evaluations)
 	; true
 	).
@@ -4222,3 +4270,4 @@ atom_to_list(Atom, List, Len) :-
 	split_string_completely(LCChars, " ", LCCharList),
 	strings_to_atoms(LCCharList, List),
 	length(List, Len).
+

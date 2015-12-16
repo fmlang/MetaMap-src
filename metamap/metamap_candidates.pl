@@ -40,6 +40,10 @@
 	word_is_last_word_of_some_variant/2
     ]).
 
+:- use_module(metamap(metamap_stop_phrase), [
+	stop_phrase/2
+    ]).
+
 :- use_module(metamap(metamap_tokenization), [
 	tokenize_text/2,
 	tokenize_text_mm/2
@@ -54,7 +58,8 @@
     ]).
 
 :- use_module(skr_lib(nls_strings), [
-	lex_stop_word/1
+	lex_stop_word/1,
+	lex_stop_word_atom/1
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -81,6 +86,7 @@
     ]).
 
 :- use_module(library(sets), [
+	intersection/3,
 	list_to_set/2
     ]).
 
@@ -113,9 +119,27 @@ add_candidates([gvc(Generator,Variants,Candidates)|RestGVCs],
 	       WordDataCacheOut, USCCacheOut) :-
 	% If IgnoreSingleChars == 1,
 	% then don't generate candidates for single-character tokens
-	Generator = v(Token,_,_,_,_Roots0,_WordCount),
+	Generator = v(Token,_,LexCats,_,_Roots0,_WordCount),
+%	format('GENERATOR|~w~n', [Generator]),
+%	( LexCats = [verb] ->
+%	  Candidates = [],
+%	  WordDataCacheNext = WordDataCacheIn,
+%	  USCCacheNext = USCCacheIn
+%	; IgnoreSingleChars =:= 1,
 	( IgnoreSingleChars =:= 1,
 	  atom_codes(Token, [_SingleChar]) ->
+	  Candidates = [],
+	  WordDataCacheNext = WordDataCacheIn,
+	  USCCacheNext = USCCacheIn
+	; control_option(allow_overmatches),
+	  stop_phrase(Token, StopPhraseLexCats),
+	  intersection(LexCats, StopPhraseLexCats, Intersection),
+	  Intersection \== [] ->
+	  Candidates = [],
+	  WordDataCacheNext = WordDataCacheIn,
+	  USCCacheNext = USCCacheIn
+	; control_option(allow_overmatches),
+	  lex_stop_word_atom(Token)->
 	  Candidates = [],
 	  WordDataCacheNext = WordDataCacheIn,
 	  USCCacheNext = USCCacheIn
@@ -367,14 +391,14 @@ determine_first_word_index(Word, AllVariants, Index) :-
 
 debug_get_meta_candidates_1(DebugFlags, Variant) :-
 	( memberchk(2, DebugFlags) ->
-	  format('~nVariant: ~p~n',[Variant])
+	  format(user_error, '~nVariant: ~p~n',[Variant])
 	; true
 	).
 
 debug_get_meta_candidates_2(DebugFlags, NewCandidates) :-
 	( memberchk(2, DebugFlags) ->
 	  length(NewCandidates, NewCandidatesLength),
-	  format('~d candidates.~n', [NewCandidatesLength]),
+	  format(user_error, '~d candidates.~n', [NewCandidatesLength]),
 	  wl(NewCandidates)
 	; true
 	).
@@ -383,7 +407,7 @@ debug_get_meta_candidates_2(DebugFlags, NewCandidates) :-
 debug_get_uscs(DebugFlags, WordDataCacheIn, WordDataCacheOut) :-
 	( memberchk(2, DebugFlags),
 	  WordDataCacheIn = WordDataCacheOut ->
-	  format('(by cache)~n', [])
+	  format(user_error, '(by cache)~n', [])
 	; true
 	).
 
@@ -399,6 +423,7 @@ frequent_first_word_pair('4',                   'acid').
 frequent_first_word_pair('accidental',          'poisoning').
 frequent_first_word_pair('acetaminophen',       'tablet').
 frequent_first_word_pair('anterior',            'nerve').
+frequent_first_word_pair('anti',                'antibody').
 frequent_first_word_pair('arabidopsis',         'protein').
 frequent_first_word_pair('articular',           'vertebra').
 frequent_first_word_pair('ascorbic',            'tablet').
@@ -410,7 +435,6 @@ frequent_first_word_pair('bony',                'vertebra').
 frequent_first_word_pair('bronchoscopy',        'bronchus').
 frequent_first_word_pair('c',                   'protein').
 frequent_first_word_pair('calcium',             'tablet').
-frequent_first_word_pair('chewable',            'tablet').
 frequent_first_word_pair('compact',             'bone').
 frequent_first_word_pair('compact',             'vertebra').
 frequent_first_word_pair('ctcae',               'injury').
@@ -420,7 +444,6 @@ frequent_first_word_pair('e',                   'protein').
 frequent_first_word_pair('entire',              'artery').
 frequent_first_word_pair('extended',            'capsule').
 frequent_first_word_pair('extended',            'tablet').
-frequent_first_word_pair('film',                'tablet').
 frequent_first_word_pair('hla',                 'antigen').
 frequent_first_word_pair('human',               '1').
 frequent_first_word_pair('human',               '2').
@@ -439,9 +462,11 @@ frequent_first_word_pair('mouse',               'protein').
 frequent_first_word_pair('negative',            'process').
 frequent_first_word_pair('periosteum',          'bone').
 frequent_first_word_pair('periosteum',          'vertebra').
+frequent_first_word_pair('positive',            'activity').
 frequent_first_word_pair('positive',            'process').
 frequent_first_word_pair('posterior',           'nerve').
 frequent_first_word_pair('rat',                 'protein').
+frequent_first_word_pair('regulation',          'activity').
 frequent_first_word_pair('regulation',          'process').
 frequent_first_word_pair('right',               'artery').
 frequent_first_word_pair('right',               'trunk').
@@ -452,7 +477,6 @@ frequent_first_word_pair('serum',               'measurement').
 frequent_first_word_pair('skin',                'foot').
 frequent_first_word_pair('skin',                'hand').
 frequent_first_word_pair('skin',                'toe').
-frequent_first_word_pair('sodium',              'solution').
 frequent_first_word_pair('stage',               'cancer').
 frequent_first_word_pair('stage',               'carcinoma').
 frequent_first_word_pair('stage',               'v7').

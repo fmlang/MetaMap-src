@@ -105,7 +105,9 @@ DYNAMIC_LINK_FLAGS = -- ${LDFLAGS}			        \
 
 
 # all:		splfr_STATIC splfr_DYNAMIC
-all:		splfr_DYNAMIC
+# all:		splfr_DYNAMIC
+# FML changed 09/30/2015
+all:		splfr_STATIC splfr_DYNAMIC
 		cp qp_lexicon.so ../..
 
 splfr_STATIC:	functions query miscutil morph

@@ -37,6 +37,9 @@
 % Source:   NLM TC, OMED TC, NCBI TC and MMI TS
 
 
+% In USAbase.2015AB, we took the top 1046 entries (all those with frequency of at least 10),
+% giving us 353230 of the 383054 stop phrases collected, i.e., 92.21%.
+
 % In NLM.2015AA, we took the top 1046 entries (all those with frequency of at least 10),
 % giving us 353192 of the 383548 stop phrases collected, i.e., 92.08%.
 
@@ -56,7 +59,7 @@
     stop_phrase/2
     ]).
 
-stop_phrase('"', [punc]). %" Just to fake out Emacs!
+stop_phrase('"', [punc]). % " Just to fake out Emacs
 stop_phrase('''', [punc]).
 stop_phrase('(', [punc]).
 stop_phrase('(+', [punc,punc]).

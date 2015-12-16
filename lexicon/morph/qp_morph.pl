@@ -49,6 +49,9 @@
         control_value/2
    ]).
 
+:- use_module(library(system), [
+	environ/2
+   ]).
 
 % foreign_file(morph('morph'), [
 
@@ -58,7 +61,10 @@ foreign_resource(qp_morph, [
 
 foreign(c_dm_variants, c, c_dm_variants(+string, +term, -term, [-integer])).
 
-:- load_foreign_resource('../../qp_morph').
+% :- load_foreign_resource('../../qp_morph').
+:- environ('DYNAMIC_LIB_DIR',DynamicLibDir),
+   atom_concat(DynamicLibDir,'/qp_morph',QpMorphSo),
+   load_foreign_resource(QpMorphSo).
  
 %%% returns inflectional variants in -Var
 %%% +Term is the input term

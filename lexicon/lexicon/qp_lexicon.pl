@@ -185,34 +185,37 @@
      ]).
 
  % Replaced with new lexAccess code
- foreign(c_lex_cit,            c,
-	 c_lex_cit(+string, +string, +integer, +integer, +integer, -term, [-integer])).
+foreign(c_lex_cit,            c,
+	c_lex_cit(+string, +string, +integer, +integer, +integer, -term, [-integer])).
 
  % foreign(c_lex_root,           c,
  % 	c_lex_root(+string, +string, +integer, +integer, +integer, -term, [-integer])).
 
- foreign(c_lex_form,           c,
-	 c_lex_form(+string, +string, +integer, +integer, +integer, -term, [-integer])).
+foreign(c_lex_form,           c,
+	c_lex_form(+string, +string, +integer, +integer, +integer, -term, [-integer])).
 
- foreign(c_lex_form_cats,      c,
-	 c_lex_form_cats(+string, +string, +integer, +integer, -term, [-integer])).
+foreign(c_lex_form_cats,      c,
+	c_lex_form_cats(+string, +string, +integer, +integer, -term, [-integer])).
 
- foreign(c_lex_is_a_root,      c,
-	 c_lex_is_a_root(+string, +string, +integer, +integer, [-integer])).
+foreign(c_lex_is_a_root,      c,
+	c_lex_is_a_root(+string, +string, +integer, +integer, [-integer])).
 
- foreign(c_lex_is_a_form,      c,
-	 c_lex_is_a_form(+string, +string, +integer, +integer, [-integer])).
+foreign(c_lex_is_a_form,      c,
+	c_lex_is_a_form(+string, +string, +integer, +integer, [-integer])).
 
- foreign(c_lex_is_a_root_cats, c,
-	 c_lex_is_a_root_cats(+string, +string, +integer, +integer, +term, [-integer])).
+foreign(c_lex_is_a_root_cats, c,
+	c_lex_is_a_root_cats(+string, +string, +integer, +integer, +term, [-integer])).
 
- foreign(c_lex_form_input,     c,
-	 c_lex_form_input(+string, +integer, +term, -term, [-integer])).
+foreign(c_lex_form_input,     c,
+	c_lex_form_input(+string, +integer, +term, -term, [-integer])).
 
- foreign(c_get_varlist,        c,
-	 c_get_varlist(+string, +integer, -term, [-integer])).
+foreign(c_get_varlist,        c,
+	c_get_varlist(+string, +integer, -term, [-integer])).
 
- :- load_foreign_resource('../../qp_lexicon').
+% :- load_foreign_resource('../../qp_lexicon').
+:- environ('DYNAMIC_LIB_DIR',DynamicLibDir),
+   atom_concat(DynamicLibDir,'/qp_lexicon',QpLexiconSo),
+   load_foreign_resource(QpLexiconSo).
 
  %%% lex_init(-Lexicon, -Index)
  %%% This predicate will return the names of the default location of the lexicon files
