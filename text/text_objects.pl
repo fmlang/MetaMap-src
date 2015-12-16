@@ -35,6 +35,7 @@
 :- module(text_objects, [
 	create_nomap_pairs/2,
 	dump_all_AAs/4,
+	dump_all_UDAs/4,
 	extract_token_atoms/2,
 	extract_an_lc_atoms/2,
 	find_and_coordinate_sentences/8,
@@ -79,7 +80,9 @@
 	lex_stop_word/1,
 	split_string_completely/3,
 	trim_and_compress_whitespace/2,
-	trim_whitespace/2
+	trim_whitespace/2,
+	trim_whitespace_left/2,
+	trim_whitespace_right/2
     ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -641,6 +644,35 @@ xml_output_on :-
 	; control_option('XMLn1')
 	).
 
+dump_all_UDAs(UDAList, FirstField, UI, OutputStream) :-
+	reformat_UDA_list_for_output(UDAList, UI, OutputUDAList),
+	write_AA_data(OutputUDAList, FirstField, 'UA', OutputStream),
+	flush_output(OutputStream).
+
+reformat_UDA_list_for_output([], _UI, []).
+reformat_UDA_list_for_output([UDA:Expansion:StartPos:EndPos|RestUDAs],
+			      UI, [ReformattedUDA|RestReformattedUDAs]) :-
+	reformat_one_UDA_for_output(UDA, Expansion, StartPos, EndPos, UI, ReformattedUDA),
+	reformat_UDA_list_for_output(RestUDAs, UI, RestReformattedUDAs).
+
+reformat_one_UDA_for_output(UDAString, ExpansionString, StartPos, _EndPos, UI, ReformattedUDAData) :-
+	length(UDAString, UDATextLength),
+	atom_codes(UDATextAtom, UDAString),
+	tokenize_text_utterly(UDAString, TokenizedUDA),
+	length(TokenizedUDA, UDATokenLength),
+	length(ExpansionString, ExpansionTextLength),
+	atom_codes(ExpansionTextAtom, ExpansionString),
+	tokenize_text_utterly(ExpansionString, TokenizedExpansion),
+	length(TokenizedExpansion, ExpansionTokenLength),
+	ReformattedUDAData = UI-UDATextAtom-ExpansionTextAtom-
+			     UDATokenLength-UDATextLength-
+			     ExpansionTokenLength-ExpansionTextLength-StartPos.
+
+
+% UDAList looks like
+% ["CAT":"Computerized Axial Tomography",
+%  "PET":"Positron Emission Tomography"]
+
 % The FirstField argument should be either "aa" or "pmid",
 % and determines whether the first two fields should be
 % AA|PMID  -- for --dump_aas output, e.g.,
@@ -656,7 +688,7 @@ dump_all_AAs(AAListTokens, FirstField, UI, OutputStream) :-
 	% dump_one_avl(Key, UI, Values, OutputStream),
 	% fail.
 	reformat_AA_list_for_output(AAListTokens, UI, AAList),
-	write_AA_data(AAList, FirstField, OutputStream),
+	write_AA_data(AAList, FirstField, 'AA', OutputStream),
 	flush_output(OutputStream).
 	
 
@@ -682,27 +714,35 @@ get_AA_startpos_and_endpos(AA, AATextLength, StartPos, EndPos) :-
 	FirstAAToken = tok(_,_,_,pos(StartPos,_)),
 	EndPos is StartPos + AATextLength.
 
-write_AA_data([], _FirstField, _OutputStream).
-write_AA_data([FirstAAData|RestAAs], FirstField, OutputStream) :-
+write_AA_data([], _FirstField, _Type, _OutputStream).
+write_AA_data([FirstAAData|RestAAs], FirstField, Type, OutputStream) :-
 	FirstAAData = UI-AATextAtom-ExpansionTextAtom-
 		      AATokenLength-AATextLength-
 		      ExpansionTokenLength-ExpansionTextLength-StartPos,
-	output_fields(FirstField, OutputStream, UI, AATextAtom, ExpansionTextAtom,
+	output_fields(FirstField, Type, OutputStream, UI, AATextAtom, ExpansionTextAtom,
 		      AATokenLength, AATextLength, ExpansionTokenLength, ExpansionTextLength,
 		      StartPos, AATextLength),
-	write_AA_data(RestAAs, FirstField, OutputStream).
+	write_AA_data(RestAAs, FirstField, Type, OutputStream).
 
-output_fields(FirstField, OutputStream, UI, AATextAtom, ExpansionTextAtom,
+output_fields(FirstField, Type, OutputStream, UI, AATextAtom, ExpansionTextAtom,
 	      AATokenLength, AATextLength, ExpansionTokenLength,  ExpansionTextLength,
 	      StartPos, EndPos) :-
-	set_field_order(FirstField, UI, Field1, Field2),
-	format(OutputStream, '~w|~w|~w|~w|~d|~d|~d|~d|~d:~d~n',
+	set_field_order(FirstField, Type, UI, Field1, Field2),
+	update_UDA_pos_info(StartPos, EndPos, PosInfo),
+	format(OutputStream, '~w|~w|~w|~w|~d|~d|~d|~d|~w~n',
 	       [Field1,Field2,AATextAtom,ExpansionTextAtom,AATokenLength,
-		AATextLength, ExpansionTokenLength, ExpansionTextLength,
-		StartPos,EndPos]).
+		AATextLength, ExpansionTokenLength, ExpansionTextLength, PosInfo]).
 
-set_field_order(aa,   UI, 'AA', UI).
-set_field_order(pmid, UI,   UI, 'AA').
+
+% Willie requested that empty posinfo be displayed for UDAs, rather than 0:Length
+update_UDA_pos_info(StartPos, EndPos, PosInfo) :-
+	( StartPos is 0 ->
+	  PosInfo = ''
+	; PosInfo = StartPos:EndPos
+	).
+
+set_field_order(aa,  _Type, UI, 'AA', UI).
+set_field_order(pmid, Type, UI,   UI, Type).
 
 find_aas([], _LastPos, AAsIn, AAsIn).
 find_aas([tok(sn,_,_,Pos)|Rest], LastPos, AAsIn, AAsOut) :-
@@ -1834,7 +1874,8 @@ find_aa(AATokensIn, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut
 
 	\+ deconstructing_known_AA(Scope, PE_Token, AATokensWithParens, AAsIn),
 	\+ proposed_AA_overlaps_prev_scope(AATokensWithParens, AAsIn),
-	check_shared_token(AAsIn, Scope, AAsNext),
+	\+ shared_token(AAsIn, AATokensWithParens, Scope, _SharedToken),
+	AAsNext = AAsIn,
 	test_valid_scope(AATokens, Scope),
 	test_valid_aa_and_expansion(AATokens, Scope),
 	% test on 16249374 16463099
@@ -1890,19 +1931,37 @@ find_aa(_AATokens, _AATokensWithParens, _PE_Token,  _LastPos, _RevPre, AAsIn, AA
 % will delete the already-created shorter AA ("doxorubicin (DXR)"),
 % and allow the longer one to be created.
 
-check_shared_token(AAsIn, Scope, AAsNext) :-
-	( avl_member(ShortForm, AAsIn, [ExpansionTokenList]),
-	  member(SharedToken, Scope),
-	  memberchk(SharedToken, ExpansionTokenList) ->
-	  avl:avl_delete(ShortForm, AAsIn, [ExpansionTokenList], AAsNext)
-	; AAsNext = AAsIn
+% check_shared_token(AAsIn, Scope, AAsNext) :-
+%         ( avl_member(ShortForm, AAsIn, [ExpansionTokenList]),
+%           member(SharedToken, Scope), 
+%           memberchk(SharedToken, ExpansionTokenList) ->
+%           avl:avl_delete(ShortForm, AAsIn, [ExpansionTokenList], AAsNext)
+%         ; AAsNext = AAsIn
+%         ).
+
+shared_token(AAsIn, AATokensWithParens, Scope, _SharedToken) :-
+	( shared_token_1(AAsIn, Scope, _SharedToken) ->
+	  true
+	; shared_token_1(AAsIn, AATokensWithParens, _SharedToken)
 	).
 
-shared_token(AAsIn, Scope) :-
-	avl_member(_ShortForm, AAsIn, [ExpansionTokenList]),
-	member(SharedToken, Scope),
-	memberchk(SharedToken, ExpansionTokenList),
-	!.
+shared_token_1(AAsIn, Scope, ScopeToken) :-	
+	avl_member(ShortForm, AAsIn, [ExpansionTokenList]),
+	member(ScopeToken, Scope),
+ 	( match_token_no_pos_info(ScopeToken, ExpansionTokenList) ->
+	  true
+	; match_token_no_pos_info(ScopeToken, ShortForm)
+	).
+
+match_token_no_pos_info(ScopeToken, AATokenList) :-
+	token_template(ScopeToken, ScopeTokenType, ScopeTokenString,
+		       _ScopeLCTokenString, _ScopePosInfo),
+	member(AAToken, AATokenList),
+	token_template(AAToken, AATokenType, AATokenString,
+		       _AALCTokenString, _AAPosInfo),
+	ScopeTokenType == 'uc',
+	ScopeTokenType == AATokenType,
+	ScopeTokenString == AATokenString.	
 
 block_stop_words(TempRevScope0) :-
 	trim_ws_tokens(TempRevScope0, TempRevScope),	
@@ -2111,14 +2170,14 @@ find_first_an([_|Rest], AN) :-
 % This is a refinement of the original algorithm, which stopped at
 % the first matching token.
 
-% MatchFound encodes whether a token matching the first letter
+% State encodes whether a token matching the first letter
 % of the first token in the AA TokenList has been found.
 
-% MatchFound == 0 means that no matching token has yet been found.
+% State == 0 means that no matching token has yet been found.
 
 match_initial_to_char(State, ConsumedTokenCount, AATokensLength, RevPre, InitialChar,
 		      PreviousMatchingText, RevScope1, RestTokens) :-
-	( ConsumedTokenCount > 2*AATokensLength ->
+	( ConsumedTokenCount > AATokensLength + 1 ->
 	  RevScope1 = [],
 	  RestTokens = RevPre
 	; RevPre == [] ->
@@ -2158,7 +2217,7 @@ match_initial_to_char_1(0, ConsumedTokenCount, AALength, [Token|RestTokens], Ini
 	match_initial_to_char(NextState, NextConsumedTokenCount, AALength, RestTokens, InitialChar,
 			      PreviousMatchingText, RestMatchingTokens, LeftOverTokens).
 
-% MatchFound == 1 means that a token matching InitialChar has already been found.
+% State == 1 means that a token matching InitialChar has already been found.
 % Keep on going, looking for more matching tokens, skipping over skip tokens,
 % as long as we don't consume more tokens than the length of the AA.
 match_initial_to_char_1(1, ConsumedTokenCount, AALength, Tokens, InitialChar,
@@ -2167,10 +2226,11 @@ match_initial_to_char_1(1, ConsumedTokenCount, AALength, Tokens, InitialChar,
 	% was not a stop word; we don't want to allow, e.g., "AMI" to expand to
 	% "and acute myocardial infarction".
 	( Tokens = [Token|RestTokens],
-	  skip_tok(Token, Result),
-	  Result \== 4,
+	  skip_tok(Token, _Result),
+	  % Result \== 4,
 	  % If the token is skippable, don't count it against the length of the AA.
-	  maybe_increase_token_count(Result, ConsumedTokenCount, NextConsumedTokenCount),
+	  % maybe_increase_token_count(Result, ConsumedTokenCount, NextConsumedTokenCount),
+	  NextConsumedTokenCount is ConsumedTokenCount,
 	  MatchingTokens = [Token|RestMatchingTokens],
 	  match_initial_to_char(1, NextConsumedTokenCount, AALength, RestTokens, InitialChar, " ",
 				RestMatchingTokens, LeftOverTokens)
@@ -2194,11 +2254,11 @@ match_initial_to_char_1(1, ConsumedTokenCount, AALength, Tokens, InitialChar,
 	  % format(user_output, 'PMT: ~w~n', [LCText]),
 	  \+ lex_stop_word(LCText),
 	  MatchingTokens = [Token|RestMatchingTokens],
-%	  MatchingTokens = [Token],
+	  MatchingTokens = [Token],
 %	  RestMatchingTokens = [],
 	  % LeftOverTokens = RestTokens,
 	  NextConsumedTokenCount is ConsumedTokenCount + 1,
-	  NextConsumedTokenCount =< AALength,
+% 	  NextConsumedTokenCount =< AALength,
 	  match_initial_to_char(1, NextConsumedTokenCount, AALength, RestTokens, InitialChar,
 				LCText, RestMatchingTokens, LeftOverTokens)
 	; \+ lex_stop_word(PreviousMatchingText),
@@ -2215,11 +2275,11 @@ match_initial_to_char_1(1, ConsumedTokenCount, AALength, Tokens, InitialChar,
 %	).
 
 % Increase the token count if the non-matching token is a stop word
-maybe_increase_token_count(Result, ConsumedTokenCount, NextConsumedTokenCount) :-
-	( Result =:= 4 ->
-	  NextConsumedTokenCount is ConsumedTokenCount
-	; NextConsumedTokenCount is ConsumedTokenCount
-	).
+% maybe_increase_token_count(Result, ConsumedTokenCount, NextConsumedTokenCount) :-
+% 	( Result =:= 4 ->
+% 	  NextConsumedTokenCount is ConsumedTokenCount
+% 	; NextConsumedTokenCount is ConsumedTokenCount
+% 	).
 
 token_matches_char(TokenType, LCText, Char) :-
        ( TokenType \== nu ->
@@ -3019,7 +3079,7 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences,
 	remove_aa_expansion_overlap(AAList1, AAList1, AAList2),
 	list_to_avl(AAList2, AAs),
 	order_aas(AAList2, AAList),
-	resolve_AA_conflicts(AAList, UDAListIn, UDAListOut),
+	resolve_AA_conflicts(AAList, UDAListIn, UDAListNext),
 	% format(user_output, '~nAAs:~p~n', [AAs]),
 	% FakeAAs = node([tok(uc,"ha","ha",pos(16,18))],[[tok(lc,"heart","heart",pos(16,18)),tok(ws," "," ",pos(16,18)),tok(lc,"attack","attack",pos(16,18))]],0,empty,empty),
 	% annotate_with_aas(FakeAAs, Sentences0, Sentences1),
@@ -3027,7 +3087,9 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences,
 	empty_avl(UDA_AVL0),
 	% UDA_AVL contains those UDAs that were actually found in the text
 	% annotate_with_UDAs(Sentences1, UDA_AVL0, UDAListOut, UDA_AVL, Sentences2),
-	annotate_with_UDAs(UDAListOut, Sentences1, UDA_AVL0, UDA_AVL, Sentences2),
+	UDAListUsed = [],
+	annotate_with_UDAs(UDAListNext, Sentences1, UDA_AVL0, UDA_AVL,
+			   UDAListUsed, UDAListOut, Sentences2),
 	% format(user_output, '~nSentences1:~n', []),
 	add_sentence_labels(Sentences2, UI, "TX", 0, Sentences),
 	% format(user_output, '~nSentences:~n', []),
@@ -3391,22 +3453,26 @@ deaugment_aas([], []).
 deaugment_aas([_AAText-AA-Def|Rest], [AA-Def|DeaugmentedRest]) :-
 	deaugment_aas(Rest, DeaugmentedRest).
 
-annotate_with_UDAs([], Sentences, UDA_AVL, UDA_AVL, Sentences).
-annotate_with_UDAs([H|T], Sentences1, UDA_AVL0, UDA_AVL, Sentences2) :-
+annotate_with_UDAs([], Sentences, UDA_AVL, UDA_AVL, UDAsUsed, UDAsUsed, Sentences).
+annotate_with_UDAs([H|T], Sentences1, UDA_AVL0, UDA_AVL, UDAsUsedIn, UDAsUsedOut, Sentences2) :-
 	UDAList = [H|T],
-	annotate_with_UDAs_1(Sentences1, UDA_AVL0, UDAList, UDA_AVL, Sentences2).
+	annotate_with_UDAs_1(Sentences1, UDA_AVL0, UDAList, UDA_AVL,
+			     UDAsUsedIn, UDAsUsedOut, Sentences2).
 
-annotate_with_UDAs_1([], AVL, _UDAs, AVL, []).
-annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedTokens) :-
+annotate_with_UDAs_1([], AVL, _UDAs, AVL, UDAsUsed, UDAsUsed, []).
+annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut,
+		     UDAsUsedIn, UDAsUsedOut, AnnotatedTokens) :-
 	% Don't try to expand UDAs from non-alphanumeric tokens
 	( \+ an_tok(FirstToken)	->
 	  AVLNext = AVLIn,
-	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens]
+	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens],
+	  UDAsUsedNext = UDAsUsedIn
 	% The first token is alphanumeric, so get its String
 	; FirstToken = tok(_TokenType,String,_LCString,pos(StartPos,EndPos)),
 	  % Is String one of the UDAs?
 	  member(String:ThisExpansion, UDAs) ->
-	  % String = ThisUDA ->
+	  UDAsUsedNext = [String:ThisExpansion:StartPos:EndPos|UDAsUsedIn],
+	  % UDAShortForm = ThisUDA ->
 	  lower(ThisExpansion, LCThisExpansion),
 	  tokenize_text_utterly(ThisExpansion, TokenizedThisExpansion),
 	  tokenize_text_utterly(LCThisExpansion, LCTokenizedThisExpansion),
@@ -3416,9 +3482,11 @@ annotate_with_UDAs_1([FirstToken|RestTokens], AVLIn, UDAs, AVLOut, AnnotatedToke
 	  store_aa([FirstToken], LastUnwantedToken, ExpansionTokens, AVLIn, AVLNext),
 	  append(ExpansionTokens, RestAnnotatedTokens, AnnotatedTokens)
 	; AVLNext = AVLIn,
-	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens]
+	  AnnotatedTokens = [FirstToken|RestAnnotatedTokens],
+	  UDAsUsedNext = UDAsUsedIn
 	),
-	annotate_with_UDAs_1(RestTokens, AVLNext, UDAs, AVLOut, RestAnnotatedTokens).
+	annotate_with_UDAs_1(RestTokens, AVLNext, UDAs, AVLOut,
+			     UDAsUsedNext, UDAsUsedOut, RestAnnotatedTokens).
 
 
 /* annotate_with_aas(+AAs, +SentencesIn, +AAList, -SentencesOut)
@@ -3561,7 +3629,8 @@ get_UDAs(UDAs) :-
 create_UDAs(InputStream, Type, UDAs) :-
 	% read in the contents of the UDA file
 	get_skr_text_2(InputStream, UDALines),
-	(  foreach(Line, UDALines),
+	sort(UDALines, SortedUDALines),
+	(  foreach(Line, SortedUDALines),
 	   fromto(Strings, S0, S, [])
 	   % remove all leading and trailing blanks from the entire line
 	do trim_whitespace(Line, TrimmedLine),
@@ -3612,36 +3681,39 @@ get_UDA_short_and_long_forms(String, AACodes, ExpansionCodes) :-
 	% The UDA and the expansion can appear in either order,
 	% i.e., UDA|Expansion or Expansion|UDA;
 	% take the shorter one to be the UDA, and the longer to be the expansion
-	( split_string_completely(String, "|", [Before,After]) ->
+	trim_whitespace(String, TrimmedString),
+	( TrimmedString = "|" ->
+	  Before = [],
+	  After = []
+	; split_string_completely(TrimmedString, "|", [Before,After]) ->
 	  true
 	; fatal_error('Each data line in UDA file must contain exactly one "|" char!~n', []),
 	  stop_and_halt
 	),
 	trim_and_compress_whitespace(Before, TrimmedBefore),
 	trim_and_compress_whitespace(After, TrimmedAfter),
-	determine_AA_and_expansion(TrimmedBefore, TrimmedAfter, AACodes, ExpansionCodes).
+	determine_UDA_and_expansion(TrimmedBefore, TrimmedAfter, AACodes, ExpansionCodes).
 
 % Use the same code to create NoMap pairs as for creating UDAs!
 create_nomap_pairs(InputStream, StringNoMapPairs) :-
 	create_UDAs(InputStream, 'NoMap', StringNoMapPairs).
 
 % The shorter string is deemed to be the AA, and the longer, the expansion,
-% unless either is zero length (this is for NoMap pairs), in which case
-% keep them in the existing order.
-determine_AA_and_expansion(String1, String2, Shorter, Longer) :-
-	length(String1, Length1),
-	length(String2, Length2),
-	( Length1 =:= 0 ->
-	  Shorter = String1,
-	  Longer  = String2
-	; Length2 =:= 0 ->
-	  Shorter = String1,
-	  Longer  = String2
-	; Length1 < Length2 ->
-	  Shorter = String1,
-	  Longer  = String2
-	; Shorter = String2,
-	  Longer  = String1
+% unless either is zero length, in which case declare an error.
+
+determine_UDA_and_expansion(BeforeString, AfterString, Shorter, Longer) :-
+	( BeforeString == [] ->
+	  fatal_error('UDA file cannot contain empty UDA or Expansion!~n', [])
+	; AfterString == [] ->
+	  fatal_error('UDA file cannot contain empty UDA or Expansion!~n', [])
+	; length(BeforeString, BeforeLength),
+	  length(AfterString, AfterLength),
+	  ( BeforeLength < AfterLength ->
+	    Shorter = BeforeString,
+	    Longer  = AfterString
+	  ; Shorter = AfterString,
+	    Longer  = BeforeString
+	  )
 	).
 
 % We need to remove from the UDA any UDA that is

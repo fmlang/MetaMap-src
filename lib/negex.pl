@@ -45,6 +45,10 @@
         tokenize_text_utterly/2
    ]).
 
+:- use_module(metamap(metamap_utilities),[
+	positions_overlap/2
+   ]).
+
 :- use_module(skr(skr_utilities), [
 	fatal_error/2,
 	get_candidate_feature/3,
@@ -273,12 +277,25 @@ generate_negation_terms_2([H|T], UsefulTokenList,
 	keep_triggers_with_seqs(TriggerList0, TriggerSeqList, Triggers),
 	list_concepts_and_tokens(PhraseMaps, UsefulTokenList, ConceptTokensPhraseMaps),
 	list_concepts_for_triggers(Triggers, ConceptTokensPhraseMaps, NegationTerms0),
-	remove_negation_terms_after_conjs(NegationTerms0, NegationTerms1),
-	cull_negterms_eliminated_by_conj_and(UsefulTokenList, NegationTerms1, NegationTerms2),
-	remove_spurious_negterms(NegationTerms2,
+	block_negated_terms_overlapping_triggers(NegationTerms0, NegationTerms1), 
+	remove_negation_terms_after_conjs(NegationTerms1, NegationTerms2),
+	cull_negterms_eliminated_by_conj_and(UsefulTokenList, NegationTerms2, NegationTerms3),
+	remove_spurious_negterms(NegationTerms3,
 				 UtteranceMaxDist, ConceptMaxDist,
 				 UsefulTokenList, NegationTerms),
 	consolidate_negation_terms(NegationTerms, ConsolidatedNegationTerms).
+
+block_negated_terms_overlapping_triggers([], []).
+block_negated_terms_overlapping_triggers([H|T], Rest) :-
+	orig_negation_template(H, _Type, _TriggerText, TriggerPosInfo,
+			       _ConceptName, _CUI, ConceptPosInfo),
+	( member(TriggerStartPos/TriggerLength, TriggerPosInfo),
+	  member(ConceptStartPos/ConceptLength, ConceptPosInfo),
+	  positions_overlap([TriggerStartPos,TriggerLength], [ConceptStartPos,ConceptLength]) ->
+	  Rest = NextRest
+	; Rest = [H|NextRest]
+	),
+	block_negated_terms_overlapping_triggers(T, NextRest).
 
 remove_nonuseful_tokens([], []).
 remove_nonuseful_tokens([H|T], TokenListOut) :-

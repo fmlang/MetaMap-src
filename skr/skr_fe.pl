@@ -50,7 +50,7 @@
 	% called by MetaMap API -- do not change signature!
 	postprocess_sentences/11,
 	% called by MetaMap API -- do not change signature!
-	process_text/9
+	process_text/10
    ]).
 
 % :- extern(skr_fe_go).
@@ -64,6 +64,7 @@
 % they must still be defined, even as stubs, so as not to get a warning message.
 
 :- use_module(skr_db(db_access), [
+	all_digits/1,
 	default_release/1
    ]).
 
@@ -77,7 +78,7 @@
    ]).
 
 :- use_module(mmi(mmi), [
-        do_MMI_processing/4
+        do_MMI_processing/5
    ]).
 
 :- use_module(skr(skr), [
@@ -94,7 +95,7 @@
    ]).
 
 :- use_module(skr(skr_text_processing), [
-	extract_sentences/12,
+	extract_sentences/13,
 	get_skr_text/2,
 	medline_field_separator_char/1
    ]).
@@ -106,9 +107,9 @@
 	do_formal_tagger_output/0,
 	do_sanity_checking_and_housekeeping/4,
 	generate_bracketed_output/2,
-	generate_candidates_output/7,
+	generate_candidates_output/8,
 	% generate_header_output/6,
-	generate_mappings_output/5,
+	generate_mappings_output/6,
 	generate_phrase_output/7,
 	generate_utterance_output/6,
 	generate_variants_output/2,
@@ -366,7 +367,7 @@ process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
 	process_all_1(OutputStream, UDAList, NoMapPairs,
 		      TagOption, ServerStreams, InterpretedArgs, IOptions).
 
-process_all_1(OutputStream, UDAList, NoMapPairs, TagOption,
+process_all_1(OutputStream, UDAListIn, NoMapPairs, TagOption,
 	      ServerStreams, InterpretedArgs, IOptions) :-
 	get_skr_text(Strings, TextID),
 	% append(TempExtraChars, ExtraChars),
@@ -375,11 +376,11 @@ process_all_1(OutputStream, UDAList, NoMapPairs, TagOption,
 	% Removed call for Steven Bedrick
 	( Strings \== [] ->
 	  process_text(Strings, TextID, TagOption, ServerStreams,
-		       ExpRawTokenList, AAs, UDAList, NoMapPairs, MMResults),
+		       ExpRawTokenList, AAs, UDAListIn, UDAListOut, NoMapPairs, MMResults),
 	  output_should_be_bracketed(BracketedOutput),
  	  postprocess_text(OutputStream, Strings, BracketedOutput, InterpretedArgs,
-			   IOptions, ExpRawTokenList, AAs, MMResults),
-	  process_all_1(OutputStream, UDAList, NoMapPairs,
+			   IOptions, ExpRawTokenList, AAs, UDAListOut, MMResults),
+	  process_all_1(OutputStream, UDAListIn, NoMapPairs,
 			TagOption, ServerStreams, InterpretedArgs, IOptions)
 	; true
 	),
@@ -451,17 +452,17 @@ in Sentences in case the original text is preferred. */
 % 	 aphrases(APhrases))
 
 %%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
-process_text(Text, TextID, TagOption, ServerStreams,
-	     RawTokenList, AAs, UDAList, NoMapPairs, MMResults) :-
+process_text(Text, TextID, TagOption, ServerStreams, RawTokenList, AAs,
+	     UDAListIn, UDAListOut, NoMapPairs, MMResults) :-
 	halt_if_non_ASCII(Text),
 	( process_text_1(Text, TextID, TagOption, ServerStreams,
-			 RawTokenList, AAs, UDAList, NoMapPairs, MMResults) ->
+			 RawTokenList, AAs, UDAListIn, UDAListOut, NoMapPairs, MMResults) ->
 	  true
  	; fatal_error('process_text/4 failed for ~p~n', [Text])
 	).
 
 process_text_1(Lines0, TextID, TagOption, ServerStreams,
-	       ExpRawTokenList, AdjustedAAs, UDAListIn, NoMapPairs, MMResults) :-
+	       ExpRawTokenList, AdjustedAAs, UDAListIn, UDAListOut, NoMapPairs, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
@@ -470,7 +471,7 @@ process_text_1(Lines0, TextID, TagOption, ServerStreams,
 	% format(user_output, 'Processing PMID ~w~n', [PMID]),
 	extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
 			  Sentences, CoordSentences,
-			  UniqueID, AAs, UDAListIn, UDA_AVL, Lines),
+			  UniqueID, AAs, UDAListIn, UDAListOut, UDA_AVL, Lines),
 	% need to update Lines
 	% fail,
 	% RawTokenList is the copy of Sentences that includes an extra pos(_,_) term
@@ -513,7 +514,7 @@ process_text_1(Lines0, TextID, TagOption, ServerStreams,
 	% 	 CoordSentencesLength,ExpRawTokenListLength]),
 
 	write_raw_token_lists(ExpRawTokenList, UnExpRawTokenList),
-	form_original_utterances(Sentences, 1, 0, 0, CitationTextAtomWithCRs,
+	form_original_utterances(Sentences, 1, 0, 0, OrigCitationTextAtomWithBlanks,
 				 UnExpRawTokenList, OrigUtterances),
 	% format(user_output, '~n~n### ~w OrigUtterances:~n', [PMID]),
 	% write_utterances(OrigUtterances),
@@ -567,7 +568,7 @@ do_process_text([ExpandedUtterance|Rest],
 		 OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL, NoMapPairs,
 		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
 		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
-		 [mm_output(ExpandedUtterance,CitationTextAtom,ModifiedText,Tagging,AAs,
+		 [mm_output(ExpandedUtterance,OrigCitationTextAtom,ModifiedText,Tagging,AAs,
 			    Syntax,DisambiguatedMMOPhrases,ExtractedPhrases)|RestMMOutput]) :-
 	maybe_atom_gc(2, _DidGC,_SpaceCollected),
 	% Construct output terms
@@ -598,7 +599,7 @@ do_process_text([ExpandedUtterance|Rest],
 			ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
 
 postprocess_text(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
-		 IOptions,  ExpRawTokenList, AAs, MMResults) :-
+		 IOptions,  ExpRawTokenList, AAs, UDAList, MMResults) :-
 	% If the phrases_only debug option is set, don't do postprocessing,
 	% because we've already computed and displayed the phrase lengths,
 	% and that's all we care about if this option is on.
@@ -606,13 +607,13 @@ postprocess_text(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 	  ; control_option(phrases_only) ) ->
 	  true
 	; postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
-			     IOptions,  ExpRawTokenList, AAs, MMResults) ->
+			     IOptions,  ExpRawTokenList, AAs, UDAList, MMResults) ->
 	  true
 	; fatal_error('postprocess_text/2 failed for~n~p~n', [Lines0])
 	).
 
 postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
-		   IOptions, ExpRawTokenList, AAs, MMResults) :-
+		   IOptions, ExpRawTokenList, AAs, UDAList, MMResults) :-
 	% Decompose input
 	MMResults = mm_results(Lines0, _TagOption, _ModifiedLines, _InputType,
 			       Sentences, _CoordSentences, OrigUtterances, DisambMMOutput),
@@ -627,7 +628,7 @@ postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 			      BracketedOutput, DisambMMOutput, PrintMMO, AllMMO),
 	% All the XML output for the current citation is handled here
 	generate_and_print_xml(AllMMO, OutputStream),
-	do_MMI_processing(OrigUtterances, BracketedOutput, AAs, DisambMMOutput),
+	do_MMI_processing(OrigUtterances, BracketedOutput, AAs, UDAList, DisambMMOutput),
 	do_formal_tagger_output.
 
 % DO NOT MODIFY post_process_sentences/11 without checking with the maintainer of the MetaMap API.
@@ -676,7 +677,7 @@ postprocess_phrases([], [], _NegExList, _BracketedOutput,
 		    _N, _M, _AAs, _Label, MMO, MMO).
 postprocess_phrases([MMOPhrase|RestMMOPhrases],
 		    [_ExtractedPhrase|RestExtractedPhrases], NegExList,
-		    BracketedOutput, N, M, AAs, Label, MMOIn, MMOOut) :-
+		    BracketedOutput, N, M, AAs, UtteranceLabel, MMOIn, MMOOut) :-
 	MMOPhrase = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
 			   candidates(TotalCandidateCount,
 				      ExcludedCandidateCount,
@@ -698,18 +699,18 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 			       BracketedOutput, PhraseMMO),
 	generate_bracketed_output(BracketedOutput, PhraseWordInfo),
 	generate_variants_output(GVCs, BracketedOutput),
-	generate_candidates_output(Evaluations3, TotalCandidateCount,
+	generate_candidates_output(Evaluations3, TotalCandidateCount, UtteranceLabel,
 				   ExcludedCandidateCount, PrunedCandidateCount,
 				   RemainingCandidateCount,
 				   BracketedOutput, CandidatesMMO),
-	generate_mappings_output(Mappings, Evaluations, APhrases,
+	generate_mappings_output(Mappings, Evaluations, UtteranceLabel, APhrases,
 				 BracketedOutput, MappingsMMO),
 	% format('PhraseTextAtom:~n~p~n',[PhraseTextAtom]),
 	% CHANGE
 	MMOIn = [PhraseMMO,CandidatesMMO,MappingsMMO|MMONext],
 	NextM is M + 1,
 	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases, NegExList,
-			    BracketedOutput, N, NextM, AAs, Label, MMONext, MMOOut).
+			    BracketedOutput, N, NextM, AAs, UtteranceLabel, MMONext, MMOOut).
 
 
 % If show_candidates is on, the candidate terms will be present in the big MMOPhrase term, and
@@ -967,6 +968,7 @@ form_expanded_utterances_aux([Token|Rest], OrigUtterances,
         form_expanded_utterances_aux(Rest, OrigUtterances,
 				     Label, [TokenText|RevTexts], ExpandedSentences).
 
+% If output stream is to STDOUT, do nothing; otherwise send message to STDERR.
 conditionally_announce_processing(InputLabel, Text0) :-
 	telling(CurrentOutput),
 	( CurrentOutput == user ->
@@ -1011,7 +1013,8 @@ get_nomap_pairs(AtomNoMapPairs) :-
 	  check_valid_file_type(FileName, 'NoMap Strings'),
 	  open(FileName, read, InputStream),
 	  % Use the same code to create NoMap pairs as for creating UDAs!
-	  create_nomap_pairs(InputStream, StringNoMapPairs),
+	  create_nomap_pairs(InputStream, StringNoMapPairs0),
+	  reorder_nomap_pairs(StringNoMapPairs0, StringNoMapPairs),
 	  ( foreach(StringPair, StringNoMapPairs),
 	    foreach(AtomPair,   AtomNoMapPairs)
 	  do StringPair = StringString:CUIString,
@@ -1024,6 +1027,27 @@ get_nomap_pairs(AtomNoMapPairs) :-
 	  close(InputStream)
 	; AtomNoMapPairs = []
 	).
+
+reorder_nomap_pairs([], []).
+reorder_nomap_pairs([FirstPairIn|RestPairsIn], [FirstPairOut|RestPairsOut]) :-
+	reorder_one_nomap_pair(FirstPairIn, FirstPairOut),
+	reorder_nomap_pairs(RestPairsIn, RestPairsOut).
+
+% NoMapPairs should be of the form CUI:String
+reorder_one_nomap_pair(A:B, FirstPairOut) :-
+	( A \== [],
+	  B \== [] ->
+	  FirstPairOut = A:B
+	% if NoMapFile contains a row like "|Bed", the pair will be "[]:"Bed"
+	; A == [],
+	  \+ looks_like_CUI(B) ->
+	  FirstPairOut = B:A
+	; FirstPairOut = A:B
+	).
+
+looks_like_CUI(String) :-
+	String = [0'C|RestCodes],
+	all_digits(RestCodes).
 
 create_string_atom_or_var(String, AtomOrVar) :-
 	( String == "" ->

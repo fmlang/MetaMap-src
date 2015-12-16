@@ -67,6 +67,7 @@
 	ic_tok/1,
 	lbracket/1,
 	lbracket_tok/1,
+	label_tok/1,
 	lc_tok/1,
 	multi_brackets/2,
 	ne_lbracket_tok/1,
@@ -161,6 +162,10 @@ aa_tok(tok(aa,_,_,_)).
 aadef_tok(tok(aadef,_,_,_)).
 
 lc_tok(tok(lc,_,_,_)).
+
+label_tok(tok(label,_,_,_)).
+label_tok(tok(label,_,_,_,_)).
+
 
 ic_tok(tok(ic,_,_,_)).
 

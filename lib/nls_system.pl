@@ -146,7 +146,7 @@ is_control_option(metamap, 'L', lexicon_year, 	 		no,
                        'Lexicon year')).
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
-is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
+% is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
 is_control_option(metamap, 'Q', composite_phrases, 		yes,
                   aspec(composite_phrases, mandatory, integer, yes, 4,
                         'Max number of prepositional phrases to glom on')).	% MetaMap default
@@ -193,7 +193,7 @@ is_control_option(metamap,   p, hide_plain_syntax,	        no, none).
 is_control_option(metamap,   r, threshold, no,
                   aspec(threshold, mandatory, integer, none, no_default,
                         'Threshold for displaying candidates')).
-is_control_option(metamap,   s, hide_semantic_types,	 	no, none).
+is_control_option(metamap,   s, short_semantic_types,	 	no, none).
 is_control_option(metamap,   t, no_tagging,		        no, none).
 is_control_option(metamap,   u, unique_acros_abbrs_only, 	no, none).
 is_control_option(metamap,   v, variants, 			no, none).
@@ -275,6 +275,7 @@ is_control_option(metamap,  '', prompt, no,
 
 % show lexical definitions
 is_control_option(metamap,  '', 'show_lex',		 	no, none).
+is_control_option(metamap,  '', 'pipe_output',		 	no, none).
 % recompile negex_triggers.pl
 is_control_option(metamap,  '', 'negex_trigger_file', no,
 		  aspec(negex_trigger_file, mandatory, file, read, no_default,
@@ -283,6 +284,7 @@ is_control_option(metamap,  '', 'nomap', no,
 		  aspec(nomap, mandatory, file, read, no_default,
 			'File containing String/CUI pairs to exclude.')).
 is_control_option(metamap,  '', 'utterances_only',	 	no, none).
+is_control_option(metamap,  '', 'cascade',	 		no, none).
 
 
 
@@ -381,7 +383,7 @@ is_control_option(mm_print, m,mappings,yes,none).
 % is_control_option(mm_print, o,organize_semantic_types,no,none).
 % is_control_option(mm_print, 'F',first_mappings_only,no,none).
 is_control_option(mm_print, 'I',show_cuis,no,none).
-is_control_option(mm_print, 'O',show_preferred_names_only,no,none).
+% is_control_option(mm_print, 'O',show_preferred_names_only,no,none).
 % is_control_option(mm_print, l,not_in_lex_dump,no,none).
 % is_control_option(mm_print, d,label_text_field_dump,no,none).
 % is_control_option(mm_print, a,syntax_dump,no,none).

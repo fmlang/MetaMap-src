@@ -80,10 +80,12 @@ LINK_FLAGS = -- -L${BERKELEY_LIB} -ldb
 SPLFR_BASIC_FLAGS =  --vv --keep
 SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable --conf SPLFR_SHLDFLAGS=${LDFLAGS}
 SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
-SPLFR = splfr --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}
+DO_SPLFR = ${SPLFR} --conf CC=${CC} --cflag=-I${SKR_BERKELEY_DB} ${addprefix --cflag=, ${CFLAGS}}
 
 # all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
-all:		BDB splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
+# all:		BDB splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
+## FML 09/30/2015
+all:		BDB splfr_STATIC splfr_DYNAMIC ${C_NLS_DB_STATIC_LIB} ${C_NLS_DB_DYNAMIC_LIB}
 		mv db_access.so ..
 
 # all:
@@ -109,10 +111,10 @@ c_nls_db.o:	c_nls_db.c ${BTREE_QLIB} ${SKR_BERKELEY_DB}/embed.h
 		${CC} ${WARNINGS} ${CFLAGS} c_nls_db.c -I${SKR_BERKELEY_DB} -I${SPINCDIR}
 
 splfr_STATIC:	${BTREE_QLIB_A}
-		${SPLFR} ${SPLFR_STATIC_FLAGS} db_access.pl c_nls_db.c ${DBLIBS} ${LINK_FLAGS}
+		${DO_SPLFR} ${SPLFR_STATIC_FLAGS} db_access.pl c_nls_db.c ${DBLIBS} ${LINK_FLAGS}
 
 splfr_DYNAMIC:	${BTREE_QLIB_O}
-		${SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}
+		${DO_SPLFR} ${SPLFR_DYNAMIC_FLAGS} db_access.pl c_nls_db.c ${BTREE_QLIB_O} ${LINK_FLAGS}
 
 clean:
 		-${RM} *.o *.a *.so *glue*; cd berkeley_db ; make -f Makefile.berkeley_db clean

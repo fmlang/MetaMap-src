@@ -51,9 +51,9 @@
 	fatal_error/2,
 	generate_AAs_MMO_term/2,
 	generate_bracketed_output/2,
-	generate_candidates_output/7,
+	generate_candidates_output/8,
 	% generate_header_output/6,
-	generate_mappings_output/5,
+	generate_mappings_output/6,
 	generate_MMO_terms/9,
 	generate_phrase_output/7,
 	generate_utterance_output/6,
@@ -94,9 +94,9 @@
 
 :- use_module(metamap(metamap_utilities), [
 	candidate_term/16,
-	dump_aphrase_mappings/2,
+	dump_aphrase_mappings/3,
 	% dump_evaluations_indented/6,
-	num_dump_evaluations_indented/7,
+	num_dump_evaluations_indented/8,
 	write_list_indented/1
     ]).
 
@@ -382,7 +382,8 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_blanklines_setting(BlankLinesSetting),
 	verify_number_the_candidates_setting(NumberTheCandidatesSetting),
 	verify_number_the_mappings_setting(NumberTheMappingsSetting),
-	verify_hide_mappings_setting(HideMappingsSetting),
+	verify_hide_mappings_setting_1(HideMappingsSetting1),
+	verify_hide_mappings_setting_2(HideMappingsSetting2),
 	verify_all_results([ModelSettings, TaggerOutputSettings, SingleOutputFormat,
 			    XMLSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
@@ -391,7 +392,8 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 			    TaggerServerSettings, WSDServerSettings,
 			    PruningSettings, SLDISettings, NegExTriggerSetting, NegExSettings,
 			    LexiconSetting, CompositePhrasesSetting, BlankLinesSetting,
-			    NumberTheCandidatesSetting, NumberTheMappingsSetting, HideMappingsSetting],
+			    NumberTheCandidatesSetting, NumberTheMappingsSetting,
+			    HideMappingsSetting1,HideMappingsSetting2],
 			   InputStream, OutputStream),
 	display_current_control_options(ProgramName, DefaultRelease).
 
@@ -428,7 +430,7 @@ verify_xml_settings(Result) :-
 	!,
 	warning_check([syntax, show_cuis, sources, dump_aas], XMLFormat),
 	fatal_error_check([hide_plain_syntax, number_the_candidates,
-			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
+			   short_semantic_types, hide_mappings, show_preferrred_names_only],
 			  XMLFormat, 0, Result).
 verify_xml_settings(0).
 
@@ -437,7 +439,7 @@ verify_MMO_settings(Result) :-
 	!,
 	warning_check([syntax, show_cuis, sources, dump_aas], machine_output),
 	fatal_error_check([hide_plain_syntax, number_the_candidates,
-			   hide_semantic_types, hide_mappings, show_preferrred_names_only],
+ 			   short_semantic_types, hide_mappings, show_preferrred_names_only],
 			  machine_output, 0, Result).
 verify_MMO_settings(0).
 
@@ -446,7 +448,7 @@ verify_mmi_settings(Result) :-
 	!,
 	warning_check([show_cuis,show_candidates,hide_mappings,negex,syntax], fielded_mmi_output),
 	fatal_error_check([tagger_output, hide_plain_syntax,
-			   number_the_candidates, hide_semantic_types,
+			   number_the_candidates, short_semantic_types,
 			   show_preferrred_names_only, sources],
 			  fielded_mmi_output, 0, Result).
 verify_mmi_settings(0).
@@ -716,14 +718,21 @@ verify_number_the_mappings_setting(NumberTheMappingsSetting) :-
 	;  NumberTheMappingsSetting is 0
 	).
 
-verify_hide_mappings_setting(HideMappingsSetting) :-
+verify_hide_mappings_setting_1(HideMappingsSetting1) :-
 	( \+ control_option(show_candidates),
 	  control_option(hide_mappings) ->
-	   send_message('~n### MetaMap ERROR: --hide_mappings cannot be used without --show_candidates!~n', []),
-	   HideMappingsSetting is 1
-	;  HideMappingsSetting is 0
+	  send_message('~n### MetaMap ERROR: --hide_mappings cannot be used without --show_candidates!~n', []),
+	   HideMappingsSetting1 is 1
+	;  HideMappingsSetting1 is 0
 	).
 
+verify_hide_mappings_setting_2(HideMappingsSetting2) :-
+	( control_option(hide_mappings),
+	  control_option(compute_all_mappings) ->
+	  send_message('~n### MetaMap ERROR: --hide_mappings cannot be used with --compute_all_mappings!~n', []),
+	   HideMappingsSetting2 is 1
+	;  HideMappingsSetting2 is 0
+	).
 
 verify_all_results(ValuesList, InputStream, OutputStream) :-
 	compute_sum(ValuesList, 0, Result),
@@ -891,10 +900,7 @@ do_formal_tagger_output :-
 generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length,
 		       ReplacementPos, BracketedOutput, PhraseMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
-        ( ( control_option(machine_output)
-	  ; xml_output_format(_XMLFormat)
-	  ; control_option(fielded_mmi_output)
-	  ) ->
+        ( check_generate_utterance_output_control_options_1 ->
 	  % Genrerate the MMO for the Phrase term
 	  % which is needed for both MMO and XML output!
 	  PhraseMMO = phrase(PhraseTextAtom,Phrase,StartPos/Length,ReplacementPos)
@@ -965,7 +971,7 @@ compute_varnum_length(AllGVCs, NumDigits) :-
 
 
 
-generate_candidates_output(Evaluations3, TotalCandidateCount,
+generate_candidates_output(Evaluations3, TotalCandidateCount, UtteranceLabel,
 			   ExcludedCandidateCount, PrunedCandidateCount,
 			   RemainingCandidateCount,
 			   BracketedOutput, CandidatesMMO) :-
@@ -980,7 +986,7 @@ generate_candidates_output(Evaluations3, TotalCandidateCount,
 	  % Even if show_candidates is on, if there are no candidates, there's no output.
 	  Evaluations3 \== [] ->
 	  conditionally_skr_begin_write(BracketedOutput, 'Candidates'),
-	  conditionally_dump_evals(Evaluations3, TotalCandidateCount,
+	  conditionally_dump_evals(Evaluations3, TotalCandidateCount, UtteranceLabel,
 				   ExcludedCandidateCount, PrunedCandidateCount,
 				   RemainingCandidateCount),
 	  conditionally_skr_end_write(BracketedOutput, 'Candidates')
@@ -1008,14 +1014,14 @@ conditionally_skr_end_write(BracketedOutput, Message) :-
 	; true
 	).
 
-conditionally_dump_evals(Evaluations3, TotalCandidateCount,
+conditionally_dump_evals(Evaluations3, TotalCandidateCount, UtteranceLabel,
 			 ExcludedCandidateCount, PrunedCandidateCount,
 			 RemainingCandidateCount) :-
 	( control_option(number_the_candidates) ->
 	  StartNum is 1
 	; StartNum is 0
 	),
-	num_dump_evaluations_indented(Evaluations3, TotalCandidateCount,
+	num_dump_evaluations_indented(Evaluations3, TotalCandidateCount, UtteranceLabel,
 				      ExcludedCandidateCount, PrunedCandidateCount,
 				      RemainingCandidateCount, StartNum, 'Candidates').
 %	; dump_evaluations_indented(Evaluations3, TotalCandidateCount,
@@ -1023,7 +1029,8 @@ conditionally_dump_evals(Evaluations3, TotalCandidateCount,
 %				    RemainingCandidateCount, 'Candidates')
 %	).
 
-generate_mappings_output(Mappings, _Evaluations, APhrases, BracketedOutput, MappingsMMO) :-
+generate_mappings_output(Mappings, _Evaluations, UtteranceLabel,
+			 APhrases, BracketedOutput, MappingsMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
 	( ( control_option(machine_output)
 	  ; xml_output_format(_XMLFormat)
@@ -1038,7 +1045,7 @@ generate_mappings_output(Mappings, _Evaluations, APhrases, BracketedOutput, Mapp
 	      skr_begin_write('Mappings')
 	    ; true
 	    ),
-	    dump_aphrase_mappings(APhrases,'Mapping'),
+	    dump_aphrase_mappings(APhrases, UtteranceLabel, 'Mapping'),
 	    ( BracketedOutput == 1 ->
 	      skr_end_write('Mappings')
 	    ; true

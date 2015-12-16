@@ -39,13 +39,19 @@
 	establish_signal_handling/0
    ]).
 
+:- use_module(library(system), [
+	environ/2
+   ]).
 
 foreign_resource(nls_signal, ['C_establish_signal_handling']).
 
 foreign('C_establish_signal_handling', c,
         'C_establish_signal_handling'([-integer])).
 
-:- load_foreign_resource('../nls_signal').
+% :- load_foreign_resource('../nls_signal').
+:- environ('DYNAMIC_LIB_DIR',DynamicLibDir),
+   atom_concat(DynamicLibDir,'/nls_signal',NlsSignalSo),
+   load_foreign_resource(NlsSignalSo).
 
 % :- abolish(foreign_resource/2, [force(true)]).
 

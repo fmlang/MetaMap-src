@@ -34,10 +34,6 @@
 	extract_SemRep_phrases_1/3
     ]).
 
-:- use_module(metamap(metamap_tokenization), [
-        get_utterance_token_list/4
-   ]).
-
 :- use_module(skr(skr_utilities), [
 	fatal_error/2,
         get_candidate_feature/3
@@ -66,13 +62,6 @@
 	get_phrase_tokens/4
    ]).
 
-:- use_module(skr(skr_utilities), [
-	debug_message/3,
-	ensure_number/2,
-	fatal_error/2,
-	generate_AAs_MMO_term/2
-   ]).
-
 :- use_module(skr_lib(nls_strings), [
 	atom_codes_list/2,
 	split_string_completely/3,
@@ -83,9 +72,22 @@
 	ttyflush/0
    ]).
 
+:- use_module(skr(skr_utilities), [
+	debug_message/3,
+	ensure_number/2,
+	fatal_error/2,
+	generate_AAs_MMO_term/2,
+	token_template/6
+
+   ]).
+
 :- use_module(skr_lib(xml), [
 	xml_parse/3
    ]).
+
+:- use_module(text(text_object_util),[
+	field_or_label_type/1
+    ]).
 
 :- use_module(wsd(mmoxml), [
 	mmo_terms_to_xml_chars/3
@@ -1039,6 +1041,92 @@ get_codes_WSD(Stream, Input) :-
 	  get_codes_WSD(Stream, RestCodes)
 	).
 
+/* 
+Pass in    [FirstToken|RestTokensIn]
+the list of all tokens for all current input text.
+Return in  [FirstToken|RestTokensThisUtterance]
+the list of tokens corresponding to the current utterance.
+Return in TokenListOut
+the list of tokens corresponding to the remaining utterances.
+
+How does this work?
+The first token for each utterance is of the form
+tok(sn,[],0,pos(_,_)),
+so the entire token list will look like this:
+
+tok(sn,[],0,pos(Utt1StartPos,Utt1EndPos)) %%% token signalling beginning of first utterance
+tok(...)                                  %%% first  "real" token  of first utterance
+tok(...)                                  %%% second "real" token  of first utterance
+tok(...)                                  %%% third  "real" token  of first utterance
+...                                       %%% intervening   tokens of first utterance
+tok(...)                                  %%% last   "real" token  of first utterance
+tok(sn,[],0,pos(Utt2StartPos,Utt2EndPos)) %%% token signalling beginning of second utterance
+...                                       %%% remaining tokens for rest of input text
+
+FirstToken is the first token of the current utterance.
+To get the remaining tokens corresponding to the first utterance,
+we need to recognize that
+ *  the list of tokens for this utterance appended to
+    the list of tokens for the rest of the utterances is equal to
+    the entire list of tokens.
+If we then specify that the first token of the rest of the utterances must be of the form
+        tok(sn,[],0,pos(_,_))
+we can then get the list of tokens for the first utterance. I.e.,
+
+        append([FirstToken|RestTokensThisUtterance], RestTokensRestUtterances, AllTokens),
+        RestTokensRestUtterances = [tok(sn,[],0,pos(_,_))|_]
+
+*/
+get_utterance_token_list(TokensIn, TokensThisUtterance, CharOffset, TokenListOut) :-
+        remove_field_and_label_tokens(TokensIn, TokensOut),
+        get_utterance_token_list_aux(TokensOut, TokensThisUtterance, CharOffset, TokenListOut).
+
+get_utterance_token_list_aux([FirstToken|RestTokensIn],
+			     TokensThisUtterance, CharOffset, TokenListOut) :-
+        first_token_char_offset(FirstToken, CharOffset),
+        get_utterance_token_list_1([FirstToken|RestTokensIn],
+				   TokensThisUtterance,TokenListOut).
+	% [FirstToken|RestTokensThisUtterance], TokenListOut).
+
+
+get_utterance_token_list_1([FirstToken|RestTokensIn],
+			   TokensThisUtterance,  TokenListOut) :-
+	token_template(FirstToken, sn, [], 0, _PosInfo1, _PosInfo2),
+	% FirstToken = tok(sn,[],0,_,_),
+	token_template(NewFirstToken, sn, [], 0, _NewPosInfo1, _NewPosInfo2),
+        append(RestTokensThisUtterance,
+	       % [tok(sn,[],0,pos(StartPos,EndPos),pos(StartPos1,EndPos1))|RestTokenListOut],
+	       [NewFirstToken|RestTokenListOut],
+               RestTokensIn),
+        !,
+        append([FirstToken], RestTokensThisUtterance, TokensThisUtterance),
+	% TokenListOut = [tok(sn,[],0,pos(StartPos,EndPos),pos(StartPos1,EndPos1))|RestTokenListOut].
+	TokenListOut = [NewFirstToken|RestTokenListOut].
+get_utterance_token_list_1([FirstToken|RestTokensIn], TokensThisUtterance, []) :-
+	% FirstToken = tok(sn,[],0,_,_),
+	token_template(FirstToken, sn, [], 0, _PosInfo1, _PosInfo2),
+	!,
+	TokensThisUtterance = [FirstToken|RestTokensIn].
+get_utterance_token_list_1([_FirstToken|RestTokensIn], TokensThisUtterance, TokenListOut) :-
+        get_utterance_token_list_1(RestTokensIn, TokensThisUtterance, TokenListOut).
+
+% first_token_char_offset(tok(_,_,_,pos(StartPos,_EndPos),_), StartPos).
+first_token_char_offset(FirstToken, StartPos) :-
+	token_template(FirstToken, _TokenType, _TokenString, _LCString,
+		       pos(StartPos,_EndPos), _PosInfo2).
+
+
+remove_field_and_label_tokens([], []).
+remove_field_and_label_tokens([Token|RestTokens], TokensOut) :-
+	token_template(Token, TokenType, _TokenString, _LCTokenString, _PosInfo1, _PosInfo2),
+	( field_or_label_type(TokenType) ->
+	  TokensOut = RestTokensOut
+	; TokensOut = [Token|RestTokensOut]
+	),
+	remove_field_and_label_tokens(RestTokens, RestTokensOut).
+
+
+
 make_method_list([], [], []).
 make_method_list([Method0|Methods], [Weight|Weights], [MethodElement|MethodList]) :-
 	atom_codes(Method0, Method),
@@ -1082,3 +1170,4 @@ display_WSD_methods :-
 %%% 	   ; S = S0
 %%% 	   )
 %%% 	).	
+

@@ -162,7 +162,10 @@ foreign(exec_init_dbs, c, exec_init_dbs(+string)).
 
 foreign(exec_destroy_dbs, c, exec_destroy_dbs).
 
-:- load_foreign_resource('../db_access').
+% :- load_foreign_resource('../db_access').
+:- environ('DYNAMIC_LIB_DIR',DynamicLibDir),
+   atom_concat(DynamicLibDir,'/db_access',DbAccessSo),
+   load_foreign_resource(DbAccessSo).
 
 % :- abolish(foreign_resource/2, [force(true)]).
 
@@ -233,7 +236,7 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 
-default_release('2015AA').
+default_release('2015AB').
 
 initialize_db_access :-
 	get_data_release(Release, 1),

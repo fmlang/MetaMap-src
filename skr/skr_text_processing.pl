@@ -34,7 +34,7 @@
 
 
 :- module(skr_text_processing, [
-	extract_sentences/12,
+	extract_sentences/13,
 	get_skr_text/2,
 	get_skr_text_2/2,
 	medline_field_separator_char/1,
@@ -69,7 +69,7 @@
 :- use_module(skr_lib(nls_io), [
 	fget_line/2,
 	fget_lines_until_skr_break/4,
-	fget_non_ws_only_line/2
+	fget_non_ws_only_line/3
     ]).
 
 
@@ -127,10 +127,10 @@ get_skr_text(Lines, TextID) :-
 	; Lines = Lines0
 	).
 
-% get_skr_text_2 is used ONLY for reading in the UDA file.
+% get_skr_text_2 is used ONLY for reading in the UDA file (and the NoMap file).
 get_skr_text_2(InputStream, [First|Rest]) :-
 	% skip all blank lines at the beginning of the input
-	fget_non_ws_only_line(InputStream, First),
+	fget_non_ws_only_line(InputStream, 1, First),
 	% fget_line(InputStream, First),
         !,
 	NumBlankLines is 1,
@@ -139,7 +139,7 @@ get_skr_text_2(_, []).
 
 get_skr_text_3(InputStream, NumBlankLines, [FirstText|Rest], TextID) :-
 	% Skip all blank lines at the beginning of the input
-	fget_non_ws_only_line(InputStream, First),
+	fget_non_ws_only_line(InputStream, NumBlankLines, First),
 	!,
 	% "sldi" == "single-line-delimited input"
 	% The sldi option reads exactly one line of input and then stops reading.
@@ -153,7 +153,12 @@ get_skr_text_3(InputStream, NumBlankLines, [FirstText|Rest], TextID) :-
 	  ( append([TempTextID, "|", TempFirstText], First) ->
 	    Rest = [],
 	    trim_whitespace(TempTextID, TextID),
-	    trim_whitespace(TempFirstText, FirstText)
+	    trim_whitespace(TempFirstText, FirstText),
+	      ( control_option(pipe_output) ->
+		atom_codes(FirstTextAtom, FirstText),
+		format('SLDI|~w~n', [FirstTextAtom])
+	      ; true
+	      )
 	  ; fatal_error('The sldiID option requires input lines of the form ID|Text\n', []),
 	    stop_and_halt
 	  )
@@ -241,7 +246,7 @@ whitespace_only_field([FirstChar|RestChars]) :-
 
 extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
 		  Sentences, CoordinatedSentences,
-		  UniqueIDAtom, AAs, UDAListIn, UDA_AVL, Lines) :-
+		  UniqueIDAtom, AAs, UDAListIn, UDAListOut, UDA_AVL, Lines) :-
 	Lines0 = [FirstLine|RestLines],
 	% This is for Steven Bedrick's --blanklines idea
 	glom_whitespace_fields(RestLines, FirstLine, Lines00),
@@ -982,7 +987,7 @@ update_strings_with_UDAs([FirstUDA|RestUDAs], StringsIn, StringsOut) :-
 	update_strings_with_UDAs(RestUDAs, StringsNext, StringsOut).
 
 update_strings_with_one_UDA([], _UDA, []).
-update_strings_with_one_UDA([FirstString|RestStrings], UDA:Expansion,
+update_strings_with_one_UDA([FirstString|RestStrings], UDA:Expansion:_StartPos:_EndPos,
 			    [UpdatedFirstString|UpdatedRestStrings]) :-
 	tokenize_text_utterly(FirstString, TokenizedFirstString),
 	substitute(UDA, TokenizedFirstString, Expansion, UpdatedTokenizedFirstString),
