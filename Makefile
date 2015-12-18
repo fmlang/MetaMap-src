@@ -207,7 +207,11 @@ $(A_SAVED_STATE) : $(PROLOGSHOBJS)
 	LOADER_MODULE=$(A_LOADER_MODULE) $(PROLOG) $(SICSTUSARGS) --goal "save_program('$(A_SAVED_STATE)'), halt."
 
 $(A_BINEXEC) : $(ASAVED_STATE) 
-	$(SPLD) -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(A_SAVED_STATE) --output=$(A_BINEXEC) $(LINK_FILES) $(LDFLAGS)
+	$(SPLD) -vv $(CONF) \
+	--respath=$(RESPATH) \
+	--output=$(A_BINEXEC) \
+	--main=restore \
+	--resources=$(A_SAVED_STATE)/$(A_SAVED_STATE) $(LINK_FILES) $(LDFLAGS)
 
 RT_DIR=$(SKR_SRC_HOME)/sp-$(SICSTUS_VERSION)
 RT_BIN=$(RT_DIR)/sicstus-$(SICSTUS_VERSION)/bin
