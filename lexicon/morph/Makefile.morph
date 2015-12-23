@@ -56,7 +56,9 @@ else
   ifeq '$(O_SYSTEM)' "Linux"
     LD = gcc
     SOLDFLAGS=$(LINKFLAGS)
-    LDFLAGS=-m32
+    # LDFLAGS=-m32
+    # FML changed 09/30/2015
+    LDFLAGS=
     LIBS =
     SEXT=so
   else 
@@ -91,8 +93,10 @@ LINK_FLAGS = -LD ${LOCAL_LIBS} ${LIBS} -lc ${DM_OBJ} ../miscutil/miscutil.o ../.
 # all we need to make is morph.so and morph.a; liblm.a is not needed except for
 
 # all:		splfr_STATIC splfr_DYNAMIC ${FACTS} ${RULES}
-all:		splfr_DYNAMIC ${FACTS} ${RULES}
-		mv qp_morph.${SEXT} ../..
+# all:		splfr_DYNAMIC ${FACTS} ${RULES}
+# FML changed 09/30/2015
+all:		splfr_STATIC splfr_DYNAMIC ${FACTS} ${RULES}
+		mv qp_morph.so ../..
 
 liblm.a:	${LM_OBJ} lm_translated_rules
 		${AR} ${ARFLAGS} $@ ${LM_OBJ}

@@ -85,15 +85,15 @@ SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC="${CC}" --cflag="${INCLUDES}" $(addprefix --cflag=, $(CFLAGS))
 
 STATIC_LINK_FLAGS = -LD ${SKR_LEXICON}/functions/linfl.o	\
- 		       ${SKR_LEXICON}/functions/tokenize.o	\
- 		       ${SKR_LEXICON}/morph/lm.o		\
- 		       ${SKR_LEXICON}/morph/util.o		\
- 		       ${SKR_LEXICON}/query/btree_query.o	\
- 		       ${SKR_LEXICON}/query/tokenize.o		\
- 		       ${SKR_LEXICON}/query/lex_btree.a		\
- 		       ${SKR_LEXICON}/query/wl.o		\
- 		       ${SKR_LEXICON}/miscutil/miscutil.o	\
- 		       ${SKR_DEBUG}/get_val.o
+		       ${SKR_LEXICON}/functions/tokenize.o	\
+		       ${SKR_LEXICON}/morph/lm.o		\
+		       ${SKR_LEXICON}/morph/util.o		\
+		       ${SKR_LEXICON}/query/btree_query.o	\
+		       ${SKR_LEXICON}/query/tokenize.o		\
+		       ${SKR_LEXICON}/query/lex_btree.a		\
+		       ${SKR_LEXICON}/query/wl.o		\
+		       ${SKR_LEXICON}/miscutil/miscutil.o	\
+		       ${SKR_DEBUG}/get_val.o
 
 DYNAMIC_LINK_FLAGS = -- ${LDFLAGS}			        \
 			${BERKELEY_LIB_SO}			\
@@ -108,12 +108,10 @@ DYNAMIC_LINK_FLAGS = -- ${LDFLAGS}			        \
 
 
 # all:		splfr_STATIC splfr_DYNAMIC
-all:		splfr_DYNAMIC
-<<<<<<< HEAD
-		mv qp_lexicon.${SEXT} ../..
-=======
+# all:		splfr_DYNAMIC
+# FML changed 09/30/2015
+all:		splfr_STATIC splfr_DYNAMIC
 		cp qp_lexicon.so ../..
->>>>>>> master
 
 splfr_STATIC:	functions query miscutil morph
 		${SPLFR} ${SPLFR_STATIC_FLAGS} qp_lexicon.pl c_lexicon.c c_linfl.c ${STATIC_LINK_FLAGS}

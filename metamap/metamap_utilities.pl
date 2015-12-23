@@ -37,7 +37,7 @@
 	% must be exported for mm_print
 	build_concept_name_1/5,
 	candidate_term/16,
-	dump_aphrase_mappings/2,
+	dump_aphrase_mappings/3,
 	% dump_evaluations_indented/6,
 	% must be exported for mm_print
 	dump_evaluations_indented/7,
@@ -46,7 +46,7 @@
 	extract_relevant_sources/3,
 	extract_name_in_source/2,
 	% extract_unique_sources/2,
-	num_dump_evaluations_indented/7,
+	num_dump_evaluations_indented/8,
 	positions_overlap/2,
 	wgvcs/1,
 	wl/1,
@@ -65,16 +65,19 @@
 	get_all_candidate_features/3
     ]).
 
+:- use_module(library(codesio), [
+	write_term_to_codes/3
+   ]).
 
 :- use_module(library(file_systems), [
 	file_exists/1
    ]).
 
-:-   absolute_file_name(skr_lib(semtype_translation_2015AA),
+:-   absolute_file_name(skr_lib(semtype_translation_2015AB),
 			AbsFileName,
 			[extensions(['.pl'])]),
      file_exists(AbsFileName) ->
-     use_module(skr_lib(semtype_translation_2015AA), [expand_semtypes/2]),
+     use_module(skr_lib(semtype_translation_2015AB), [expand_semtypes/2]),
      format(user_error, 'File metamap_utilities.pl is loading ~w~n', [AbsFileName])
    ; format(user_error, 'File metamap_utilities.pl is NOT loading ~w~n', [AbsFileName]).
 
@@ -85,6 +88,7 @@
 
 :- use_module(skr_lib(nls_strings), [
 	concatenate_items_to_atom/2,
+	split_string_completely/3,
 	trim_whitespace/2
     ]).
 
@@ -97,6 +101,10 @@
 	append/2,
 	is_list/1,
 	rev/2
+    ]).
+
+:- use_module(library(lists3), [
+	substitute/4
     ]).
 
 
@@ -137,22 +145,22 @@ dump_aphrase_mappings_aux/2
 dump_mapping/2
 */
 
-dump_aphrase_mappings([], Label) :-
+dump_aphrase_mappings([], _UtteranmceLabel, Label) :-
 	format('Meta ~a: <none>~n', [Label]).
-dump_aphrase_mappings([H|T], Label) :-
+dump_aphrase_mappings([H|T], UtteranceLabel, Label) :-
 	APhrases = [H|T],
 	( control_option(number_the_mappings) ->
 	  Counter is 1
 	; Counter is 0
 	),
-	dump_aphrase_mappings_aux(APhrases, Label, Counter).
+	dump_aphrase_mappings_aux(APhrases, UtteranceLabel, Label, Counter).
 
-dump_aphrase_mappings_aux([], _Label, _Counter).
-dump_aphrase_mappings_aux([ap(NegValue,_,_,Mapping)|Rest], Label, Counter) :-
+dump_aphrase_mappings_aux([], _UtteranceLabel, _Label, _Counter).
+dump_aphrase_mappings_aux([ap(NegValue,_,_,Mapping)|Rest], UtteranceLabel, Label, Counter) :-
 	Score is -NegValue,
 	get_display_and_increment_counter(Counter, CounterDisplay, NextCounter),
-	dump_mapping(Mapping, Label, Score, CounterDisplay),
-	dump_aphrase_mappings_aux(Rest, Label, NextCounter).
+	dump_mapping(Mapping, UtteranceLabel, Label, Score, CounterDisplay),
+	dump_aphrase_mappings_aux(Rest, UtteranceLabel, Label, NextCounter).
 
 get_display_and_increment_counter(Counter, CounterDisplay, NextCounter) :-
 	( Counter =:= 0 ->
@@ -164,18 +172,18 @@ get_display_and_increment_counter(Counter, CounterDisplay, NextCounter) :-
 	  NextCounter is Counter + 1
 	).	  
 
-dump_mapping([], Label, _Score, _DisplayCounter) :-
+dump_mapping([], _UtteranceLabel, Label, _Score, _DisplayCounter) :-
 	format('Meta ~a: <none>~n', [Label]).
-dump_mapping([H|T], Label, Score, DisplayCounter) :-
+dump_mapping([H|T], UtteranceLabel, Label, Score, DisplayCounter) :-
 	Mapping = [H|T],
 	format('~wMeta ~a (~d):~n', [DisplayCounter,Label,Score]),
-	dump_evaluations(Mapping).
+	dump_evaluations(Mapping, UtteranceLabel).
 
-dump_evaluations([]).
-dump_evaluations([FirstEV|RestEVs]) :-
+dump_evaluations([], _UtteranceLabel).
+dump_evaluations([FirstEV|RestEVs], UtteranceLabel) :-
 	RelatedEvaluations = [],
-	num_dump_one_evaluation(FirstEV:RelatedEvaluations, 0, _),
-	dump_evaluations(RestEVs).
+	num_dump_one_evaluation(FirstEV:RelatedEvaluations, 0, UtteranceLabel, _),
+	dump_evaluations(RestEVs, UtteranceLabel).
 
 % MetaMap now has status symbols :-)
 
@@ -227,18 +235,23 @@ compute_preferred_name_display(MetaTerm, PreferredName, SourcesAtom,
 	( MetaTerm == PreferredName,
 	  control_option(sources) ->
 	  PreferredNameDisplay = SourcesAtom
-	; MetaTerm == PreferredName ->
+	; MetaTerm == PreferredName,
+	  control_option(pipe_output) ->
+	  PreferredNameDisplay = MetaTerm
+	; control_option(pipe_output) ->
+	  PreferredNameDisplay = PreferredName
+	; MetaTerm == PreferredName,
 	  PreferredNameDisplay = ''  
-	; control_option(show_preferred_names_only) ->
-	  PreferredNameDisplay = ''
+	% ; control_option(show_preferred_names_only) ->
+	%   PreferredNameDisplay = ''
 	; concat_atom([' (',PreferredNameDisplayIn,')'], PreferredNameDisplay)
 	).
 
-conditionally_expand_semtypes(SemTypes0) :-
-    	( \+ control_option(hide_semantic_types) ->
-	  expand_semtypes(SemTypes0, SemTypes),
-	  format(' ~p', [SemTypes])
-	; true
+conditionally_expand_semtypes(ShortSemTypes, LongSemTypes) :-
+    	( \+ control_option(short_semantic_types) ->
+	  expand_semtypes(ShortSemTypes, LongSemTypes)
+	% format(' ~p', [SemTypes])
+	; LongSemTypes = ShortSemTypes
 	).
 
 /* build_concept_name_1(+PreferredName, +CUI, +Sources, -PreferredNameDisplay) :-
@@ -295,14 +308,11 @@ dump_evaluations_indented(Candidates, TotalCandidateCount,
 	current_output(CurrentOutput),
 	set_output(OutputStream),
 	StartNum is 0,
-	num_dump_evaluations_indented(Candidates, TotalCandidateCount,
+	num_dump_evaluations_indented(Candidates, TotalCandidateCount, Label,
 				      ExcludedCandidateCount, PrunedCandidateCount,
 				      RemainingCandidateCount, StartNum, Label),
 	!,
 	set_output(CurrentOutput).
-
-
-
 
 % This should never be called,
 % because generate_candidates_output/6 tests for Evaluations3 \== []
@@ -375,11 +385,11 @@ construct_related_evaluations_6([FirstCandidate|RestCandidates], Concept,
 
 % This should never be called,
 % because generate_candidates_output/6 tests for Evaluations3 \== []
-num_dump_evaluations_indented([], _TotalCandidateCount,
+num_dump_evaluations_indented([], _TotalCandidateCount, _UtteranceLabel,
 			      _ExcludedCandidateCount, _PrunedCandidateCount,
 			      _RemainingCandidateCount, _StartNum, Label) :-
 	  format('Meta ~a (0): <none>~n', [Label]).
-num_dump_evaluations_indented([H|T], TotalCandidateCount,
+num_dump_evaluations_indented([H|T], TotalCandidateCount, UtteranceLabel,
 			      ExcludedCandidateCount, PrunedCandidateCount,
 			      RemainingCandidateCount, StartNum, Label) :-
 	Candidates = [H|T],
@@ -391,26 +401,30 @@ num_dump_evaluations_indented([H|T], TotalCandidateCount,
 		  RemainingCandidateCount])
 	),
 	maybe_construct_related_evaluations(Candidates, CandidatePairs),
-	num_dump_evaluations_indented_aux(CandidatePairs, StartNum).
+	num_dump_evaluations_indented_aux(CandidatePairs, StartNum, UtteranceLabel).
 
-num_dump_evaluations_indented_aux([], _).
-num_dump_evaluations_indented_aux([Candidate:RelatedCandidates|Rest], N) :-
-	num_dump_one_evaluation(Candidate:RelatedCandidates, N, NextN),
-	num_dump_evaluations_indented_aux(Rest, NextN).
+num_dump_evaluations_indented_aux([], _Num, _UtteranceLabel).
+num_dump_evaluations_indented_aux([Candidate:RelatedCandidates|Rest], N, UtteranceLabel) :-
+	num_dump_one_evaluation(Candidate:RelatedCandidates, N, UtteranceLabel, NextN),
+	num_dump_evaluations_indented_aux(Rest, NextN, UtteranceLabel).
 
-num_dump_one_evaluation(Candidate:RelatedCandidates, N, NextN) :-
+num_dump_one_evaluation(Candidate:RelatedCandidates, N, UtteranceLabel, NextN) :-
 	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,
-				    semtypes,sources,status,negated],
+				    semtypes,sources,status,negated,posinfo],
 				   Candidate,
 				   [NegValue,CUI,MetaTerm,PreferredName,
-				    SemTypes0,SourceInfo,Status,Negated]),
+				    ShortSemTypes,SourceInfo,Status,Negated,PosInfoList]),
+	write_term_to_codes(PosInfoList, PosInfoCodesWithBrackets, []),
+	append(["[", PosInfoCodes, "]"], PosInfoCodesWithBrackets),
+	atom_codes(PosInfoAtom, PosInfoCodes),
 	CandidateScore is -NegValue,
 	build_concept_name_1(PreferredName, CUI, SourceInfo, SourcesAtom, PreferredNameDisplay),
 	choose_status_symbol(Status, Negated, StatusSymbol),
-	num_display_concept_info(N, MetaTerm, PreferredName, SourcesAtom, CandidateScore,
-				 CUI, PreferredNameDisplay, StatusSymbol),
-	conditionally_expand_semtypes(SemTypes0),
-	format('~n', []),
+	conditionally_expand_semtypes(ShortSemTypes, LongSemTypes),
+	num_display_concept_info(N, UtteranceLabel, MetaTerm, PreferredName, SourcesAtom,
+				 CandidateScore, CUI, PreferredNameDisplay,
+				 StatusSymbol, PosInfoAtom, LongSemTypes),
+	% format('~n', []),
 	get_next_N(N, N1),
 	num_dump_related_evaluations(RelatedCandidates, N1, NextN).
 
@@ -421,8 +435,9 @@ get_next_N(N, N1) :-
 	; N1 is N + 1
 	).
 
-num_display_concept_info(N, MetaTerm, PreferredName, SourcesAtom, CandidateScore,
-			 CUI, PreferredNameDisplayIn, StatusSymbol) :-
+num_display_concept_info(N, UtteranceLabelAtom, MetaTerm, PreferredName,
+			 SourcesAtom, CandidateScore, CUI, PreferredNameDisplayIn,
+			 StatusSymbol, PosInfo, SemTypes) :-
 	( control_option(show_cuis) ->
 	  DisplayCUI = CUI,
 	  Colon = ':'
@@ -431,12 +446,42 @@ num_display_concept_info(N, MetaTerm, PreferredName, SourcesAtom, CandidateScore
 	),
 	compute_preferred_name_display(MetaTerm, PreferredName, SourcesAtom,
 				       PreferredNameDisplayIn, PreferredNameDisplay),
-	( N =:= 0 ->
-	  format('~t~d ~w~8| ~w~w~w~p',
-	       [CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay])
-	; format('~t~d~4|. ~t~d~10| ~t~w~12| ~p~w~p ~p',
-		 [N,CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay])
+	( control_option(pipe_output) ->
+	  modify_utterance_label_display(UtteranceLabelAtom, ModUtteranceLabelAtom),
+	  format('~w||~w|~w|~w|~w|~w~n',
+		 [MetaTerm,PreferredNameDisplay,ModUtteranceLabelAtom,DisplayCUI,SemTypes,PosInfo])
+	; N =:= 0 ->
+	  format('~t~d ~w~8| ~w~w~w~p ~w~n',
+		 [CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay,SemTypes])
+	; format('~t~d~4|. ~t~d~10| ~t~w~12| ~p~w~p ~p ~w~n',
+		 [N,CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay,SemTypes])
 	).
+
+modify_utterance_label_display(UtteranceLabelAtom, ModUtteranceLabelAtom) :-
+        atom_codes(UtteranceLabelAtom, UtteranceLabelString),
+        % Para will look like "para1.tx.2"; we care only about "para1"
+        ( split_string_completely(UtteranceLabelString, "#", [Section,SubSection0,Para]) ->
+          substitute(0'^, SubSection0, 0'., SubSection),
+          split_string_completely(Para, ".", [ParaOnly|_]),
+          append([Section, "|", SubSection, "|", ParaOnly], ModUtteranceLabelString),
+          atom_codes(ModUtteranceLabelAtom, ModUtteranceLabelString)
+        ; ModUtteranceLabelAtom = UtteranceLabelAtom
+        ).
+
+
+% modify_utterance_label_display(UtteranceLabelAtom, ModUtteranceLabelAtom) :-
+%         atom_codes(UtteranceLabelAtom, UtteranceLabelString),
+%         % Para will look like "para1.tx.2"; we care only about "para1"
+%         % No more "para"s.
+%         % Subsection will look like "6^3 Immunogenicity.tx.1";
+% 	% we must get rid of the ".tx.1".
+%         ( split_string_completely(UtteranceLabelString, "#", [Section,SubSection0]) ->
+%           split_string_completely(SubSection0, ".", [SubSection1|_]),
+%           substitute(0'^, SubSection1, 0'., SubSection),
+%           append([Section, "|", SubSection], ModUtteranceLabelString),
+%           atom_codes(ModUtteranceLabelAtom, ModUtteranceLabelString)
+%         ; ModUtteranceLabelAtom = UtteranceLabelAtom
+%         ).
 
 num_dump_related_evaluations([], NIn, NIn).
 num_dump_related_evaluations([FirstCandidate|RestCandidates], NIn, NOut) :-
@@ -543,17 +588,17 @@ wgvcs([First|Rest]) :-
     wgvcs(Rest).
 
 wgvc(gvc(G,Vs,Cs)) :-
-    format('gvc:  ~p~n',[G]),
+    format(user_error, 'gvc:  ~p~n',[G]),
     wl(Vs),
     wl(Cs).
 
 wl(X) :-
     var(X),
     !,
-    format('  <none>~n',[]).
+    format(user_error, '  <none>~n',[]).
 wl([]).
 wl([First|Rest]) :-
-    format('  ~p~n',[First]),
+    format(user_error, '  ~p~n',[First]),
     wl(Rest).
 
 

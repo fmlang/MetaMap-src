@@ -164,7 +164,7 @@ evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, 
 		 EvaluationsIn, EvaluationsOut) :-
 	debug_message(trace, '~N### Generator: ~q~n', [Generator]),
 	% length(EvaluationsIn, EvaluationsInLength),
-	% format(user_output, '~n### Appending Length ~w~n', [EvaluationsInLength]),
+	% format(user_error, '~n### Appending Length ~w~n', [EvaluationsInLength]),
 	append(EvaluationsIn, Evaluations, EvaluationsOut),
 	debug_call([3,4,trace,candidates], length(Candidates, CandidatesLength)),
 	length(Candidates, CandidatesLength),
@@ -177,7 +177,7 @@ evaluate_one_GVC(gvc(Generator,_,Candidates), DebugFlags, Label, UtteranceText, 
 				TokenHeadWords, PhraseTokens, RawTokensOut,
 				AAs, InputmatchPhraseWords,
 				CCsIn, CCsOut, Evaluations).
-	% format(user_output, '~n### Generator evaluation DONE!~n', []).
+	% format(user_error, '~n### Generator evaluation DONE!~n', []).
 
 evaluate_candidate_list([], _N, _CandidatesLength,
 			_DebugFlags, _Label, _UtteranceText, _Variants, _TokenPhraseWords,
@@ -198,15 +198,15 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 	debug_evaluate_candidate_list_1(DebugFlags, N, CandidatesLength,
 					MetaCanonical, MetaString, MetaConcept),
 	% avl_size(CCsIn, CCsInSize),
-	% format(user_output,'~N### CCsIn Length: ~w~n', [CCsInSize]),
+	% format(user_error,'~N### CCsIn Length: ~w~n', [CCsInSize]),
 	avl_fetch(MetaCanonical, CCsIn, SavedValues),
 	memberchk(MetaConcept, SavedValues),
 	% member(cc(MetaCanonical,MetaConcept), CCsIn),
 	% eliminate_multiple_meaning_designator(MetaConcept, MetaConcept),
 	!,
-	% format(user_output, '~N### FOUND ~q|~q in cache~n', [MetaCanonical,MetaConcept]),
+	% format(user_error, '~N### FOUND ~q|~q in cache~n', [MetaCanonical,MetaConcept]),
 	debug_evaluate_candidate_list_2(DebugFlags, N, CandidatesLength),
-	% format('~N### Eval 1: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
+	% format(user_error, '~N### Eval 1: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
 	N1 is N + 1,
 	evaluate_candidate_list(Rest, N1, CandidatesLength, DebugFlags, Label, UtteranceText,
 				Variants, TokenPhraseWords, PhraseTokenLength, TokenHeadWords,
@@ -225,9 +225,9 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 			InputmatchPhraseWords,
 			CCsIn, CCsOut, Evaluations) :-
 	% \+ control_option(allow_duplicate_concept_names),
-	% format(user_output, '~n### USC ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
+	% format(user_error, '~n### USC ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
 	!,
-	% format(user_output, '### IN: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
+	% format(user_error, '### IN: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
 	( compute_one_evaluation(MetaCanonical, N, CandidatesLength,
 				 DebugFlags, Label, UtteranceText,
 				 MetaString, MetaConcept,
@@ -235,20 +235,20 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				 RawTokensOut, AAs,
 				 InputmatchPhraseWords,
 				 TokenHeadWords, PhraseTokens, Evaluation) ->
-	  % format(user_output, '### OUT: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
-	  % format(user_output, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]),
-	  % format(user_output, '~q~n', [Evaluation]),
+	  % format(user_error, '### OUT: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
+	  % format(user_error, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]),
+	  % format(user_error, '~q~n', [Evaluation]),
 	  debug_evaluate_candidate_list_3(DebugFlags, N, CandidatesLength, Evaluation),
-	  % format(user_output, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
-	  % format(user_output, '     ~q~n', [Evaluation]),	    
+	  % format(user_error, 'YES: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
+	  % format(user_error, '     ~q~n', [Evaluation]),	    
 	  Evaluations = [Evaluation|RestEvaluations],
 	  add_to_avl(MetaCanonical, MetaConcept, CCsIn, CCsNext)
 	; Evaluations = RestEvaluations,
-	  % format(user_output, ' NO: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
+	  % format(user_error, ' NO: ~q~n', [usc(MetaCanonical,MetaString,MetaConcept)]),
 	  debug_evaluate_candidate_list_4(DebugFlags, N, CandidatesLength),
 	  CCsNext = CCsIn
 	),
-	% format('~N### Eval 2: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
+	% format(user_error, '~N### Eval 2: ~q|~q|~q~n', [MetaCanonical,MetaString,MetaConcept]),
 	% 
 	N1 is N + 1,
 	evaluate_candidate_list(Rest, N1, CandidatesLength,
@@ -291,27 +291,27 @@ compute_one_evaluation(MetaWords, N, CandidatesLength,
 	% TempMatchMap = [MatchMapHead|MatchMapTail],
 	% consolidate_matchmap(MatchMapTail, MatchMapHead, MatchMap),
 	% get_matching_phrasewords(TokenPhraseWords, MatchMap, MatchingWords),
-	% format(user_output,'TokenPhraseWords     = ~q~n', [TokenPhraseWords]),	
-	% format(user_output,'MetaWords     = ~q~n', [MetaWords]),	
-	% format(user_output,'MatchMap      = ~q~n', [MatchMap]),	
-	% format(user_output,'MetaString      = ~q~n', [MetaString]),	
-	% format(user_output,'MetaConcept   = ~q~n', [MetaConcept]),
+	% format(user_error,'TokenPhraseWords     = ~q~n', [TokenPhraseWords]),	
+	% format(user_error,'MetaWords     = ~q~n', [MetaWords]),	
+	% format(user_error,'MatchMap      = ~q~n', [MatchMap]),	
+	% format(user_error,'MetaString      = ~q~n', [MetaString]),	
+	% format(user_error,'MetaConcept   = ~q~n', [MetaConcept]),
 	test_minimum_length(TokenPhraseWords, MatchMap),
 	% foo(2, N, CandidatesLength, MetaWords),
 	debug_message(trace, '~N### computing evaluation ~d of ~d: ~q~n',
 		      [N, CandidatesLength,MetaWords]),
-	% format(user_output, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
+	% format(user_error, '~w:~w:~w~n', [MetaWords,MatchMap,PhraseTokenLength]),
 	MatchMap \== [],
 	compute_connected_components(MatchMap, MatchCCs),
 	length(TokenPhraseWords, NTokenPhraseWords),
 	length(MetaWords, NMetaWords),
 	compute_extra_meta(MatchMap, MetaWords, ExtraMetaWords),
-	% format(user_output, '~w: ~w~n', [MetaWords,MatchMap]),
+	% format(user_error, '~w: ~w~n', [MetaWords,MatchMap]),
 	debug_compute_one_evaluation_1(DebugFlags, TokenPhraseWords, MetaWords,
 				       MatchMap, MatchCCs, ExtraMetaWords),
 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
 			    ExtraMetaWords, Variants, InvolvesHead, Value),
-	% format(user_output,'MatchValue    = ~q~n', [Value]),	
+	% format(user_error,'MatchValue    = ~q~n', [Value]),	
 	debug_compute_one_evaluation_2(DebugFlags, MetaString),
 	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
@@ -326,8 +326,8 @@ compute_one_evaluation(MetaWords, N, CandidatesLength,
 		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
 		       IsOvermatch, CUISources, PosInfo, _Status, _Negated, Evaluation),
 	debug_candidate_term(DebugFlags, Evaluation).
-	% format(user_output, 'EV:~q:~n', [Evaluation]),
-	% format(user_output, '~N~q:~q:~q~n', [MetaString,MetaWords,TokenPhraseWords]),
+	% format(user_error, 'EV:~q:~n', [Evaluation]),
+	% format(user_error, '~N~q:~q:~q~n', [MetaString,MetaWords,TokenPhraseWords]),
 	% This is just so the debugger will let me examine Evaluation
 	% Evaluation \== [],
 	% get the positional info corresponding to this MatchMap
@@ -599,10 +599,21 @@ compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 	% I now think that it should in order to avoid the anomalous situation
 	% where a headless phrase matching a string perfectly does not get a perfect score.
 	get_gap_size_parameters(MinPhraseLength, MaxGapSize),
-	% format(user_output, 'MW:~w~n', [MetaWords]),
+	% format(user_error, 'MW:~w~n', [MetaWords]),
 	set_involves_head_in(TokenHeadWords, InvolvesHeadIn),
 	NMeta0 is 1,
 	MatchMap0 = [],
+	% For reasons I still don't understand, this list of MetaWords (PMID 24592066)
+	% [human,papilloma,virus,'16','18','31','33','35','39','45','51','52','56','58','68','70']
+	% from the text
+	% microarray system.The HPV test detected 35types of HPV
+        % (HPV-6/-11/-16/-18/-26/-31/-33/-35/-39/-40/-42/-43/-44/-45/-51/-52/-53/-54/-56/-5
+        % 8/-59/-61/-62/-66/-70/-71/-72/-73/-81/-83/84/-85/-89). RESULTS: Overall, 44.7% of
+        % all patients were HPV positive. HPV was positive in 35%, 51.9%, 77.7% of the
+	% runs for a VERY long time.
+	% format(user_error, 'CPM|~q~n', [MetaWords]),
+	length(MetaWords, MetaWordsLength),
+	MetaWordsLength =< 14,
 	compute_phrase_match_aux(MetaWords, Label, UtteranceText,
 				 MetaWords, TokenPhraseWords,
 				 NMeta0, Variants, PhraseTokenLength,
@@ -620,7 +631,7 @@ compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 	  ; fail
 	  )
 	).
-	% format(user_output, 'MM: ~w~n~w~n~w~n~n', [MatchMap,MetaWords,TokenPhraseWords]).
+	% format(user_error, 'MM: ~w~n~w~n~w~n~n', [MatchMap,MetaWords,TokenPhraseWords]).
 
 set_involves_head_in([],    yes).
 set_involves_head_in([_|_], no).
@@ -637,20 +648,6 @@ compute_phrase_match_aux([], _Label, _UtteranceText, _AllMetaWords, _TokenPhrase
 			 _MinPhraseLength, _MaxGapSize,
 			 MatchMapIn, MatchMapIn,
 			 InvolvesHeadIn, InvolvesHeadIn).
-compute_phrase_match_aux([First|Rest], _Label, _UtteranceText, _AllMetaWords, _TokenPhraseWords,
-			 _NMeta, _Variants, _PhraseTokenLength,
-			 _MinPhraseLength, _MaxGapSize,
-			 _MatchMapIn, _MatchMapOut,
-			 _InvolvesHeadIn, _InvolvesHeadOut) :-
-	% efficiency hack to get past PMID 24592066, which contains this horror:
-	% The HPV test detected 35types of HPV
-        % (HPV-6/-11/-16/-18/-26/-31/-33/-35/-39/-40/-42/-43/-44/-45/-51/-52/-53/-54/-56/-
-        % 58/-59/-61/-62/-66/-70/-71/-72/-73/-81/-83/84/-85/-89).
-	length([First|Rest], Length),
-	Length > 15,
-	memberchk('70', [First|Rest]),
-	!,
-	fail.	
 compute_phrase_match_aux([First|Rest], Label, UtteranceText, AllMetaWords, TokenPhraseWords,
 			 NMeta, Variants, PhraseTokenLength,
 			 MinPhraseLength, MaxGapSize,
@@ -965,7 +962,7 @@ compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
 	    InvValue = 0.0
 	  ; true
 	  ),
-	  format('=~t~d~5| ~~ ~2f, ~2f, ~2f, ~2f, ~2f',
+	  format(user_error, '=~t~d~5| ~~ ~2f, ~2f, ~2f, ~2f, ~2f',
 		 [Value,CenValue,VarValue,CovValue,CohValue,InvValue])
 	; true
 	).
@@ -1135,13 +1132,14 @@ compute_involvement_value(MatchMap, NTokenPhraseWords, NMetaWords,
 	( control_value(debug, DebugFlags),
 	  memberchk(5, DebugFlags),
 	  RelevantExtraMetaWords\==[] ->
-	  format('Relevant extras: ~p~n',[RelevantExtraMetaWords])
+	  format(user_error, 'Relevant extras: ~p~n',[RelevantExtraMetaWords])
 	; true
 	),
 	length(RelevantExtraMetaWords, NExtra),
 	( control_value(debug, DebugFlags),
 	  memberchk(6, DebugFlags) ->
-	  format('NPInvolved,NEx,NP,NMInvolved,NEx,NM: ~d ~d ~d ~d ~d ~d~n',
+	  format(user_error,
+		 'NPInvolved,NEx,NP,NMInvolved,NEx,NM: ~d ~d ~d ~d ~d ~d~n',
 		 [NPhrase,NExtra,NTokenPhraseWords,NMeta,NExtra,NMetaWords])
 	; true
 	),
