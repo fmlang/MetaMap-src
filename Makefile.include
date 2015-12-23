@@ -50,7 +50,7 @@ export SKR_MMI=$(SKR_SRC_HOME)/mmi
 export TOOLS_SRC=$(SKR)/tools
 
 O_SYSTEM = $(shell uname)
-MACHINE_TYPE=-m32
+MACHINE_TYPE=-m64
 
 ifeq '$(O_SYSTEM)' "Linux"
   RANLIB = /bin/true
