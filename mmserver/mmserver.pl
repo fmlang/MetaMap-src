@@ -23,8 +23,9 @@
 :- use_module(skr(skr_fe), [
 	postprocess_sentences/11,
 	initialize_skr/4,
-	process_text/10,
-        get_nomap_pairs/1
+	process_text/11,
+        get_nomap_pairs/1,
+        get_novar_pairs/1
    ]).
 
 :- use_module(skr(skr),[
@@ -226,9 +227,11 @@ process_string(Input,Output) :-
 	split_string_completely(TrimmedInput,"\n",Strings),
 	get_UDAs(UDAListIn),
 	get_nomap_pairs(NoMapPairs),
+	get_novar_pairs(NoMapPairs),
 	bb_get(all_server_streams, AllServerStreams),
 	process_text(Strings, "00000000", TagOption, AllServerStreams,
-		     ExpRawTokenList, AAs, UDAListIn, _UDAListOut, NoMapPairs, MMResults),
+		     ExpRawTokenList, AAs, UDAListIn, _UDAListOut,
+		     NoMapPairs, NoVarPairs, MMResults),
 	parse_command_line(CLTerm),
 	CLTerm=command_line(Options,Args),
 	initialize_skr(Options, Args, InterpretedArgs, IOptions),

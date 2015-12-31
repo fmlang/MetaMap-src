@@ -50,7 +50,7 @@
 	% called by MetaMap API -- do not change signature!
 	postprocess_sentences/11,
 	% called by MetaMap API -- do not change signature!
-	process_text/10
+	process_text/11
    ]).
 
 % :- extern(skr_fe_go).
@@ -83,7 +83,7 @@
 
 :- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/19,
+	skr_phrases/20,
 	stop_and_halt/0
    ]).
 
@@ -244,7 +244,8 @@ go(HaltOption, command_line(OptionsIn, ArgsIn)) :-
 	( initialize_skr(OptionsOut, ArgsOut, InterpretedArgs, IOptions) ->
 	    get_UDAs(UDAList),
 	    get_nomap_pairs(NoMapPairs),
-          ( skr_fe(InterpretedArgs, ProgramName, UDAList, NoMapPairs, Release, IOptions) ->
+	    get_novar_pairs(NoVarPairs),
+          ( skr_fe(InterpretedArgs, ProgramName, UDAList, NoMapPairs, NoVarPairs, Release, IOptions) ->
 	    true
 	  ; true
 	  )
@@ -285,7 +286,7 @@ initialize_skr(InitialOptions, InitialArgs, FinalArgs, FinalOptions) :-
 skr_fe/1 calls either process_all/1 or batch_skr/1 (which redirects
 I/O streams and then calls process_all/1) depending on InterpretedArgs.  */
 
-skr_fe(InterpretedArgs, ProgramName, UDAList, NoMapPairs, DefaultRelease, IOptions) :-
+skr_fe(InterpretedArgs, ProgramName, UDAList, NoMapPairs, NoVarPairs, DefaultRelease, IOptions) :-
 	set_tag_option_and_mode(TagOption, TagMode),
 	% XML header will be printed here (and XML footer several lines below) iff
 	% (1) XML command-line option is on, and
@@ -301,10 +302,11 @@ skr_fe(InterpretedArgs, ProgramName, UDAList, NoMapPairs, DefaultRelease, IOptio
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
           process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-		      UDAList, NoMapPairs, ServerStreams,
+		      UDAList, NoMapPairs, NoVarPairs, ServerStreams,
 		      TagOption, InterpretedArgs, IOptions)
           % batch_skr is for batch processing
-        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease, UDAList, NoMapPairs,
+        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
+		    UDAList, NoMapPairs, NoVarPairs,
 		    ServerStreams, TagOption, TagMode, IOptions, InputStream)
 	),
 	% conditionally_print_xml_footer/4 will be called here
@@ -335,7 +337,8 @@ Meta concepts are computed for each noun phrase in the input.  */
 
 
 batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
-	  UDAList, NoMapPairs, ServerStreams, TagOption, TagMode, IOptions, InputStream) :-
+	  UDAList, NoMapPairs, NoVarPairs,
+	  ServerStreams, TagOption, TagMode, IOptions, InputStream) :-
 	get_from_iargs(infile,  name,   InterpretedArgs, InputFile),
 	get_from_iargs(infile,  stream, InterpretedArgs, InputStream),
 	get_from_iargs(outfile, name,   InterpretedArgs, OutputFile),
@@ -344,7 +347,7 @@ batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 	set_input(InputStream),
 	set_output(OutputStream),
 	( process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-		      UDAList, NoMapPairs,
+		      UDAList, NoMapPairs, NoVarPairs,
 		      ServerStreams, TagOption, InterpretedArgs, IOptions) ->
 	  true
 	; true
@@ -361,13 +364,13 @@ user_input and user_output may have been redirected to files.)
 If TagOption is 'tag', then tagging is done. */
 
 process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
-	    UDAList, NoMapPairs,
+	    UDAList, NoMapPairs, NoVarPairs,
 	    ServerStreams, TagOption, InterpretedArgs, IOptions) :-
 	do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream),
-	process_all_1(OutputStream, UDAList, NoMapPairs,
+	process_all_1(OutputStream, UDAList, NoMapPairs, NoVarPairs,
 		      TagOption, ServerStreams, InterpretedArgs, IOptions).
 
-process_all_1(OutputStream, UDAListIn, NoMapPairs, TagOption,
+process_all_1(OutputStream, UDAListIn, NoMapPairs, NoVarPairs, TagOption,
 	      ServerStreams, InterpretedArgs, IOptions) :-
 	get_skr_text(Strings, TextID),
 	% append(TempExtraChars, ExtraChars),
@@ -375,13 +378,14 @@ process_all_1(OutputStream, UDAListIn, NoMapPairs, TagOption,
 	% trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
 	% Removed call for Steven Bedrick
 	( Strings \== [] ->
-	  process_text(Strings, TextID, TagOption, ServerStreams,
-		       ExpRawTokenList, AAs, UDAListIn, UDAListOut, NoMapPairs, MMResults),
-	  output_should_be_bracketed(BracketedOutput),
- 	  postprocess_text(OutputStream, Strings, BracketedOutput, InterpretedArgs,
-			   IOptions, ExpRawTokenList, AAs, UDAListOut, MMResults),
-	  process_all_1(OutputStream, UDAListIn, NoMapPairs,
-			TagOption, ServerStreams, InterpretedArgs, IOptions)
+	    process_text(Strings, TextID, TagOption, ServerStreams,
+			 ExpRawTokenList, AAs,
+			 UDAListIn, UDAListOut, NoMapPairs, NoVarPairs, MMResults),
+	    output_should_be_bracketed(BracketedOutput),
+	    postprocess_text(OutputStream, Strings, BracketedOutput, InterpretedArgs,
+			     IOptions, ExpRawTokenList, AAs, UDAListOut, MMResults),
+	    process_all_1(OutputStream, UDAListIn, NoMapPairs, NoVarPairs,
+			  TagOption, ServerStreams, InterpretedArgs, IOptions)
 	; true
 	),
 	!.
@@ -453,16 +457,18 @@ in Sentences in case the original text is preferred. */
 
 %%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
 process_text(Text, TextID, TagOption, ServerStreams, RawTokenList, AAs,
-	     UDAListIn, UDAListOut, NoMapPairs, MMResults) :-
+	     UDAListIn, UDAListOut, NoMapPairs, NoVarPairs, MMResults) :-
 	halt_if_non_ASCII(Text),
 	( process_text_1(Text, TextID, TagOption, ServerStreams,
-			 RawTokenList, AAs, UDAListIn, UDAListOut, NoMapPairs, MMResults) ->
+			 RawTokenList, AAs, UDAListIn, UDAListOut,
+			 NoMapPairs, NoVarPairs, MMResults) ->
 	  true
  	; fatal_error('process_text/4 failed for ~p~n', [Text])
 	).
 
 process_text_1(Lines0, TextID, TagOption, ServerStreams,
-	       ExpRawTokenList, AdjustedAAs, UDAListIn, UDAListOut, NoMapPairs, MMResults) :-
+	       ExpRawTokenList, AdjustedAAs, UDAListIn, UDAListOut,
+	       NoMapPairs, NoVarPairs, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
@@ -538,21 +544,21 @@ process_text_1(Lines0, TextID, TagOption, ServerStreams,
 	adjust_AAs_pos_info(AAList, UnExpRawTokenList, UniqueID, AdjustedAAs),
 	process_text_aux(ExpandedUtterances, TagOption, ServerStreams,
 			 OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
-			 AdjustedAAs, UDA_AVL, NoMapPairs,
+			 AdjustedAAs, UDA_AVL, NoMapPairs, NoVarPairs,
 			 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut, MMOutput),
 	!.
 
 process_text_aux(ExpandedUtterances, TagOption, ServerStreams,
 		 OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
-		 AdjustedAAs, UDA_AVL, NoMapPairs,
+		 AdjustedAAs, UDA_AVL, NoMapPairs, NoVarPairs,
 		 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 		 RawTokenListOut, WordDataCacheOut, USCacheOut, MMOutput) :-
 	( control_option(aas_only) ->
 	  true
 	; do_process_text(ExpandedUtterances, TagOption, ServerStreams,
 			  OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
-			  AdjustedAAs, UDA_AVL, NoMapPairs,
+			  AdjustedAAs, UDA_AVL, NoMapPairs, NoVarPairs,
 			  ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 			  RawTokenListOut, WordDataCacheOut, USCacheOut, MMOutput)
 	).
@@ -560,12 +566,13 @@ process_text_aux(ExpandedUtterances, TagOption, ServerStreams,
 do_process_text([],
 		 _TagOption, _ServerStreams,
 		 _OrigCitationTextAtom, _CitationTextAtom,
-		_AAs, _UDA_AVL, _NoMapPairs,
+		_AAs, _UDA_AVL, _NoMapPairs, _NoVarPairs,
 		 ExpRawTokenList, WordDataCache, USCCache,
 		 ExpRawTokenList, WordDataCache, USCCache, []).
 do_process_text([ExpandedUtterance|Rest],
 		 TagOption, ServerStreams,
-		 OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL, NoMapPairs,
+		 OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL,
+		 NoMapPairs, NoVarPairs,
 		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
 		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
 		 [mm_output(ExpandedUtterance,OrigCitationTextAtom,ModifiedText,Tagging,AAs,
@@ -588,13 +595,14 @@ do_process_text([ExpandedUtterance|Rest],
 			       HRTagStrings, Definitions, SyntAnalysis0),
 	  conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	  skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
-		      AAs, UDA_AVL, NoMapPairs, SyntAnalysis, TagList,
+		      AAs, UDA_AVL, NoMapPairs, NoVarPairs, SyntAnalysis, TagList,
 		      WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
 		      ServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 		      DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases)
 	),
 	do_process_text(Rest, TagOption, ServerStreams,
-			OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL, NoMapPairs,
+			OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL,
+			NoMapPairs, NoVarPairs,
 			ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 			ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
 
@@ -1015,6 +1023,23 @@ get_nomap_pairs(AtomNoMapPairs) :-
 	  % Use the same code to create NoMap pairs as for creating UDAs!
 	  create_nomap_pairs(InputStream, StringNoMapPairs0),
 	  reorder_nomap_pairs(StringNoMapPairs0, StringNoMapPairs),
+	  ensure_atom_pairs(StringNoMapPairs, AtomNoMapPairs),
+	  close(InputStream)
+	; AtomNoMapPairs = []
+	).
+
+get_novar_pairs(AtomNoVarPairs) :-
+	( control_value(novar, FileName) ->
+	  check_valid_file_type(FileName, 'NoVar Strings'),
+	  open(FileName, read, InputStream),
+	  % Use the same code to create NoMap pairs as for creating UDAs!
+	  create_nomap_pairs(InputStream, StringNoVarPairs),
+	  ensure_atom_pairs(StringNoVarPairs, AtomNoVarPairs),
+	  close(InputStream)
+	; AtomNoVarPairs = []
+	).	
+
+ensure_atom_pairs(StringNoMapPairs, AtomNoMapPairs) :-
 	  ( foreach(StringPair, StringNoMapPairs),
 	    foreach(AtomPair,   AtomNoMapPairs)
 	  do StringPair = StringString:CUIString,
@@ -1023,11 +1048,8 @@ get_nomap_pairs(AtomNoMapPairs) :-
 	     % atom_codes(StringAtom, StringString),
 	     % atom_codes(CUIAtom, CUIString),
 	     AtomPair = StringAtomOrVar:CUIAtomOrVar
-	  ),
-	  close(InputStream)
-	; AtomNoMapPairs = []
-	).
-
+	  ).
+	
 reorder_nomap_pairs([], []).
 reorder_nomap_pairs([FirstPairIn|RestPairsIn], [FirstPairOut|RestPairsOut]) :-
 	reorder_one_nomap_pair(FirstPairIn, FirstPairOut),
