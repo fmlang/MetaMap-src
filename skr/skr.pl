@@ -45,7 +45,7 @@
 	% but they must still be exported because they're called via debug_call.
 	print_candidate_grid/6,
 	print_duplicate_info/4,
-	skr_phrases/19,
+	skr_phrases/20,
 	print_all_aevs/1,
 	stop_and_halt/0,
 	% called by MetaMap API -- do not change signature!
@@ -289,12 +289,12 @@ warn_if_no_sab_files :-
 	).
 
 skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
-	    AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
+	    AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
 	    WordDataCacheIn, USCCacheIn, RawTokensIn,
 	    ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 	    MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) :-
 	( skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
-			  AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
+			  AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
 			  WordDataCacheIn, USCCacheIn, RawTokensIn,
 			  ServerStreams, RawTokensNext, WordDataCacheOut, USCCacheOut,
 			  MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) ->
@@ -306,7 +306,7 @@ skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
         ).
 
 skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
-		AAs, UDAs, NoMapPairs, SyntacticAnalysis, TagList,
+		AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
 		WordDataCacheIn, USCCacheIn, RawTokensIn,
 		ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
 		DisambiguatedMMOPhrases, ExtractedPhrases,
@@ -317,7 +317,7 @@ skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAto
 	% UtteranceText contains no AAs. E.g.,
 	% "heart attack (HA)" will become simply "heart attack".
 	skr_phrases_1(Phrases, InputLabel, UtteranceText,
-		      AAs, UDAs, NoMapPairs,
+		      AAs, UDAs, NoMapPairs, NoVarPairs,
 		      OrigCitationTextAtom,
 		      TagList,
 		      WordDataCacheIn, USCCacheIn,
@@ -336,12 +336,12 @@ skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAto
 % 	nl(user_output).
 
 skr_phrases_1([], _InputLabel,
-	      _AllUtteranceText, _AAs, _UDAs, _NoMapPairs,
+	      _AllUtteranceText, _AAs, _UDAs, _NoMapPairs, _NoVarPairs,
 	      _OrigCitationTextAtom, _TagList,
 	      WordDataCache, USCCache, WordDataCache, USCCache,
 	      RawTokens, RawTokens, [], []).
 skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
-	      AAs, UDAs, NoMapPairs, OrigCitationTextAtom,
+	      AAs, UDAs, NoMapPairs, NoVarPairs, OrigCitationTextAtom,
 	      TagList,
 	      WordDataCacheIn, USCCacheIn,
 	      WordDataCacheOut, USCCacheOut,
@@ -374,7 +374,7 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	% which is no longer used!!
 	% format(user_output, 'Phrase ~w:~n', [MergedPhrase]),
 	skr_phrase(InputLabel, AllUtteranceText,
-		   MergedPhrase, AAs, NoMapPairs,
+		   MergedPhrase, AAs, NoMapPairs, NoVarPairs,
 		   OrigCitationTextAtom, TagList,
 		   RawTokensIn, GVCs,
 		   WordDataCacheIn, USCCacheIn,
@@ -388,7 +388,7 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	subtract_from_control_options(AllAddedOptions),
 	% add_semtypes_to_phrases_if_necessary(Phrases0,FirstEPPhrases),
 	skr_phrases_1(RestMergedPhrases, InputLabel, AllUtteranceText,
-		      AAs, UDAs, NoMapPairs, OrigCitationTextAtom,
+		      AAs, UDAs, NoMapPairs, NoVarPairs, OrigCitationTextAtom,
 		      TagList,
 		      WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut,
 		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrases).
@@ -553,14 +553,14 @@ element of the pair is of the form
      pwi(PhraseWordL,PhraseHeadWordL,PhraseMap).
 */
 
-skr_phrase(Label, UtteranceText, PhraseSyntax, AAs, NoMapPairs,
+skr_phrase(Label, UtteranceText, PhraseSyntax, AAs, NoMapPairs, NoVarPairs,
 	   OrigCitationTextAtom, TagList,
 	   RawTokensIn, GVCs,
 	   WordDataCacheIn, USCCacheIn,
 	   WordDataCacheOut, USCCacheOut,
 	   RawTokensOut, APhrases, MMOPhraseTerm) :-
 	( skr_phrase_1(Label, UtteranceText,
-		       PhraseSyntax, AAs, NoMapPairs, RawTokensIn,
+		       PhraseSyntax, AAs, NoMapPairs, NoVarPairs, RawTokensIn,
 		       OrigCitationTextAtom, TagList, GVCs,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut,
@@ -571,7 +571,7 @@ skr_phrase(Label, UtteranceText, PhraseSyntax, AAs, NoMapPairs,
         ).
 
 skr_phrase_1(Label, UtteranceTextString,
-	     PhraseSyntax, AAs, NoMapPairs,
+	     PhraseSyntax, AAs, NoMapPairs, NoVarPairs,
 	     RawTokensIn, OrigCitationTextAtom, TagList, GVCs,
 	     WordDataCacheIn, USCCacheIn,
 	     WordDataCacheOut, USCCacheOut,
@@ -585,7 +585,7 @@ skr_phrase_1(Label, UtteranceTextString,
 	atom_codes(OrigPhraseTextAtom, OrigPhraseTextString),
 	debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords),
 	atom_codes(UtteranceTextAtom, UtteranceTextString),
-	generate_initial_evaluations(Label, UtteranceTextAtom, OrigPhraseTextString,
+	generate_initial_evaluations(Label, UtteranceTextAtom, OrigPhraseTextString, NoVarPairs,
 				     PhraseSyntax, Variants, GVCs, WordDataCacheIn, USCCacheIn,
 				     RawTokensOut, AAs,
 				     InputMatchPhraseWords, PhraseTokens, TokenPhraseWords,
@@ -802,7 +802,7 @@ get_AA_text(AATokens, AATextString) :-
 	% interleave_string(AATokenStrings, " ", AATextString).
 
 generate_initial_evaluations(Label, UtteranceText,
-			     PhraseTextString, Phrase, Variants,
+			     PhraseTextString, NoVarPairs, Phrase, Variants,
 			     GVCs, WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
 			     InputMatchPhraseWords, PhraseTokens, TokenPhraseWords,
 			     TokenPhraseHeadWords, WordDataCacheOut, USCCacheOut, Evaluations0) :-
@@ -832,7 +832,7 @@ generate_initial_evaluations(Label, UtteranceText,
 	  WordDataCacheOut = WordDataCacheIn,
 	  USCCacheOut = USCCacheIn
 	; check_generate_initial_evaluations_control_options_2 ->
- 	  compute_evaluations(Label, UtteranceText,
+ 	  compute_evaluations(Label, UtteranceText, NoVarPairs,
  			      Phrase, Variants, GVCs,
  			      WordDataCacheIn, USCCacheIn, RawTokensOut, AAs,
  			      InputMatchPhraseWords,
@@ -1001,7 +1001,7 @@ get_all_generators_and_candidate_lengths([GVC|RestGVCs], [G-CandidatesLength|Res
 	length(Candidates, CandidatesLength),
 	get_all_generators_and_candidate_lengths(RestGVCs, RestGenerators).
 
-compute_evaluations(Label, UtteranceText,
+compute_evaluations(Label, UtteranceText, NoVarPairs,
 		    Phrase, Variants, GVCs, WordDataCacheIn, USCCacheIn,
 		    RawTokensOut, AAs, InputMatchPhraseWords,
 		    PhraseTokens, TokenPhraseWords, TokenPhraseHeadWords,
@@ -1012,7 +1012,7 @@ compute_evaluations(Label, UtteranceText,
 	get_debug_control_value(DebugFlags),
 	debug_message(trace, '~N### Calling generate_variants: ~q~n', [TokenPhraseWords]),
 	generate_variants(TokenPhraseWords, TokenPhraseHeadWords,
-			  Phrase, DebugFlags, GVCs, Variants),
+			  Phrase, DebugFlags, NoVarPairs, GVCs, Variants),
 	% format(user_output, '~N### generate_variants DONE!~n', []),
 	debug_compute_evaluations_2(DebugFlags, GVCs, Variants),
 
@@ -1021,7 +1021,6 @@ compute_evaluations(Label, UtteranceText,
 	CandidateCount is 1,
 	maybe_ignore_GVCs(GVCs, GVCsToEvaluate),
 	add_candidates(GVCsToEvaluate, CandidateCount, Variants, IgnoreSingleChars, DebugFlags,
-
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut),
 	% format(user_output, '~N### add_candidates DONE!~n', []),
@@ -1117,7 +1116,7 @@ next_single_alpha_or_hyphen_count(Word, CountIn, CountNext) :-
 % 	).
 
 generate_variants(PhraseWords, PhraseHeadWords, Phrase, 
-		  DebugFlags, GVCs3, Variants) :-
+		  DebugFlags, NoVarPairs, GVCsOut, Variants) :-
 	expand_split_word_list(PhraseWords, DupPhraseWords),
 	% expand_split_word_list(PhraseHeadWords, DupPhraseHeadWords),	
 	compute_variant_generators(PhraseWords, DupPhraseWords, GVCs0),
@@ -1132,9 +1131,11 @@ generate_variants(PhraseWords, PhraseHeadWords, Phrase,
 	%        [augment_GVCs_with_variants(GVCs1)]),
 	maybe_filter_out_dvars(GVCs1, GVCs2),
 	maybe_filter_out_aas(GVCs2, GVCs3),
-	gather_variants(GVCs3,
+	maybe_filter_out_novars(NoVarPairs, GVCs3, GVCsOut),
+	gather_variants(GVCsOut,
 			PhraseWords, PhraseHeadWords, % GenWords, DupPhraseWords, DupPhraseHeadWords, DupGenWords,
 			Variants).
+
 	% format(user_output, '~n### ~q~n',
 	%       [gather_variants(GVCs3, PhraseWords, PhraseHeadWords, Variants)]).
 
@@ -4035,6 +4036,56 @@ maybe_filter_out_aas(GVCs2, GVCs3) :-
 	  filter_out_aas(GVCs2, GVCs3)
 	; GVCs3 = GVCs2
 	).
+
+maybe_filter_out_novars(NoVars, GVCsIn, GVCsOut) :-
+	( control_option(novar) ->
+	  filter_out_novars(NoVars, GVCsIn, GVCsOut)
+	; GVCsOut = GVCsIn
+	).
+
+
+filter_out_novars([], GVCs, GVCs).
+filter_out_novars([VariantWord1:VariantWord2|RestNoVarPairs], GVCsIn, GVCsOut) :-
+	filter_out_novars_from_one_GVC(GVCsIn, VariantWord1, VariantWord2, GVCsNext),
+	filter_out_novars(RestNoVarPairs, GVCsNext, GVCsOut).
+
+filter_out_novars_from_one_GVC([], _VariantWord1, _VariantWord2, []).
+filter_out_novars_from_one_GVC([GVCIn|RestGVCsIn], VariantWord1, VariantWord2, [GVCOut|RestGVCsOut]) :-
+	GVCIn = gvc(Generator,VariantsIn,_Candidates),
+	Generator = v(GeneratorWord,_,_,_,_,_),
+	( generator_matches_variant_word(GeneratorWord,
+					 VariantWord1, VariantWord2, OtherVariantWord) ->
+	  filter_out_novar_variants(VariantsIn, OtherVariantWord, VariantsOut)
+	; VariantsOut = VariantsIn
+	),
+	GVCOut = gvc(Generator,VariantsOut,_Candidates),
+	filter_out_novars_from_one_GVC(RestGVCsIn, VariantWord1, VariantWord2, RestGVCsOut).
+
+% If Generator == VariantWord1 or VariantWord2, then return the other variant word.
+generator_matches_variant_word(Generator, VariantWord1, VariantWord2, OtherVariantWord) :-
+	% Check for exact matches first
+	( Generator == VariantWord1 ->
+	  OtherVariantWord = VariantWord2
+	; Generator == VariantWord2 ->
+	  OtherVariantWord = VariantWord1
+	;  \+ \+ ( Generator = VariantWord1 ) ->
+	  OtherVariantWord = VariantWord2
+	; \+ \+ ( Generator = VariantWord2 ) ->
+	  OtherVariantWord = VariantWord1
+	).
+
+filter_out_novar_variants([], _OtherVariantWord, []).
+filter_out_novar_variants([VariantTerm|RestVariantTerms], OtherVariantWord, VariantsOut) :-
+	VariantTerm = v(VariantWord,VarLevel,_LexCat,_History,_Roots,_NFR),
+	% Always allow a word to be its own variant (VarLevel == 0)!
+	( VarLevel is 0 ->
+	  VariantsOut = [VariantTerm|RestVariantsOut]
+	; \+ \+ ( VariantWord = OtherVariantWord ) ->
+	  VariantsOut = RestVariantsOut
+	; VariantsOut = [VariantTerm|RestVariantsOut]
+	),
+	filter_out_novar_variants(RestVariantTerms, OtherVariantWord, RestVariantsOut).
+
 
 maybe_filter_evaluations_by_threshold(Evaluations1, Evaluations2) :-
 	( control_value(threshold, Threshold) ->

@@ -283,6 +283,9 @@ is_control_option(metamap,  '', 'negex_trigger_file', no,
 is_control_option(metamap,  '', 'nomap', no,
 		  aspec(nomap, mandatory, file, read, no_default,
 			'File containing String/CUI pairs to exclude.')).
+is_control_option(metamap,  '', 'novar', no,
+		  aspec(novar, mandatory, file, read, no_default,
+			'File containing variant pairs to exclude.')).		  
 is_control_option(metamap,  '', 'utterances_only',	 	no, none).
 is_control_option(metamap,  '', 'cascade',	 		no, none).
 
