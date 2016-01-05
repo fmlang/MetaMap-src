@@ -227,7 +227,7 @@ process_string(Input,Output) :-
 	split_string_completely(TrimmedInput,"\n",Strings),
 	get_UDAs(UDAListIn),
 	get_nomap_pairs(NoMapPairs),
-	get_novar_pairs(NoMapPairs),
+	get_novar_pairs(NoVarPairs),
 	bb_get(all_server_streams, AllServerStreams),
 	process_text(Strings, "00000000", TagOption, AllServerStreams,
 		     ExpRawTokenList, AAs, UDAListIn, _UDAListOut,
