@@ -107,14 +107,20 @@ main :-
     CLTerm=command_line(Options,Args),
     format('Options:~q~n', [Options]),
     format('Args:~q~n', [Args]),
-    ( \+ member(q,Options) -> append(Options, [q], OptionsFinal0) ; Options=OptionsFinal0),
+
+    ( \+ member(q, Options) ->
+      append(Options, [q], OptionsFinal0)
+    ; Options = OptionsFinal0
+    ),
     ( \+ member('Q',Options) ->
 	append(OptionsFinal0, ['Q'], OptionsFinal),
-	append(Args, ['4'], ArgsFinal) ;
-	OptionsFinal0=OptionsFinal, Args=ArgsFinal),
-    initialize_skr(OptionsFinal, ArgsFinal, _IArgs, IOptions),
-    format('IOptions:~q~n', [IOptions]),
-    add_to_control_options(IOptions),
+	append(Args, ['4'], ArgsFinal)
+      ; OptionsFinal0 = OptionsFinal,
+	Args = ArgsFinal
+    ),
+    % initialize_skr(OptionsFinal, ArgsFinal, _IArgs, IOptions),
+    % format('IOptions:~q~n', [IOptions]),
+    % add_to_control_options(IOptions),
     start(ServerOptions).
 
 %% Event listener callbacks
@@ -160,6 +166,8 @@ set_options(OptionString) :-
     assert(control_value(lexicon,db)),
     % end Temporary code 
     set_control_values(IOptionsFinal,IArgs),
+    retractall(db_access:db_access_status(_,_,_)),
+    initialize_skr([]),
     %%
     %% If the user asks for WSD then get server stream for WSD server
     %% and add it to the blackboard.
@@ -227,7 +235,7 @@ process_string(Input,Output) :-
 	split_string_completely(TrimmedInput,"\n",Strings),
 	get_UDAs(UDAListIn),
 	get_nomap_pairs(NoMapPairs),
-	get_novar_pairs(NoMapPairs),
+	get_novar_pairs(NoVarPairs),
 	bb_get(all_server_streams, AllServerStreams),
 	process_text(Strings, "00000000", TagOption, AllServerStreams,
 		     ExpRawTokenList, AAs, UDAListIn, _UDAListOut,
