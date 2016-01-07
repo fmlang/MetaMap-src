@@ -78,7 +78,7 @@ TARGETS=$(DEBUGTARGETS) $(DBTARGETS) $(MISCTARGETS)		\
         $(FUNCTIONTARGETS) $(MORPHTARGETS) $(QUERYTARGETS)	\
         $(LIBTARGETS) $(LEXICONTARGETS)
 
-# sharable libraries need by SICStus Prolog interpreter
+# sharable libraries needed by SICStus Prolog interpreter
 PROLOGSHOBJS=db_access.$(SOEXT) nls_signal.$(SOEXT) qp_lexicon.$(SOEXT) qp_morph.$(SOEXT) 
 
 DEBUGTARGETS=debug/debug.a debug/debug.$(SOEXT) debug/debug.o debug/get_val.o
@@ -164,7 +164,7 @@ $(SAVED_STATE) : $(PROLOGSHOBJS)
 	$(PROLOG) $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
 
 $(BINEXEC) : $(SAVED_STATE)
-	$(SPLD) -vv $(CONF) \
+	$(SPLD) -vv \
 	--respath=$(RESPATH) \
 	--output=$(BINEXEC) \
 	--static \
