@@ -77,7 +77,7 @@ ifeq '$(O_SYSTEM)' "Linux"
   export BERKELEY_LIB = $(BERKELEY)/lib
   export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb-4.8.a
   export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb-4.8.so
-  export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb-4.8.a
+  export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb.a
   export BERKELEY_LIB_DYNAMIC = "-L$(BERKELEY_LIB) -ldb-4.8"
 
   export DEFAULT_LIBXML_DIR = /usr
@@ -134,8 +134,7 @@ export LINK_FILES=$(SKR_DEBUG)/debug.o \
            ./debug/get_val.o \
            ./lexicon/morph/dm.o \
            ./db/c_nls_db.a \
-           $(BERKELEY_LIB_DYNAMIC) \
-           $(XDR_STATIC_LIB)
+           $(BERKELEY_LIB_STATIC)
 
-export CONF=--conf BDBLIB=$(BERKELEY_LIB_DYNAMIC) --conf BDB_PATH=$(BERKELEY)
+export CONF=--conf BDBLIB=$(BERKELEY_LIB_STATIC) --conf BDB_PATH=$(BERKELEY)
 
