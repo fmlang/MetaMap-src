@@ -64,7 +64,6 @@
     ]).
 
 :- use_module(skr_db(db_access),[
-	initialize_db_access/3,
 	db_get_mesh_mh/2,
 	db_get_meta_mesh/2,
 	db_get_mesh_tc_relaxed/2
