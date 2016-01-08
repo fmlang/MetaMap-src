@@ -226,6 +226,8 @@ reset_options :-
 process_string(Input,Output) :-
 	%% Temporary code for use until a final lex access method is
 	%% determined.
+	% force machine_output
+	set_options("['-q']"),
 	assert(control_value(lexicon,db)),
 	%% end Temporary code 
 	trim_whitespace_right(Input, TrimmedInput0),
