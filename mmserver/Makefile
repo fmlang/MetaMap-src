@@ -39,7 +39,7 @@
 
 include ../Makefile.include
 
-APPNAME=mmserver11
+APPNAME=mmserver16
 SAVED_STATE=$(APPNAME).sav
 BINEXEC=$(APPNAME).BINARY.$(ARCH)
 
@@ -50,7 +50,12 @@ $(SAVED_STATE) : loader.pl
 	sicstus $(SICSTUSARGS) --goal "save_program('$(SAVED_STATE)'), halt."
 
 $(BINEXEC) : $(SAVED_STATE)
-	spld -vv $(CONF) --moveable --respath=$(RESPATH) $(PREFIX)/$(SAVED_STATE) --output=$(BINEXEC) $(LINK_FILES) $(LDFLAGS)
+	$(SPLD) -vv $(CONF) \
+	--respath=$(RESPATH) \
+	--output=$(MSBINEXEC) \
+	--static \
+	--main=restore \
+	--resources=$(MSSAVED_STATE)=/$(MSSAVED_STATE) $(LINK_FILES) $(LDFLAGS)
 
 clean : 
-	$(RM) -f $(BINEXEC) $(SAVED_STATE) $(MSBINEXEC) $(MSSAVED_STATE) *.${SOEXT} *.po
+	$(RM) -f $(BINEXEC) $(SAVED_STATE) *.${SOEXT} *.po
