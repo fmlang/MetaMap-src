@@ -51,7 +51,7 @@
 	% called by MetaMap API -- do not change signature!
 	postprocess_sentences/11,
 	% called by MetaMap API -- do not change signature!
-	process_text/11
+	process_text/12
    ]).
 
 % :- extern(skr_fe_go).
@@ -84,15 +84,15 @@
 
 :- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/20,
+	skr_phrases/21,
 	stop_and_halt/0
    ]).
 
-:- use_module(skr(skr_utilities), [
-	check_valid_file_type/2,
-	convert_non_text_fields_to_blanks/6,
-        fatal_error/2,
-	get_all_candidate_features/3
+:- use_module(skr(skr_json), [
+	conditionally_print_json_bracket/3,
+	conditionally_print_json_document_separator/3,
+	generate_and_print_json/2,
+	json_output_params/6
    ]).
 
 :- use_module(skr(skr_text_processing), [
@@ -102,11 +102,14 @@
    ]).
 
 :- use_module(skr(skr_utilities), [
+	check_valid_file_type/2,
 	conditionally_print_end_info/0,
 	conditionally_print_header_info/4,
 	compare_utterance_lengths/2,
+	convert_non_text_fields_to_blanks/6,
 	do_formal_tagger_output/0,
 	do_sanity_checking_and_housekeeping/4,
+        fatal_error/2,
 	generate_bracketed_output/2,
 	generate_candidates_output/8,
 	% generate_header_output/6,
@@ -114,6 +117,7 @@
 	generate_phrase_output/7,
 	generate_utterance_output/6,
 	generate_variants_output/2,
+	get_all_candidate_features/3,
 	get_program_name/1,
 	output_should_be_bracketed/1,
 	output_tagging/3,
@@ -138,11 +142,11 @@
 	maybe_atom_gc/3
    ]).
 
-:- use_module(skr_lib(negex), [
-	compute_negex/4,
-	final_negation_template/6,
-	generate_negex_output/1
-   ]).
+% :- use_module(skr_lib(negex), [
+% 	compute_negex/4,
+% 	final_negation_template/6,
+% 	generate_negex_output/1
+%    ]).
 
 :- use_module(skr_lib(nls_strings), [
 	% OBSOLETE
@@ -150,7 +154,8 @@
 	form_one_string/3,
 	normalized_syntactic_uninvert_string/2,
 	split_atom_completely/3,
-	trim_whitespace/2
+	trim_whitespace/2,
+	trim_whitespace_left/2
    ]).
 
 :- use_module(skr_lib(nls_system), [
@@ -265,6 +270,7 @@ discovered, and performs other initialization tasks including initializing
 other modules by calling initialize_skr/1.  It returns InterpretedArgs
 for later use (e.g., the stream associated with a file).  */
 
+%%% DO NOT MODIFY initialize_skr/4 without checking with the maintainer of the MetaMap API.
 initialize_skr(InitialOptions, InitialArgs, FinalArgs, FinalOptions) :-
 	get_control_options_for_modules([metamap], AllOptions),
 	interpret_options(InitialOptions, AllOptions, metamap, FinalOptions),
@@ -294,26 +300,30 @@ skr_fe(InterpretedArgs, ProgramName, UDAList, NoMapPairs, NoVarPairs, DefaultRel
 	% (2) OutputChoice is 1 (which is manually forced)
 	% (3) XML value is either XMLf1 or XMLn1
 	% get_xml_settings(XMLOption, FormatMode, XMLValue),
+	json_output_params(JSONFormat, _StartIndent, _IndentInc, _Padding, _Space, _NewLine),
 	xml_header_footer_print_setting(1, XMLMode, PrintSetting),
 	get_output_stream(OutputStream),
 	conditionally_print_xml_header(PrintSetting, OutputStream),
+	% Print the JSON opening bracket
+	conditionally_print_json_bracket('{', JSONFormat, OutputStream),
 	get_server_streams(ServerStreams),
 	% ServerStreams = TaggerServerStream-WSDServerStream,
 	( InputStream = user_input,
 	  get_from_iargs(infile, name, InterpretedArgs, InputStream) ->
 	  % process_all is for user_input
-          process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
+          process_all(ProgramName, DefaultRelease, InputStream, OutputStream, JSONFormat,
 		      UDAList, NoMapPairs, NoVarPairs, ServerStreams,
 		      TagOption, InterpretedArgs, IOptions)
           % batch_skr is for batch processing
-        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
+        ; batch_skr(InterpretedArgs, ProgramName, DefaultRelease, JSONFormat,
 		    UDAList, NoMapPairs, NoVarPairs,
 		    ServerStreams, TagOption, TagMode, IOptions, InputStream)
 	),
 	% conditionally_print_xml_footer/4 will be called here
 	% only if MetaMap is in batch mode, because otherwise (in interactive use)
 	% the user will have control-C-ed the program or exited it altogether.
-	conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream).
+	conditionally_print_xml_footer(PrintSetting, XMLMode, OutputStream),
+	conditionally_print_json_bracket('}', JSONFormat, OutputStream).
 
 get_output_stream(OutputStream) :-
 	( current_stream(_File, write, OutputStream) ->
@@ -337,7 +347,7 @@ file names from InterpretedArgs and redirects I/O to them.
 Meta concepts are computed for each noun phrase in the input.  */
 
 
-batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
+batch_skr(InterpretedArgs, ProgramName, DefaultRelease, JSONFormat,
 	  UDAList, NoMapPairs, NoVarPairs,
 	  ServerStreams, TagOption, TagMode, IOptions, InputStream) :-
 	get_from_iargs(infile,  name,   InterpretedArgs, InputFile),
@@ -347,7 +357,7 @@ batch_skr(InterpretedArgs, ProgramName, DefaultRelease,
 	conditionally_print_header_info(InputFile, TagMode, OutputFile, TagOption),
 	set_input(InputStream),
 	set_output(OutputStream),
-	( process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
+	( process_all(ProgramName, DefaultRelease, InputStream, OutputStream, JSONFormat,
 		      UDAList, NoMapPairs, NoVarPairs,
 		      ServerStreams, TagOption, InterpretedArgs, IOptions) ->
 	  true
@@ -364,29 +374,34 @@ processing (MetaMapping, MMI processing, Semantic interpretation).
 user_input and user_output may have been redirected to files.)
 If TagOption is 'tag', then tagging is done. */
 
-process_all(ProgramName, DefaultRelease, InputStream, OutputStream,
+process_all(ProgramName, DefaultRelease, InputStream, OutputStream, JSONFormat,
 	    UDAList, NoMapPairs, NoVarPairs,
 	    ServerStreams, TagOption, InterpretedArgs, IOptions) :-
 	do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream),
-	process_all_1(OutputStream, UDAList, NoMapPairs, NoVarPairs,
+	process_all_1(OutputStream, 1, UDAList, NoMapPairs, NoVarPairs, JSONFormat,
 		      TagOption, ServerStreams, InterpretedArgs, IOptions).
 
-process_all_1(OutputStream, UDAListIn, NoMapPairs, NoVarPairs, TagOption,
-	      ServerStreams, InterpretedArgs, IOptions) :-
+process_all_1(OutputStream, CurrDocNum, UDAListIn, NoMapPairs, NoVarPairs, JSONFormat,
+	      TagOption, ServerStreams, InterpretedArgs, IOptions) :-
 	get_skr_text(Strings, TextID),
+	% remove_initial_whitespace(Strings0, Strings),
 	% append(TempExtraChars, ExtraChars),
 	% Strings0 = [FirstString|RestStrings],
 	% trim_whitespace_from_last_string(RestStrings, FirstString, TrimmedStrings),
 	% Removed call for Steven Bedrick
 	( Strings \== [] ->
-	    process_text(Strings, TextID, TagOption, ServerStreams,
-			 ExpRawTokenList, AAs,
-			 UDAListIn, UDAListOut, NoMapPairs, NoVarPairs, MMResults),
-	    output_should_be_bracketed(BracketedOutput),
-	    postprocess_text(OutputStream, Strings, BracketedOutput, InterpretedArgs,
-			     IOptions, ExpRawTokenList, AAs, UDAListOut, MMResults),
-	    process_all_1(OutputStream, UDAListIn, NoMapPairs, NoVarPairs,
-			  TagOption, ServerStreams, InterpretedArgs, IOptions)
+	  conditionally_print_json_document_separator(CurrDocNum, JSONFormat, OutputStream),
+	  process_text(Strings, TextID, TagOption, ServerStreams,
+		       ExpRawTokenList, AAs,
+		       UDAListIn, UDAListOut, NoMapPairs, NoVarPairs,
+		       NegationTerms, MMResults),
+	  output_should_be_bracketed(BracketedOutput),
+	  postprocess_text(OutputStream, Strings, BracketedOutput, InterpretedArgs,
+			   IOptions, ExpRawTokenList, AAs, UDAListOut,
+			   NegationTerms, MMResults),
+	  NextDocNum is CurrDocNum + 1,	    
+	  process_all_1(OutputStream, NextDocNum, UDAListIn, NoMapPairs, NoVarPairs, JSONFormat,
+			TagOption, ServerStreams, InterpretedArgs, IOptions)
 	; true
 	),
 	!.
@@ -449,27 +464,38 @@ in Sentences in case the original text is preferred. */
 % DisambiguatedMMOPhrases = list of
 %
 % phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
-% 	 candidates(Evaluations),
+% 	 candidates(TotalCandidateCount,ExcludedCandidateCount,
+%                   PrunedCandidateCount,RemainingCandidateCount,Evaluations),
 % 	 mappings(Mappings),
 % 	 pwi(PhraseWordInfo),
-% 	 gvcs(GVCs),
+%        gvcs(GVCs),
 % 	 ev0(Evaluations3),
 % 	 aphrases(APhrases))
 
-%%% DO NOT MODIFY process_text without checking with the maintainer of the MetaMap API.
+%%% DO NOT MODIFY process_text/12 without checking with the maintainer of the MetaMap API.
 process_text(Text, TextID, TagOption, ServerStreams, RawTokenList, AAs,
-	     UDAListIn, UDAListOut, NoMapPairs, NoVarPairs, MMResults) :-
+	     UDAListIn, UDAListOut, NoMapPairs, NoVarPairs, NegationTerms, MMResults) :-
 	halt_if_non_ASCII(Text),
 	( process_text_1(Text, TextID, TagOption, ServerStreams,
 			 RawTokenList, AAs, UDAListIn, UDAListOut,
-			 NoMapPairs, NoVarPairs, MMResults) ->
+			 NoMapPairs, NoVarPairs, NegationTerms, MMResults) ->
 	  true
  	; fatal_error('process_text/4 failed for ~p~n', [Text])
 	).
 
+remove_initial_whitespace([], []).
+remove_initial_whitespace([FirstTextString|RestTextStrings], ConvertedTextStrings) :-
+	( FirstTextString == [] ->
+	  remove_initial_whitespace(RestTextStrings, ConvertedTextStrings)
+	; trim_whitespace_left(FirstTextString, TrimmedFirstTextString),
+	  ConvertedTextStrings = [TrimmedFirstTextString|RestTextStrings]
+	).
+	
+
+	
 process_text_1(Lines0, TextID, TagOption, ServerStreams,
 	       ExpRawTokenList, AdjustedAAs, UDAListIn, UDAListOut,
-	       NoMapPairs, NoVarPairs, MMResults) :-
+	       NoMapPairs, NoVarPairs, NegationTerms, MMResults) :-
 	MMResults = mm_results(Lines0, TagOption, ModifiedLines, InputType,
 			       Sentences, CoordSentences, OrigUtterances, MMOutput),
 	ModifiedLines = modified_lines(Lines),
@@ -547,21 +573,24 @@ process_text_1(Lines0, TextID, TagOption, ServerStreams,
 			 OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
 			 AdjustedAAs, UDA_AVL, NoMapPairs, NoVarPairs,
 			 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
-			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut, MMOutput),
+			 _RawTokenListOut, _WordDataCacheOut, _USCacheOut,
+			 NegationTermsList, MMOutput),
+	append(NegationTermsList, NegationTerms),
 	!.
 
 process_text_aux(ExpandedUtterances, TagOption, ServerStreams,
 		 OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
 		 AdjustedAAs, UDA_AVL, NoMapPairs, NoVarPairs,
 		 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
-		 RawTokenListOut, WordDataCacheOut, USCacheOut, MMOutput) :-
+		 RawTokenListOut, WordDataCacheOut, USCacheOut, NegationTerms, MMOutput) :-
 	( control_option(aas_only) ->
 	  true
 	; do_process_text(ExpandedUtterances, TagOption, ServerStreams,
 			  OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
 			  AdjustedAAs, UDA_AVL, NoMapPairs, NoVarPairs,
 			  ExpRawTokenList, WordDataCacheIn, USCCacheIn,
-			  RawTokenListOut, WordDataCacheOut, USCacheOut, MMOutput)
+			  RawTokenListOut, WordDataCacheOut, USCacheOut,
+			  NegationTerms, MMOutput)
 	).
 
 do_process_text([],
@@ -569,13 +598,14 @@ do_process_text([],
 		 _OrigCitationTextAtom, _CitationTextAtom,
 		_AAs, _UDA_AVL, _NoMapPairs, _NoVarPairs,
 		 ExpRawTokenList, WordDataCache, USCCache,
-		 ExpRawTokenList, WordDataCache, USCCache, []).
+		 ExpRawTokenList, WordDataCache, USCCache, [], []).
 do_process_text([ExpandedUtterance|Rest],
-		 TagOption, ServerStreams,
-		 OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL,
-		 NoMapPairs, NoVarPairs,
-		 ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
-		 ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
+		TagOption, ServerStreams,
+		OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL,
+		NoMapPairs, NoVarPairs,
+		ExpRawTokenListIn, WordDataCacheIn, USCCacheIn,
+		ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
+		[UtteranceNegationTerms|RestNegationTerms],
 		 [mm_output(ExpandedUtterance,OrigCitationTextAtom,ModifiedText,Tagging,AAs,
 			    Syntax,DisambiguatedMMOPhrases,ExtractedPhrases)|RestMMOutput]) :-
 	maybe_atom_gc(2, _DidGC,_SpaceCollected),
@@ -599,16 +629,18 @@ do_process_text([ExpandedUtterance|Rest],
 		      AAs, UDA_AVL, NoMapPairs, NoVarPairs, SyntAnalysis, TagList,
 		      WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
 		      ServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
-		      DisambiguatedMMOPhrases, ExtractedPhrases, _SemRepPhrases)
+		      DisambiguatedMMOPhrases, UtteranceNegationTerms,
+		      ExtractedPhrases, _SemRepPhrases)
 	),
 	do_process_text(Rest, TagOption, ServerStreams,
 			OrigCitationTextAtom, CitationTextAtom, AAs, UDA_AVL,
 			NoMapPairs, NoVarPairs,
 			ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
-			ExpRawTokenListOut, WordDataCacheOut, USCCacheOut, RestMMOutput).
+			ExpRawTokenListOut, WordDataCacheOut, USCCacheOut,
+			RestNegationTerms, RestMMOutput).
 
 postprocess_text(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
-		 IOptions,  ExpRawTokenList, AAs, UDAList, MMResults) :-
+		 IOptions,  ExpRawTokenList, AAs, UDAList, NegationTerms, MMResults) :-
 	% If the phrases_only debug option is set, don't do postprocessing,
 	% because we've already computed and displayed the phrase lengths,
 	% and that's all we care about if this option is on.
@@ -616,19 +648,20 @@ postprocess_text(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 	  ; control_option(phrases_only) ) ->
 	  true
 	; postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
-			     IOptions,  ExpRawTokenList, AAs, UDAList, MMResults) ->
+			     IOptions,  ExpRawTokenList, AAs, UDAList,
+			     NegationTerms, MMResults) ->
 	  true
 	; fatal_error('postprocess_text/2 failed for~n~p~n', [Lines0])
 	).
 
 postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
-		   IOptions, ExpRawTokenList, AAs, UDAList, MMResults) :-
+		   IOptions, _ExpRawTokenList, AAs, UDAList, NegationTerms, MMResults) :-
 	% Decompose input
 	MMResults = mm_results(Lines0, _TagOption, _ModifiedLines, _InputType,
 			       Sentences, _CoordSentences, OrigUtterances, DisambMMOutput),
 
-	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
-	generate_negex_output(NegationTerms),
+	% compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
+	% generate_negex_output(NegationTerms),
 	% current_output(OutputStream),
 	% format(user_output, '~n### Current output is ~q', [OutputStream]),
 	PrintMMO = 1,
@@ -637,6 +670,7 @@ postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 			      BracketedOutput, DisambMMOutput, PrintMMO, AllMMO),
 	% All the XML output for the current citation is handled here
 	generate_and_print_xml(AllMMO, OutputStream),
+	generate_and_print_json(AllMMO, OutputStream),
 	do_MMI_processing(OrigUtterances, BracketedOutput, AAs, UDAList, DisambMMOutput),
 	do_formal_tagger_output.
 
@@ -646,7 +680,7 @@ postprocess_sentences(OutputStream, OrigUtterances, NegExList, IArgs, IOptions, 
 		      _Sentences, BracketedOutput, DisambMMOutput, PrintMMO, AllMMO) :-
 	% HeaderMMO = [ArgsMMO,AAsMMO,NegExMMO|HeaderMMORest],
 	% HeaderMMORest is the (as yet) uninstantiated tail of HeaderMMO
-	postprocess_sentences_1(OrigUtterances, NegExList,
+	postprocess_sentences_1(OrigUtterances, % NegExList,
 				BracketedOutput, 1, AAs, DisambMMOutput, UtteranceMMO, []),
 	AllMMO = HeaderMMO,
 	HeaderMMORest = UtteranceMMO,
@@ -655,9 +689,8 @@ postprocess_sentences(OutputStream, OrigUtterances, NegExList, IArgs, IOptions, 
 	generate_MMO_terms(IArgs, IOptions, NegExList, DisambMMOutput,
 			   HeaderMMO, HeaderMMORest, OutputStream, PrintMMO, AllMMO).
 
-postprocess_sentences_1([], _NegExList,
-			_BracketedOutput, _N, _AAs, [], MMO, MMO).
-postprocess_sentences_1([OrigUtterance|RestOrigUtterances], NegExList,
+postprocess_sentences_1([], _BracketedOutput, _N, _AAs, [], MMO, MMO).
+postprocess_sentences_1([OrigUtterance|RestOrigUtterances],
 			BracketedOutput, N, AAs, [MMOutput|RestMMOutput], MMOIn, MMOOut) :-
 	% Decompose input
 	OrigUtterance = utterance(Label, TextString, StartPos/Length, ReplPos),
@@ -668,24 +701,23 @@ postprocess_sentences_1([OrigUtterance|RestOrigUtterances], NegExList,
 	% CHANGE
 	MMOIn = [UtteranceMMO|MMONext1],
 	output_tagging(BracketedOutput, HRTagStrings, FullTagList),
-	postprocess_phrases(MMOPhrases, ExtractedPhrases, NegExList,
+	postprocess_phrases(MMOPhrases, ExtractedPhrases,
 			    BracketedOutput, N, 1, AAs, Label, MMONext1, MMONext2),
 	!,
 	NextN is N + 1,
-	postprocess_sentences_1(RestOrigUtterances, NegExList,
+	postprocess_sentences_1(RestOrigUtterances,
 				BracketedOutput, NextN, AAs, RestMMOutput,
 				MMONext2, MMOOut).
-postprocess_sentences_1([FailedUtterance|_], _NegExList,
-			_BracketedOutput, _N, _AAs, _MMOutput, _MMOIn, _MMOOut) :-
+postprocess_sentences_1([FailedUtterance|_], _BracketedOutput,
+			_N, _AAs, _MMOutput, _MMOIn, _MMOOut) :-
 	FailedUtterance = utterance(UtteranceID,UtteranceText,_PosInfo,_ReplPos),
 	fatal_error('postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
 		    [UtteranceID,UtteranceText]).
 
 
-postprocess_phrases([], [], _NegExList, _BracketedOutput,
-		    _N, _M, _AAs, _Label, MMO, MMO).
+postprocess_phrases([], [], _BracketedOutput, _N, _M, _AAs, _Label, MMO, MMO).
 postprocess_phrases([MMOPhrase|RestMMOPhrases],
-		    [_ExtractedPhrase|RestExtractedPhrases], NegExList,
+		    [_ExtractedPhrase|RestExtractedPhrases],
 		    BracketedOutput, N, M, AAs, UtteranceLabel, MMOIn, MMOOut) :-
 	MMOPhrase = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
 			   candidates(TotalCandidateCount,
@@ -698,10 +730,10 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 			   gvcs(GVCs),
 			   ev0(Evaluations3),
 			   aphrases(APhrases)),
-	instantiate_candidates_NegEx_values(Evaluations,  NegExList),
-	instantiate_candidates_NegEx_values(Evaluations3, NegExList),
+	% instantiate_candidates_NegEx_values(Evaluations,  NegExList),
+	% instantiate_candidates_NegEx_values(Evaluations3, NegExList),
 	% This needs to be done explicitly if candidates are not displayed
-	conditionally_instantiate_mappings_NegEx_values(Mappings, NegExList),
+	% conditionally_instantiate_mappings_NegEx_values(Mappings, NegExList),
 	PhraseTextAtom = PhraseTextAtom0,
 	% format('PhraseTextAtom:~n~p~n',[PhraseTextAtom]),
 	generate_phrase_output(PhraseTextAtom, Phrase, StartPos, Length, ReplacementPos,
@@ -718,47 +750,10 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 	% CHANGE
 	MMOIn = [PhraseMMO,CandidatesMMO,MappingsMMO|MMONext],
 	NextM is M + 1,
-	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases, NegExList,
+	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases,
 			    BracketedOutput, N, NextM, AAs, UtteranceLabel, MMONext, MMOOut).
 
 
-% If show_candidates is on, the candidate terms will be present in the big MMOPhrase term, and
-% instantiate_candidates_NegEx_values/2 will instantiate the Negated field in the candidate terms,
-% which will instantiate the Negated field in the Mappings because the variables are shared
-% in the Candidates and Mappings data structures, so there's nothing to do here.
-
-% If, however, show_candidates is not on, both Evaluations and Evaluations3 will be [],
-% so the Negated field in the Mappings will need to be explicitly instantiated here.
-conditionally_instantiate_mappings_NegEx_values(Mappings, NegExList) :-
-	( \+ control_option(show_candidates) ->
-	   (  foreach(map(_NegScore,CandidatesList), Mappings),
-	       param(NegExList)
-	   do instantiate_candidates_NegEx_values(CandidatesList, NegExList)
-	   )
-	; true
-	).
-
-instantiate_candidates_NegEx_values(Evaluations, NegExList) :-
-	% format(user_output, '~q~n', [NegExList]),
-	(  foreach(Candidate, Evaluations),
-	   param(NegExList)
-	do % format(user_output, 'BEFORE: ~q~n', [Candidate]),
-	   get_all_candidate_features([cui,metaterm,posinfo,negated],
-				      Candidate,
-				      [CUI,MetaTerm,PosInfo,Negated]),
-	   instantiate_negated(CUI, MetaTerm, PosInfo, Negated, NegExList)
-	   % format(user_output, 'AFTER:  ~q~n', [Candidate])
-	).
-
-instantiate_negated(CUI, MetaTerm, PosInfo, Negated, NegExList) :-
-	final_negation_template(Negation,
-				_Type, _TriggerText, _TriggerPosInfo,
-				ConceptCUIList, PosInfo),
-	( member(Negation, NegExList),
-	  member(CUI:MetaTerm, ConceptCUIList) ->
-	  Negated is 1
-	; Negated is 0
-	).
 /*
    form_original_utterances(+Sentences, +StartPos, +EndPos, +TokenState, +CitationTextAtom,
 			    +RawTokenList, -OrigUtterances)

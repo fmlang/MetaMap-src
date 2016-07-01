@@ -254,10 +254,14 @@ is_control_option(metamap,  '', sldiID,	 	 		no, none).
 % is_control_option(metamap,  '', restore, 	 	 	no, none).
 is_control_option(metamap,  '', 'UDA',   			no,
 		  aspec('UDA', mandatory, file, read, no_default, 'File containing UDAs')).
+is_control_option(metamap,  '', 'JSONf',   			no,
+		  aspec('JSONf', mandatory, integer, none, no_default, 'integer specifying JSON indenting')).
+is_control_option(metamap,  '', 'JSONn',	 	 	no, none).
 is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLn1',		 	no, none).
+is_control_option(metamap,  '', 'conj',		 	 	no, none).
 
 % is_control_option(metamap,  '', 'allcats',		 	no, none).
 
@@ -288,9 +292,10 @@ is_control_option(metamap,  '', 'novar', no,
 			'File containing variant pairs to exclude.')).		  
 is_control_option(metamap,  '', 'utterances_only',	 	no, none).
 is_control_option(metamap,  '', 'cascade',	 		no, none).
-
-
-
+is_control_option(metamap,  '', 'num_break',	 		no, none).
+is_control_option(metamap,  '', 'no_nums',	 		no,
+                  aspec(no_nums, mandatory, list, none, no_default,
+                        'List of semantic types to exclude for numerical_concepts')).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% USemRep %%%%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -406,6 +411,9 @@ is_control_option(mm_print, p,potential_stopphrase_dump,no,none).
 % is_control_option(mm_print, i,inputmatch_lexmatch_dump,no,none).
 
 is_control_option(mm_print, h,help,no,none).
+is_control_option(mm_print,  '', 'JSONf',   		 no,
+		  aspec('JSONf', mandatory, integer, none, no_default, 'integer specifying JSON indenting')).
+is_control_option(mm_print,  '', 'JSONn',	   	 no, none).
 is_control_option(mm_print,  '', 'XMLf',		 no, none).
 is_control_option(mm_print,  '', 'XMLf1',	 	 no, none).
 is_control_option(mm_print,  '', 'XMLn',		 no, none).

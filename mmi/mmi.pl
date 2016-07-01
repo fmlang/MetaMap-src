@@ -99,10 +99,6 @@
 	skr_end_write/1
     ]).
 
-:- use_module(skr(skr_xml), [
-	xml_output_format/1
-    ]).
-
 :- use_module(text(text_object_tokens),[
 	all_alnum/1
    ]).		     
@@ -837,7 +833,7 @@ compute_specificities(Concept, MMValue, TreeCodes, WD, NMM, NM, NW, NC,
 	MMSpec is MMValue / 1000,
 	normalize_value(NMM, MMSpec, NMMSpec),
 	% MeSH tree depth specificity
-	compute_tree_depth_specificity(Concept, TreeCodes, WD, MValue),
+	compute_tree_depth_specificity(TreeCodes, WD, MValue),
 	% TreeDepthSpecificityDivisor used to be hard-coded as 9
 	environ('MMI_TREE_DEPTH_SPECIFICITY_DIVISOR', TreeDepthSpecificityDivisorVar),
 	ensure_number(TreeDepthSpecificityDivisorVar, TreeDepthSpecificityDivisor),
@@ -859,14 +855,13 @@ compute_specificities(Concept, MMValue, TreeCodes, WD, NMM, NM, NW, NC,
 	CSpec is CValue / CharacterSpecificityDivisor,
 	normalize_value(NC, CSpec, NCSpec).
 
-compute_tree_depth_specificity(_Concept, TreeCodes, WD, MValue) :-
-	( TreeCodes == [] ->
-	  MValue = WD
-	; compute_tree_depths(TreeCodes, TreeDepths),
-	  %% try both average and max--max is better (see runs a, b, and c)
-	  %% compute_average(TreeDepths,MValue)
-          max_member(MValue, TreeDepths)
-	).
+compute_tree_depth_specificity([], WD, WD).
+compute_tree_depth_specificity([H|T], _WD, MValue) :-
+	% TreeCodes = [H|T],	
+	compute_tree_depths([H|T], TreeDepths),
+	%% try both average and max--max is better (see runs a, b, and c)
+	%% compute_average(TreeDepths,MValue)
+        max_member(MValue, TreeDepths).	
 
 compute_tree_depths([], []).
 compute_tree_depths([First|Rest], [FirstDepth|RestDepths]) :-

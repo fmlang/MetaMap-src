@@ -44,6 +44,10 @@
 	reformat_AA_list_for_output/3
     ]).
 
+:- use_module(skr(skr_xml), [
+	xml_output_format/1
+    ]).
+
 :- use_module(skr_db(db_access), [
 	all_digits/1
     ]).
@@ -203,7 +207,7 @@ NOTE: This predicate assumes no knowledge about the interaction between
 
 is_at_sentence_boundary([Token|Rest], RevPre, RBWSs, NewRest) :-
 	sentence_punc_tok(Token),
-	\+ at_ws_tok(RevPre),	% must not be preceded by whitespace
+%	\+ at_ws_tok(RevPre),	% must not be preceded by whitespace
 	rb_ws_seq(Rest,RBs,WSs,RBWSs,NewRest),
 	( NewRest == [] ->	% has to end, nothing left
 	  true
@@ -319,6 +323,7 @@ non_ws_seq([WSToken|RestIn], [], [WSToken|RestIn]) :-
 non_ws_seq([First|RestIn], [First|NWSs], TokensOut) :-
     non_ws_seq(RestIn, NWSs, TokensOut).
 
+can_be_abbreviation([], y).
 can_be_abbreviation([tok(Type,Text,_,_)|_], YN) :-
 	% any alphabetic token (except for uc of length > 1) can be an abbreviation
 	% note that tokens are in reverse order
@@ -394,8 +399,6 @@ can_begin_sentence_1(_Tokens, y).
    find_bracketing(+TokensIn, +RevPre, +Level, +LBList, +Label,
                    -LBToClear, -RevBExpr, -TokensOut)
 */
-
-
 
 find_field_sentences([], []) :- !.
 find_field_sentences([[Field,Tokens]|Rest],
@@ -630,18 +633,11 @@ maybe_dump_AAs(UIAtom, AAs, OutputStream) :-
 	  ; control_option(aas_only)
 	  ),
 	  \+ control_option(machine_output),
-	  \+ xml_output_on ->
+	  \+ xml_output_format(_XMLOutput) ->
 	  % The "aa" argument specifies that "AA" should be the first field in he AA output
 	  current_output(OutputStream),
 	  dump_all_AAs(AAs, aa, UIAtom, OutputStream)
 	; true
-	).
-
-xml_output_on :-
-	( control_option('XMLf') -> true
-	; control_option('XMLn') -> true
-	; control_option('XMLf1') -> true
-	; control_option('XMLn1')
 	).
 
 dump_all_UDAs(UDAList, FirstField, UI, OutputStream) :-

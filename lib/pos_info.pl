@@ -38,7 +38,7 @@
 	collapse_pos_info/3,
 	create_EXP_raw_token_list/7,
 	create_UNEXP_raw_token_list/6,
-	get_next_token_state/3
+        get_next_token_state/3
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -743,7 +743,7 @@ remove_untokenized_whitespace([NextToken|_], InputStringIn,
 	( ws_tok(NextToken) ->
 	  InputStringOut = InputStringIn,
 	  NumBlanksRemoved is 0
-        ; remove_whitespace_chars(InputStringIn, 0, InputStringOut, NumBlanksRemoved)
+        ; remove_leading_whitespace(InputStringIn, 0, InputStringOut, NumBlanksRemoved)
         ).
 
 
@@ -963,7 +963,7 @@ consume_aa_token_strings([SecondAAToken|RestAATokens],
 	% arg(3, FirstAAToken, pos(StartPos,EndPos)),
 	% NumCharsConsumed is EndPos - StartPos,
 	% append(AATokenString, InputString1, InputStringIn),
-	% remove_whitespace_chars(InputString1, 0, InputStringNext, _NumBlanksRemoved),
+	% remove_leading_whitespace(InputString1, 0, InputStringNext, _NumBlanksRemoved),
 	consume_aa_token_strings(RemainingAATokens, NextAAToken, InputStringNext, InputStringOut).
 
 % consume_aa_token_strings([NextAAToken|RestAATokens], AAToken, InputStringIn, InputStringOut) :-
@@ -976,7 +976,7 @@ consume_aa_token_strings([SecondAAToken|RestAATokens],
 % 	limit_forward_skip(AAToken, PrefixLength),
 % 	append_length(InputString1, InputStringIn, NumCharsConsumed),
 % 	% append(AATokenString, InputString1, InputStringIn),
-% 	% remove_whitespace_chars(InputString1, 0, InputStringNext, _NumBlanksRemoved),
+% 	% remove_leading_whitespace(InputString1, 0, InputStringNext, _NumBlanksRemoved),
 % 	consume_aa_token_strings(RestAATokens, NextAAToken, InputString1, InputStringOut).
 
 limit_forward_skip(AAToken, PrefixLength) :-
@@ -989,11 +989,11 @@ limit_forward_skip(AAToken, PrefixLength) :-
 	; PrefixLength < 10
 	).
 
-remove_whitespace_chars([H|T], NumBlanksRemovedIn,
+remove_leading_whitespace([H|T], NumBlanksRemovedIn,
 			CharsWithNoWhiteSpace, NumBlanksRemovedOut) :-
 	( ws_char(H) ->
 	  NumBlanksRemovedNext is NumBlanksRemovedIn + 1,
-	  remove_whitespace_chars(T, NumBlanksRemovedNext,
+	  remove_leading_whitespace(T, NumBlanksRemovedNext,
 	  			  CharsWithNoWhiteSpace, NumBlanksRemovedOut)
         ; CharsWithNoWhiteSpace = [H|T],
 	  NumBlanksRemovedOut is NumBlanksRemovedIn
@@ -1264,7 +1264,7 @@ consume_strings([], _TokenIndex, _FirstPrefixLength, InputString, InputString).
 consume_strings([FirstToken|RestTokens], TokenIndex, FirstPrefixLength,
 		InputStringIn, InputStringOut) :-
 	arg(2, FirstToken, TokenString),
-	% remove_whitespace_chars(InputStringIn, 0, InputStringTemp, _NumBlanksRemoved),
+	% remove_leading_whitespace(InputStringIn, 0, InputStringTemp, _NumBlanksRemoved),
 	% Must change this call to append to a call to substring
 	% append(TokenString, InputStringNext, InputStringTemp),
 	InputStringTemp = InputStringIn,

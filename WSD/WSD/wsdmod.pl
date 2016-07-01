@@ -36,6 +36,7 @@
 
 :- use_module(skr(skr_utilities), [
 	fatal_error/2,
+        get_all_candidate_features/3,
         get_candidate_feature/3
     ]).
 
@@ -198,11 +199,11 @@ add_pos_info_to_phrases([], _Eval, _Tokens, []).
 add_pos_info_to_phrases([Item|RestItems], Evaluations, Tokens, [ItemPos|RestItemsPos]) :-
 	functor(Item, Type, 1),
 	arg(1, Item, Elements),
-	get_from_list(metaconc,Elements, [_Conc:CUI:_SemType]),
-	get_metaconc_position(CUI, Evaluations, Tokens, StartPos, EndPos),
+	get_from_list(metaconc, Elements, _Conc:CUI:_SemType),
+	get_metaconc_position_and_neg(CUI, Evaluations, Tokens, StartPos, EndPos, Negated),
 	!,
 	functor(ItemPos, Type, 1),
-	append(Elements, [position(StartPos,EndPos)], ElementsWithPos),
+	append(Elements, [negated(Negated),position(StartPos,EndPos)], ElementsWithPos),
 	arg(1,ItemPos, ElementsWithPos),
 	add_pos_info_to_phrases(RestItems, Evaluations, Tokens, RestItemsPos).
 add_pos_info_to_phrases([Item|RestItems], Evals, Tokens, [ItemPos|RestItemsPos]):-
@@ -213,10 +214,11 @@ add_pos_info_to_phrases([Item|RestItems], Evals, Tokens, [Item|RestItemsPos]) :-
 	add_pos_info_to_phrases(RestItems, Evals, Tokens, RestItemsPos).
 
 
-get_metaconc_position(CUI,[Eval|_RestEval], Tokens, StartPos, EndPos) :-
-	functor(Eval, ev, 11),
-	arg(2, Eval, CUI),
-	arg(11, Eval, PosInfoList),
+get_metaconc_position_and_neg(CUI,[Eval|_RestEval], Tokens, StartPos, EndPos, Negated) :-
+	get_all_candidate_features([cui,posinfo,negated], Eval, [CUI,PosInfoList,Negated]),
+	% functor(Eval, ev, 11),
+	% arg(2, Eval, CUI),
+	% arg(11, Eval, PosInfoList),
 	match_pos_token(PosInfoList, Tokens, MatchingTokens),
 	% \+ MatchingTokens == [],
 	compute_positions(MatchingTokens, StartPos, EndPos),
