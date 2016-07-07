@@ -59,6 +59,7 @@
 	substring/4,
 	ttyflush/0,
 	upper/2,
+	upper_list/2,
 	with_input_from_chars/3
    ]).
 
@@ -152,6 +153,11 @@ lowercase_list([First|Rest], [LCFirst|LCRest]) :-
 %   upper(+Text, ?Upper)
 %   converts an atom, [XQP] string, or non-empty list of character codes
 %   Text to upper case.  Upper and Text are the same type of term.
+
+upper_list([], []).
+upper_list([H|T], [UPPERH|UPPERT]) :-
+	upper(H, UPPERH),
+	upper_list(T, UPPERT).
 
 upper(Text, Upper) :-
         (   atom(Text) ->

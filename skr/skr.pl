@@ -193,7 +193,8 @@
 	lower/2,
 	midstring/6,
 	subchars/4,
-	ttyflush/0
+	ttyflush/0,
+	upper_list/2
     ]).
 
 :- use_module(text(text_objects), [
@@ -1151,13 +1152,15 @@ filter_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs, Evaluation
 filter_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	( control_value(restrict_to_sources, RestrictedSources) ->
 	  convert_to_root_sources(RestrictedSources, RestrictedRootSources),
+	  upper_list(RestrictedRootSources, RestrictedRootSourcesUPPER),
 	  filter_evaluations_restricting_to_sources(Evaluations0,
-						    RestrictedRootSources,
+						    RestrictedRootSourcesUPPER,
 						    EvaluationsAfterSources)
 	; control_value(exclude_sources, ExcludedSources),
 	  convert_to_root_sources(ExcludedSources, ExcludedRootSources),
+	  upper_list(ExcludedRootSources, ExcludedRootSourcesUPPER),
 	  filter_evaluations_excluding_sources(Evaluations0,
-					       ExcludedRootSources,
+					       ExcludedRootSourcesUPPER,
 					       EvaluationsAfterSources)
 	; EvaluationsAfterSources = Evaluations0
 	).
@@ -1956,8 +1959,8 @@ filter_evaluations_restricting_to_sources([FirstCandidate|RestCandidates],
 	% convert_to_root_sources(CUISources, CUIRootSources),
 	% The sources in the concept are guaranteed to be the root sources,
 	% so there's no need to check here!
-	CUIRootSources = CUISources,
-	intersection(RestrictRootSources, CUIRootSources, CommonSources),
+	upper_list(CUISources, CUISourcesUPPER), 
+	intersection(RestrictRootSources, CUISourcesUPPER, CommonSources),
 	  % If none of this CUI's sources are in the sources to restrict to, discard the candidate.
         ( CommonSources == [] ->
           Results = ModRest
@@ -1990,10 +1993,11 @@ filter_evaluations_excluding_sources([FirstCandidate|RestCandidates], ExcludedRo
 	db_get_cui_sourceinfo(CUI, CUISourceInfo),
 	get_string_sources(CUISourceInfo, MetaTerm, StringSources),
 	convert_to_root_sources(StringSources, StringRootSources),
+	upper_list(StringRootSources, StringRootSourcesUPPER),
 	% remove_non_string_sources(StringRootSources, CUISourceInfo, StringSourceInfo),
 	% RemainingStringSources is the result of deleting
 	% all elements of ExcludedRootSources from StringRootSources
-	difference(ExcludedRootSources, StringRootSources, RemainingStringSources),
+	difference(ExcludedRootSources, StringRootSourcesUPPER, RemainingStringSources),
 	  % If all of this CUI's sources are excluded sources, then discard the candidate.
 	( RemainingStringSources == [] ->
 	  Results = RestResults
