@@ -45,7 +45,7 @@
 	% but they must still be exported because they're called via debug_call.
 	print_candidate_grid/6,
 	print_duplicate_info/4,
-	skr_phrases/20,
+	skr_phrases/21,
 	print_all_aevs/1,
 	stop_and_halt/0,
 	% called by MetaMap API -- do not change signature!
@@ -91,6 +91,8 @@
 	get_subitems_feature/3,
 	linearize_components/2,
 	linearize_phrase/4,
+	local_digit/1,
+	local_ws/1,
 	new_phrase_item/3,
 	parse_phrase_word_info/3,
 	set_subitems_feature/4
@@ -113,13 +115,17 @@
 	gather_variants/4
     ]).
 
+:- use_module(skr(skr_fe), [
+	get_output_stream/1
+    ]).
+
+:- use_module(skr(skr_json), [
+	json_output_format/1
+   ]).
+
 :- use_module(skr(skr_umls_info), [
 	convert_to_root_sources/2,
 	sab_tables_exist/0
-    ]).
-
-:- use_module(skr(skr_fe), [
-	get_output_stream/1
     ]).
 
 :- use_module(skr(skr_utilities), [
@@ -159,6 +165,11 @@
 % 	maybe_atom_gc/3
 %     ]).
 
+:- use_module(skr_lib(negex), [
+	compute_negex/4,
+	final_negation_template/6
+   ]).
+
 :- use_module(skr_lib(nls_strings), [
 	split_string_completely/3,
 	trim_and_compress_whitespace/2
@@ -172,7 +183,6 @@
 	subtract_from_control_options/1
     ]).
 
-
 :- use_module(skr_lib(semgroup_member), [
 	semrep_semgroup_member/2
     ]).
@@ -183,7 +193,8 @@
 	lower/2,
 	midstring/6,
 	subchars/4,
-	ttyflush/0
+	ttyflush/0,
+	upper_list/2
     ]).
 
 :- use_module(text(text_objects), [
@@ -224,6 +235,7 @@
 	append/2,
 	keys_and_values/3,
 	last/2,
+	last/3,
 	nth0/3,
 	rev/2,
 	select/3,
@@ -292,24 +304,24 @@ skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
 	    AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
 	    WordDataCacheIn, USCCacheIn, RawTokensIn,
 	    ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
-	    MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) :-
+	    MMOPhrases, NegationTerms, ExtractedPhrases, SemRepPhrasesOut) :-
 	( skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
 			  AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
 			  WordDataCacheIn, USCCacheIn, RawTokensIn,
 			  ServerStreams, RawTokensNext, WordDataCacheOut, USCCacheOut,
-			  MMOPhrases, ExtractedPhrases, SemRepPhrasesOut) ->
+			  MMOPhrases, ExtractedPhrases, NegationTerms, SemRepPhrasesOut) ->
 	  % clean up token list by removing un-consumed tokens
 	  remove_tokens_until_label_token(RawTokensNext, RawTokensOut)
 	  % skr_utilities:write_token_list(RawTokensOut, 0, 1)
         ; fatal_error('skr_phrases/14 failed for text ~p: ~p~n',
-		  [InputLabel,UtteranceText])
+		      [InputLabel,UtteranceText])
         ).
 
 skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
 		AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
 		WordDataCacheIn, USCCacheIn, RawTokensIn,
 		ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
-		DisambiguatedMMOPhrases, ExtractedPhrases,
+		DisambiguatedMMOPhrases, ExtractedPhrases, NegationTerms,
 		minimal_syntax(SemRepPhrasesWithWSD)) :-
 	ServerStreams = _TaggerServerStream-WSDServerStream,
 	SyntacticAnalysis = minimal_syntax(Phrases0),
@@ -326,6 +338,7 @@ skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAto
 		      MMOPhrases, ExtractedPhrases),
 	% current_output(OutputStream),
 	% format(user_output, '~n### Current output before WSD is ~q', [OutputStream]),
+	compute_negex(RawTokensIn, UtteranceText, MMOPhrases, NegationTerms),
 	do_WSD(UtteranceText, InputLabel, CitationTextAtom, AAs, RawTokensIn,
 	       WSDServerStream, MMOPhrases, DisambiguatedMMOPhrases, SemRepPhrasesWithWSD).
 	% current_output(OutputStream),
@@ -340,7 +353,7 @@ skr_phrases_1([], _InputLabel,
 	      _OrigCitationTextAtom, _TagList,
 	      WordDataCache, USCCache, WordDataCache, USCCache,
 	      RawTokens, RawTokens, [], []).
-skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
+skr_phrases_1([FirstPhraseIn|RestPhrasesIn0], InputLabel, AllUtteranceText,
 	      AAs, UDAs, NoMapPairs, NoVarPairs, OrigCitationTextAtom,
 	      TagList,
 	      WordDataCacheIn, USCCacheIn,
@@ -348,20 +361,31 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	      RawTokensIn, RawTokensOut,
 	      [FirstMMOPhrase|RestMMOPhrases],
 	      [Phrases|RestPhrases]) :-
+	% merge conjuncts beginning with FirstPhraseIn
+	get_label_components(InputLabel, PMID, _TiOrAB, _UtteranceNum),
+	merge_conjuncts(FirstPhraseIn, RestPhrasesIn0, PMID,
+			ConjoinedPhrase0, RestPhrasesIn1),
 	% TotalPhraseCount is total the number of phrases glommed together
 	% to form the composite phrase.
 	% E.g., TotalPhraseCount for [ [pain] [on the left side] [of the chest] ] is 3
-	get_composite_phrases([PhraseIn|OrigRestPhrasesIn], CompositePhrase,
-			      TotalPhraseCount, RestCompositePhrases, CompositeOptions),
+	% get_composite_phrases is intentionally non-deterministic
+	% in order to allow undoing the phrase-gluing, in case the result is too long!
+	get_composite_phrases([ConjoinedPhrase0|RestPhrasesIn1], CompositePhrase,
+			      TotalPhraseCount, RestPhrasesIn2, CompositeOptions),
+	% merge conjuncts beginning with CompositePhrase
+	merge_conjuncts(CompositePhrase, RestPhrasesIn2, PMID,
+			ConjoinedPhrase1, RestPhrasesIn3),
 	% Merge consecutive phrases spanned by an AA
 	% The original composite phrases are the list
-	% [CompositePhrase|RestCompositePhrases];
+	% [CompositePhrase|NewRestPhrases0];
 	% after merging phrases that are spanned by an AA, the phrases are
 	% [MergedPhrase|RestMergedPhrases]
-	merge_aa_phrases(RestCompositePhrases, CompositePhrase, AAs, UDAs,
-			 MergedPhrase, RestMergedPhrases, MergeOptions),
-	get_inputmatch_atoms_from_phrase(MergedPhrase, InputMatchMergedPhraseWords),
-	length(InputMatchMergedPhraseWords, Length),
+	merge_aa_phrases(RestPhrasesIn3, ConjoinedPhrase1, AAs, UDAs,
+			 MergedPhrase, RestPhrasesIn4, MergeOptions),
+	% merge_conjuncts(MergedPhrase, NewRestPhrases1, PMID,
+	% 		  ConjoinedPhrase, NewRestPhrases2),
+	get_inputmatch_atoms_from_phrase(MergedPhrase, InputMatchConjoinedPhraseWords),
+	length(InputMatchConjoinedPhraseWords, Length),
 	( TotalPhraseCount > 0 ->
 	  Length < 21
 	; true
@@ -372,7 +396,7 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	add_to_control_options(AllAddedOptions),
 	% AllUtteranceText is never used in skr_phrase; it's there only for gap analysis,
 	% which is no longer used!!
-	% format(user_output, 'Phrase ~w:~n', [MergedPhrase]),
+	% format(user_output, 'Phrase ~w:~n', [ConjoinedPhrase]),
 	skr_phrase(InputLabel, AllUtteranceText,
 		   MergedPhrase, AAs, NoMapPairs, NoVarPairs,
 		   OrigCitationTextAtom, TagList,
@@ -387,11 +411,233 @@ skr_phrases_1([PhraseIn|OrigRestPhrasesIn], InputLabel, AllUtteranceText,
 	extract_phrases_from_aps(APhrases, Phrases),
 	subtract_from_control_options(AllAddedOptions),
 	% add_semtypes_to_phrases_if_necessary(Phrases0,FirstEPPhrases),
-	skr_phrases_1(RestMergedPhrases, InputLabel, AllUtteranceText,
+	skr_phrases_1(RestPhrasesIn4, InputLabel, AllUtteranceText,
 		      AAs, UDAs, NoMapPairs, NoVarPairs, OrigCitationTextAtom,
 		      TagList,
 		      WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut,
 		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrases).
+
+% Either
+% (1) The last element of MergedPhrase is a head(_) or mod(_),
+% or
+% (2a) The last element of MergedPhrase is a punc(_),
+% AND
+% (2a) The next-to-last element of MergedPhrase is a head(_) or mod(_).
+
+ends_with_head_or_mod_or_prep(MergedPhrase) :-
+	last(AllButLast, Last, MergedPhrase),
+	( Last = head(_) ->
+	  true
+	; Last = mod(_) ->
+	  true
+	; Last = prep(_) ->
+	  true
+	; Last = punc(_) ->
+	  last(AllButLast, NextToLast),
+	  ( NextToLast = head(_) ->
+	    true
+	  ; NextToLast = mod(_)
+	  )
+	).
+
+relevant_conj('and').
+relevant_conj('and/or').
+relevant_conj('and or').
+relevant_conj('as well as').
+% "instead of" is a prep, not a conj
+% relevant_conj('instead of').
+relevant_conj('nor').
+relevant_conj('or').
+relevant_conj('rather than').
+relevant_conj('versus').
+relevant_conj('vs').
+
+merge_conjuncts(FirstPhrase, RestPhrasesIn, PMID, ConjoinedPhrase, RestPhrasesOut) :-
+	% MetaMap must have been called with "--conj".
+	( control_option(conj),
+	% If the phrases left in the utterance number fewer than 3, do nothing,
+	% because we need at least 3 phrases to join conjuncts, i.e.,
+	% Conjunct1, Conjunction, Conjunct2.
+	  length([FirstPhrase|RestPhrasesIn], AllPhrasesLength),
+	  AllPhrasesLength >= 3 ->
+	  merge_conjuncts_aux(FirstPhrase, RestPhrasesIn,
+			      PMID, ConjoinedPhrase, RestPhrasesOut)
+	; ConjoinedPhrase = FirstPhrase,
+	  RestPhrasesOut = RestPhrasesIn
+	).
+
+% CLAUSE 1 of 3 for merge_conjuncts_aux/5
+% This clause handles plain vanilla "lung and stomach cancer" conjunction.
+merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, PMID, ConjoinedPhrase, RestPhrasesOut) :-
+	% Get the next two phrases, NextPhrase1 and NextPhrase2
+	RestPhrasesIn = [ConjunctionPhrase,Conjunct2Phrase|_],
+	% ConjunctionPhrase must begin (and end?) with a conj(_) element,
+	% conj([lexmatch([and]),inputmatch([and]),tag(conj),tokens([and])])
+	ConjunctionPhrase = [conj([lexmatch([ConjWord])|_])|_],
+	% and the conjunction lexmatch must be a specific conjunction
+	relevant_conj(ConjWord),
+	% The first phrase (i.e., FirstPhrase) must be < 5 elements long,
+	length(FirstPhrase, FirstPhraseLength),
+	FirstPhraseLength =< 8,
+	% and end with a head(_) or mod(_) element.
+	% Should this restriction be relaxed?
+	ends_with_head_or_mod_or_prep(FirstPhrase),
+	% The phrase after the conj(_) phrase (NextPhrase2) must be < 5 elements long
+	length(Conjunct2Phrase, Conjunct2PhraseLength),
+	Conjunct2PhraseLength < 8,
+	% merge_conjoined_phrases/2 should be nondeterminate
+	% so that it can be undone if the conjoined phrase it creates is too long.
+	merge_conjoined_phrases(FirstPhrase, RestPhrasesIn, PMID,
+				ConjoinedPhrase, RestPhrasesOut),
+	length(ConjoinedPhrase, ConjoinedPhraseLength),
+	ConjoinedPhraseLength < 15,
+	!.
+
+% Should eventually be merged into previous clause
+% This clause handles series coordination, e.g., "stage i, ii, and iiia breast cancer"
+
+% FirstPhrase = 
+%   [mod([lexmatch([stage]),inputmatch([stage]),tag(noun),tokens([stage])])
+%    head([lexmatch([i]),inputmatch([i]),tag(noun),tokens([i])])
+%    punc([inputmatch([,]),tokens([])]) ]
+% RestPhrasesIn =
+%   [[head([inputmatch([ii]),tag(noun),tokens([ii])]),punc([inputmatch([',']),tokens([])])],
+%    [conj([lexmatch([and]),inputmatch([and]),tag(conj),tokens([and])])],
+%    [mod([inputmatch([iiia]),tag(noun),tokens([iiia])]),
+%     head([lexmatch(['breast cancer']),inputmatch([breast,cancer]),tag(noun),tokens([breast,cancer])])]]
+
+% PhrasesEndingWithConj =
+%   [[head([inputmatch([ii]),tag(noun),tokens([ii])]),punc([inputmatch([',']),tokens([])])],
+%    [conj([lexmatch([and]),inputmatch([and]),tag(conj),tokens([and])])]]
+
+% Rest =
+%   [[mod([inputmatch([iiia]),tag(noun),tokens([iiia])]),
+%     head([lexmatch(['breast cancer']),inputmatch([breast,cancer]),tag(noun),tokens([breast,cancer])])]]
+
+% FirstRestPhrases =
+%   [[mod([inputmatch([iiia]),tag(noun),tokens([iiia])]),
+%     head([lexmatch(['breast cancer']),inputmatch([breast,cancer]),tag(noun),tokens([breast,cancer])])]]
+
+% TempConjoinedPhrase =
+%   [mod([lexmatch([stage]),inputmatch([stage]),tag(noun),tokens([stage])]),
+%    head([lexmatch([i]),inputmatch([i]),tag(noun),tokens([i])]),
+%    punc([inputmatch([',']),tokens([])]),
+%    head([inputmatch([ii]),tag(noun),tokens([ii])]),
+%    punc([inputmatch([',']),tokens([])]),
+%    conj([lexmatch([and]),inputmatch([and]),tag(conj),tokens([and])])]
+
+% ConjoinedPhrase0    = 
+%   [mod([lexmatch([stage]),inputmatch([stage]),tag(noun),tokens([stage])]),
+%    head([lexmatch([i]),inputmatch([i]),tag(noun),tokens([i])]),
+%    punc([inputmatch([',']),tokens([])]),
+%    head([inputmatch([ii]),tag(noun),tokens([ii])]),
+%    punc([inputmatch([',']),tokens([])]),
+%    conj([lexmatch([and]),inputmatch([and]),tag(conj),tokens([and])]),
+%    mod([inputmatch([iiia]),tag(noun),tokens([iiia])]),
+%    head([lexmatch(['breast cancer']),inputmatch([breast,cancer]),tag(noun),tokens([breast,cancer])])]
+
+% ConjoinedPhrase1 = 
+%   [mod([lexmatch([stage]),inputmatch([stage]),tag(noun),tokens([stage])]),
+%    mod([lexmatch([i]),inputmatch([i]),tag(noun),tokens([i])]),
+%    punc([inputmatch([',']),tokens([])]),
+%    mod([inputmatch([ii]),tag(noun),tokens([ii])]),
+%    punc([inputmatch([',']),tokens([])]),
+%    conj([lexmatch([and]),inputmatch([and]),tag(conj),tokens([and])]),
+%    mod([inputmatch([iiia]),tag(noun),tokens([iiia])]),
+%    mod([lexmatch(['breast cancer']),inputmatch([breast,cancer]),tag(noun),tokens([breast,cancer])])]
+%   
+% ConjoinedPhrase  =
+%   [mod([lexmatch([stage]),inputmatch([stage]),tag(noun),tokens([stage])]),
+%    mod([lexmatch([i]),inputmatch([i]),tag(noun),tokens([i])]),
+%    punc([inputmatch([',']),tokens([])]),
+%    mod([inputmatch([ii]),tag(noun),tokens([ii])]),
+%    punc([inputmatch([',']),tokens([])]),
+%    conj([lexmatch([and]),inputmatch([and]),tag(conj),tokens([and])]),
+%    mod([inputmatch([iiia]),tag(noun),tokens([iiia])]),
+%    head([lexmatch(['breast cancer']),inputmatch([breast,cancer]),tag(noun),tokens([breast,cancer])])]
+
+% CLAUSE 2 of 3 for merge_conjuncts_aux/5
+merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, PMID, ConjoinedPhrase, RestPhrasesOut) :-
+	contains_relevant_conj([FirstPhrase|RestPhrasesIn], PhrasesEndingWithConj, Rest),
+	% ensure series coordination comma(s) appear before the conjunction
+	contains_series_coord(PhrasesEndingWithConj),
+	Rest = [FirstRestPhrases|RestPhrasesOut],
+	
+	append(PhrasesEndingWithConj, TempConjoinedPhrase),
+	append(TempConjoinedPhrase, FirstRestPhrases, ConjoinedPhrase0),
+	maybe_print_inputmatches(ConjoinedPhrase0, PMID),
+	demote_heads(ConjoinedPhrase0, ConjoinedPhrase1),
+	promote_last_mod(ConjoinedPhrase1, ConjoinedPhrase).		
+
+% CLAUSE 3 of 3 for merge_conjuncts_aux/5
+merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, _PMID, ConjoinedPhrase, RestPhrasesOut) :-
+	ConjoinedPhrase = FirstPhrase,
+	RestPhrasesOut = RestPhrasesIn.
+
+contains_relevant_conj([H|T], PhrasesEndingWithConj, Rest) :-
+	% conj([lexmatch([and]),inputmatch([and]),tag(conj),tokens([and])])
+	( H = [conj([lexmatch([ConjWord])|_])],
+	  relevant_conj(ConjWord) ->
+	  PhrasesEndingWithConj = [H],
+	  Rest = T
+	; PhrasesEndingWithConj = [H|RestPhrasesEndingWithConj],
+	  contains_relevant_conj(T, RestPhrasesEndingWithConj, Rest)
+	).
+
+contains_series_coord(PhrasesEndingWithConj) :-
+	member(Phrase, PhrasesEndingWithConj),
+	last(Phrase, PhraseElement),
+	% punc([inputmatch([,]),tokens([])])
+	PhraseElement = punc([inputmatch([','])|_]).
+
+merge_conjoined_phrases(Conjunct1Phrase, RestPhrasesIn, PMID, ConjoinedPhrase2, RestPhrasesOut) :-
+	merge_conjoined_phrases_once(Conjunct1Phrase, RestPhrasesIn, PMID,
+				     ConjoinedPhrase0, RestPhrasesNext),
+	% must recurse to glue phrases together multiple times, e.g.,
+	% "inoperable, recurrent and metastatic endometrial or renal carcinoma"
+	merge_conjuncts(ConjoinedPhrase0, RestPhrasesNext, PMID, ConjoinedPhrase1, RestPhrasesOut),
+	promote_last_mod(ConjoinedPhrase1, ConjoinedPhrase2).
+
+promote_last_mod(ConjoinedPhrase1, ConjoinedPhrase2) :-
+	last(AllButLast, Last, ConjoinedPhrase1),
+	( Last = mod(Args) ->
+	  NewLast = head(Args)
+	; NewLast = Last
+	),
+	last(AllButLast, NewLast, ConjoinedPhrase2).
+
+merge_conjoined_phrases_once(Conjunct1Phrase, RestPhrasesIn,
+			     PMID, ConjoinedPhrase, RestPhrasesOut) :-
+	RestPhrasesIn = [ConjunctionPhrase,Conjunct2Phrase|Rest],
+	append([Conjunct1Phrase,ConjunctionPhrase,Conjunct2Phrase], TempConjoinedPhrase),
+	maybe_print_inputmatches(TempConjoinedPhrase, PMID),
+	demote_heads(TempConjoinedPhrase, ConjoinedPhrase),
+	RestPhrasesOut = Rest.	
+
+maybe_print_inputmatches(TempConjoinedPhrase, PMID) :-
+	( control_option(fielded_mmi_output) ->
+	  format('~s|CONJ|', [PMID]),
+	  print_inputmatches(TempConjoinedPhrase)
+	; true
+	).
+
+print_inputmatches([]) :- nl.
+print_inputmatches([FirstPhraseElement|RestPhraseElements]) :-
+	arg(1, FirstPhraseElement, FeatureList),
+	memberchk(inputmatch(TokenList), FeatureList),
+	concat_atom(TokenList, ' ', TokenListAtom),
+	format('~w|', [TokenListAtom]),
+	print_inputmatches(RestPhraseElements).
+
+% print_inputmatches(TempConjoinedPhrase) :-
+% 	member(Element, TempConjoinedPhrase),
+% 	arg(1, Element, FeatureList),
+% 	memberchk(inputmatch(TokenList), FeatureList),
+% 	concat_atom(TokenList, ' ', TokenListAtom),
+% 	format('~w|', [TokenListAtom]),
+% 	fail.
+% print_inputmatches(_) :- nl.
+ 
 
 remove_tokens_until_label_token([], []).
 remove_tokens_until_label_token([FirstToken|RestTokens], ExpRawTokenListNext) :-
@@ -662,7 +908,7 @@ mark_excluded_evaluations(RefinedEvaluations) :-
 
 debug_phrase(Label, TokenPhraseWords, InputMatchPhraseWords) :-
 	( phrase_debugging ->
-	  get_label_components(Label, [PMID,TiOrAB,UtteranceNum]),
+	  get_label_components(Label, PMID, TiOrAB, UtteranceNum),
 	  length(TokenPhraseWords, TokenPhraseLength),
 	  format(user_error, 'Phrase|~s|~s|~s|~d|~q~n',
 		 [PMID,TiOrAB,UtteranceNum,TokenPhraseLength,InputMatchPhraseWords]),
@@ -677,7 +923,7 @@ phrase_debugging :-
 	; control_option(phrases_only)
 	).
 
-get_label_components(Label, [PMID,TiOrAB,UtteranceNum]) :-
+get_label_components(Label, PMID, TiOrAB, UtteranceNum) :-
 	  atom_codes(Label, LabelString),
 	  % Label can contain an arbitrary number of ".",
 	  % but the last two chunks will be the TiOrAB and the UtteranceNumber:
@@ -695,6 +941,8 @@ get_label_components(Label, [PMID,TiOrAB,UtteranceNum]) :-
 
 get_pwi_info(Phrase, PhraseWordInfoPair, TokenPhraseWords, TokenPhraseHeadWords) :-
 	( control_option(term_processing) ->
+	  parse_phrase_word_info(Phrase, unfiltered, PhraseWordInfoPair)
+	; control_option(conj) ->
 	  parse_phrase_word_info(Phrase, unfiltered, PhraseWordInfoPair)
 	; parse_phrase_word_info(Phrase, filtered,   PhraseWordInfoPair)
 	),
@@ -886,7 +1134,10 @@ filter_evaluations(InitialEvaluations, NoMapPairs, RefinedEvaluations, FinalEval
 	filter_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs,
 					      EvaluationsAfterUserExclusions),
 	filter_evaluations_by_sources(EvaluationsAfterUserExclusions, EvaluationsAfterSources),
-	filter_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
+	% SemType filtering is now done after mapping construction in filter_mappings_by_semtypes/6
+	% filter_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
+	filter_numerical_evaluations(EvaluationsAfterSources, EvaluationsAfterNumerical), 
+	RefinedEvaluations = EvaluationsAfterNumerical,
 	filter_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
 
 
@@ -901,15 +1152,25 @@ filter_evaluations_by_user_exclusions(InitialEvaluations, NoMapPairs, Evaluation
 filter_evaluations_by_sources(Evaluations0, EvaluationsAfterSources) :-
 	( control_value(restrict_to_sources, RestrictedSources) ->
 	  convert_to_root_sources(RestrictedSources, RestrictedRootSources),
+	  upper_list(RestrictedRootSources, RestrictedRootSourcesUPPER),
 	  filter_evaluations_restricting_to_sources(Evaluations0,
-						    RestrictedRootSources,
+						    RestrictedRootSourcesUPPER,
 						    EvaluationsAfterSources)
 	; control_value(exclude_sources, ExcludedSources),
 	  convert_to_root_sources(ExcludedSources, ExcludedRootSources),
+	  upper_list(ExcludedRootSources, ExcludedRootSourcesUPPER),
 	  filter_evaluations_excluding_sources(Evaluations0,
-					       ExcludedRootSources,
+					       ExcludedRootSourcesUPPER,
 					       EvaluationsAfterSources)
 	; EvaluationsAfterSources = Evaluations0
+	).
+
+filter_numerical_evaluations(Evaluations0, EvaluationsAfterNumerical) :-
+	( control_value(no_nums, NumSemTypes) ->
+	  filter_numerical_evaluations_aux(Evaluations0,
+					   NumSemTypes,
+					   EvaluationsAfterNumerical)
+	; EvaluationsAfterNumerical = Evaluations0
 	).
 
 filter_evaluations_by_semtypes(Evaluations0, RefinedEvaluations) :-
@@ -971,12 +1232,12 @@ debug_evaluations(Evaluations) :-
 	).
 
 generate_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-		       Variants, APhrases0, BestCandidates, Mappings0, PrunedCount) :-
+		       Variants, APhrases0, _BestCandidates, Mappings0, PrunedCount) :-
 	  % Construct mappings only if necessary
 	( check_generate_best_mappings_control_options ->
 	  % format(user_output, 'About to call construct_best_mappings~n', []), ttyflush,
 	  construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-				  Variants, APhrases0, BestCandidates, Mappings0, PrunedCount)
+				  Variants, APhrases0, _BestCandidates, Mappings0, PrunedCount)
 	  % length(Mappings0, Mappings0Length),
 	  % format(user_output, 'Done with construct_best_mappings:~d ~n', [Mappings0Length]), ttyflush
 	; APhrases0 = [],
@@ -987,7 +1248,6 @@ generate_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair
 	  % Don't prune any candidates if we don't generate mappings!
 	  PrunedCount is 0
 	).
-
 extract_syntactic_tags([], []).
 extract_syntactic_tags([First|Rest], [FirstSTag|RestSTags]) :-
 	functor(First, FirstSTag, _Arity),
@@ -1045,17 +1305,82 @@ compute_evaluations(Label, UtteranceText, NoVarPairs,
 	% length(Evaluations2, Length2),
 	% format(user_output, '~d~n', [Length2]),
 	% Evaluations = Evaluations2,
+	% get_CUIs(Evaluations2, CUIs),
+	% agg_count(CUIs, Res), ( Res = [First|_Counts] -> format('### ~w~n', [First]) ; true),
 	filter_out_redundant_evaluations(Evaluations2, Evaluations),
 	% This is now done in compute_one_evaluation in metamap_evaluation.pl
 	% add_semtypes_to_evaluations(Evaluations),
 	debug_compute_evaluations_5(DebugFlags, Evaluations).
 
+% agg_count(List, Counts) :-
+% 	sort(List, Sorted),
+% 	count_all_instances(Sorted, List, Counts0),
+% 	sort(Counts0, Counts).
+% 
+% count_all_instances([], _List, []).
+% count_all_instances([H|T], List, [HCount-H|TCounts]) :-
+% 	count_occurrences(List, H, 0, HCount),
+% 	count_all_instances(T, List, TCounts).
+% 
+% count_occurrences([], _Element, Counts, Counts).
+% count_occurrences([H|T], Element, CountIn, CountOut) :-
+% 	( H == Element ->
+% 	  CountNext is CountIn - 1
+% 	; CountNext is CountIn
+% 	),
+% 	count_occurrences(T, Element, CountNext, CountOut).
+% 
+% 
+% get_CUIs([], []).
+% get_CUIs([H|T], [HCUI|TCUIs]) :-
+% 	get_candidate_feature(cui, H, HCUI),
+% 	get_CUIs(T, TCUIs).
 
 maybe_ignore_GVCs(GVCs, GVCsToEvaluate) :-
 	( control_option(tokenize_only) ->
 	  GVCsToEvaluate = []
-	; GVCsToEvaluate = GVCs
+	% ; GVCsToEvaluate = GVCs
+	; keep_only_useful_lexcats(GVCs, GVCsToEvaluate)
 	).
+
+% <flang@indlx6> 29 : grep cat= lexiconStatic2016 | count
+% 404417    82.260    82.260  	cat=noun
+%  65829    13.390    95.649  	cat=adj
+%  11399     2.319    97.968  	cat=verb
+%   9570     1.947    99.915  	cat=adv
+%    217     0.044    99.959  	cat=prep
+%     86     0.017    99.976  	cat=pron
+%     67     0.014    99.990  	cat=conj
+%     38     0.008    99.998  	cat=det
+%      8     0.002    99.999  	cat=modal
+%      3     0.001   100.000  	cat=aux
+%      1     0.000   100.000  	cat=compl
+
+% print_GVCs([]).
+% print_GVCs([H|T]) :-
+%  	H = gvc(v(_,_,LexCats,_,_,_),_, _),
+% 	format(user_output, '~w~n', [LexCats]),
+% 	print_GVCs(T).
+	      
+useful_lexcat(noun).
+useful_lexcat(adj).
+useful_lexcat(verb).
+useful_lexcat(adv).
+
+keep_only_useful_lexcats([], []).
+keep_only_useful_lexcats([H|T], FilteredGVCs) :-
+	H = gvc(v(_,_,LexCats,_,_,_),_, _),
+	% If the token is not in the lexicon at all, LexCats will be [],
+	% and we want to keep those. Filter out only tokens in the lexicon
+	% that we know are not useful.
+	( LexCats == [] ->
+	  FilteredGVCs = [H|RestFilteredGVCs]	    
+	; LexCats = [LexCat],	    
+	  useful_lexcat(LexCat) ->
+	  FilteredGVCs = [H|RestFilteredGVCs]
+	; FilteredGVCs = RestFilteredGVCs
+	),
+	keep_only_useful_lexcats(T, RestFilteredGVCs).
 
 % Determine if at least one-third of the words in the phrase are either
 % single-char alphabetic tokens or hyphens. This special case handles cases like
@@ -1556,6 +1881,51 @@ occurs_in_gvcs([gvc(v(Word,_,[Tag],_,_,_),_,_)|_Rest], Word, Tags) :-
 occurs_in_gvcs([_|Rest], Word, Tags) :-
 	occurs_in_gvcs(Rest, Word, Tags).
 
+filter_numerical_evaluations_aux([], _NoNumSemTypes, []).
+filter_numerical_evaluations_aux([FirstCandidate|RestCandidates], NoNumSemTypes, Results) :-
+	get_all_candidate_features([metaterm,semtypes],
+				   FirstCandidate,
+				   [MetaTermAtom, CandidateSemTypes]),
+	( matching_semtypes(NoNumSemTypes, CandidateSemTypes),
+	  atom_codes(MetaTermAtom, MetaTermString),
+	  mostly_digits(MetaTermString) ->
+	  Results = RestResults
+	; Results = [FirstCandidate|RestResults]
+	),
+	filter_numerical_evaluations_aux(RestCandidates, NoNumSemTypes, RestResults).
+
+matching_semtypes(NoNumSemTypes, CandidateSemTypes) :-
+	( intersection([all,'ALL'], NoNumSemTypes, Int),
+	  Int \== [] ->
+	  true
+	; intersection(NoNumSemTypes, CandidateSemTypes, CommonSemTypes),
+	    CommonSemTypes \== []
+	).
+	
+mostly_digits(MetaTermString) :-
+	remove_whitespace_chars(MetaTermString, MetaTermStringNoWS),
+	length(MetaTermStringNoWS, Length),
+	count_digits(MetaTermStringNoWS, 0, DigitCount),
+	DigitCount/ Length > 0.49.
+
+remove_whitespace_chars([], []).
+remove_whitespace_chars([H|T], CharsWithNoWS) :-
+	( local_ws(H) ->
+	  CharsWithNoWS = RestCharsWithNoWS
+	; CharsWithNoWS = [H|RestCharsWithNoWS]
+	),
+	remove_whitespace_chars(T, RestCharsWithNoWS).
+
+
+
+count_digits([], DigitCount, DigitCount).
+count_digits([H|T], DigitCountIn, DigitCountOut) :-
+	( local_digit(H) ->
+	  DigitCountNext is DigitCountIn + 1
+	; DigitCountNext is DigitCountIn
+	),
+	count_digits(T, DigitCountNext, DigitCountOut).
+
 
 % ev(-1000,'C0596170','BED','Binge eating disorder',[bed],[mobd],[[[1,1],[1,1],0]],[1],1,yes,no,[],[0/3],_247965,_247967)],
 filter_evaluations_by_user_exclusions_aux([], _UserExclusions, []).
@@ -1589,8 +1959,8 @@ filter_evaluations_restricting_to_sources([FirstCandidate|RestCandidates],
 	% convert_to_root_sources(CUISources, CUIRootSources),
 	% The sources in the concept are guaranteed to be the root sources,
 	% so there's no need to check here!
-	CUIRootSources = CUISources,
-	intersection(RestrictRootSources, CUIRootSources, CommonSources),
+	upper_list(CUISources, CUISourcesUPPER), 
+	intersection(RestrictRootSources, CUISourcesUPPER, CommonSources),
 	  % If none of this CUI's sources are in the sources to restrict to, discard the candidate.
         ( CommonSources == [] ->
           Results = ModRest
@@ -1623,10 +1993,11 @@ filter_evaluations_excluding_sources([FirstCandidate|RestCandidates], ExcludedRo
 	db_get_cui_sourceinfo(CUI, CUISourceInfo),
 	get_string_sources(CUISourceInfo, MetaTerm, StringSources),
 	convert_to_root_sources(StringSources, StringRootSources),
+	upper_list(StringRootSources, StringRootSourcesUPPER),
 	% remove_non_string_sources(StringRootSources, CUISourceInfo, StringSourceInfo),
 	% RemainingStringSources is the result of deleting
 	% all elements of ExcludedRootSources from StringRootSources
-	difference(ExcludedRootSources, StringRootSources, RemainingStringSources),
+	difference(ExcludedRootSources, StringRootSourcesUPPER, RemainingStringSources),
 	  % If all of this CUI's sources are excluded sources, then discard the candidate.
 	( RemainingStringSources == [] ->
 	  Results = RestResults
@@ -1730,23 +2101,25 @@ filter_evaluations_excluding_sts([FirstCandidate|RestCandidates], STs,
 	filter_evaluations_excluding_sts(RestCandidates, STs,
 					 RestKeptEvaluations, RestDiscardedEvaluations).
 
+% construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
+% 			_Variants, APhrases, Evaluations, BestMaps, PrunedCount) :-
+% 	% special clause for detecting structures such as
+% 	% amino acid sequences (e.g., His-Ala-Asp-Gly-...); and
+% 	% other hyphenated structures (e.g., (D)-C-Q-W- A-V-G-H-L-C-NH2)
+% 	% to prevent computing mappings
+% 	length(Phrase, PhraseLength),
+% 	PhraseLength > 5,
+% 	PhraseWordInfoPair=_:pwi(wdl(_,LCFilteredWords),_,_),
+% 	apply_shortcut_processing_rules(LCFilteredWords, PhraseTextString),
+% 	!,
+% 	% AllMappings = [],
+% 	PrunedCount is 0,
+% 	APhrases = [],
+% 	BestMaps = [].
+% 	% construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
+% 	%			  Variants, APhrases, BestMaps).
 construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-			Variants, APhrases, Evaluations, BestMaps, PrunedCount) :-
-	% special clause for detecting structures such as
-	% amino acid sequences (e.g., His-Ala-Asp-Gly-...); and
-	% other hyphenated structures (e.g., (D)-C-Q-W- A-V-G-H-L-C-NH2)
-	% to prevent computing mappings
-	length(Phrase, PhraseLength),
-	PhraseLength > 5,
-	PhraseWordInfoPair=_:pwi(wdl(_,LCFilteredWords),_,_),
-	apply_shortcut_processing_rules(LCFilteredWords, PhraseTextString),
-	!,
-	AllMappings = [],
-	PrunedCount is 0,
-	construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
-				  Variants, APhrases, BestMaps).
-construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-			Variants, APhrases, BestCandidates, BestMaps, PrunedCount) :-
+			Variants, APhrases, _BestCandidates, BestMaps, PrunedCount) :-
 	% consider doing construction, augmentation and filtering more linearly
 	% to increase control and to avoid keeping non-optimal results when
 	% control_option(compute_all_mappings) is not in effect
@@ -1758,7 +2131,7 @@ construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPai
 	  % write_aevs(AEvaluations),
 	  compute_phrase_words_length(PhraseWordInfoPair, NPhraseWords),
 	  construct_all_mappings(Evaluations, PhraseTextString, NPhraseWords, Variants,
-				 BestAEvs, DuplicateCandidates, AllMappings, PrunedCount),
+				 _BestAEvs, DuplicateCandidates, AllMappings, PrunedCount),
 	  % construct_all_mappings_OLD(AEvaluations, AllMappings)
 	  % user:'=?'(AllMappings, OldAllMappings),
 	  debug_call(trace, length(AllMappings, AllMappingsLength)),
@@ -1779,8 +2152,73 @@ construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPai
 	% Cut away all the choice points left by the pruning code!
 	!,
 	construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllDistributedMappings,
-				  Variants, APhrases, BestMaps),
-	deaugment_evaluations(BestAEvs, BestCandidates).
+				  Variants, APhrases0, BestMaps0),
+	maybe_filter_mappings_by_semtypes(BestMaps0, APhrases0,
+					  NPhraseWords, Variants,
+					  BestMaps, APhrases).
+
+% filter_mappings_by_semtypes(BestMaps, APhrases, BestMaps, APhrases).
+
+
+maybe_filter_mappings_by_semtypes(BestMaps0, APhrases0,
+				  NPhraseWords, Variants,
+				  BestMaps, APhrases) :-
+	( \+ control_option(restrict_to_sts),
+	  \+ control_option(exclude_sts) ->
+	  BestMaps = BestMaps0,
+	  APhrases = APhrases0
+	; filter_mappings_by_semtypes(BestMaps0, APhrases0,
+				      NPhraseWords, Variants,
+				      BestMaps, APhrases)
+	).		  
+
+filter_mappings_by_semtypes([], [], _Variants, _NPhraseWords, [], []).
+filter_mappings_by_semtypes([FirstMapping|RestMappings], [FirstAPhrase|RestAPhrases],
+			    NPhraseWords, Variants,
+			    FilteredMappings, FilteredAPhrases) :-
+	FirstMapping = map(_Score, AllEvaluations),
+	filter_evaluations_by_semtypes(AllEvaluations, FilteredEvaluations),
+	  % If no candidates are left in this mapping, discard the mapping altogether
+	( FilteredEvaluations == [] ->
+	  FilteredMappings = RestFilteredMappings,
+	  FilteredAPhrases = RestFilteredAPhrases
+	; compute_confidence_value(FilteredEvaluations, NPhraseWords, Variants, ModScore),
+	  ModifiedFirstMapping = map(ModScore, FilteredEvaluations),
+	  FilteredMappings = [ModifiedFirstMapping|RestFilteredMappings],
+	  modify_aphrase(FirstAPhrase, FilteredEvaluations, ModScore, ModifiedFirstAPhrase),
+	  FilteredAPhrases = [ModifiedFirstAPhrase|RestFilteredAPhrases]
+	),
+	filter_mappings_by_semtypes(RestMappings, RestAPhrases,
+				    NPhraseWords, Variants,
+				    RestFilteredMappings, RestFilteredAPhrases).
+	% deaugment_evaluations(BestAEvs, BestCandidates).
+
+modify_aphrase(FirstAPhrase, FilteredEvaluations, ModScore, ModifiedFirstAPhrase) :-
+	FirstAPhrase = ap(_OrigScore,LPhraseOut,LPhraseMapOut,_OrigMapping),
+	LPhraseOut = [_OrigConfid|OrigSyntax],
+	modify_lphrase_syntax(OrigSyntax, FilteredEvaluations, ModSyntax),
+	ModLPhraseOut = [confid(ModScore)|ModSyntax],
+	ModifiedFirstAPhrase = ap(ModScore,ModLPhraseOut,LPhraseMapOut,FilteredEvaluations).
+
+
+% The Syntax elements are terms like these:
+% mod([lexmatch([stent]),inputmatch([stent]),tag(noun),tokens([stent]),metaconc('Stent Device Component':'C1705817':[medd])])
+% head([lexmatch([inferior,'vena caval',filter]),inputmatch([inferior,vena,caval,filter]),tag(noun),tokens([inferior,vena,caval,filter]),metaconc('Vena Cava Filters':'C0080306':[medd])])
+
+modify_lphrase_syntax([], _FilteredEvaluations, []).
+modify_lphrase_syntax([FirstSyntaxElement|RestSyntaxElements], FilteredEvaluations, ModLPhraseOut) :-
+	arg(1, FirstSyntaxElement, FeatureList),
+	( memberchk(metaconc(_MetaConcept:CUI:_SemTypes), FeatureList) ->
+	  % create an ev/16 term with only the CUI instantiated
+	  get_candidate_feature(cui, Candidate, CUI),
+	  ( memberchk(Candidate, FilteredEvaluations) ->
+	    ModLPhraseOut = [FirstSyntaxElement|RestModLPhraseOut]
+	  ; ModLPhraseOut = RestModLPhraseOut
+	  )
+	  % If FirstSyntaxElement contains no metaconc(_) term, just pass it through
+	  ; ModLPhraseOut = [FirstSyntaxElement|RestModLPhraseOut]
+	),
+	modify_lphrase_syntax(RestSyntaxElements, FilteredEvaluations, RestModLPhraseOut).
 
 test_mappings_limit(MappingsCount) :-
 	  % If no_prune is not set, then determine the max allowable number of mappings
@@ -1802,8 +2240,8 @@ compute_phrase_words_length(PhraseWordInfoPair, NPhraseWords) :-
 	  length(LCPhraseWords, NPhraseWords).
 	
 
-apply_shortcut_processing_rules(LCFilteredWords, _PhraseTextString) :-
-	contains_n_amino_acids(LCFilteredWords, 0, 3) .
+% apply_shortcut_processing_rules(LCFilteredWords, _PhraseTextString) :-
+%	contains_n_amino_acids(LCFilteredWords, 0, 3).
 
 % apply_shortcut_processing_rules(LCFilteredWords, PhraseTextString) :-
 % 	( contains_n_amino_acids(LCFilteredWords, 3) ->
@@ -1814,14 +2252,17 @@ apply_shortcut_processing_rules(LCFilteredWords, _PhraseTextString) :-
 construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 			  Variants, APhrases, BestMappings) :-
 	debug_message(mappings, '~N### Calling augment_phrase_with_mappings~n', []),
-	augment_phrase_with_mappings(AllMappings, Phrase, PhraseWordInfoPair, Variants, APhrases0),
+	sort(AllMappings, SortedAllMappings),
+	augment_phrase_with_mappings(SortedAllMappings, Phrase,
+				     PhraseWordInfoPair, Variants, APhrases0),
 	% The sort is now done inside augment_phrase_with_mappings
 	% sort(APhrases0,APhrases1),
 	debug_message(mappings, '~N### Calling conditionally_filter_best_aphrases~n', []),
 	conditionally_filter_best_aphrases(APhrases0, APhrases),
 	% Aphrases is a list of terms of the form
 	% ap(NegValue,LPhraseOut,LPhraseMapOut,Mapping).
-	aphrases_maps(APhrases, BestMappings),
+	aphrases_maps(APhrases, BestMappings0),
+	sort(BestMappings0, BestMappings),
 	% BestMappings = BestMappings0,
 	debug_call(mappings, length(BestMappings, BestMappingsCount)),
 	debug_message(mappings, '~n### ~d Best Mappings~n', [BestMappingsCount]),
@@ -1951,35 +2392,35 @@ conditionally_filter_best_aphrases([H|T], APhrases) :-
 % contains_n_amino_acids(LCWords, N) :-
 % 	contains_n_amino_acids(LCWords, 0, N).
 
-contains_n_amino_acids([First|Rest], I, N) :-
-	( I =:= N ->
-	  true
-	; is_an_amino_acid(First) ->
-	  J is I + 1,
-	  contains_n_amino_acids(Rest, J, N)
-	; contains_n_amino_acids(Rest, I, N)
-	).
-
-is_an_amino_acid(ala).
-is_an_amino_acid(arg).
-is_an_amino_acid(gly).
-is_an_amino_acid(leu).
-is_an_amino_acid(glu).
-is_an_amino_acid(lys).
-is_an_amino_acid(asp).
-is_an_amino_acid(ser).
-is_an_amino_acid(asn).
-is_an_amino_acid(gln).
-is_an_amino_acid(tyr).
-is_an_amino_acid(phe).
-is_an_amino_acid(ile).
-is_an_amino_acid(thr).
-is_an_amino_acid(pro).
-is_an_amino_acid(val).
-is_an_amino_acid(cys).
-is_an_amino_acid(his).
-is_an_amino_acid(met).
-is_an_amino_acid(trp).
+% contains_n_amino_acids([First|Rest], I, N) :-
+% 	( I =:= N ->
+% 	  true
+% 	; is_an_amino_acid(First) ->
+% 	  J is I + 1,
+% 	  contains_n_amino_acids(Rest, J, N)
+% 	; contains_n_amino_acids(Rest, I, N)
+% 	).
+% 
+% is_an_amino_acid(ala).
+% is_an_amino_acid(arg).
+% is_an_amino_acid(gly).
+% is_an_amino_acid(leu).
+% is_an_amino_acid(glu).
+% is_an_amino_acid(lys).
+% is_an_amino_acid(asp).
+% is_an_amino_acid(ser).
+% is_an_amino_acid(asn).
+% is_an_amino_acid(gln).
+% is_an_amino_acid(tyr).
+% is_an_amino_acid(phe).
+% is_an_amino_acid(ile).
+% is_an_amino_acid(thr).
+% is_an_amino_acid(pro).
+% is_an_amino_acid(val).
+% is_an_amino_acid(cys).
+% is_an_amino_acid(his).
+% is_an_amino_acid(met).
+% is_an_amino_acid(trp).
 
 % text_contains_n_hyphens_within_word(PhraseText, N) :-
 % 	( atom(PhraseText) ->
@@ -2770,7 +3211,7 @@ mark_pruned_evaluations(AllCandidates, RemainingCandidates) :-
 	).
 
 construct_all_mappings(Evaluations, PhraseTextString, NPhraseWords, Variants,
-		       BestAEvaluations, DuplicateAEvs, FinalMappings, PrunedCount) :-
+		       _BestAEvaluations, DuplicateAEvs, FinalMappings, PrunedCount) :-
 	augment_evaluations(Evaluations, AEvaluations), 
 	length(Evaluations, EvaluationsCount),
 	get_pruning_threshold(EvaluationsCount, PruningThreshold),
@@ -2789,7 +3230,7 @@ construct_all_mappings(Evaluations, PhraseTextString, NPhraseWords, Variants,
 		      [DuplicateAEvCount,DuplicateAEvsCount]),
 	debug_message(candidates, ' ~d Base Candidates, ~d Total Candidates~n',
 		      [NoDuplicateCount,TotalAEvsCount]),
-	BestAEvaluations = AEvaluationsNoDups,
+	% BestAEvaluations = AEvaluationsNoDups,
 	% Compute mappings' confidence value upstream -- where mappings are first constructed!
 	evaluate_candidate_grid(AEvaluationsNoDups, DuplicateAEvCount, DuplicateAEvsCount,
 				NoDuplicateCount, NPhraseWords, Sparseness),
@@ -3351,8 +3792,7 @@ augment_phrase_with_mappings([H|T], Phrase, PhraseWordInfoPair, Variants, APhras
 	length(LCPhraseWords, NPhraseWords),
 	length(MappingsList, MappingsListLength),
 	augment_lphrase_with_mappings(MappingsList, LPhrase, LPhraseMap, MappingsListLength,
-				      NPhraseWords, Variants, APhrases0),
-	sort(APhrases0, APhrases).
+				      NPhraseWords, Variants, APhrases).
 
 augment_lphrase_with_mappings([], _LPhrase, _LPhraseMap, _MappingsCount, _NPW, _Vars, []).
 augment_lphrase_with_mappings([FirstMapping|RestMappings], LPhrase, LPhraseMap, MappingsCount,
@@ -3760,9 +4200,23 @@ phrase involvement.
 
 filter_out_redundant_evaluations([], []).
 filter_out_redundant_evaluations([First|Rest], FilteredEvaluations) :-
-	rev([First|Rest], RevEvaluations),
-	filter_out_redundant_evaluations_aux(RevEvaluations, RevFilteredEvaluations),
-	rev(RevFilteredEvaluations, FilteredEvaluations).
+	prefix_with_CUI_and_pos_score([First|Rest], ListWithCUIPrefix),
+	sort(ListWithCUIPrefix, SortedListWithCUIPrefix),
+	% rev([First|Rest], RevEvaluations),
+	filter_out_redundant_evaluations_aux(SortedListWithCUIPrefix, FilteredListWithCUIPrefix),
+	remove_CUI_and_pos_score(FilteredListWithCUIPrefix, FilteredEvaluations0),
+	sort(FilteredEvaluations0, FilteredEvaluations).
+
+prefix_with_CUI_and_pos_score([], []).
+prefix_with_CUI_and_pos_score([FirstIn|RestIn], [FirstOut|RestOut]) :-
+	get_all_candidate_features([negvalue,cui], FirstIn, [NegValue,CUI]),
+	PosValue is -NegValue,
+	FirstOut = CUI-PosValue-FirstIn,
+	prefix_with_CUI_and_pos_score(RestIn, RestOut).
+
+remove_CUI_and_pos_score([], []).
+remove_CUI_and_pos_score([_CUI-_PosScore-FirstIn|RestIn], [FirstIn|RestOut]) :-
+	remove_CUI_and_pos_score(RestIn, RestOut).
 
 filter_out_redundant_evaluations_aux([], []).
 filter_out_redundant_evaluations_aux([First|Rest], Result) :-
@@ -3779,16 +4233,19 @@ WATCH ORDER OF ARGS
 evaluation_is_redundant/2 determines if Evaluation involves the same
 concept and the same phrase involvement as one of Evaluations. */
 
-evaluation_is_redundant([Candidate2|_Rest], Candidate1) :-
-	get_all_candidate_features([metaconcept,matchmap],
-				   Candidate2, [SameMetaConcept,MatchMap2]),
-	get_all_candidate_features([metaconcept,matchmap],
-				   Candidate1, [SameMetaConcept,MatchMap1]),
-	matchmaps_are_equivalent(MatchMap1, MatchMap2),
-	!.
+evaluation_is_redundant([CUI2-_PosScore2-Candidate2|_Rest], CUI1-_PosScore1-Candidate1) :-
+	get_candidate_feature(matchmap, Candidate2, MatchMap2),
+	get_candidate_feature(matchmap, Candidate1, MatchMap1),
+
+	( CUI1 == CUI2,
+	  matchmaps_are_equivalent(MatchMap1, MatchMap2) ->
+	  true
+	; CUI1 \== CUI2 ->
+	  !,
+	  fail
+	).
 evaluation_is_redundant([_First|Rest], Evaluation) :-
 	evaluation_is_redundant(Rest, Evaluation).
-
 
 /* filter_out_subsumed_evaluations(+Evaluations, -FilteredEvaluations)
    filter_out_subsumed_evaluations_aux(+Evaluations, -FilteredEvaluations)
@@ -3885,12 +4342,12 @@ get_inputmatch_lists_from_phrase([FirstPhraseComponent|RestPhraseComponents],
 % get_composite_phrases/5 is intentionally nondeterminate to allow for undoing
 % composite phrases if the result is too long a phrase!
 get_composite_phrases([PhraseIn|RestPhrasesIn], CompositePhrase,
-		      ActualPrepPhraseCount, RestCompositePhrasesIn, CompositeOptions) :-
+		      ActualPrepPhraseCount, NewRestPhrasesIn, CompositeOptions) :-
 	control_value(composite_phrases, MaxPrepPhraseCount),
 	MaxPrepPhraseCount > 0,
 	begins_with_composite_phrase([PhraseIn|RestPhrasesIn], MaxPrepPhraseCount,
 				     ActualPrepPhraseCount,
-				     CompositePhrase0, RestCompositePhrasesIn),
+				     CompositePhrase0, NewRestPhrasesIn),
 	collapse_syntactic_analysis(CompositePhrase0, CompositePhrase),
 	% append(CompositePhrase1, CompositePhrase),
 	CompositeOptions = [term_processing, ignore_word_order].
@@ -3911,20 +4368,22 @@ the phrase list begins with
 
 */
 
-begins_with_composite_phrase([First,Second|Rest], MaxPrepPhraseCount0,
-			     TotalPhraseCount, [First,Second|RestComposite], NewRest) :-
+begins_with_composite_phrase([FirstPhrase,SecondPhrase|RestPhrases], MaxPrepPhraseCount0,
+			     TotalPhraseCount, [FirstPhrase,SecondPhrase|RestComposite], NewRest) :-
 	% We want to allow not just "pain on the left side of the chest",
 	% but also "the patient presented with pain on the left side of the chest"!
-	% \+ is_prep_phrase(First),
-	% contains_head(First),
-        \+ ends_with_punc(First), % "pain"
-        is_prep_phrase(Second),   % "on the left side"
+	% \+ is_prep_phrase(FirstPhrase),
+	% contains_head(FirstPhrase),
+	% FirstPhrase = [FirstPhraseElement|_RestPhraseElements],
+	% \+ FirstPhraseElement = conj(_),
+        \+ ends_with_punc(FirstPhrase), % "pain"
+        is_prep_phrase(SecondPhrase),   % "on the left side"
 	% !,
 	% MaxPrepPhraseCount is the total number of prepositional phrases
 	% that can be glommed onto the initial phrase;
 	MaxPrepPhraseCount is MaxPrepPhraseCount0 - 1,
 	InitPrepPhraseCount is 0,
-	initial_of_phrases(Rest, MaxPrepPhraseCount, InitPrepPhraseCount,
+	initial_of_phrases(RestPhrases, MaxPrepPhraseCount, InitPrepPhraseCount,
 			   _ActualOFPhraseCount0, _RestComposite0, _NewRest0),
 	!,
 	% This looks ugly, but it prevents needless backtracking.
@@ -3937,7 +4396,7 @@ begins_with_composite_phrase([First,Second|Rest], MaxPrepPhraseCount0,
 	between(NegMaxPrepPhraseCount, 0, TempNegActualPrepPhraseCount),
 	TempActualPrepPhraseCount is -1 * TempNegActualPrepPhraseCount,
 %	TempActualPrepPhraseCount is -1 * TempNegActualPrepPhraseCount,
-	initial_of_phrases(Rest, TempActualPrepPhraseCount, InitPrepPhraseCount,
+	initial_of_phrases(RestPhrases, TempActualPrepPhraseCount, InitPrepPhraseCount,
 			   ActualOFPhraseCount, RestComposite, NewRest),
 	TotalPhraseCount is ActualOFPhraseCount + 2.
 
@@ -4104,14 +4563,16 @@ check_generate_best_mappings_control_options :-
 	( \+ control_option(hide_mappings)   -> true
 	; control_option(fielded_mmi_output) -> true
 	; control_option(machine_output)     -> true
-	; xml_output_format(_XMLFormat)
+	; xml_output_format(_XMLFormat)      -> true
+	; json_output_format(_JSONFormat)
 	).
 
 check_construct_best_mappings_control_options :-
 	( \+ control_option(hide_mappings)    -> true
 	; control_option(fielded_mmi_output)  -> true
 	; control_option(machine_output)      -> true
-	; xml_output_format(_XMLFormat)
+	; xml_output_format(_XMLFormat)      -> true
+	; json_output_format(_JSONFormat)
 	).
 
 check_generate_initial_evaluations_control_options_1 :-
@@ -4136,6 +4597,7 @@ check_generate_initial_evaluations_control_options_2 :-
 	; control_option(fielded_mmi_output) -> true
 	; control_option(machine_output)     -> true
 	; xml_output_format(_XMLFormat)      -> true
+	; json_output_format(_JSONFormat)
 	).
 
 % Create AEv term or access its features
@@ -4231,9 +4693,11 @@ portray_ev(EvTerm) :-
 :- add_portray(portray_ev).
 
 % dysonym processing
-exclude_dysonyms([],[]):- !.
-exclude_dysonyms([ev(_,_,Syn,PrefName,_,SemTypes,_,_,_,_,_,_,_,_,_)|RestMapEval], 
-	         RestMapEvalOut) :-
+exclude_dysonyms([], []).
+exclude_dysonyms([FirstCandidate|RestMapEval], RestMapEvalOut) :-
+	get_all_candidate_features([metaterm,metaconcept,semtypes],
+				   FirstCandidate,
+				   [Syn,PrefName,SemTypes]),
 	is_a_dysonym(Syn, PrefName,SemTypes),
 	!,
 	exclude_dysonyms(RestMapEval, RestMapEvalOut).
@@ -4261,16 +4725,16 @@ head_exception(PrefList) :-
 
 remove_useless_suffixes(Str,StrOut) :-
 	useless_suffixes(Suffixes),
-	remove_suffixes(Str, Suffixes, StrOut).
+	remove_suffixes(Suffixes, Str, StrOut).
 
-remove_suffixes(Str,[], Str) :- !.
-remove_suffixes(Str,[Suffix|_RestSuffixes],StrOut) :-
+remove_suffixes([], Str, Str).
+remove_suffixes([Suffix|_RestSuffixes],Str,StrOut) :-
 	atom_codes(Suffix,SuffixStr),
 	length(SuffixStr,SuffixLen),
 	midstring(Str,StrOut,Suffix,0, _,SuffixLen),
 	!.
-remove_suffixes(Str,[_Suffix|RestSuffixes],StrOut) :-
-	remove_suffixes(Str,RestSuffixes,StrOut).
+remove_suffixes([_Suffix|RestSuffixes],Str,StrOut) :-
+	remove_suffixes(RestSuffixes,Str,StrOut).
 
 useless_suffixes([', NOS',', NEC', ' NOS', ' NEC']).
 

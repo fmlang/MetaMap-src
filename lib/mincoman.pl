@@ -43,14 +43,18 @@
 
 % ----- Imported predicates
 
+:- use_module( skr_lib(nls_lists), [
+	get_from_list/3
+   ]).
+
+:- use_module( skr_lib(nls_system), [
+	control_option/1
+   ]).
+
 :- use_module( library(lists), [
 	is_list/1,
 	rev/2
    ]).
-
-:- use_module( skr_lib(nls_lists), [
-	get_from_list/3
-   ]). 
 
 /*
 
@@ -122,119 +126,118 @@ not_in_lex is coverted to noun
 
 */
 
-convert([],Gap,Gap) :- !.
-convert([shapes:[inputmatch:ShapesList,features:FeatList|_]
-                |MoreWords],
-        [shapes([inputmatch(ShapesList),features(FeatList)])
-                |NewGap],Gap) :-
-   !, convert(MoreWords,NewGap,Gap ).
+convert([], Gap, Gap) :- !.
+convert([shapes:[inputmatch:ShapesList,features:FeatList|_] | MoreWords],
+        [shapes([inputmatch(ShapesList),features(FeatList)]) | NewGap], Gap) :-
+	!,
+	convert(MoreWords,NewGap, Gap ).
 
-convert([punctuation:PuncList|MoreWords],[NewItem|NewGap],Gap) :-
-    !, get_from_list(inputmatch,PuncList,[Punk] ),
-    NewItem = punc([inputmatch([Punk])]), 
-    convert(MoreWords,NewGap,Gap).
+convert([punctuation:PuncList|MoreWords],[NewItem|NewGap], Gap) :-
+	!,
+	get_from_list(inputmatch,PuncList,[Punk] ),
+	NewItem = punc([inputmatch([Punk])]),
+	convert(MoreWords,NewGap, Gap).
 
 convert([(not):VarInfoList|MoreWords], 
         [adv([lexmatch(['not']),
-         inputmatch(InputMatch),tag(adv)])|NewGap],Gap) :-
+         inputmatch(InputMatch),tag(adv)])|NewGap], Gap) :-
 	!,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [prep([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(prep)])|NewGap],Gap ) :-
-    get_variant( prep, VarInfoList, _Info ), !,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [prep([lexmatch([ThisWord]), inputmatch(InputMatch),tag(prep)]) | NewGap], Gap ) :-
+	get_variant( prep, VarInfoList, _Info ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [aux([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(aux)])|NewGap],Gap) :-
-    get_variant( aux, VarInfoList, _Info ), !,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [aux([lexmatch([ThisWord]), inputmatch(InputMatch),tag(aux)]) | NewGap], Gap) :-
+	get_variant( aux, VarInfoList, _Info ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [modal([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(modal)])|NewGap],Gap) :-
-    get_variant( modal, VarInfoList, _Info ), !,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [modal([lexmatch([ThisWord]), inputmatch(InputMatch),tag(modal)]) | NewGap], Gap) :-
+	get_variant( modal, VarInfoList, _Info ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [conj([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(conj)])|NewGap],Gap) :-
-    get_variant( conj, VarInfoList, _Info ), !,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [conj([lexmatch([ThisWord]), inputmatch(InputMatch),tag(conj)]) | NewGap], Gap) :-
+	get_variant( conj, VarInfoList, _Info ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [compl([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(compl)])|NewGap],Gap) :-
-    get_variant( compl, VarInfoList, _Info ), !,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [compl([lexmatch([ThisWord]), inputmatch(InputMatch),tag(compl)]) | NewGap], Gap) :-
+	get_variant( compl, VarInfoList, _Info ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [det([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(det)])|NewGap],Gap) :-
-    get_variant( det, VarInfoList, _Info ), !,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [det([lexmatch([ThisWord]), inputmatch(InputMatch),tag(det)]) | NewGap], Gap) :-
+	get_variant( det, VarInfoList, _Info ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [noun([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(noun)])|NewGap],Gap) :-
-    get_variant( noun, VarInfoList, _NounInfo ),	
-    get_variant( inputmatch, VarInfoList, InputMatch ), !,    
-    convert( MoreWords, NewGap, Gap ).
+        [noun([lexmatch([ThisWord]), inputmatch(InputMatch),tag(noun)]) | NewGap], Gap) :-
+	get_variant( noun, VarInfoList, _NounInfo ),
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	!,
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [adj([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(adj)])|NewGap],Gap ) :-
-    get_variant( adj, VarInfoList, _NounInfo ),
-    get_variant( inputmatch, VarInfoList, InputMatch ), !,    
-    convert( MoreWords, NewGap, Gap ).
+        [adj([lexmatch([ThisWord]), inputmatch(InputMatch),tag(adj)]) | NewGap], Gap ) :-
+	get_variant( adj, VarInfoList, _NounInfo ),
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	!,
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [adv([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(adv)])|NewGap],Gap) :-
-    get_variant( adv, VarInfoList, _AdvInfo ), !,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [adv([lexmatch([ThisWord]), inputmatch(InputMatch),tag(adv)]) | NewGap], Gap) :-
+	get_variant( adv, VarInfoList, _AdvInfo ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 % Note: All potential pp's are tagged as adj
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [adj([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(adj)])|NewGap],Gap) :-
-    get_lex_feature( verb, pastpart, VarInfoList ), !,
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [adj([lexmatch([ThisWord]), inputmatch(InputMatch),tag(adj)]) | NewGap], Gap) :-
+	get_lex_feature( verb, pastpart, VarInfoList ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [verb([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(verb)])|NewGap],Gap) :-
-    get_variant( verb, VarInfoList, _Info ), !,  
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [verb([lexmatch([ThisWord]), inputmatch(InputMatch),tag(verb)]) | NewGap], Gap) :-
+	get_variant( verb, VarInfoList, _Info ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
 convert([ThisWord:VarInfoList|MoreWords], 
-        [pron([lexmatch([ThisWord]),
-         inputmatch(InputMatch),tag(pron)])|NewGap],Gap) :-
-    get_variant( pron, VarInfoList, _Info ), !,  
-    get_variant( inputmatch, VarInfoList, InputMatch ),
-    convert( MoreWords, NewGap, Gap ).
+        [pron([lexmatch([ThisWord]), inputmatch(InputMatch),tag(pron)]) | NewGap], Gap) :-
+	get_variant( pron, VarInfoList, _Info ),
+	!,
+	get_variant( inputmatch, VarInfoList, InputMatch ),
+	convert( MoreWords, NewGap, Gap ).
 
-convert([Unknown|MoreWords],[NewElement|NewGap],Gap) :-
-    ( punc_char1(Unknown) ->
-      NewElement = punc([inputmatch([Unknown])])
-    ; NewElement = noun([inputmatch([Unknown])])
-    ),
-    !,
-    convert(MoreWords, NewGap, Gap).
-
+convert([Unknown|MoreWords], [NewElement|NewGap], Gap) :-
+	( punc_char1(Unknown) ->
+	  NewElement = punc([inputmatch([Unknown])])
+	; NewElement = noun([inputmatch([Unknown])])
+	),
+	!,
+	convert(MoreWords, NewGap, Gap).
 
 punc_char1('\\').
 punc_char1('|').
@@ -253,8 +256,6 @@ punc_char1('[').
 punc_char1(']').
 punc_char1('<').
 punc_char1('>').
-
-
 
 /*
 
@@ -290,60 +291,76 @@ Items not found in the lexicon are labeled as noun.
 
 mark_boundaries( [], Gap, Gap ) :- !.
 
+% force a phrase break after the first of two consecutive shapes
+mark_boundaries( [shapes(ShapesArg1), shapes(ShapesArg2)|MoreWords], 
+                 [shapes(ShapesArg1), boundary(shapes(ShapesArg2))|NewGap], Gap ) :-
+	control_option(num_break),
+	!,
+	mark_boundaries( MoreWords, NewGap, Gap ).
+
 mark_boundaries( [shapes(ShapesArg)|MoreWords], 
                  [shapes(ShapesArg)|NewGap], Gap ) :-
-    !, mark_boundaries( MoreWords, NewGap, Gap ).
-        
-mark_boundaries( [punc(PunkArg1),punc(PunkArg2)|MoreWords], 
-                 [boundary(punc(PunkArg1)),boundary(punc(PunkArg2)) 
+	!,
+	mark_boundaries( MoreWords, NewGap, Gap ).
+
+mark_boundaries( [punc(PunkArg1), punc(PunkArg2)|MoreWords], 
+                 [boundary(punc(PunkArg1)), boundary(punc(PunkArg2)) 
                 |NewGap], Gap ) :-
-     get_from_list( inputmatch, PunkArg1, ['-'] ),
-     get_from_list( inputmatch, PunkArg2, ['-'] ),!,
-     mark_boundaries( MoreWords, NewGap, Gap ).
+	get_from_list( inputmatch, PunkArg1, ['-'] ),
+	get_from_list( inputmatch, PunkArg2, ['-'] ),
+	!,
+	mark_boundaries( MoreWords, NewGap, Gap ).
 
 mark_boundaries( [punc(PunkArg)|MoreWords], 
                  [NewItem|NewGap], Gap ) :-
-    !, get_from_list( inputmatch, PunkArg, [PunkMark] ),
-    ( punc_mark1(PunkMark) ->
-      NewItem = boundary(punc(PunkArg)) 
-    ;  NewItem = punc(PunkArg) 
-    ), 
-    mark_boundaries( MoreWords, NewGap, Gap ).
+	!,
+	get_from_list( inputmatch, PunkArg, [PunkMark] ),
+	( punc_mark1(PunkMark) ->
+	  NewItem = boundary(punc(PunkArg))
+	; NewItem = punc(PunkArg)
+	),
+	mark_boundaries( MoreWords, NewGap, Gap ).
 
 mark_boundaries( [adv(AdvArg)|MoreWords], 
                  [boundary( adv(AdvArg) )|NewGap], Gap ) :-
-    get_from_list( lexmatch, AdvArg, [Adv] ),
-    Adv = 'not', !,
-    mark_boundaries( MoreWords, NewGap, Gap ).
+	get_from_list( lexmatch, AdvArg, [Adv] ),
+	Adv == 'not',
+	!,
+	mark_boundaries( MoreWords, NewGap, Gap ).
 
 mark_boundaries( [noun(NounArg)|MoreWords], 
                  [noun(NounArg)|NewGap], Gap ) :-
-    !, mark_boundaries( MoreWords, NewGap, Gap ).
+	!,
+	mark_boundaries( MoreWords, NewGap, Gap ).
 
 mark_boundaries( [not_in_lex(NounArg)|MoreWords], 
                  [noun(NewNounArg)|NewGap], Gap ) :-
-    !, append(NounArg,[tag(noun)],NewNounArg),
-    mark_boundaries( MoreWords, NewGap, Gap ).
+	!,
+	append(NounArg,[tag(noun)],NewNounArg),
+	mark_boundaries( MoreWords, NewGap, Gap ).
 
 % past participles
 mark_boundaries( [adj(AdjArg)|MoreWords], 
                  [boundary(pastpart(AdjArg))|NewGap], Gap ) :-
-    get_from_list(tag,AdjArg,verb),!, 
-    mark_boundaries( MoreWords, NewGap, Gap ).
+	get_from_list(tag,AdjArg,verb),!,
+	mark_boundaries( MoreWords, NewGap, Gap ).
 
 mark_boundaries( [adj(AdjArg)|MoreWords], 
                  [adj(AdjArg)|NewGap], Gap ) :-
-    !, mark_boundaries( MoreWords, NewGap, Gap ).
+	!,
+	mark_boundaries( MoreWords, NewGap, Gap ).
 
 mark_boundaries( [ThisItem|MoreItems], 
                  [boundary(ThisItem)|NewGap], Gap ) :-
-    functor( ThisItem, Label, _ ),
-    memberchk( Label, [aux, compl, conj, modal, prep, verb] ), !,
-    mark_boundaries( MoreItems, NewGap, Gap ).
+	functor( ThisItem, Label, _ ),
+	memberchk( Label, [aux, compl, conj, modal, prep, verb] ),
+	!,
+	mark_boundaries( MoreItems, NewGap, Gap ).
 
 mark_boundaries( [AnythingElse|MoreWords], 
                  [AnythingElse|NewGap], Gap ) :-
-    !, mark_boundaries( MoreWords, NewGap, Gap ).
+	!,
+	mark_boundaries( MoreWords, NewGap, Gap ).
 
 
 punc_mark1(':').
@@ -422,15 +439,15 @@ adjust_for_comma([BeforeComma,Comma,AfterComma|More],
     Comma = punc([inputmatch([','])]),!,
     adjust_for_comma([boundary(AfterComma)|More], Gap ).
 adjust_for_comma([Other|More],[Other|Gap]) :-
-    adjust_for_comma(More,Gap).
+    adjust_for_comma(More, Gap).
 
 % -----
 
 adjust_boundaries_1( [], Gap, Gap ) :- !.
-adjust_boundaries_1( [Anything|[]],[Anything|Gap],Gap) :- !.
+adjust_boundaries_1( [Anything|[]],[Anything|Gap], Gap) :- !.
 
 adjust_boundaries_1( [PHead,ing(IngWord)|More], 
-                   [PHead,boundary(ing(IngWord))|NewGap],Gap) :- 
+                   [PHead,boundary(ing(IngWord))|NewGap], Gap) :- 
      functor( PHead, Label, _ ),
      memberchk( Label, [noun,adj] ),
      More = [First|_Rest],
@@ -442,7 +459,7 @@ adjust_boundaries_1( [PHead,ing(IngWord)|More],
 % should be bracketed separately from 'the receptor'. This
 % fixes the issue. --Halil
 adjust_boundaries_1( [adv(Adv),boundary(Boundary)|More], 
-                   [boundary(adv(Adv))|NewGap],Gap) :-
+                   [boundary(adv(Adv))|NewGap], Gap) :-
      functor( Boundary, Label, _ ),
      memberchk( Label, [modal,verb,aux] ),
      !,
@@ -450,7 +467,7 @@ adjust_boundaries_1( [adv(Adv),boundary(Boundary)|More],
      adjust_boundaries_1( NewMore, NewGap, Gap ).
 
 adjust_boundaries_1([PreBoundary,Boundary|More],
-                  [PreBoundary,boundary(Boundary)|NewGap],Gap) :-
+                  [PreBoundary,boundary(Boundary)|NewGap], Gap) :-
     \+ PreBoundary = boundary(prep(_)), 
     ( Boundary = det(_)
      ;Boundary = pron(_)
@@ -458,7 +475,7 @@ adjust_boundaries_1([PreBoundary,Boundary|More],
     adjust_boundaries_1( More, NewGap, Gap ).
 
 adjust_boundaries_1( [boundary(Boundary),PostBoundary|More], 
-                   [boundary(Boundary)|NewGap],Gap) :-
+                   [boundary(Boundary)|NewGap], Gap) :-
 
 % all these conditions should be cleaned up
     \+ PostBoundary = boundary(_),           
@@ -493,7 +510,7 @@ adjust_boundaries_1( [BeforeComma, Comma, AfterComma|More],
     adjust_boundaries_1( NewMore, NewGap, Gap ).
 
 adjust_boundaries_1( [PreBoundary,boundary(prep(ArgList))|More], 
-                   [PreBoundary,ArgList|NewGap],Gap) :-
+                   [PreBoundary,ArgList|NewGap], Gap) :-
     PreBoundary = det( _ ),
     get_from_list( lexmatch, ArgList, [Word] ),
 % this is adhoc and needs to be fixed
@@ -521,23 +538,23 @@ current boundary (dropping the actual boundary label).
 
 */
 
-segment([],Gap,Gap) :- !.
+segment([], Gap, Gap) :- !.
 
-segment([boundary(Boundary)|More],[MSU|NewGap],Gap) :- 
+segment([boundary(Boundary)|More],[MSU|NewGap], Gap) :- 
     !,get_msu([Boundary|More],Remainder,MSU,[]),
-    segment(Remainder,NewGap,Gap).
+    segment(Remainder,NewGap, Gap).
 
-segment([Other|More],[MSU|NewGap],Gap) :-
+segment([Other|More],[MSU|NewGap], Gap) :-
     get_msu([Other|More],Remainder,MSU,[]),
     segment( Remainder, NewGap, Gap ).
 
 
 % ---------- GET_MSU ----------
 
-get_msu([],[],Gap,Gap) :- !.
-get_msu([boundary(Boundary)|More],[Boundary|More],Gap,Gap) :- !.
-get_msu([Other|More],Remainder,[Other|NewGap],Gap) :- 
-    get_msu(More,Remainder,NewGap,Gap).
+get_msu([],[], Gap, Gap) :- !.
+get_msu([boundary(Boundary)|More],[Boundary|More], Gap, Gap) :- !.
+get_msu([Other|More],Remainder,[Other|NewGap], Gap) :- 
+    get_msu(More,Remainder,NewGap, Gap).
 
 
 /*
@@ -691,7 +708,7 @@ ident_left_mods( [ThisWord|['-'|[pastpart(NextWord)|More]]],
                  Gap ) :-
     !, ident_left_mods( More, NewGap, Gap ).
 
-ident_left_mods([ThisWord|More],[mod(ThisWord)|NewGap],Gap) :-
+ident_left_mods([ThisWord|More],[mod(ThisWord)|NewGap], Gap) :-
     is_list( ThisWord ), !,
     ident_left_mods( More, NewGap, Gap ).
 

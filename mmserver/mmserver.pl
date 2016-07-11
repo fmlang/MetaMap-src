@@ -23,7 +23,7 @@
 :- use_module(skr(skr_fe), [
 	postprocess_sentences/11,
 	initialize_skr/4,
-	process_text/11,
+	process_text/12,
         get_nomap_pairs/1,
         get_novar_pairs/1
    ]).
@@ -66,12 +66,6 @@
 :- use_module(text(text_objects), [
 	get_UDAs/1
    ]).
-
-:- use_module(skr_lib(negex), [
-	compute_negex/4,
-	generate_negex_output/1
-   ]).
-
 
 %% Register acceptable queries and start the server (using default port)
 main :-
@@ -241,7 +235,7 @@ process_string(Input,Output) :-
 	bb_get(all_server_streams, AllServerStreams),
 	process_text(Strings, "00000000", TagOption, AllServerStreams,
 		     ExpRawTokenList, AAs, UDAListIn, _UDAListOut,
-		     NoMapPairs, NoVarPairs, MMResults),
+		     NoMapPairs, NoVarPairs, _NegationTerms, MMResults),
 	parse_command_line(CLTerm),
 	CLTerm=command_line(Options,Args),
 	initialize_skr(Options, Args, InterpretedArgs, IOptions),
@@ -282,12 +276,13 @@ remove_final_CRLF(TrimmedInput0, TrimmedInput) :-
 	).
 
 postprocess_text_mmserver(Lines0, BracketedOutput, InterpretedArgs,
-			  IOptions,  ExpRawTokenList, AAs, MMResults, AllMMO) :-
+			  IOptions,  _ExpRawTokenList, AAs, MMResults, AllMMO) :-
 	MMResults = mm_results(Lines0, _TagOption, _ModifiedLines, _InputType,
 			       Sentences, _CoordSentences, OrigUtterances, DisambMMOutput),
-	compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
-	generate_negex_output(NegationTerms),
+	% compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
+	% generate_negex_output(NegationTerms),
 	PrintMMO = 0,
+	NegationTerms = [],
 	postprocess_sentences(user_output, OrigUtterances, NegationTerms, InterpretedArgs,
 			      IOptions, AAs, Sentences, BracketedOutput, DisambMMOutput,
 			      PrintMMO, AllMMO).

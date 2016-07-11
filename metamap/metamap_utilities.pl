@@ -73,11 +73,11 @@
 	file_exists/1
    ]).
 
-:-   absolute_file_name(skr_lib(semtype_translation_2015AB),
+:-   absolute_file_name(skr_lib(semtype_translation_2016AA),
 			AbsFileName,
 			[extensions(['.pl'])]),
      file_exists(AbsFileName) ->
-     use_module(skr_lib(semtype_translation_2015AB), [expand_semtypes/2]),
+     use_module(skr_lib(semtype_translation_2016AA), [expand_semtypes/2]),
      format(user_error, 'File metamap_utilities.pl is loading ~w~n', [AbsFileName])
    ; format(user_error, 'File metamap_utilities.pl is NOT loading ~w~n', [AbsFileName]).
 
@@ -145,8 +145,15 @@ dump_aphrase_mappings_aux/2
 dump_mapping/2
 */
 
+maybe_display_META_header(FormatString, Args) :-
+	( control_option(pipe_output) ->
+	  true
+	; format(FormatString, Args)
+	).
+
 dump_aphrase_mappings([], _UtteranmceLabel, Label) :-
-	format('Meta ~a: <none>~n', [Label]).
+	% format('Meta ~a: <none>~n', [Label]).
+	maybe_display_META_header('Meta ~a: <none>~n', [Label]).
 dump_aphrase_mappings([H|T], UtteranceLabel, Label) :-
 	APhrases = [H|T],
 	( control_option(number_the_mappings) ->
@@ -173,10 +180,12 @@ get_display_and_increment_counter(Counter, CounterDisplay, NextCounter) :-
 	).	  
 
 dump_mapping([], _UtteranceLabel, Label, _Score, _DisplayCounter) :-
-	format('Meta ~a: <none>~n', [Label]).
+	% format('Meta ~a: <none>~n', [Label]).
+	maybe_display_META_header('Meta ~a: <none>~n', [Label]).
 dump_mapping([H|T], UtteranceLabel, Label, Score, DisplayCounter) :-
 	Mapping = [H|T],
-	format('~wMeta ~a (~d):~n', [DisplayCounter,Label,Score]),
+	% format('~wMeta ~a (~d):~n', [DisplayCounter,Label,Score]),
+	maybe_display_META_header('~wMeta ~a (~d):~n', [DisplayCounter,Label,Score]),
 	dump_evaluations(Mapping, UtteranceLabel).
 
 dump_evaluations([], _UtteranceLabel).
@@ -187,10 +196,10 @@ dump_evaluations([FirstEV|RestEVs], UtteranceLabel) :-
 
 % MetaMap now has status symbols :-)
 
-choose_status_symbol(_Status, _Negated, Symbol) :-
-	control_option(silent),
-	!,
-	Symbol = ''.
+% choose_status_symbol(_Status, _Negated, Symbol) :-
+% 	control_option(silent),
+% 	!,
+% 	Symbol = ''.
 %  0 means the candidate was kept, but possibly negated
 choose_status_symbol(0, Negated, Symbol) :-
 	( Negated == 1 ->
@@ -388,18 +397,17 @@ construct_related_evaluations_6([FirstCandidate|RestCandidates], Concept,
 num_dump_evaluations_indented([], _TotalCandidateCount, _UtteranceLabel,
 			      _ExcludedCandidateCount, _PrunedCandidateCount,
 			      _RemainingCandidateCount, _StartNum, Label) :-
-	  format('Meta ~a (0): <none>~n', [Label]).
+	 %  format('Meta ~a (0): <none>~n', [Label]).
+	 maybe_display_META_header('Meta ~a (0): <none>~n', [Label]).
 num_dump_evaluations_indented([H|T], TotalCandidateCount, UtteranceLabel,
 			      ExcludedCandidateCount, PrunedCandidateCount,
 			      RemainingCandidateCount, StartNum, Label) :-
 	Candidates = [H|T],
-	( control_option(silent) ->
-	  format('Meta ~a (~d):~n', [Label,TotalCandidateCount])
-	; format('Meta ~a (Total=~d; Excluded=~d; Pruned=~d; Remaining=~d)~n',
-		 [Label,TotalCandidateCount,
-		  ExcludedCandidateCount,PrunedCandidateCount,
-		  RemainingCandidateCount])
-	),
+	% format('Meta ~a (Total=~d; Excluded=~d; Pruned=~d; Remaining=~d)~n',
+	maybe_display_META_header('Meta ~a (Total=~d; Excluded=~d; Pruned=~d; Remaining=~d)~n',
+				  [Label,TotalCandidateCount,
+				   ExcludedCandidateCount,PrunedCandidateCount,
+				   RemainingCandidateCount]),
 	maybe_construct_related_evaluations(Candidates, CandidatePairs),
 	num_dump_evaluations_indented_aux(CandidatePairs, StartNum, UtteranceLabel).
 
@@ -416,6 +424,7 @@ num_dump_one_evaluation(Candidate:RelatedCandidates, N, UtteranceLabel, NextN) :
 				    ShortSemTypes,SourceInfo,Status,Negated,PosInfoList]),
 	write_term_to_codes(PosInfoList, PosInfoCodesWithBrackets, []),
 	append(["[", PosInfoCodes, "]"], PosInfoCodesWithBrackets),
+	!,
 	atom_codes(PosInfoAtom, PosInfoCodes),
 	CandidateScore is -NegValue,
 	build_concept_name_1(PreferredName, CUI, SourceInfo, SourcesAtom, PreferredNameDisplay),
@@ -441,6 +450,9 @@ num_display_concept_info(N, UtteranceLabelAtom, MetaTerm, PreferredName,
 	( control_option(show_cuis) ->
 	  DisplayCUI = CUI,
 	  Colon = ':'
+	; control_option(pipe_output) ->
+	  DisplayCUI = CUI,
+	  Colon = ':'
 	; DisplayCUI = '',
 	  Colon = ''
 	),
@@ -448,13 +460,16 @@ num_display_concept_info(N, UtteranceLabelAtom, MetaTerm, PreferredName,
 				       PreferredNameDisplayIn, PreferredNameDisplay),
 	( control_option(pipe_output) ->
 	  modify_utterance_label_display(UtteranceLabelAtom, ModUtteranceLabelAtom),
-	  format('~w||~w|~w|~w|~w|~w~n',
-		 [MetaTerm,PreferredNameDisplay,ModUtteranceLabelAtom,DisplayCUI,SemTypes,PosInfo])
+	  format('~w|~w|~w|~w|~w|~w|~w~n',
+		 [MetaTerm,StatusSymbol,PreferredNameDisplay,
+		  ModUtteranceLabelAtom,DisplayCUI,SemTypes,PosInfo])
 	; N =:= 0 ->
 	  format('~t~d ~w~8| ~w~w~w~p ~w~n',
-		 [CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay,SemTypes])
+		 [CandidateScore,StatusSymbol,DisplayCUI,Colon,
+		  MetaTerm,PreferredNameDisplay,SemTypes])
 	; format('~t~d~4|. ~t~d~10| ~t~w~12| ~p~w~p ~p ~w~n',
-		 [N,CandidateScore,StatusSymbol,DisplayCUI,Colon,MetaTerm,PreferredNameDisplay,SemTypes])
+		 [N,CandidateScore,StatusSymbol,DisplayCUI,Colon,
+		  MetaTerm,PreferredNameDisplay,SemTypes])
 	).
 
 modify_utterance_label_display(UtteranceLabelAtom, ModUtteranceLabelAtom) :-
