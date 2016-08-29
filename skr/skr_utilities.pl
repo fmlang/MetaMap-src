@@ -33,6 +33,7 @@
 % Purpose:  Utilities
 
 :- module(skr_utilities, [
+	basename/2,
 	check_valid_file_type/2,
 	compare_utterance_lengths/2,
 	compute_sum/3,
@@ -64,6 +65,8 @@
 	get_program_name/1,
 	% called by MetaMap API -- do not change signature!
 	output_should_be_bracketed/1,
+	member_var/2,
+	memberchk_var/2,
 	output_tagging/3,
 	replace_crs_with_blanks/4,
 	replace_blanks_with_crs/4,
@@ -147,7 +150,8 @@
 	control_value/2,
 	display_control_options_for_modules/2,
 	display_mandatory_metamap_options/0,
-	display_current_control_options/2
+	display_current_control_options/2,
+	get_program_name/1
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -904,11 +908,6 @@ format_cmd_line_for_machine_output(Options, Args, args(CommandLine,ArgsMO)) :-
 	concat_atom([ProgramName|Argv], ' ', CommandLine),
 	format_cmd_line_for_machine_output_1(Options, Args, ArgsMO).
 
-get_program_name(ProgramName) :-
-	environ('SP_APP_PATH', AbsolutePathName),
-	atom_codes(AbsolutePathName, AbsolutePathNameCodes),
-	basename(AbsolutePathNameCodes, ProgramNameCodes),
-	atom_codes(ProgramName, ProgramNameCodes).
 
 basename(File, Base) :-
         basename_aux(File, S, S, Base).
@@ -1884,3 +1883,23 @@ walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-
 	; CharsNext1 = []
 	),
 	walk_off_field_lines(RestFieldLines, CharsNext1, CharsOut).
+
+% Test for membership of Element in VarList,
+% where VarList may have an uninstantiated tail, e.g., [a,b,c|Rest].
+memberchk_var(Element, VarList) :-
+	nonvar(VarList),
+	( VarList = [Element|_] ->
+	  true
+	; VarList = [_|Rest],
+	  memberchk_var(Element, Rest)
+	).
+
+% Test for membership of Element in VarList,
+% where VarList may have an uninstantiated tail, e.g., [a,b,c|Rest].
+member_var(Element, VarList) :-
+	nonvar(VarList),
+	( VarList = [Element|_]
+	; VarList = [_|Rest],
+	  member_var(Element, Rest)
+	).
+

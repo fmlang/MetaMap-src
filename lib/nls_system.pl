@@ -38,6 +38,7 @@
 	% called by MetaMap API -- do not change signature!
 	add_to_control_options/1,
 	add_to_current_control_options/3,
+	% assert_control_option/1,
 	assert_control_value/2,
 	control_option/1,
 	control_value/2,
@@ -47,8 +48,10 @@
 	% called by MetaMap API -- do not change signature!
 	get_control_options_for_modules/2,
 	get_from_iargs/4,
+	get_program_name/1,
 	% called by MetaMap API -- do not change signature!
 	interpret_args/4,
+	option_requires_list_arg/1,
 	% called by MetaMap API -- do not change signature!
 	interpret_options/4,
 	% called by MetaMap API -- do not change signature!
@@ -68,7 +71,8 @@
 	subtract_from_control_options/1,
 	% called by MetaMap API -- do not change signature!
 	toggle_control_options/1,
-	update_command_line/5
+	update_command_line/5,
+	verify_options_and_values/0
     ]).
 
 
@@ -111,6 +115,26 @@
 :- dynamic control_option/1.
 :- dynamic control_value/2.
 % :- dynamic control_value/3.
+
+get_program_name(ProgramName) :-
+	( current_module(usemrep) ->
+	  ProgramName = usemrep
+	; current_module(M),
+	  is_control_option(M, _, _, _, _) ->
+	  ProgramName = M
+	; ProgramName = metamap
+	).
+
+% get_program_name(ProgramName) :-
+% 	environ('SP_APP_PATH', AbsolutePathName),
+% 	atom_codes(AbsolutePathName, AbsolutePathNameCodes),
+% 	basename(AbsolutePathNameCodes, ProgramNameCodes),
+% 	atom_codes(ProgramName, ProgramNameCodes).
+
+option_requires_list_arg(OptionName) :-
+	is_control_option(_, _, OptionName, _,
+			  aspec(OptionName, _, list, _, _, _)),
+	!.
 
 /* is_control_option(?Module, ?ShortControlOption, ?ControlOption, ?IsDefault, ?ArgSpec)
 
@@ -296,6 +320,8 @@ is_control_option(metamap,  '', 'num_break',	 		no, none).
 is_control_option(metamap,  '', 'no_nums',	 		no,
                   aspec(no_nums, mandatory, list, none, no_default,
                         'List of semantic types to exclude for numerical_concepts')).
+
+is_control_option(metamap,  '', 'no_verb',	 		no, none).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% USemRep %%%%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -316,10 +342,10 @@ is_control_option(usemrep, 'L', lexicon_year, 	 		no,
 is_control_option(usemrep, 'M', relaxed_model,              no, none).
 is_control_option(usemrep, 'P', extract_phrases_only,       no, none).
 is_control_option(usemrep, 'R', write_syntax,              no,  none).
-is_control_option(usemrep, 'r', write_syntax_only,         no,  none).
+is_control_option(usemrep, 'r', write_syntax_only,           no,  none).
 is_control_option(usemrep, 'S', generic_processing,          no,  none).
 is_control_option(usemrep, 'U', expanded_utterances_only,    no,  none).
-is_control_option(usemrep,  u,  unexpanded_utterances_only,  no, none).
+is_control_option(usemrep,  u,  unexpanded_utterances_only,  no,  none).
 is_control_option(usemrep, 'V', mm_data_version, no,
                   aspec(mm_data_version, mandatory, none, none, no_default,
                         'Version of MetaMap data to use [USAbase,NLM]')).
@@ -329,8 +355,15 @@ is_control_option(usemrep,   x, debug_call,                  no,
                   aspec(debug_call,mandatory,integer,none,no_default,debug_call)).
 is_control_option(usemrep, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
-                        'Release of MetaMap data to use, e.g., 2015AA]')).
+                        'Release of MetaMap data to use (e.g., 2015AA)')).
 is_control_option(usemrep,  '', usemrep_processing,   yes, none).
+is_control_option(usemrep,  '', mm_add,   no,
+                  aspec(mm_add, mandatory, none, none, no_default,
+                        'List of MetaMap options to add to SemRep default MetaMap options')).
+is_control_option(usemrep,  '', mm_sub,   no,
+                  aspec(mm_sub, mandatory, none, none, no_default,
+                        'List of MetaMap options to subtract from SemRep default MetaMap options')).
+is_control_option(usemrep, Short, Long, X, Y) :- is_control_option(metamap, Short, Long, X, Y).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Other programs %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -351,6 +384,10 @@ is_control_option(filter_mrconso,i,info,no,none).
 is_control_option(filter_mrconso, 'V', mm_data_version, no,
                   aspec(mm_data_version, mandatory, none, none, no_default,
                         'Version of MetaMap data to use')).
+is_control_option(filter_mrconso, 'Z', mm_data_year, no,
+                  aspec(mm_data_year,mandatory, none, none, no_default,
+                        'Release of MetaMap data to use')).
+
 is_control_option(filter_mrconso, p, progress_bar_interval, no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
                         'Interval of progress bar')).
@@ -831,7 +868,12 @@ toggle_default_control_options(Module) :-
 	toggle_control_options(DefaultOptions).
 
 option_and_default(Module, Option, Default) :-
-	is_control_option(Module, _, Option, yes, LastArg),
+	( Module == metamap ->
+	  is_control_option(metamap, _, Option, yes, LastArg)
+	; Module == usemrep ->
+	  is_control_option(usemrep, _, Option, yes, LastArg),
+	  \+ is_control_option(metamap, _, Option, yes, LastArg)
+	),
 	( atom(LastArg) ->
 	  Default = LastArg
 	; LastArg = aspec(Option,_,_,yes,Default,_)
@@ -852,6 +894,7 @@ add_to_control_options/1 and subtract_from_control_options/1 are used
 together to perform some processing with modified options and then revert
 to the previous option configuration. */
 
+
 toggle_control_options([]).
 toggle_control_options([Option0|Rest]) :-
 	( Option0 = iopt(Option,_) ->
@@ -859,7 +902,7 @@ toggle_control_options([Option0|Rest]) :-
         ; Option0 = Option:Default
         ),
 	retractall(control_option(Option)),
-        assert_control_option(Option),
+        assert_control_option(Option), 
 	( Default \== none ->
 	  retractall(control_value(Option, _V)),
 	  assert_control_value(Option, Default)
@@ -916,7 +959,7 @@ subtract_from_control_options([Option0|Rest]) :-
 set_control_values/2 asserts control_value/2 clauses for each control option
 in IOptions with a value attribute in IArgs.  */
 
-set_control_values([] ,_).
+set_control_values([] ,_) :- set_default_lexicon.
 set_control_values([iopt(_,none)|Rest], IArgs) :-
 	!,
 	set_control_values(Rest, IArgs).
@@ -1518,11 +1561,10 @@ interpret_arg(ArgSpec, Arg, IArgsIn, [iarg(SpecName,ArgSpec, [value(Atts)])|IArg
 	ArgSpec = aspec(SpecName,_Option,list,_SubType,_Default,_Description),
 	!,
 	( atom_codes(Arg,ArgString),
-	  parse_list(ArgString,List) ->
-	  ( SpecName == noexp ->
-	    reformat_noexp_list(List, Atts)
-	  ; number_codes_list(Atts, List)
-	  ),
+	  parse_list(ArgString, List) ->
+	  % ( SpecName == noexp ->
+	  %   reformat_noexp_list(List, Atts)
+	  number_codes_list(Atts, List),
 	  StatusOut = StatusIn
 	; Atts = [],
 	StatusOut = error
@@ -1548,7 +1590,8 @@ interpret_arg(ArgSpec,Arg,
     ).
 
 parse_list(InputString,List) :-
-    phrase(l_item_list(List0),InputString),
+    % phrase(l_item_list(List0),InputString),
+    split_string_completely(InputString, ",",  List0),
     remove_null_strings(List0,List).
 
 remove_null_strings([], []) :-
@@ -1562,14 +1605,14 @@ remove_null_strings([First|Rest], [First|ModifiedRest]) :-
 
 % The argument to --noexp is of the form a:b:c:d,e:f:g:h,
 % which must be transformed into [a:[b,c,d], e:[f,g,h]]
-reformat_noexp_list(List, NoExpList) :-
-	(  foreach(L0, List),
-	   foreach(L1, NoExpList)
-	do split_string_completely(L0, ":", StringList),
-	   atom_codes_list(AtomList0, StringList),
-	    AtomList0=[H|T],
-	    L1 = H:T
-	).
+% reformat_noexp_list(List, NoExpList) :-
+% 	(  foreach(L0, List),
+% 	   foreach(L1, NoExpList)
+% 	do split_string_completely(L0, ":", StringList),
+% 	   atom_codes_list(AtomList0, StringList),
+% 	    AtomList0=[H|T],
+% 	    L1 = H:T
+% 	).
 
 % ---------- GRAMMAR FOR ITEM LIST
 
@@ -1649,26 +1692,53 @@ conditionally_announce_program_name(ProgramName, DefaultRelease) :-
 
 % Assert if not already asserted!
 assert_control_option(Option) :-
-	( control_option(Option) ->
+	get_program_name(ProgramName),
+	( Option == '' ->
+	  fatal_error('"~a" is not a valid option for program "~a"!~n', [Option, ProgramName])
+	; control_option(Option) ->
 	  true
-	; assert(control_option(Option))
+	; is_control_option(ProgramName, _ShortOption, Option, _, _ArgSpec) ->
+	  assert(control_option(Option))
+	; is_control_option(ProgramName, Option, LongOption, _, _ArgSpec) ->
+	  assert(control_option(LongOption))
+	; fatal_error('Option "~a" is not a valid option for program "~a"!~n', [Option, ProgramName])
 	).
 
 assert_control_value(Option, Value) :-
+	get_program_name(ProgramName),
 	% don't assert streams, because for "--UDA UDAfile",
 	% we want the control value to be "UDAfile" and not the stream.
 	( current_stream(_, _, Value) ->
 	  true
-%	( control_value(Option, Value) ->
-%	  true
-%	; % retractall(control_value(Option, _V)),
-	; retractall(control_value(Option, _V)),
+	; is_control_option(ProgramName, _ShortOption, Option, _, ArgSpec),
+	  compound(ArgSpec)  ->
+	  retractall(control_value(Option, _V)),
 	  assert(control_value(Option, Value))
+	; is_control_option(ProgramName, Option, LongOption, _, ArgSpec),
+	  compound(ArgSpec)  ->
+	  retractall(control_value(LongOption, _V)),
+	  assert(control_value(LongOption, Value))
+	; fatal_error('~a/~a is not a valid option/arg combination for program "~a"!',
+		      [Option, Value, ProgramName])	
 	).
+
+verify_options_and_values :-
+	( control_option(Option),
+	  is_control_option(_ProgramName, _ShortOption, Option, _, ArgSpec),
+	  compound(ArgSpec),
+	  \+ control_value(Option, _Value),
+	  fatal_error('The "~w" option requires an argument!\n', [Option])
+	; true
+	).
+
+set_default_lexicon :-
+	( \+ control_value(lexicon, _) ->
+	   assert(control_value(lexicon, db))
+         ; true
+	 ).
 
 % assert_control_value(Option, Attribute, Value) :-
 % 	( control_value(Option, Attribute, Value) ->
 % 	  true
 % 	; assert(control_value(Option, Attribute, Value))
 % 	).
-
