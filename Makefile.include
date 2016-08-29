@@ -24,8 +24,8 @@ export GIT = git
 export C__DEBUG = -D__DEBUG
 export PROLOG = sicstus
 export SPLD = spld
-export SICSTUS_VERSION = 4.3.2
-export SICSTUS_VERSION_DASHED = 4-3-2
+export SICSTUS_VERSION = 4.3.3
+export SICSTUS_VERSION_DASHED = 4-3-3
 export GLIBC_VERSION = 2.12
 export PREFIX='$$SP_APP_DIR'
 
@@ -60,8 +60,8 @@ ifeq '$(O_SYSTEM)' "Linux"
   export LDFLAGS = $(MACHINE_TYPE)
   export LINKFLAGS = $(MACHINE_TYPE) -shared
 
-  # export BERKELEY_DIR = /nfsvol/nls/tools/berkeley_db
-  # export BERKELEY = $(BERKELEY_DIR)/Linux-i686/db-4.8.24
+  export BERKELEY_DIR = /nfsvol/nls/tools/berkeley_db/Linux-x86_64/db-4.8.24
+  export BERKELEY = $(BERKELEY_DIR)
   # export BERKELEY_INC = $(BERKELEY)/include
   # export BERKELEY_LIB = $(BERKELEY)/lib
   # export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb-4.8.a
@@ -71,13 +71,15 @@ ifeq '$(O_SYSTEM)' "Linux"
   # export BERKELEY_LIB_DYNAMIC = "-L$(BERKELEY_LIB) -ldb-4.8"
 
   # Berkeley Db 4.8 definitions for SICStus Prolog 4.3.2
-  export BERKELEY_DIR = /usr
+  # export BERKELEY_DIR = /usr
   export BERKELEY = $(BERKELEY_DIR)
   export BERKELEY_INC = $(BERKELEY)/include
   export BERKELEY_LIB = $(BERKELEY)/lib
-  export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb-4.8.a
+#  export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb-4.8.a
+  export BERKELEY_LIB_A = -L$(BERKELEY_LIB) -ldb-4.8
   export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb-4.8.so
-  export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb.a
+#  export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb.a
+  export BERKELEY_LIB_STATIC = -L$(BERKELEY_LIB) -ldb-4.8
   export BERKELEY_LIB_DYNAMIC = "-L$(BERKELEY_LIB) -ldb-4.8"
 
   export DEFAULT_LIBXML_DIR = /usr
@@ -134,7 +136,8 @@ export LINK_FILES=$(SKR_DEBUG)/debug.o \
            ./debug/get_val.o \
            ./lexicon/morph/dm.o \
            ./db/c_nls_db.a \
-           $(BERKELEY_LIB_STATIC)
+           $(BERKELEY_LIB_STATIC) \
+           $(XDR_STATIC_LIB)
 
 export CONF=--conf BDBLIB=$(BERKELEY_LIB_STATIC) --conf BDB_PATH=$(BERKELEY)
 
