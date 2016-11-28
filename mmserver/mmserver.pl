@@ -236,7 +236,6 @@ process_string(Input,Output) :-
 	process_text(Strings, "00000000", TagOption, AllServerStreams,
 		     ExpRawTokenList, AAs, UDAListIn, _UDAListOut,
 		     NoMapPairs, NoVarPairs, NegationTerms, MMResults),
-	format(user_output, '~w~n', [NegationTerms]),
 	parse_command_line(CLTerm),
 	CLTerm=command_line(Options,Args),
 	initialize_skr(Options, Args, InterpretedArgs, IOptions),
