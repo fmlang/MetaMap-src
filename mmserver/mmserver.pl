@@ -235,7 +235,7 @@ process_string(Input,Output) :-
 	bb_get(all_server_streams, AllServerStreams),
 	process_text(Strings, "00000000", TagOption, AllServerStreams,
 		     ExpRawTokenList, AAs, UDAListIn, _UDAListOut,
-		     NoMapPairs, NoVarPairs, _NegationTerms, MMResults),
+		     NoMapPairs, NoVarPairs, NegationTerms, MMResults),
 	parse_command_line(CLTerm),
 	CLTerm=command_line(Options,Args),
 	initialize_skr(Options, Args, InterpretedArgs, IOptions),
@@ -251,7 +251,8 @@ process_string(Input,Output) :-
 	%% end Temporary code 
 	output_should_be_bracketed(BracketedOutput),
 	postprocess_text_mmserver(Strings, BracketedOutput, InterpretedArgs,
-		 IOptionsFinal,  ExpRawTokenList, AAs, MMResults, Output).
+				  IOptionsFinal,  ExpRawTokenList, AAs,
+				  NegationTerms, MMResults, Output).
 
 process_request(Request,Response) :-
 	split_string(Request,"|",Options,Input),
@@ -276,13 +277,13 @@ remove_final_CRLF(TrimmedInput0, TrimmedInput) :-
 	).
 
 postprocess_text_mmserver(Lines0, BracketedOutput, InterpretedArgs,
-			  IOptions,  _ExpRawTokenList, AAs, MMResults, AllMMO) :-
+			  IOptions,  _ExpRawTokenList, AAs, NegationTerms, MMResults, AllMMO) :-
 	MMResults = mm_results(Lines0, _TagOption, _ModifiedLines, _InputType,
 			       Sentences, _CoordSentences, OrigUtterances, DisambMMOutput),
 	% compute_negex(ExpRawTokenList, Lines0, DisambMMOutput, NegationTerms),
 	% generate_negex_output(NegationTerms),
 	PrintMMO = 0,
-	NegationTerms = [],
+	% NegationTerms = [],
 	postprocess_sentences(user_output, OrigUtterances, NegationTerms, InterpretedArgs,
 			      IOptions, AAs, Sentences, BracketedOutput, DisambMMOutput,
 			      PrintMMO, AllMMO).
