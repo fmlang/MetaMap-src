@@ -270,7 +270,8 @@ sentence_punc_char(0'!).
 sentence_punc_char(0'.).
 % ';'
 % sentence_punc_char(59).
-sentence_punc_char(0';).
+% Disabled for SemRep 01/12/2016
+% sentence_punc_char(0';).
 % '?'
 % sentence_punc_char(63).
 sentence_punc_char(0'?).

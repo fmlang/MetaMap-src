@@ -62,18 +62,19 @@
 	set_message/5
     ]).
 
-:-   absolute_file_name(skr_lib(semtype_translation_2015AB),
+:-   absolute_file_name(skr_lib(semtype_translation_2016AA),
 			AbsFileName,
 			[extensions(['.pl'])]),
      file_exists(AbsFileName) ->
-     use_module(skr_lib(semtype_translation_2015AA),
+     use_module(skr_lib(semtype_translation_2016AA),
 		[expand_semtypes/2,
 		 is_abbrev_semtype/1]),
      format(user_error, 'File skr_umls_info.pl is loading ~w~n', [AbsFileName])
    ; format(user_error, 'File skr_umls_info.pl is NOT loading ~w~n', [AbsFileName]).
 
 :- use_module(skr_lib(sicstus_utils), [
-	concat_atom/2
+	concat_atom/2,
+	upper/2
     ]).
 
 
@@ -136,7 +137,7 @@ convert_to_root_sources/2 converts a list of Sources (either versioned or
 root) to a list of RootSources, dropping any elements of Sources that are
 neither. */
 
-is_umls_source(Source, ZeroOrOne) :-
+is_umls_source(Source, ZeroOrOne) :-	
 	( is_umls_root_source(Source, ZeroOrOne) ->
 	  true
 	; is_umls_versioned_source(Source, ZeroOrOne)
@@ -154,20 +155,37 @@ sab_tables_exist :-
 
 is_umls_root_source(RootSource, ZeroOrOne) :-
 	( sab_tables_exist ->
-	  db_get_versioned_source_name(RootSource, Results),
+	  db_get_versioned_source_name_with_UC(RootSource, Results),
 	  member([_VersionedSource,ZeroOrOne], Results)
 	; ZeroOrOne is 1
 	).
 
 is_umls_versioned_source(VersionedSource, ZeroOrOne) :-
 	( sab_tables_exist ->
-	  db_get_root_source_name(VersionedSource, [_RootSource,ZeroOrOne])
+	  db_get_root_source_name_with_UC(VersionedSource, [_RootSource,ZeroOrOne])
 	; ZeroOrOne is 1
 	).
 
 % Versioned-to-root is one-to-one
 convert_versioned_source_to_root(VersionedSource, RootSource, ZeroOrOne) :-
-	db_get_root_source_name(VersionedSource, [RootSource,ZeroOrOne]).
+	db_get_root_source_name_with_UC(VersionedSource, [RootSource,ZeroOrOne]).
+
+
+db_get_root_source_name_with_UC(VersionedSource, Results) :-
+	( db_get_root_source_name(VersionedSource, Results),
+	  Results \== [] ->
+	  true
+	; upper(VersionedSource, VersionedSourceUC),
+	  db_get_root_source_name(VersionedSourceUC, Results)
+	).
+
+db_get_versioned_source_name_with_UC(RootSource, Results) :-
+	( db_get_versioned_source_name(RootSource, Results),
+	  Results \== [] ->
+	  true
+	; upper(RootSource, RootSourceUC),
+	  db_get_versioned_source_name(RootSourceUC, Results)
+	).
 
 % Root-to-versioned is one-to-many, e.g.,
 % CPT --> CPT2005

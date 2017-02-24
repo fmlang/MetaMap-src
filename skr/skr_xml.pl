@@ -71,8 +71,7 @@
 
 :- use_module(skr(skr_utilities), [
 	fatal_error/2,
-	replace_blanks_with_crs/4,
-	verify_xml_format/2
+	replace_blanks_with_crs/4
    ]).
 
 :- use_module(library(lists),[
@@ -173,7 +172,7 @@ generate_one_xml_utterance_term(UtteranceMMO, RestUtteranceMMO,
 				    XMLPMID, XMLUtteranceType, XMLUtteranceNumber,
 				    XMLUtteranceText,
 				    XMLUtteranceStartPos, XMLUtteranceLength),
-	generate_xml_phrase_term(RestUtteranceMMO, XMLPhraseListTerm, RemainingUtteranceMMO),
+	generate_xml_phrases_term(RestUtteranceMMO, XMLPhraseListTerm, RemainingUtteranceMMO),
 	create_xml_element('Utterance',
 			   [],
 			   [XMLPMID,XMLUtteranceType,XMLUtteranceNumber,XMLUtteranceText,
@@ -202,7 +201,7 @@ generate_phrases_before_next_utterance([H|T], PhraseCountIn, PhrasesMMO, PhraseC
 	).
 			       
 
-generate_xml_phrase_term(MMOIn, XMLPhraseTerm, MMOOut) :-
+generate_xml_phrases_term(MMOIn, XMLPhraseTerm, MMOOut) :-
 	generate_phrases_before_next_utterance(MMOIn, 0, PhrasesMMO, PhrasesLength, MMOOut),
 	number_codes(PhrasesLength, PhraseCount),
 	generate_xml_phrase_list(PhrasesMMO, XMLPhraseList),
@@ -891,7 +890,7 @@ generate_one_xml_AA_term(Acronym, Expansion, CountTerm, MMOCUIList, XMLAA) :-
 			   [],
 			   [AATextTerm,AAExpTerm,
 			    AATokenNumTerm,AALenTerm,
-			    AAExpTokenNumTerm,AAExpLenTerm,AAStartPosTerm,AALenTerm,CUIListTerm],
+			    AAExpTokenNumTerm,AAExpLenTerm,AAStartPosTerm,CUIListTerm],
 			   XMLAA).
 
 generate_xml_AA_CUI_list([], []).

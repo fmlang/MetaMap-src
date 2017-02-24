@@ -73,13 +73,15 @@ ifeq '$(O_SYSTEM)' "Linux"
   # export BERKELEY_LIB_DYNAMIC = "-L$(BERKELEY_LIB) -ldb-4.8"
 
   # Berkeley Db 4.8 definitions for SICStus Prolog 4.3.2
-  export BERKELEY_DIR = /usr
+  # export BERKELEY_DIR = /usr
   export BERKELEY = $(BERKELEY_DIR)
   export BERKELEY_INC = $(BERKELEY)/include
   export BERKELEY_LIB = $(BERKELEY)/lib
   export BERKELEY_LIB_A = $(BERKELEY_LIB)/libdb-4.8.a
+#  export BERKELEY_LIB_A = -L$(BERKELEY_LIB) -ldb-4.8
   export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb-4.8.so
   export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb.a
+#  export BERKELEY_LIB_STATIC = -L$(BERKELEY_LIB) -ldb-4.8
   export BERKELEY_LIB_DYNAMIC = "-L$(BERKELEY_LIB) -ldb-4.8"
 
   export DEFAULT_LIBXML_DIR = /usr
@@ -140,7 +142,8 @@ export LINK_FILES=$(SKR_DEBUG)/debug.o \
            ./debug/get_val.o \
            ./lexicon/morph/dm.o \
            ./db/c_nls_db.a \
-           $(BERKELEY_LIB_STATIC)
+           $(BERKELEY_LIB_STATIC) \
+           $(XDR_STATIC_LIB)
 
 export CONF=$(SPLFR_CONFIG_FLAGS) --conf BDBLIB=$(BERKELEY_LIB_STATIC) --conf BDB_PATH=$(BERKELEY) $(SPCONFIG)
 

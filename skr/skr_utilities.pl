@@ -33,6 +33,7 @@
 % Purpose:  Utilities
 
 :- module(skr_utilities, [
+	basename/2,
 	check_valid_file_type/2,
 	compare_utterance_lengths/2,
 	compute_sum/3,
@@ -64,6 +65,8 @@
 	get_program_name/1,
 	% called by MetaMap API -- do not change signature!
 	output_should_be_bracketed/1,
+	member_var/2,
+	memberchk_var/2,
 	output_tagging/3,
 	replace_crs_with_blanks/4,
 	replace_blanks_with_crs/4,
@@ -78,7 +81,6 @@
 	token_template/5,
 	token_template/6,
 	usage/0,
-	verify_xml_format/2,
 	write_raw_token_lists/2,
 	write_sentences/2,
 	write_token_list/3
@@ -110,6 +112,10 @@
 	print_candidate_grid/6,
 	print_duplicate_info/4,
 	stop_and_halt/0
+    ]).
+
+:- use_module(skr(skr_json), [
+	json_output_format/1
     ]).
 
 :- use_module(skr(skr_text_processing), [
@@ -144,7 +150,8 @@
 	control_value/2,
 	display_control_options_for_modules/2,
 	display_mandatory_metamap_options/0,
-	display_current_control_options/2
+	display_current_control_options/2,
+	get_program_name/1
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -190,6 +197,7 @@
 
 :- use_module(library(lists), [
 	append/2,
+	delete/3,
 	last/2,
 	prefix/2,
 	selectchk/3
@@ -360,14 +368,18 @@ make_atom(String, Atom) :-
 do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, OutputStream) :-
 	verify_model_settings(ModelSettings),
 	verify_tagger_output_settings(TaggerOutputSettings),
+	verify_single_xml_output_format(SingleXMLOutputFormat),
+	verify_single_json_output_format(SingleJSONOutputFormat),
 	verify_single_output_format(SingleOutputFormat),
         verify_xml_settings(XMLSettings),
+        verify_json_settings(JSONSettings),
         verify_MMO_settings(MMOSettings),
         verify_mmi_settings(MMISettings),
 	verify_sources_options(SourcesOptions),
 	verify_sources_values(SourcesValues),
 	verify_semantic_type_options(SemTypeOptions),
 	verify_semantic_type_values(SemTypeValues),
+	verify_no_nums_semantic_type_values(NoNumsSemTypeValues),
 	% verify_gap_size_values(GapSizeValues),
 	verify_acros_abbrs_settings(AcrosAbbrsSettings),
 	verify_derivational_variants_settings(DerivationalVariantsSettings),
@@ -384,10 +396,11 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_number_the_mappings_setting(NumberTheMappingsSetting),
 	verify_hide_mappings_setting_1(HideMappingsSetting1),
 	verify_hide_mappings_setting_2(HideMappingsSetting2),
-	verify_all_results([ModelSettings, TaggerOutputSettings, SingleOutputFormat,
-			    XMLSettings, MMOSettings, MMISettings,
+	verify_all_results([ModelSettings, TaggerOutputSettings,
+			    SingleOutputFormat, SingleXMLOutputFormat, SingleJSONOutputFormat,
+			    XMLSettings, JSONSettings, MMOSettings, MMISettings,
 			    SourcesOptions, SourcesValues,
-			    SemTypeOptions, SemTypeValues, % GapSizeValues,
+			    SemTypeOptions, SemTypeValues, NoNumsSemTypeValues,
 			    AcrosAbbrsSettings, DerivationalVariantsSettings,
 			    TaggerServerSettings, WSDServerSettings,
 			    PruningSettings, SLDISettings, NegExTriggerSetting, NegExSettings,
@@ -415,43 +428,111 @@ verify_tagger_output_settings(Result) :-
 	; Result is 0
 	).
 
-% Error if both XML and machine_output are set
-verify_single_output_format(Result) :-
-	( control_option(machine_output),
-	  xml_output_format(XMLFormat) ->
-	  send_message('~n### MetaMap ERROR: Only one of --machine_output and ', []),
-	  send_message('--~w can be specified.~n', [XMLFormat]),
+% Error if more than one of MMI, XML MMI, and JSON is set
+% verify_single_output_format(Result) :-
+% 	( control_option(machine_output), 
+% 	  xml_output_format(XMLFormat) ->
+% 	  send_message('~n### MetaMap ERROR: Only one of --machine_output and ', []),
+% 	  send_message('--~w can be specified.~n', [XMLFormat]),
+% 	  Result is 1 
+% 	; Result is 0
+%	).
+
+
+verify_single_xml_output_format(Result) :-
+	( control_option('XMLf') ->
+	  XMLf is 1
+	; XMLf is 0
+	),
+	( control_option('XMLn') ->
+	  XMLn is 1
+	; XMLn is 0
+	),
+	( control_option('XMLf1') ->
+	  XMLf1 is 1
+	; XMLf1 is 0
+	),
+	( control_option('XMLn1') ->
+	  XMLn1 is 1
+	; XMLn1 is 0
+	),
+	Total is XMLf + XMLn + XMLf1 + XMLn1,
+	( Total > 1 ->
+	  send_message('~n### MetaMap ERROR: Only one XML output format can be selected!~n', []),
 	  Result is 1
 	; Result is 0
 	).
 
-verify_xml_settings(Result) :-
-	xml_output_format(XMLFormat),
-	!,
-	warning_check([syntax, show_cuis, sources, dump_aas], XMLFormat),
-	fatal_error_check([hide_plain_syntax, number_the_candidates,
-			   short_semantic_types, hide_mappings, show_preferrred_names_only],
-			  XMLFormat, 0, Result).
-verify_xml_settings(0).
 
-verify_MMO_settings(Result) :-
-	control_option(machine_output),
-	!,
-	warning_check([syntax, show_cuis, sources, dump_aas], machine_output),
-	fatal_error_check([hide_plain_syntax, number_the_candidates,
- 			   short_semantic_types, hide_mappings, show_preferrred_names_only],
-			  machine_output, 0, Result).
-verify_MMO_settings(0).
+verify_single_json_output_format(Result) :-
+	( control_option('JSONf') ->
+	  JSONf is 1
+	; JSONf is 0
+	),
+	( control_option('JSONn') ->
+	  JSONn is 1
+	; JSONn is 0
+	),
+	Total is JSONf + JSONn,
+	( Total > 1 ->
+	  send_message('~n### MetaMap ERROR: Only one JSON output format can be selected!~n', []),
+	  Result is 1
+	; Result is 0
+	).
 
-verify_mmi_settings(Result) :-
-	control_option(fielded_mmi_output),
-	!,
-	warning_check([show_cuis,show_candidates,hide_mappings,negex,syntax], fielded_mmi_output),
-	fatal_error_check([tagger_output, hide_plain_syntax,
-			   number_the_candidates, short_semantic_types,
-			   show_preferrred_names_only, sources],
-			  fielded_mmi_output, 0, Result).
-verify_mmi_settings(0).
+verify_single_output_format(Result) :-
+	( control_option(machine_output) ->
+	  MMO is 1
+	; MMO is 0
+	),
+	( xml_output_format(_XMLFormat) ->
+	  XML is 1
+	; XML is 0
+	),
+	( control_option(fielded_mmi_output) ->
+	  MMI is 1
+	; MMI is 0
+	),
+	( json_output_format(_JSONFormat) ->
+	  JSON is 1
+	; JSON is 0
+	),
+	Total is MMO + XML + MMI + JSON,
+	( Total > 1 ->
+	  send_message('~n### MetaMap ERROR: Only one of --machine_output, XML output, ', []),
+	  send_message('JSON output, and fielded MMI output can be specified.~n', []),
+	  Result is 1
+	; Result is 0
+	).
+
+verify_xml_settings(0) :-
+	( xml_output_format(XMLFormat) ->
+	    warning_check([syntax, short_semantic_types, show_cuis, sources, dump_aas,
+			   hide_plain_syntax, number_the_candidates, hide_mappings], XMLFormat)
+	; true
+	).
+
+verify_json_settings(0) :-
+	( json_output_format(JSONFormat) ->
+	  warning_check([syntax, short_semantic_types, show_cuis, sources, dump_aas,
+			 hide_plain_syntax, number_the_candidates, hide_mappings], JSONFormat)
+	; true
+	).
+
+verify_MMO_settings(0) :-
+	( control_option(machine_output) ->
+	  warning_check([syntax, show_cuis, sources, dump_aas, hide_plain_syntax,
+		         number_the_candidates, short_semantic_types, hide_mappings], machine_output)
+	; true
+	).
+
+verify_mmi_settings(0) :-
+	( control_option(fielded_mmi_output) ->
+	  warning_check([show_cuis, show_candidates, hide_mappings, negex, syntax,
+		         tagger_output, hide_plain_syntax, number_the_candidates,
+		         short_semantic_types, sources], fielded_mmi_output)
+	; true
+	).
 
 % Error if both restrict_to_sources and exclude_sources are set
 verify_sources_options(Result) :-
@@ -487,8 +568,8 @@ verify_semantic_type_options(Result) :-
 
 % Error if either restrict_to_sts and exclude_sts is set and invalid ST is specified
 verify_semantic_type_values(Result) :-
-	( control_value(restrict_to_sts,STs)
-	; control_value(exclude_sts,STs)
+	( control_value(restrict_to_sts, STs)
+	; control_value(exclude_sts, STs)
 	),
 	!,
 	( verify_sts(STs) ->
@@ -496,6 +577,17 @@ verify_semantic_type_values(Result) :-
 	; Result is 1
 	).
 verify_semantic_type_values(0).
+
+verify_no_nums_semantic_type_values(Result) :-
+	control_value(no_nums, STs0),
+	delete(STs0, all,   STs1),
+	delete(STs1, 'ALL', STs2),
+	( verify_sts(STs2) ->
+	  Result is 0
+	; Result is 1
+	).
+verify_no_nums_semantic_type_values(0).
+	
 
 %%% % Error if invalid gap size is specified (obsolete)
 %%% verify_gap_size_values(Result) :-
@@ -756,7 +848,7 @@ warning_check([WarningOption|RestOptions], OutputOption) :-
 fatal_error_check([], _OutputOption, Result, Result).
 fatal_error_check([FatalErrorOption|RestOptions], OutputOption, ResultIn, ResultOut) :-
 	( control_option(FatalErrorOption) ->
-	  send_message('~n### MetaMap ERROR: The ~w option cannot be used with ~w output.~n',
+	  send_message('~n### MetaMap ERROR: The --~w option cannot be used with ~w output.~n',
 		       [FatalErrorOption, OutputOption]),
 	  ResultNext is 1
 	; ResultNext is ResultIn
@@ -816,11 +908,6 @@ format_cmd_line_for_machine_output(Options, Args, args(CommandLine,ArgsMO)) :-
 	concat_atom([ProgramName|Argv], ' ', CommandLine),
 	format_cmd_line_for_machine_output_1(Options, Args, ArgsMO).
 
-get_program_name(ProgramName) :-
-	environ('SP_APP_PATH', AbsolutePathName),
-	atom_codes(AbsolutePathName, AbsolutePathNameCodes),
-	basename(AbsolutePathNameCodes, ProgramNameCodes),
-	atom_codes(ProgramName, ProgramNameCodes).
 
 basename(File, Base) :-
         basename_aux(File, S, S, Base).
@@ -887,6 +974,8 @@ generate_EOT_output(OutputStream) :-
 
 do_formal_tagger_output :-
 	( xml_output_format(_XMLFormat) ->
+	  true
+	; json_output_format(_XMLFormat) ->
 	  true
 	; control_option(machine_output) ->
 	  true
@@ -998,6 +1087,8 @@ test_generate_candidate_output_control_options :-
 	  true
 	; xml_output_format(_XMLFormat) ->
 	  true
+	; json_output_format(_JSONFormat) ->
+	  true
 	; control_option(fielded_mmi_output)
 	).
 
@@ -1034,6 +1125,7 @@ generate_mappings_output(Mappings, _Evaluations, UtteranceLabel,
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
 	( ( control_option(machine_output)
 	  ; xml_output_format(_XMLFormat)
+	  ; json_output_format(_JSONFormat)
 	  ; control_option(fielded_mmi_output)
 	  ) ->
 	  % Generate the MMO for the Mappings,
@@ -1185,7 +1277,8 @@ generate_MMO_terms(IArgs, IOptions, NegExList, DisambMMOutput,
 conditionally_generate_header_output(IArgs, IOptions, NegExList,
 				     DisambMMOutput, HeaderMMO, HeaderMMORest) :-
 	( ( control_option(machine_output)
-	   ; xml_output_format(_)  ) ->
+	   ; xml_output_format(_XMLFormat)
+	   ; json_output_format(_JSONFormat) ) ->
 	  generate_header_output(IArgs, IOptions, NegExList,
 				 DisambMMOutput, HeaderMMO, HeaderMMORest)
 	; true
@@ -1481,7 +1574,9 @@ ensure_number(Atom, Number) :-
 check_generate_utterance_output_control_options_1 :-
 	( control_option(machine_output)     -> true
 	; control_option(fielded_mmi_output) -> true
-	; xml_output_format(_XMLFormat)
+	; control_option(pipe_output) -> true
+	; xml_output_format(_XMLFormat)      -> true
+	; json_output_format(_JSONFormat)
 	).
 
 % If this predicate succeeds it causes
@@ -1553,65 +1648,83 @@ get_all_candidate_features(FeatureList, Candidate, FeatureValueList) :-
 	).
 
 get_candidate_feature(negvalue, Candidate, NegValue) :-
+	!,
 	candidate_term(NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(cui, Candidate, CUI) :-
+	!,
 	candidate_term(_NegValue,CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(metaterm, Candidate, MetaTerm) :-
+	!,
 	candidate_term(_NegValue,_CUI,MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(metaconcept, Candidate, MetaConcept) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(metawords, Candidate, MetaWords) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(semtypes, Candidate, SemTypes) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(matchmap, Candidate, MatchMap) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(lscomponents, Candidate, LSComponents) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(targetlscomponent, Candidate, TargetLSComponent) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(involveshead, Candidate, InvolvesHead) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(isovermatch, Candidate, IsOvermatch) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       IsOvermatch,_Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(sources, Candidate, Sources) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,Sources,_PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(posinfo, Candidate, PosInfo) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,PosInfo,_Status,_Negated, Candidate).
 get_candidate_feature(status, Candidate, Status) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,Status,_Negated, Candidate).
 get_candidate_feature(negated, Candidate, Negated) :-
+	!,
 	candidate_term(_NegValue,_CUI,_MetaTerm,_MetaConcept,_MetaWords,_SemTypes,
 		       _MatchMap,_LSComponents,_TargetLSComponent,_InvolvesHead,
 		       _IsOvermatch,_Sources,_PosInfo,_Status,Negated, Candidate).
+get_candidate_feature(BogusFeature, Candidate, _) :-
+	fatal_error('### Attempt to extract unknown feature ~w from candidate term ~q!!~n',
+		    [BogusFeature, Candidate]).
 
 fatal_error(Message, Args) :-
 	send_message('~n### MetaMap ERROR: ', []),
@@ -1640,6 +1753,7 @@ convert_non_text_fields_to_blanks(InputType, InputStringWithBlanks,
 	),
 	append(TextFieldsOnly, TextFieldsOnlyString0),
 	trim_whitespace_right(TextFieldsOnlyString0, TextFieldsOnlyString),
+	% TextFieldsOnlyString = TextFieldsOnlyString0,
 	trim_whitespace_left_count(TextFieldsOnlyString, TrimmedTextFieldsOnlyString, NumBlanksTrimmed).
 
 
@@ -1769,3 +1883,23 @@ walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-
 	; CharsNext1 = []
 	),
 	walk_off_field_lines(RestFieldLines, CharsNext1, CharsOut).
+
+% Test for membership of Element in VarList,
+% where VarList may have an uninstantiated tail, e.g., [a,b,c|Rest].
+memberchk_var(Element, VarList) :-
+	nonvar(VarList),
+	( VarList = [Element|_] ->
+	  true
+	; VarList = [_|Rest],
+	  memberchk_var(Element, Rest)
+	).
+
+% Test for membership of Element in VarList,
+% where VarList may have an uninstantiated tail, e.g., [a,b,c|Rest].
+member_var(Element, VarList) :-
+	nonvar(VarList),
+	( VarList = [Element|_]
+	; VarList = [_|Rest],
+	  member_var(Element, Rest)
+	).
+

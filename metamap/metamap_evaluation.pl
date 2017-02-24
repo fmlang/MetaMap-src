@@ -58,10 +58,6 @@
 	linearize_components/2
     ]).
 
-:- use_module(skr(skr_xml), [
-    	xml_output_format/1
-   ]).
-
 :- use_module(skr(skr_utilities), [
     	compute_sum/3,
     	debug_message/3,
@@ -613,7 +609,7 @@ compute_phrase_match(TokenHeadWords, Label, UtteranceText,
 	% runs for a VERY long time.
 	% format(user_error, 'CPM|~q~n', [MetaWords]),
 	length(MetaWords, MetaWordsLength),
-	MetaWordsLength =< 14,
+	MetaWordsLength =< 35,
 	compute_phrase_match_aux(MetaWords, Label, UtteranceText,
 				 MetaWords, TokenPhraseWords,
 				 NMeta0, Variants, PhraseTokenLength,

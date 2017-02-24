@@ -36,18 +36,18 @@
 :- module(negex,[
 	compute_negex/4,
 	default_negex_semtypes/1,
-	final_negation_template/6,
-	generate_all_negex_output/1,
-	generate_negex_output/1
+	final_negation_template/6
+	% generate_all_negex_output/1
+	% generate_negex_output/1
    ]).
 
 :- use_module(metamap(metamap_tokenization),[
         tokenize_text_utterly/2
    ]).
 
-:- use_module(metamap(metamap_utilities),[
-	positions_overlap/2
-   ]).
+% :- use_module(metamap(metamap_utilities),[
+% 	positions_overlap/2
+%    ]).
 
 :- use_module(skr(skr_utilities), [
 	fatal_error/2,
@@ -83,14 +83,8 @@
 	ttyflush/0
    ]).
 
-:- use_module(skr(skr_xml),[
-        xml_output_format/1
-   ]).
-
 :- use_module(library(lists), [
 	append/2,
-	delete/3,
-	delete/4,
 	last/2,
 	select/3,
 	subseq1/2
@@ -127,107 +121,108 @@ final_negation_template(negation(Type, TriggerText, TriggerPosInfo,
 		  
 
 % find all negated concepts
-compute_negex(RawTokenList, Lines, DisambMMOutput, NegationTerms) :-
-	( compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) ->
+compute_negex(RawTokenList, Lines, PhraseList, NegationTerms) :-
+	( compute_negex_1(RawTokenList, PhraseList, NegationTerms) ->
 	  true
 	; fatal_error('Negex failed on "~p".~n', [Lines]),
 	  abort
 	).
 
-do_negex :-
-	( control_option(negex) ->
-	  true
-	; control_option(negex_trigger_file) ->
-	  true
-	; control_option(fielded_mmi_output) ->
-	  true
-	; control_value(negex_st_add, _) ->
-	  true
-	; control_value(negex_st_del, _) ->
-	  true
-	; control_value(negex_st_set, _)
-	).
+% do_negex :-
+% 	( control_option(negex) ->
+% 	  true
+% 	; control_option(negex_trigger_file) ->
+% 	  true
+% 	; control_option(fielded_mmi_output) ->
+% 	  true
+% 	; control_value(negex_st_add, _) ->
+% 	  true
+% 	; control_value(negex_st_del, _) ->
+% 	  true
+% 	; control_value(negex_st_set, _)
+% 	).
 
-compute_negex_1(RawTokenList, DisambMMOutput, NegationTerms) :-
-	( \+ control_option(machine_output),
-	  \+ control_option(fielded_mmi_output),
-	  \+ xml_output_format(_XMLFormat),
-	  \+ do_negex ->
-	  NegationTerms = []
-	; environ('NEGEX_UTTERANCE_MAX_DIST', UtteranceMaxDistAtom),
-	  atom_codes(UtteranceMaxDistAtom,    UtteranceMaxDistChars),
-	  number_codes(UtteranceMaxDistNum ,  UtteranceMaxDistChars),
-	  environ('NEGEX_CONCEPT_MAX_DIST',   ConceptMaxDistAtom),
-	  atom_codes(ConceptMaxDistAtom,      ConceptMaxDistChars),
-	  number_codes(ConceptMaxDistNum ,    ConceptMaxDistChars),
-	  % Split the token list for the entire utterance into a list of lists of tokens;
-	  % each sub-list contains all the tokens for a single utterance.
-	  split_token_list(RawTokenList, ListOfTokenLists),
-	  negex_aux(ListOfTokenLists, DisambMMOutput,
+compute_negex_1(RawTokenList, PhraseList, NegationTerms) :-
+	% ( \+ control_option(machine_output),
+	%   \+ control_option(fielded_mmi_output),
+	%   \+ xml_output_format(_XMLFormat),
+	%   \+ do_negex ->
+	%   NegationTerms = []
+	% ; environ('NEGEX_UTTERANCE_MAX_DIST', UtteranceMaxDistAtom),
+	environ('NEGEX_UTTERANCE_MAX_DIST', UtteranceMaxDistAtom),
+	atom_codes(UtteranceMaxDistAtom,    UtteranceMaxDistChars),
+	number_codes(UtteranceMaxDistNum,   UtteranceMaxDistChars),
+	environ('NEGEX_CONCEPT_MAX_DIST',   ConceptMaxDistAtom),
+	atom_codes(ConceptMaxDistAtom,      ConceptMaxDistChars),
+	number_codes(ConceptMaxDistNum,     ConceptMaxDistChars),
+	% Split the token list for the entire utterance into a list of lists of tokens;
+	% each sub-list contains all the tokens for a single utterance.
+	% No longer needed
+	% split_token_list(RawTokenList, [FirstUtteranceTokenList|_ListOfTokenLists]),
+	get_first_utterance_tokens(RawTokenList, FirstUtteranceTokenList),
+	token_negex(FirstUtteranceTokenList, PhraseList,
 		    UtteranceMaxDistNum, ConceptMaxDistNum, NegationTerms0),
-	  flatten(NegationTerms0, NegationTerms)
-	).
+	flatten(NegationTerms0, NegationTerms),
+	instantiate_negated_fields(PhraseList, NegationTerms).
 
-negex_aux([], [], _UtteranceMaxDist, _ConceptMaxDist, []).
-negex_aux([RawTokenList|ListOfTokenLists], [MMOutput|MMOutputList],
-	  UtteranceMaxDist, ConceptMaxDist, [NegationTerm|NegationTerms]) :-
-	MMOutput = mm_output(_,_,_,_,_,_,DisambiguatedMMOPhraseList,_),
-	token_negex(RawTokenList, DisambiguatedMMOPhraseList,
-		    UtteranceMaxDist, ConceptMaxDist, NegationTerm),
-	negex_aux(ListOfTokenLists, MMOutputList, UtteranceMaxDist, ConceptMaxDist, NegationTerms).
-
+% negex_aux([], [], _UtteranceMaxDist, _ConceptMaxDist, []).
+% negex_aux([RawTokenList|ListOfTokenLists], [MMOutput|MMOutputList],
+%           UtteranceMaxDist, ConceptMaxDist, [NegationTerm|NegationTerms]) :-
+%         MMOutput = mm_output(_,_,_,_,_,_,DisambiguatedMMOPhraseList,_),
+%         token_negex(RawTokenList, DisambiguatedMMOPhraseList,
+%                     UtteranceMaxDist, ConceptMaxDist, NegationTerm),
+%         negex_aux(ListOfTokenLists, MMOutputList, UtteranceMaxDist, ConceptMaxDist, NegationTerms).
 
 % NegEx output should be generated IFF
 % * --negex is on, and
 % neither machine_output nor XML is on.
-generate_negex_output(NegationTerms) :-
-	( do_negex,
-	  \+ control_option(machine_output),
-	  \+ control_option(fielded_mmi_output),
-	  \+ xml_output_format(_XMLFormat) ->
-	   format('NEGATIONS:~n', []),
-	   generate_all_negex_output(NegationTerms),
-	   nl
-	; true
-	).
+% generate_negex_output(NegationTerms) :-
+% 	( do_negex,
+% 	  \+ control_option(machine_output),
+% 	  \+ control_option(fielded_mmi_output),
+% 	  \+ xml_output_format(_XMLFormat) ->
+% 	   format('NEGATIONS:~n', []),
+% 	   generate_all_negex_output(NegationTerms),
+% 	   nl
+% 	; true
+% 	).
 
-generate_all_negex_output([]).
-generate_all_negex_output([H|T]) :-
-	generate_one_negex_output(H),
-	generate_all_negex_output(T).
+% generate_all_negex_output([]).
+% generate_all_negex_output([H|T]) :-
+% 	generate_one_negex_output(H),
+% 	generate_all_negex_output(T).
+% 
+% generate_one_negex_output(NegExTerm) :-
+% 	final_negation_template(NegExTerm,
+% 				NegationType, NegationTrigger, NegationPosInfo,
+% 				ConceptCUIList, NegatedConceptPosInfo),
+% 	display_negex_info('Negation Type:     ', NegationType),
+% 	display_negex_info('Negation Trigger:  ', NegationTrigger),
+% 	display_negex_info('Negation PosInfo:  ', NegationPosInfo),
+% 	display_negex_info('Negated  Concept:  ', ConceptCUIList),
+% 	display_negex_info('Concept  PosInfo:  ', NegatedConceptPosInfo),
+% 	nl.
 
-generate_one_negex_output(NegExTerm) :-
-	final_negation_template(NegExTerm,
-				NegationType, NegationTrigger, NegationPosInfo,
-				ConceptCUIList, NegatedConceptPosInfo),
-	display_negex_info('Negation Type:     ', NegationType),
-	display_negex_info('Negation Trigger:  ', NegationTrigger),
-	display_negex_info('Negation PosInfo:  ', NegationPosInfo),
-	display_negex_info('Negated  Concept:  ', ConceptCUIList),
-	display_negex_info('Concept  PosInfo:  ', NegatedConceptPosInfo),
-	nl.
-
-
-display_negex_info(Header, Data) :-
-	( atomic(Data) ->
-	  display_negex_atom_info(Header, Data)
-	; display_negex_list_info(Header, Data)
-	).
-
-display_negex_atom_info(Header, AtomData) :-
-	format('~w~w~n', [Header,AtomData]).
-
-display_negex_list_info(Header, ListData) :-
-	format('~w', [Header]),
-	ListData = [H|T],
-	write_list_elements(T, H).
-
-write_list_elements([], Datum) :-
-	format('~w~n', [Datum]).
-write_list_elements([H|T], Datum) :-
-	format('~w, ', [Datum]),
-	write_list_elements(T, H).
-
+% display_negex_info(Header, Data) :-
+% 	( atomic(Data) ->
+% 	  display_negex_atom_info(Header, Data)
+% 	; display_negex_list_info(Header, Data)
+% 	).
+% 
+% display_negex_atom_info(Header, AtomData) :-
+% 	format('~w~w~n', [Header,AtomData]).
+% 
+% display_negex_list_info(Header, ListData) :-
+% 	format('~w', [Header]),
+% 	ListData = [H|T],
+% 	write_list_elements(T, H).
+% 
+% write_list_elements([], Datum) :-
+% 	format('~w~n', [Datum]).
+% write_list_elements([H|T], Datum) :-
+% 	format('~w, ', [Datum]),
+% 	write_list_elements(T, H).
+ 
 % token based marking of nega (and pnega) negations
 %
 % 1. find negation phrase in tokenlist
@@ -258,7 +253,7 @@ generate_negation_terms_1([H|T], DisambiguatedMMOPhrases,
 	% PhraseMaps0 is a list of lists of the form [PhraseObject,Mappings];
 	% PhraseObject is phrase(PhraseAtom, Syntax, StartPos/Length, ReplPos), and
 	% Mappings is a list of the mappings generated from that phrase.
-	list_phrases_with_mappings(DisambiguatedMMOPhrases, PhraseMaps0),
+	list_phrases_with_candidates(DisambiguatedMMOPhrases, PhraseMaps0),
 	% Keep only [PhraseObject,Mappings] lists in which
 	% PhraseObject is head or verb, and Mappings is nonempty.
 	keep_useful_phrasemaps(PhraseMaps0, PhraseMaps),
@@ -289,13 +284,49 @@ block_negated_terms_overlapping_triggers([], []).
 block_negated_terms_overlapping_triggers([H|T], Rest) :-
 	orig_negation_template(H, _Type, _TriggerText, TriggerPosInfo,
 			       _ConceptName, _CUI, ConceptPosInfo),
-	( member(TriggerStartPos/TriggerLength, TriggerPosInfo),
-	  member(ConceptStartPos/ConceptLength, ConceptPosInfo),
-	  positions_overlap([TriggerStartPos,TriggerLength], [ConceptStartPos,ConceptLength]) ->
+	( trigger_overlaps_concept(TriggerPosInfo, ConceptPosInfo) ->
 	  Rest = NextRest
 	; Rest = [H|NextRest]
 	),
 	block_negated_terms_overlapping_triggers(T, NextRest).
+
+trigger_overlaps_concept(TriggerPosInfo, ConceptPosInfo) :-
+	get_overall_start_and_end_pos(TriggerPosInfo,
+				      FirstTriggerStartPos, LastTriggerEndPos),
+	get_overall_start_and_end_pos(ConceptPosInfo,
+				      FirstConceptStartPos, LastConceptEndPos),
+	positions_overlap(FirstTriggerStartPos, LastTriggerEndPos,
+			  FirstConceptStartPos, LastConceptEndPos).
+
+get_overall_start_and_end_pos(AllPosInfo, FirstStartPos, LastEndPos) :-
+	AllPosInfo = [FirstPosInfo|_],
+	FirstPosInfo = FirstStartPos/_FirstLength,
+	last(AllPosInfo, LastPosInfo),
+	LastPosInfo = LastStartPos/LastLength,
+	LastEndPos is LastStartPos + LastLength.
+	
+% See "Overlap Test" in https://en.wikipedia.org/wiki/Interval_tree
+positions_overlap(StartPos1, EndPos1, StartPos2, EndPos2) :-
+	% 1:    |-------------|
+	% 2:         |-------------|
+	( StartPos1 =< StartPos2,
+	  StartPos2 < EndPos1 ->
+	  true
+	% 1:         |-------------|
+	% 2:    |-------------|
+	; StartPos1 < EndPos2,
+	  EndPos2  =< EndPos1 ->
+	  true
+	% 1:        |----|
+	% 2:    |-------------|
+	; StartPos2 =< StartPos1,
+	  StartPos1 < EndPos2 ->
+	  true
+	% 1:    |-------------|
+	% 2:        |----|
+	; StartPos2 < EndPos1,
+	  EndPos1 =< EndPos2
+	).
 
 remove_nonuseful_tokens([], []).
 remove_nonuseful_tokens([H|T], TokenListOut) :-
@@ -318,20 +349,21 @@ nonuseful_token_type(ws).
 list_mapped_tokens([], _, []).
 list_mapped_tokens([Token|RawTokenListIn], PhraseMap, MappedTokens) :-
 	Token = tok(_Type,_String,_Nstring, _Pos0, pos(TokenStart,TokenLength)),	
-	PhraseMap = [phrase(_PhraseText,_Mincoman,_PhraseStartPos/_PhraseEndPos,_),
-		     mappings(MapList)],
-	( maplist_contains_range(MapList, TokenStart, TokenLength) ->
+	PhraseMap = phrase(_PhraseText,_Mincoman,_PhraseStartPos/_PhraseEndPos,_):CandidatesList,
+%		     mappings(MapList)],
+%	( maplist_contains_range(MapList, TokenStart, TokenLength) ->
+	( evlist_contains_range(CandidatesList, TokenStart, TokenLength) ->
 	  MappedTokens = [Token|RestMappedTokens]
 	; MappedTokens = RestMappedTokens
 	),
 	list_mapped_tokens(RawTokenListIn, PhraseMap, RestMappedTokens).
 
-maplist_contains_range([Map|MapList], TokenStart, TokenLength) :-
-	Map = map(_score,EvList),
-	( evlist_contains_range(EvList, TokenStart, TokenLength) ->
-	  true
-	; maplist_contains_range(MapList, TokenStart, TokenLength)
-	).
+% maplist_contains_range([Map|MapList], TokenStart, TokenLength) :-
+% 	Map = map(_score,EvList),
+% 	( evlist_contains_range(EvList, TokenStart, TokenLength) ->
+% 	  true
+% 	; maplist_contains_range(MapList, TokenStart, TokenLength)
+% 	).
 
 evlist_contains_range([FirstCandidate|RestCandidates], TokenStart, TokenLength) :-
 	get_candidate_feature(posinfo, FirstCandidate, PositionList),
@@ -364,10 +396,10 @@ list_concepts_and_tokens([PhraseMap|PhraseMaps], RawTokenListIn, ConceptTokensPh
 	  ConceptTokensPhraseMap = RestConceptTokensPhraseMap
 	  % PhraseObject = _,
 	  % Mappings = _
-	; PhraseMap = [PhraseObject,Mappings],
+	; PhraseMap = PhraseObject:CandidateList,
 	  % reversed order of args from QP library version!
 	  last(MappedTokens, LastMappedToken),
-	  ConceptTokensPhraseMap = [[LastMappedToken,PhraseObject,Mappings]
+	  ConceptTokensPhraseMap = [[LastMappedToken,PhraseObject,CandidateList]
 				    |RestConceptTokensPhraseMap]
 	),
 	list_concepts_and_tokens(PhraseMaps, RawTokenListIn, RestConceptTokensPhraseMap).
@@ -426,7 +458,7 @@ tokenize_strings([String|StringList], [Token|TokenList]) :-
 %
 % no
 %
-check_for_negation_phrase(Type, Target, WordList) :-
+check_for_negation_phrase(Target, Type, WordList) :-
 	sublist(Target, WordList),
 	WordList = [H|T],
 	negation_phrase_tokens(Type, H, T).
@@ -454,23 +486,39 @@ negation_phrase_tokens(conj, H, T) :-
 
 get_negation_phrase_list(Target, ResultList) :-
 	findall([Type,X],
-		check_for_negation_phrase(Type,Target,X),
+		check_for_negation_phrase(Target,Type,X),
 		ResultList).
 
 
-% Return list of phrases and their associated mappings.
-list_phrases_with_mappings([],[]).   
-list_phrases_with_mappings([DisambiguatedMMOPhrase|DisambiguatedMMOPhraseList],
-			   [PhraseMap|PhraseMaps]) :-
+% Return list of phrases and their associated candidates--both
+% those in the candidates and those in the mappings.
+% If both candidates and mappings are being generated,
+% this will be dpplicated, hence the sort.
+list_phrases_with_candidates([],[]).   
+list_phrases_with_candidates([DisambiguatedMMOPhrase|DisambiguatedMMOPhraseList],
+			     [PhraseMap|PhraseMaps]) :-
 	DisambiguatedMMOPhrase =
-	          phrase(PhraseObject,_Candidates,Mappings,_PWI,_GVCs,_EV0,_APhrases),
-	PhraseMap = [PhraseObject,Mappings],
-	list_phrases_with_mappings(DisambiguatedMMOPhraseList,PhraseMaps).
+	          phrase(PhraseObject,Candidates,Mappings,_PWI,_GVCs,_EV0,_APhrases),
+	% PhraseMap = [PhraseObject,Mappings],
+	Mappings = mappings(MappingsList),
+	get_all_mappings_candidates(MappingsList, AllMappingsCandidates0),
+	append(AllMappingsCandidates0, AllMappingsCandidates),
+	Candidates = candidates(_,_,_,_,EVList),
+	append(AllMappingsCandidates, EVList, AllCandidates0),
+	sort(AllCandidates0, AllCandidates),
+	PhraseMap = PhraseObject:AllCandidates,
+	list_phrases_with_candidates(DisambiguatedMMOPhraseList,PhraseMaps).
 
+
+get_all_mappings_candidates([], []).
+get_all_mappings_candidates([FirstMapping|RestMappings],
+			    [FirstMappingsCandidates|RestMappingsCandidates]) :-
+	FirstMapping = map(_Score, FirstMappingsCandidates),
+	get_all_mappings_candidates(RestMappings, RestMappingsCandidates).
 
 % map concepts of head and verb phrases, ignore the others
 keep_useful_phrasemaps(PhraseMaps, FinalPhraseMaps) :-
-	delete_phrasemaps_with_empty_mappings(PhraseMaps, FinalPhraseMaps0),
+	delete_phrasemaps_with_empty_candidates(PhraseMaps, FinalPhraseMaps0),
 	delete_nonuseful_phrasemaps(FinalPhraseMaps0, FinalPhraseMaps).
 
 mincoman_get_pos_tag([], []).
@@ -488,7 +536,7 @@ phrase_get_pos_tag(Phrase,Tag) :-
 
 delete_nonuseful_phrasemaps([], []).
 delete_nonuseful_phrasemaps([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
-	PhraseMap = [Phrase,_Mappings],
+	PhraseMap = Phrase:_CandidateList,
 	phrase_get_pos_tag(Phrase, Tag),
 	( Tag \== [] ->
 	  FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
@@ -496,16 +544,16 @@ delete_nonuseful_phrasemaps([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
 	),
 	delete_nonuseful_phrasemaps(PhraseMaps, RestFinalPhraseMaps).
 
-delete_phrasemaps_with_empty_mappings([], []).
-delete_phrasemaps_with_empty_mappings([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
-	PhraseMap = [_Phrase,Mappings],
-	( Mappings = mappings([]) ->
+delete_phrasemaps_with_empty_candidates([], []).
+delete_phrasemaps_with_empty_candidates([PhraseMap|PhraseMaps], FinalPhraseMaps) :-
+	PhraseMap = _Phrase:CandidateList,
+	% ( Mappings = mappings([]) ->
+	( CandidateList = [] ->
 	  FinalPhraseMaps = RestFinalPhraseMaps
 	; FinalPhraseMaps = [PhraseMap|RestFinalPhraseMaps]
 	),
-	delete_phrasemaps_with_empty_mappings(PhraseMaps, RestFinalPhraseMaps).
+	delete_phrasemaps_with_empty_candidates(PhraseMaps, RestFinalPhraseMaps).
 
-%
 % List concepts that have positions before or after trigger, based on
 % type of negation.
 %
@@ -572,7 +620,7 @@ get_negation_data(TriggerPositionTerm, ConceptTokensPhraseMap,
 	ConceptToken            = tok(_Type,_String,_LCString,_Pos,ConceptPositionTerm),
 	ConceptPositionTerm     = pos(ConceptPosition,_ConceptLength).
 
-make_negation_terms(Trigger, Phrase, Mappings, NegationTermList) :-
+make_negation_terms(Trigger, Phrase, CandidateList, NegationTermList) :-
 	Trigger = trigger(Type,Tokens),
 	Tokens = [FirstToken|_Rest],
 	FirstToken = tok(_FType,_FString,_FLCString,
@@ -587,20 +635,23 @@ make_negation_terms(Trigger, Phrase, Mappings, NegationTermList) :-
 	extract_atoms_from_tokenlist(Tokens, AtomList),
 	concat_atom(AtomList, ' ', TriggerPhraseText),
 	Phrase = phrase(_PhraseText,_Mincoman,_PhraseStartPos/_PhraseEndPos,_),
-	Mappings = mappings(MapList),
-	negationlist_from_maplist(MapList, Type, TriggerPhraseText,
+	% Mappings = mappings(MapList),
+	% Mappings = candidates(_,_,_,_,CandidateList),
+	% negationlist_from_maplist(MapList, Type, TriggerPhraseText,
+	negationlist_from_evlist(CandidateList, Type, TriggerPhraseText,
 				  TriggerStartPos, TriggerLength, NegationTermList0),
 	flatten(NegationTermList0, NegationTermList).
 	
-negationlist_from_maplist([], _, _, _, _, []).
-negationlist_from_maplist([Map|MapList], Type, TriggerPhraseText, TriggerStartPos, TriggerLength,
-			  [NegationTerm|NegationTermList]) :-
-	Map = map(_score,EvList),
-	negationlist_from_evlist(EvList, Type, TriggerPhraseText,
-				 TriggerStartPos, TriggerLength, NegationTerm),
-	negationlist_from_maplist(MapList, Type, TriggerPhraseText,
-				  TriggerStartPos, TriggerLength, NegationTermList).
-
+% negationlist_from_maplist([], _, _, _, _, []).
+% negationlist_from_maplist([Map|MapList], Type, TriggerPhraseText, TriggerStartPos, TriggerLength,
+% 			  [NegationTerm|NegationTermList]) :-
+% 	% Map = map(_score,EvList),
+% 	Map = candidates(_,_,_,_,EvList),
+% 	negationlist_from_evlist(EvList, Type, TriggerPhraseText,
+% 				 TriggerStartPos, TriggerLength, NegationTerm),
+% 	negationlist_from_maplist(MapList, Type, TriggerPhraseText,
+% 				  TriggerStartPos, TriggerLength, NegationTermList).
+ 
 negationlist_from_evlist([], _, _, _, _, []).
 negationlist_from_evlist([FirstCandidate|RestCandidates], Type, TriggerPhraseText, TriggerStartPos,
 			 TriggerLength, NegationTerms) :-
@@ -894,7 +945,7 @@ intervening_negation_trigger(TokenList, NegationTerm) :-
 	remove_blank_atoms(TriggerPhraseAtomsWithBlanks, TriggerPhraseAtoms),
 	append([_Before, TriggerPhraseAtoms, PhraseAtomsAfterTrigger], NegationAtomList),
 	!,
-	check_for_negation_phrase(_Type, PhraseAtomsAfterTrigger, _WordList),
+	check_for_negation_phrase(PhraseAtomsAfterTrigger, _Type, _WordList),
 	!.
 
 % Extract all the tokens from the TokenList that
@@ -1054,34 +1105,129 @@ merge_negation_terms(NegationTerm1, NegationTerm2, MergedNegationTerm) :-
 %
 % François Lang's tokenlist splitting predicate
 %
-split_token_list([], []).
-split_token_list([FirstToken|RestTokens], SplitTokenList) :-
+
+% No longer needed because NegEx is now called one utterance at a time.
+% split_token_list([], []).
+% split_token_list([FirstToken|RestTokens], SplitTokenList) :-
+% 	FirstToken = tok(FirstTokenType,_,_,_,_),
+% 	ignore_token_type(FirstTokenType),
+% 	!,
+% 	split_token_list(RestTokens, SplitTokenList).
+% split_token_list([FirstToken|RestTokens], [FirstUtteranceTokens|RestUtteranceTokens]) :-
+% 	FirstToken = tok(sn,_,_,_,_),
+% 	!,
+% 	FirstUtteranceTokens = [FirstToken|RestFirstUtteranceTokens],
+% 	get_utterance_tokens(RestTokens, RestFirstUtteranceTokens, RemainingTokens),
+% 	split_token_list(RemainingTokens, RestUtteranceTokens).
+
+% get_utterance_tokens([], [], []).
+% get_utterance_tokens([CurrentToken|RestTokens], RestUtteranceTokens, RemainingTokens) :-
+% 	CurrentToken = tok(CurrentTokenType,_,_,_,_),
+% 	ignore_token_type(CurrentTokenType),
+% 	!,
+% 	get_utterance_tokens(RestTokens, RestUtteranceTokens, RemainingTokens).
+% get_utterance_tokens([CurrentToken|RestTokens], [CurrentToken|RestUtteranceTokens], RemainingTokens) :-
+% 	CurrentToken = tok(CurrentTokenType,_,_,_,_),
+% 	CurrentTokenType \== sn,
+% 	!,
+% 	get_utterance_tokens(RestTokens, RestUtteranceTokens, RemainingTokens).
+% get_utterance_tokens([CurrentToken|RestTokens], [], [CurrentToken|RestTokens]).
+
+
+get_first_utterance_tokens([], []).
+get_first_utterance_tokens([FirstToken|RestTokens], FirstUtteranceTokens) :-
 	FirstToken = tok(FirstTokenType,_,_,_,_),
 	ignore_token_type(FirstTokenType),
 	!,
-	split_token_list(RestTokens, SplitTokenList).
-split_token_list([FirstToken|RestTokens], [FirstUtteranceTokens|RestUtteranceTokens]) :-
+	get_first_utterance_tokens(RestTokens, FirstUtteranceTokens).
+get_first_utterance_tokens([FirstToken|RestTokens], FirstUtteranceTokens) :-
 	FirstToken = tok(sn,_,_,_,_),
 	!,
 	FirstUtteranceTokens = [FirstToken|RestFirstUtteranceTokens],
-	get_utterance_tokens(RestTokens, RestFirstUtteranceTokens, RemainingTokens),
-	split_token_list(RemainingTokens, RestUtteranceTokens).
+	get_rest_utterance_tokens(RestTokens, RestFirstUtteranceTokens).
 
-get_utterance_tokens([], [], []).
-get_utterance_tokens([CurrentToken|RestTokens], RestUtteranceTokens, RemainingTokens) :-
+get_rest_utterance_tokens([], []).
+get_rest_utterance_tokens([CurrentToken|RestTokens], RestUtteranceTokens) :-
 	CurrentToken = tok(CurrentTokenType,_,_,_,_),
 	ignore_token_type(CurrentTokenType),
 	!,
-	get_utterance_tokens(RestTokens, RestUtteranceTokens, RemainingTokens).
-get_utterance_tokens([CurrentToken|RestTokens], [CurrentToken|RestUtteranceTokens], RemainingTokens) :-
+	get_rest_utterance_tokens(RestTokens, RestUtteranceTokens).
+get_rest_utterance_tokens([CurrentToken|RestTokens], [CurrentToken|RestUtteranceTokens]) :-
 	CurrentToken = tok(CurrentTokenType,_,_,_,_),
 	CurrentTokenType \== sn,
 	!,
-	get_utterance_tokens(RestTokens, RestUtteranceTokens, RemainingTokens).
-get_utterance_tokens([CurrentToken|RestTokens], [], [CurrentToken|RestTokens]).
+	get_rest_utterance_tokens(RestTokens, RestUtteranceTokens).
+get_rest_utterance_tokens(_, []).
 
 ignore_token_type(field).
 ignore_token_type(label).
 
 % List of negation triggers.
 % These are now contained in negex_triggers.pl.
+
+% If show_candidates is on, the candidate terms will be present in the big MMOPhrase term, and
+% instantiate_candidates_NegEx_values/2 will instantiate the Negated field in the candidate terms,
+% which will instantiate the Negated field in the Mappings because the variables are shared
+% in the Candidates and Mappings data structures, so there's nothing to do here.
+
+% If, however, show_candidates is not on, both Evaluations and Evaluations3 will be [],
+% so the Negated field in the Mappings will need to be explicitly instantiated here.
+
+% PhraseList is a list of terms of the form
+% phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
+% 	 candidates(Evaluations),
+% 	 mappings(Mappings),
+% 	 pwi(PhraseWordInfo),
+% 	 gvcs(GVCs),
+% 	 ev0(Evaluations3),
+% 	 aphrases(APhrases))
+
+instantiate_negated_fields([], _NegationTerms).
+instantiate_negated_fields([PhraseTerm|RestPhraseTerms], NegationTerms) :-
+	instantiate_negated_fields_aux(PhraseTerm, NegationTerms),
+	instantiate_negated_fields(RestPhraseTerms, NegationTerms).
+
+instantiate_negated_fields_aux(PhraseTerm, NegationTerms) :-
+	PhraseTerm = phrase(phrase(_PhraseTextAtom0,_Phrase,_StartPos/_Length,_ReplacementPos),
+			    candidates(_TotalCandidateCount,_ExcludedCandidateCount,
+				       _PrunedCandidateCount,_RemainingCandidateCount,
+				       Evaluations),
+			    mappings(Mappings),
+			    pwi(_PhraseWordInfo), gvcs(_GVCs), ev0(Evaluations3),
+			    aphrases(_APhrases)),
+	instantiate_candidates_NegEx_values(Evaluations,  NegationTerms),
+	instantiate_candidates_NegEx_values(Evaluations3, NegationTerms),
+	% This needs to be done explicitly if candidates are not displayed
+	conditionally_instantiate_mappings_NegEx_values(Mappings, NegationTerms).
+
+
+conditionally_instantiate_mappings_NegEx_values(Mappings, NegExList) :-
+	( \+ control_option(show_candidates) ->
+	   (  foreach(map(_NegScore,CandidatesList), Mappings),
+	       param(NegExList)
+	   do instantiate_candidates_NegEx_values(CandidatesList, NegExList)
+	   )
+	; true
+	).
+
+instantiate_candidates_NegEx_values(Evaluations, NegExList) :-
+	% format(user_output, '~q~n', [NegExList]),
+	(  foreach(Candidate, Evaluations),
+	   param(NegExList)
+	do % format(user_output, 'BEFORE: ~q~n', [Candidate]),
+	   get_all_candidate_features([cui,metaterm,posinfo,negated],
+				      Candidate,
+				      [CUI,MetaTerm,PosInfo,Negated]),
+	   instantiate_negated(CUI, MetaTerm, PosInfo, Negated, NegExList)
+	   % format(user_output, 'AFTER:  ~q~n', [Candidate])
+	).
+
+instantiate_negated(CUI, MetaTerm, PosInfo, Negated, NegExList) :-
+	final_negation_template(Negation,
+				_Type, _TriggerText, _TriggerPosInfo,
+				ConceptCUIList, PosInfo),
+	( member(Negation, NegExList),
+	  member(CUI:MetaTerm, ConceptCUIList) ->
+	  Negated is 1
+	; Negated is 0
+	).

@@ -54,6 +54,7 @@
 	db_get_root_source_name/2,
 	db_get_variants/3,
 	db_get_versioned_source_name/2,
+	double_quotes/2,
 	default_release/1,
 	get_data_model/1,
 	get_data_version/1,
@@ -83,6 +84,10 @@
 
 :- use_module(metamap(metamap_variants), [
 	variant_score/2
+    ]).
+
+:- use_module(skr(skr_json), [
+	json_output_format/1
     ]).
 
 :- use_module(skr(skr_utilities),[
@@ -236,7 +241,7 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 
-default_release('2015AB').
+default_release('2016AA').
 
 initialize_db_access :-
 	get_data_release(Release, 1),
@@ -1211,7 +1216,8 @@ db_get_cui_sources_and_semtypes(CUI, SourcesList, SemTypesList) :-
           \+ control_option(restrict_to_sources),
           \+ control_option(exclude_sources),
           \+ control_option(machine_output),
-          \+ xml_output_format(_) ->
+          \+ xml_output_format(_),
+          \+ json_output_format(_) ->
           form_simple_query("semtypes", "cui_srcs_sts", "cui", CUI, Query),
           run_query(Query, [[SemTypesAtom]], 1),
           SourcesAtom = []
