@@ -30,9 +30,11 @@ export SPCONFIG=--config=$(SKR_SRC_HOME)/spconfig-4.3.2-metamap
 export GLIBC_VERSION = 2.12
 export PREFIX='$$SP_APP_DIR'
 
-export WARNINGS = -pedantic -Wall -Wbad-function-cast -Wcast-qual -Wcast-align -Wconversion \
--Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes \
--Wredundant-decls -Wnested-externs -Winline -Wno-long-long
+# export WARNINGS = -pedantic -Wall -Wbad-function-cast -Wcast-qual -Wcast-align -Wconversion \
+# -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes \
+# -Wredundant-decls -Wnested-externs -Winline -Wno-long-long
+
+export WARNINGS = 
 
 export SKR_HOME=$(SKR)
 export SKR_SRC_HOME=$(SKR_HOME)/src
@@ -102,7 +104,8 @@ else
     export LDFLAGS = $(MACHINE_TYPE) 
     # Berkeley DB definitions for SICStus Prolog 4.3.2
     export BERKELEY_VERSION = 4.8
-    export BERKELEY_DIR = /usr/local/BerkeleyDB.$(BERKELEY_VERSION)
+    export DEVELOPER = /Users/wjrogers/Developer
+    export BERKELEY_DIR = $(DEVELOPER)/BerkeleyDB.$(BERKELEY_VERSION)
     export BERKELEY = $(BERKELEY_DIR)
     export BERKELEY_INC = $(BERKELEY)/include
     export BERKELEY_LIB = $(BERKELEY)/lib
@@ -110,7 +113,7 @@ else
     export BERKELEY_LIB_SO = $(BERKELEY_LIB)/libdb-$(BERKELEY_VERSION).dylib
     export BERKELEY_LIB_STATIC = $(BERKELEY_LIB)/libdb-$(BERKELEY_VERSION).a
     export BERKELEY_LIB_DYNAMIC = $(BERKELEY_LIB)/libdb-$(BERKELEY_VERSION).dylib
-    export SICSTUS = /usr/local/sicstus$(SICSTUS_VERSION)
+    export SICSTUS = $(DEVELOPER)/sicstus$(SICSTUS_VERSION)
     export SICSTUS_BIN = $(SICSTUS)/bin
     export SICSTUS_LIB = $(SICSTUS)/lib
     export SICSTUS_OBJECTS = $(SICSTUS)/lib/sicstus-$(SICSTUS_VERSION)/bin
