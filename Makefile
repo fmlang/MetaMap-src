@@ -169,7 +169,6 @@ $(BINEXEC) : $(SAVED_STATE)
 	--output=$(BINEXEC) \
 	--static \
 	--main=restore \
-	--embed_rt_sav \
 	--resources=$(SAVED_STATE)=/$(SAVED_STATE) $(LINK_FILES) $(LDFLAGS)
 
 # MetaMap Server targets
@@ -188,7 +187,6 @@ $(MSBINEXEC) : $(MSSAVED_STATE)
 	--output=$(MSBINEXEC) \
 	--static \
 	--main=restore \
-	--embed_rt_sav \
 	--resources=$(MSSAVED_STATE)=/$(MSSAVED_STATE) $(LINK_FILES) $(LDFLAGS)
 
 # arbitrary targets
