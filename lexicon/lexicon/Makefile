@@ -76,7 +76,7 @@ SPLFR_DYNAMIC_FLAGS = $(SPLFR_BASIC_FLAGS) --moveable
 SPLFR_STATIC_FLAGS = $(SPLFR_BASIC_FLAGS) --static
 SPLFR = splfr --conf CC="$(CC)" --cflag="$(INCLUDES)" $(addprefix --cflag=, $(CFLAGS))
 
-STATIC_LINK_FLAGS = -- ../functions/linfl.o		\
+STATIC_LINK_FLAGS = -LD ../functions/linfl.o		\
 		       ../functions/tokenize.o	\
 		       ../morph/lm.o		\
 		       ../morph/util.o		\
@@ -88,7 +88,7 @@ STATIC_LINK_FLAGS = -- ../functions/linfl.o		\
 		       ../../debug/get_val.o
 
 DYNAMIC_LINK_FLAGS = $(SOLDFLAGS)			        \
-			-- \
+			-LD \
 			$(BERKELEY_LIB_SO)			\
 			../functions/linfl.o	\
 		        ../morph/lm.o		\
