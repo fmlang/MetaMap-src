@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -31,7 +31,7 @@
 % ./src/skr/negex.pl, Thu Jul 31 11:00:57 2008, edit by Will Rogers
 % Author: Willie Rogers
 
-% See http://code.google.com/p/negex/wiki/NegExTerms
+% See https://code.google.com/p/negex/wiki/NegExTerms
 
 :- module(negex,[
 	compute_negex/4,
@@ -99,8 +99,6 @@
 :- use_module(library(system), [
 	environ/2
    ]).
-
-:- use_module(skr_lib(print_chars)).
 
 % These two predicates should be the ONLY instances
 % where the negation/6 term appears explicitly.
@@ -807,7 +805,7 @@ is_proper_subseq_of_anyseq(TargetSeq, Seqs) :-
 %     umls concepts preceding the "and" belong to the negation phrase preceding the and
 %     umls concepts following the "and" belong to the negation phrase following the and
 % From: 
-% NegEx version 2: (http://www.dbmi.pitt.edu/chapman/NegEx.html), III. NegEx Algorithm:, Section A.
+% NegEx version 2: (https://www.dbmi.pitt.edu/chapman/NegEx.html), III. NegEx Algorithm:, Section A.
 %
 cull_negterms_eliminated_by_conj_and(TokenList, NegationTerms, FilteredNegationTerms) :-
 	( string_find_tokenpos(TokenList, "and", AndPos) ->
@@ -1224,9 +1222,10 @@ instantiate_candidates_NegEx_values(Evaluations, NegExList) :-
 
 instantiate_negated(CUI, MetaTerm, PosInfo, Negated, NegExList) :-
 	final_negation_template(Negation,
-				_Type, _TriggerText, _TriggerPosInfo,
+				Type, _TriggerText, _TriggerPosInfo,
 				ConceptCUIList, PosInfo),
 	( member(Negation, NegExList),
+	  \+ Type == pseudoneg,
 	  member(CUI:MetaTerm, ConceptCUIList) ->
 	  Negated is 1
 	; Negated is 0

@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -38,6 +38,7 @@
 	% called by MetaMap API -- do not change signature!
 	add_to_control_options/1,
 	add_to_current_control_options/3,
+	% assert_control_option/1,
 	assert_control_value/2,
 	control_option/1,
 	control_value/2,
@@ -47,8 +48,10 @@
 	% called by MetaMap API -- do not change signature!
 	get_control_options_for_modules/2,
 	get_from_iargs/4,
+	get_program_name/1,
 	% called by MetaMap API -- do not change signature!
 	interpret_args/4,
+	option_requires_list_arg/1,
 	% called by MetaMap API -- do not change signature!
 	interpret_options/4,
 	% called by MetaMap API -- do not change signature!
@@ -68,7 +71,8 @@
 	subtract_from_control_options/1,
 	% called by MetaMap API -- do not change signature!
 	toggle_control_options/1,
-	update_command_line/5
+	update_command_line/5,
+	verify_options_and_values/0
     ]).
 
 
@@ -111,6 +115,26 @@
 :- dynamic control_option/1.
 :- dynamic control_value/2.
 % :- dynamic control_value/3.
+
+get_program_name(ProgramName) :-
+	( current_module(usemrep) ->
+	  ProgramName = usemrep
+	; current_module(M),
+	  is_control_option(M, _, _, _, _) ->
+	  ProgramName = M
+	; ProgramName = metamap
+	).
+
+% get_program_name(ProgramName) :-
+% 	environ('SP_APP_PATH', AbsolutePathName),
+% 	atom_codes(AbsolutePathName, AbsolutePathNameCodes),
+% 	basename(AbsolutePathNameCodes, ProgramNameCodes),
+% 	atom_codes(ProgramName, ProgramNameCodes).
+
+option_requires_list_arg(OptionName) :-
+	is_control_option(_, _, OptionName, _,
+			  aspec(OptionName, _, list, _, _, _)),
+	!.
 
 /* is_control_option(?Module, ?ShortControlOption, ?ControlOption, ?IsDefault, ?ArgSpec)
 
@@ -296,30 +320,93 @@ is_control_option(metamap,  '', 'num_break',	 		no, none).
 is_control_option(metamap,  '', 'no_nums',	 		no,
                   aspec(no_nums, mandatory, list, none, no_default,
                         'List of semantic types to exclude for numerical_concepts')).
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% USemRep %%%%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-is_control_option(usemrep, 'A', anaphora_resolution,   no,  none).
-is_control_option(usemrep,  '',  domain, no,
+is_control_option(usemrep,  '', blanklines, 		 	no,
+                  aspec(blanklines, mandatory, integer, none, no_default,
+			'Number of newlines to read to signal end of citation')).
+is_control_option(usemrep,  '', 'cascade',	 		no, none).
+is_control_option(usemrep,  '', debug, 			 	no,
+                  aspec(debug, mandatory, list, none, no_default, 'Debugging settings')).
+is_control_option(usemrep,  '', domain, no,
                    aspec(domain, mandatory, none, no, no_default,
                          'Specify a non-generic domain.')).
+is_control_option(usemrep,  '', lexicon, yes,
+                   aspec(lexicon, mandatory, none, yes, db,
+                         'Specify "c" or "db" for lexicon version.')).
+is_control_option(usemrep,  '', negex,		 	 	no, none).
+is_control_option(usemrep,  '', negex_st_add, 		 	no,
+                  aspec(negex_st_add, mandatory, list, none, no_default, 'SemTypes to add to NegEx')).
+is_control_option(usemrep,  '', negex_st_del, 		 	no,
+                  aspec(negex_st_del, mandatory, list, none, no_default, 'SemTypes to delete from to NegEx')).
+is_control_option(usemrep,  '', negex_st_set, 		 	no,
+                  aspec(negex_st_set, mandatory, list, none, no_default, 'SemTypes to set for NegEx')).
+is_control_option(usemrep,  '', 'nomap', no,
+		  aspec(nomap, mandatory, file, read, no_default,
+			'File containing String/CUI pairs to exclude.')).
+is_control_option(usemrep,  '', 'no_nums',	 		no,
+                  aspec(no_nums, mandatory, list, none, no_default,
+                        'List of semantic types to exclude for numerical_concepts')).
+is_control_option(usemrep,  '', 'num_break',	 		no, none).
+is_control_option(usemrep,  '', prune, no,
+                  aspec(prune, mandatory, integer, none, no_default,
+                        'Max number of candidates to allow before pruning')).
+is_control_option(usemrep,  '', silent,		 	 	no, none).
+% sldi == "Single-Line Delimited Input"
+is_control_option(usemrep,  '', sldi,	 	 		no, none).
+% sldiID == "Single-Line Delimited Input with ID"
+is_control_option(usemrep,  '', sldiID,	 	 		no, none).
+is_control_option(usemrep,  '', usemrep_processing,   yes, none).
 
+is_control_option(usemrep, '@', 'WSD_SERVER', no,
+                  aspec('WSD_SERVER', mandatory, none, none, no_default,
+                        'Which WSD server to use')).
+is_control_option(usemrep, 'A', anaphora_resolution,   no,  none).
 is_control_option(usemrep, 'D', dysonym_processing,   no,  none).
+is_control_option(usemrep,  d, no_derivational_variants,	no, none).
 is_control_option(usemrep, 'E', indicate_citation_end,  no,  none).
+is_control_option(usemrep,   e, exclude_sources, 		no,
+                  aspec(exclude_sources, mandatory, list, none, no_default,
+                        'List of sources to exclude for output')).
 is_control_option(usemrep, 'F', full_fielded_output_format,   no,  none).
 is_control_option(usemrep, 'G', genetics_processing,         no,  none).
+is_control_option(usemrep,   g, allow_concept_gaps, 		no, none).
 is_control_option(usemrep,   h, help,                        no,  none).
+is_control_option(usemrep,   i, ignore_word_order, 		no, none).
+is_control_option(usemrep, 'J', restrict_to_sts, no,
+                  aspec(restrict_to_sts, mandatory, list, none, no_default,
+                        'List of semantic types to use for output')).
+is_control_option(usemrep,   k, exclude_sts, no,
+                  aspec(exclude_sts, mandatory, list, none, no_default,
+                        'List of semantic types to exclude for output')).
 is_control_option(usemrep, 'L', lexicon_year, 	 		no,
                   aspec(lexicon_year, mandatory, none, none, no_default,
                         'Lexicon year [2006,2012,2014]')).
-is_control_option(usemrep, 'M', relaxed_model,              no, none).
-is_control_option(usemrep, 'P', extract_phrases_only,       no, none).
-is_control_option(usemrep, 'R', write_syntax,              no,  none).
-is_control_option(usemrep, 'r', write_syntax_only,         no,  none).
+is_control_option(usemrep,   l, allow_large_n,		        no, none).
+is_control_option(usemrep, 'M', relaxed_model,               no, none).
+is_control_option(usemrep, 'P', extract_phrases_only,        no, none).
+is_control_option(usemrep, 'Q', composite_phrases,           no,
+                  aspec(composite_phrases, mandatory, integer, yes, 4,
+                        'Max number of prepositional phrases to glom on')).	% MetaMap default
+is_control_option(usemrep,   q, unique_acros_abbrs_only,     no, none).
+is_control_option(usemrep, 'R', write_syntax,                no,  none).
+is_control_option(usemrep, 'r', write_syntax_only,           no,  none).
+is_control_option(usemrep,   s, restrict_to_sources, no,
+                  aspec(restrict_to_sources, mandatory, list, none, no_default,
+                        'List of sources to use for output')).
+
 is_control_option(usemrep, 'S', generic_processing,          no,  none).
+is_control_option(usemrep,   t, threshold, no,
+                  aspec(threshold, mandatory, integer, none, no_default,
+                        'Threshold for displaying candidates')).
+is_control_option(usemrep, 'T', 'TAGGER_SERVER', no,
+                  aspec('TAGGER_SERVER', mandatory, none, none, no_default,
+                        'Which tagger server to use')).
 is_control_option(usemrep, 'U', expanded_utterances_only,    no,  none).
-is_control_option(usemrep,  u,  unexpanded_utterances_only,  no, none).
+is_control_option(usemrep,  u,  unexpanded_utterances_only,  no,  none).
 is_control_option(usemrep, 'V', mm_data_version, no,
                   aspec(mm_data_version, mandatory, none, none, no_default,
                         'Version of MetaMap data to use [USAbase,NLM]')).
@@ -327,10 +414,19 @@ is_control_option(usemrep,   w, warnings,                    no,  none).
 is_control_option(usemrep, 'X', xml_output_format, no, none).
 is_control_option(usemrep,   x, debug_call,                  no,
                   aspec(debug_call,mandatory,integer,none,no_default,debug_call)).
+is_control_option(usemrep, 'Y', prefer_multiple_concepts, 	no, none).
+is_control_option(usemrep,   y, word_sense_disambiguation, 	no, none).
 is_control_option(usemrep, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
-                        'Release of MetaMap data to use, e.g., 2015AA]')).
-is_control_option(usemrep,  '', usemrep_processing,   yes, none).
+                        'Release of MetaMap data to use (e.g., 2015AA)')).
+is_control_option(usemrep,   z, term_processing, 		no, none).
+% is_control_option(usemrep,  '', mm_add,   no,
+%                   aspec(mm_add, mandatory, none, none, no_default,
+%                         'List of MetaMap options to add to SemRep MetaMap options')).
+% is_control_option(usemrep,  '', mm_sub,   no,
+%                   aspec(mm_sub, mandatory, none, none, no_default,
+%                         'List of MetaMap options to subtract from SemRep default MetaMap options')).
+% is_control_option(usemrep, Short, Long, X, Y) :- is_control_option(metamap, Short, Long, X, Y).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Other programs %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -351,6 +447,10 @@ is_control_option(filter_mrconso,i,info,no,none).
 is_control_option(filter_mrconso, 'V', mm_data_version, no,
                   aspec(mm_data_version, mandatory, none, none, no_default,
                         'Version of MetaMap data to use')).
+is_control_option(filter_mrconso, 'Z', mm_data_year, no,
+                  aspec(mm_data_year,mandatory, none, none, no_default,
+                        'Release of MetaMap data to use')).
+
 is_control_option(filter_mrconso, p, progress_bar_interval, no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
                         'Interval of progress bar')).
@@ -390,7 +490,7 @@ is_control_option(mm_print, t,semantic_types,yes,none).
 is_control_option(mm_print, m,mappings,yes,none).
 % is_control_option(mm_print, o,organize_semantic_types,no,none).
 % is_control_option(mm_print, 'F',first_mappings_only,no,none).
-is_control_option(mm_print, 'I',show_cuis,no,none).
+is_control_option(mm_print, 'I',show_cuis,yes,none).
 % is_control_option(mm_print, 'O',show_preferred_names_only,no,none).
 % is_control_option(mm_print, l,not_in_lex_dump,no,none).
 % is_control_option(mm_print, d,label_text_field_dump,no,none).
@@ -400,7 +500,7 @@ is_control_option(mm_print, 'I',show_cuis,no,none).
 % is_control_option(mm_print, b,candidate_count_dump,no,none).
 % is_control_option(mm_print, 'C',candidate_text_dump,no,none).
 % is_control_option(mm_print, 'M',mapping_text_dump,no,none).
-% is_control_option(mm_print, 'S',mapping_summary_dump,no,none).
+is_control_option(mm_print, 'S',mapping_summary_dump,no,none).
 % is_control_option(mm_print, 'U',unique_mapping_text_dump,no,none).
 % is_control_option(mm_print, 'N',non_monotonic_mapping_dump,no,none).
 % is_control_option(mm_print, 'k',odd_mapping_dump,no,none).
@@ -831,7 +931,14 @@ toggle_default_control_options(Module) :-
 	toggle_control_options(DefaultOptions).
 
 option_and_default(Module, Option, Default) :-
-	is_control_option(Module, _, Option, yes, LastArg),
+	( Module == metamap ->
+	  is_control_option(metamap, _, Option, yes, LastArg)
+	; Module == usemrep ->
+	  is_control_option(usemrep, _, Option, yes, LastArg),
+	  \+ is_control_option(metamap, _, Option, yes, LastArg)
+	; get_program_name(ProgramName) ->
+	  is_control_option(ProgramName, _, Option, yes, LastArg)
+	),
 	( atom(LastArg) ->
 	  Default = LastArg
 	; LastArg = aspec(Option,_,_,yes,Default,_)
@@ -852,6 +959,7 @@ add_to_control_options/1 and subtract_from_control_options/1 are used
 together to perform some processing with modified options and then revert
 to the previous option configuration. */
 
+
 toggle_control_options([]).
 toggle_control_options([Option0|Rest]) :-
 	( Option0 = iopt(Option,_) ->
@@ -859,7 +967,7 @@ toggle_control_options([Option0|Rest]) :-
         ; Option0 = Option:Default
         ),
 	retractall(control_option(Option)),
-        assert_control_option(Option),
+        assert_control_option(Option), 
 	( Default \== none ->
 	  retractall(control_value(Option, _V)),
 	  assert_control_value(Option, Default)
@@ -916,7 +1024,7 @@ subtract_from_control_options([Option0|Rest]) :-
 set_control_values/2 asserts control_value/2 clauses for each control option
 in IOptions with a value attribute in IArgs.  */
 
-set_control_values([] ,_).
+set_control_values([] ,_) :- set_default_lexicon.
 set_control_values([iopt(_,none)|Rest], IArgs) :-
 	!,
 	set_control_values(Rest, IArgs).
@@ -1518,11 +1626,10 @@ interpret_arg(ArgSpec, Arg, IArgsIn, [iarg(SpecName,ArgSpec, [value(Atts)])|IArg
 	ArgSpec = aspec(SpecName,_Option,list,_SubType,_Default,_Description),
 	!,
 	( atom_codes(Arg,ArgString),
-	  parse_list(ArgString,List) ->
-	  ( SpecName == noexp ->
-	    reformat_noexp_list(List, Atts)
-	  ; number_codes_list(Atts, List)
-	  ),
+	  parse_list(ArgString, List) ->
+	  % ( SpecName == noexp ->
+	  %   reformat_noexp_list(List, Atts)
+	  number_codes_list(Atts, List),
 	  StatusOut = StatusIn
 	; Atts = [],
 	StatusOut = error
@@ -1548,7 +1655,8 @@ interpret_arg(ArgSpec,Arg,
     ).
 
 parse_list(InputString,List) :-
-    phrase(l_item_list(List0),InputString),
+    % phrase(l_item_list(List0),InputString),
+    split_string_completely(InputString, ",",  List0),
     remove_null_strings(List0,List).
 
 remove_null_strings([], []) :-
@@ -1562,25 +1670,25 @@ remove_null_strings([First|Rest], [First|ModifiedRest]) :-
 
 % The argument to --noexp is of the form a:b:c:d,e:f:g:h,
 % which must be transformed into [a:[b,c,d], e:[f,g,h]]
-reformat_noexp_list(List, NoExpList) :-
-	(  foreach(L0, List),
-	   foreach(L1, NoExpList)
-	do split_string_completely(L0, ":", StringList),
-	   atom_codes_list(AtomList0, StringList),
-	    AtomList0=[H|T],
-	    L1 = H:T
-	).
+% reformat_noexp_list(List, NoExpList) :-
+% 	(  foreach(L0, List),
+% 	   foreach(L1, NoExpList)
+% 	do split_string_completely(L0, ":", StringList),
+% 	   atom_codes_list(AtomList0, StringList),
+% 	    AtomList0=[H|T],
+% 	    L1 = H:T
+% 	).
 
 % ---------- GRAMMAR FOR ITEM LIST
 
-l_item_list(L) --> ([0' ], !, l_item_list(L)
-               ;    l_item(I), [0',], !, l_item_list(M), {L=[I|M]}
-               ;    l_item(I), {L=[I]}
-                   ), !.
-
-l_item(I) --> ([Char], {\+Char==0',}, l_item(J), {I=[Char|J]}
-          ;    {I=[]}
-              ), !.
+% l_item_list(L) --> ([0' ], !, l_item_list(L)
+%                ;    l_item(I), [0',], !, l_item_list(M), {L=[I|M]}
+%                ;    l_item(I), {L=[I]}
+%                    ), !.
+% 
+% l_item(I) --> ([Char], {\+Char==0',}, l_item(J), {I=[Char|J]}
+%           ;    {I=[]}
+%               ), !.
 
 compute_default_value(or(Default1,_Default2),IArgs,DefaultValue) :-
     compute_default_value(Default1,IArgs,DefaultValue).
@@ -1649,26 +1757,53 @@ conditionally_announce_program_name(ProgramName, DefaultRelease) :-
 
 % Assert if not already asserted!
 assert_control_option(Option) :-
-	( control_option(Option) ->
+	get_program_name(ProgramName),
+	( Option == '' ->
+	  fatal_error('"~a" is not a valid option for program "~a"!~n', [Option, ProgramName])
+	; control_option(Option) ->
 	  true
-	; assert(control_option(Option))
+	; is_control_option(ProgramName, _ShortOption, Option, _, _ArgSpec) ->
+	  assert(control_option(Option))
+	; is_control_option(ProgramName, Option, LongOption, _, _ArgSpec) ->
+	  assert(control_option(LongOption))
+	; fatal_error('Option "~a" is not a valid option for program "~a"!~n', [Option, ProgramName])
 	).
 
 assert_control_value(Option, Value) :-
+	get_program_name(ProgramName),
 	% don't assert streams, because for "--UDA UDAfile",
 	% we want the control value to be "UDAfile" and not the stream.
 	( current_stream(_, _, Value) ->
 	  true
-%	( control_value(Option, Value) ->
-%	  true
-%	; % retractall(control_value(Option, _V)),
-	; retractall(control_value(Option, _V)),
+	; is_control_option(ProgramName, _ShortOption, Option, _, ArgSpec),
+	  compound(ArgSpec)  ->
+	  retractall(control_value(Option, _V)),
 	  assert(control_value(Option, Value))
+	; is_control_option(ProgramName, Option, LongOption, _, ArgSpec),
+	  compound(ArgSpec)  ->
+	  retractall(control_value(LongOption, _V)),
+	  assert(control_value(LongOption, Value))
+	; fatal_error('~a/~a is not a valid option/arg combination for program "~a"!',
+		      [Option, Value, ProgramName])	
 	).
+
+verify_options_and_values :-
+	( control_option(Option),
+	  is_control_option(_ProgramName, _ShortOption, Option, _, ArgSpec),
+	  compound(ArgSpec),
+	  \+ control_value(Option, _Value),
+	  fatal_error('The "~w" option requires an argument!\n', [Option])
+	; true
+	).
+
+set_default_lexicon :-
+	( \+ control_value(lexicon, _) ->
+	   assert(control_value(lexicon, db))
+         ; true
+	 ).
 
 % assert_control_value(Option, Attribute, Value) :-
 % 	( control_value(Option, Attribute, Value) ->
 % 	  true
 % 	; assert(control_value(Option, Attribute, Value))
 % 	).
-

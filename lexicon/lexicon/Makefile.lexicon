@@ -81,18 +81,22 @@ SPLFR_DYNAMIC_FLAGS = ${SPLFR_BASIC_FLAGS} --moveable
 SPLFR_STATIC_FLAGS = ${SPLFR_BASIC_FLAGS} --static
 SPLFR = splfr --conf CC="${CC}" --cflag="${INCLUDES}" $(addprefix --cflag=, $(CFLAGS))
 
-STATIC_LINK_FLAGS = -- ${SKR_LEXICON}/functions/linfl.o		\
-		       ${SKR_LEXICON}/functions/tokenize.o	\
-		       ${SKR_LEXICON}/morph/lm.o		\
-		       ${SKR_LEXICON}/morph/util.o		\
-		       ${SKR_LEXICON}/query/btree_query.o	\
-		       ${SKR_LEXICON}/query/tokenize.o		\
-		       ${SKR_LEXICON}/query/lex_btree.a		\
-		       ${SKR_LEXICON}/query/wl.o		\
-		       ${SKR_LEXICON}/miscutil/miscutil.o	\
-		       ${SKR_DEBUG}/get_val.o
+# STATIC_LINK_FLAGS = -- ${SKR_LEXICON}/functions/linfl.o		\
 
-DYNAMIC_LINK_FLAGS = -- ${LDFLAGS}			        \
+STATIC_LINK_FLAGS = -LD  ${SKR_LEXICON}/functions/linfl.o		\
+		    ${SKR_LEXICON}/functions/tokenize.o	\
+		    ${SKR_LEXICON}/morph/lm.o		\
+		    ${SKR_LEXICON}/morph/util.o		\
+		    ${SKR_LEXICON}/query/btree_query.o	\
+		    ${SKR_LEXICON}/query/tokenize.o		\
+		    ${SKR_LEXICON}/query/lex_btree.a		\
+		    ${SKR_LEXICON}/query/wl.o		\
+		    ${SKR_LEXICON}/miscutil/miscutil.o	\
+		    ${SKR_DEBUG}/get_val.o
+
+# DYNAMIC_LINK_FLAGS = -- ${LDFLAGS}			        \
+
+DYNAMIC_LINK_FLAGS =  -LD  ${LDFLAGS}			        \
 			${BERKELEY_LIB_SO}			\
 			${SKR_LEXICON}/functions/linfl.o	\
 		        ${SKR_LEXICON}/morph/lm.o		\

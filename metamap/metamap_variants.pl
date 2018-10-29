@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -111,8 +111,8 @@
     ]).
 
 :- use_module(skr_lib(nls_strings), [
-	concatenate_items_to_atom/2,
-	safe_number_codes/2
+	concatenate_items_to_atom/2
+	% safe_number_codes/2
     ]).
 
 % :- use_module(skr_lib(subsyn_variants), [
@@ -248,9 +248,9 @@ compute_variant_generators_3([_|RevRestRest], Word, GVCs) :-
 % maybe_check_is_a_form(1, Word) :- is_a_form(Word).
 % maybe_check_is_a_form(0, Word) :- subsyn_variant(Word, _), !.
 
-is_a_number(Atom) :-
-	atom_codes(Atom, Codes),
-	safe_number_codes(_Number, Codes).
+% is_a_number(Atom) :-
+% 	atom_codes(Atom, Codes),
+% 	safe_number_codes(_Number, Codes).
 
 compute_variant_generators_for_word(Word, VariantGenerators) :-
 	get_categories_for_form(Word, LexicalCategories),
@@ -326,14 +326,20 @@ no_variants_word(dynamic, Word, CategoryList) :-
 	; no_variants_word(static, Word, CategoryList)
 	).
  
-no_variants_word(static, Word, [Category]) :-
-	( is_invariant_category(Category) ->
+no_variants_word(static, Word, CategoryList) :-
+	( CategoryList == [] ->
+	  true
+	; CategoryList = [Category],
+	  is_invariant_category(Category) ->
 	  true
 	  % At the LNCV meeting on 01/15/2009,
 	  % we decided not to generate variants for words of 1 or 2 chars.
 	; atom_length(Word, WordLength),
 	  WordLength =< 2
 	).
+
+
+
 
 augment_GVCs_with_variants_aux([], _GenerationMode).
 % Words of invariant category have no variants but themselves.
@@ -365,57 +371,58 @@ augment_GVCs_with_variants_mode(static, [gvc(G,Vs,Cs)|Rest]) :-
 	%    ),
 	augment_GVCs_with_variants_aux(Rest, static).
 
+
 augment_GVCs_with_variants_mode(dynamic, [gvc(G,Vs,_Cs)|Rest]) :-
 	% augment the generator with acronyms, abbreviations and synonyms
 	% temp
 	G = v(Generator,_,_,_,_,_),
-
+	get_debug_variants_control_value(DebugVariants),
 	compute_acros_abbrs(G, GAAs),
-	announce_variants(Generator, 'GAAs', GAAs),
+	announce_variants(DebugVariants, Generator, 'GAAs', GAAs),
 
 	compute_syns(G, GSs),
-	announce_variants(Generator, 'GSs', GSs),
+	announce_variants(DebugVariants, Generator, 'GSs', GSs),
 
 	% compute same-part, inflectional and derivational variants of G
 	get_spid_variants(G, yes, GSPs, GIs, GDs),
-	announce_variants(Generator, 'GSPs', GSPs),
-	announce_variants(Generator, 'GIs', GIs),
-	announce_variants(Generator, 'GDs', GDs),
+	announce_variants(DebugVariants, Generator, 'GSPs', GSPs),
+	announce_variants(DebugVariants, Generator, 'GIs', GIs),
+	announce_variants(DebugVariants, Generator, 'GDs', GDs),
 
 	% compute same-part, inflectional and derivational variants of AAs and Ss
 	get_all_spid_variants(GAAs, no, GAASPs, GAAIs, GAADs),
-	announce_variants(Generator, 'GAASPs', GAASPs),
-	announce_variants(Generator, 'GAAIs', GAAIs),
-	announce_variants(Generator, 'GAADs', GAADs),
+	announce_variants(DebugVariants, Generator, 'GAASPs', GAASPs),
+	announce_variants(DebugVariants, Generator, 'GAAIs', GAAIs),
+	announce_variants(DebugVariants, Generator, 'GAADs', GAADs),
 
 	get_all_spid_variants(GSs, no, GSSPs, GSIs, GSDs),
-	announce_variants(Generator, 'GSSPs', GSSPs),
-	announce_variants(Generator, 'GSIs', GSIs),
-	announce_variants(Generator, 'GSDs', GSDs),
+	announce_variants(DebugVariants, Generator, 'GSSPs', GSSPs),
+	announce_variants(DebugVariants, Generator, 'GSIs', GSIs),
+	announce_variants(DebugVariants, Generator, 'GSDs', GSDs),
 
 	% compute synonyms of AAs and acronyms and abbreviations of Ss
 	compute_all_syns(GAAs, GAASs),
-	announce_variants(Generator, 'GAASs', GAASs),
+	announce_variants(DebugVariants, Generator, 'GAASs', GAASs),
 
 	compute_all_acros_abbrs(GSs, GSAAs),
-	announce_variants(Generator, 'GSAAs', GSAAs),
+	announce_variants(DebugVariants, Generator, 'GSAAs', GSAAs),
 
 	% perform final augmentations
 	% augment all derivational variants with synonyms and then inflect
 	compute_synonyms_and_inflect(GDs, GDSIs),
-	announce_variants(Generator, 'GDSIs', GDSIs),
+	announce_variants(DebugVariants, Generator, 'GDSIs', GDSIs),
 
 	compute_synonyms_and_inflect(GAADs, GAADSIs),
-	announce_variants(Generator, 'GAADSIs', GAADSIs),
+	announce_variants(DebugVariants, Generator, 'GAADSIs', GAADSIs),
 
 	compute_synonyms_and_inflect(GSDs, GSDSIs),
-	announce_variants(Generator, 'GSDSIs', GSDSIs),
+	announce_variants(DebugVariants, Generator, 'GSDSIs', GSDSIs),
 
 	compute_all_inflections(GAASs, GAASIs),
-	announce_variants(Generator, 'GAASIs', GAASIs),
+	announce_variants(DebugVariants, Generator, 'GAASIs', GAASIs),
 
 	compute_all_inflections(GSAAs, GSAAIs),
-	announce_variants(Generator, 'GSAAIs', GSAAIs),
+	announce_variants(DebugVariants, Generator, 'GSAAIs', GSAAIs),
 
 	% merge all variants
 	append([[G],GSPs,GIs,GDs,GDSIs,GAAs,GAASPs,GAAIs,GAADs,GAADSIs,
@@ -445,19 +452,22 @@ reverse_score_and_categories(VariantsIn, VariantsOut) :-
 	   RevVariantTerm = v(Variant,Categories,Score,Path,Roots,NFR)
 	).
 
-
+get_debug_variants_control_value(DebugVariants) :-
+	( control_value(debug, DebugFlags),
+	  memberchk(variants, DebugFlags) ->
+	  DebugVariants is 1
+	; DebugVariants is 0
+	).
 	
-announce_variants(Generator, Type, Variants) :-
-	control_value(debug, DebugFlags),
-	memberchk(variants, DebugFlags),
-	format('~w:~w~n', [Generator, Type]),
+announce_variants(1, Generator, Type, Variants) :-
+	length(Variants, VariantsLength),
+	format('~w:~w (~w)~n', [Generator,Type,VariantsLength]),
 	member(Variant, Variants),
 	Variant = v(Word,VarLevel,Categories,History,_Roots,_NFR),
 	format('   v(~q, ~w, ~d, "~s", _, _)~n', [Word,Categories,VarLevel,History]),
  	fail.
-announce_variants(_Generator, _Type, _Variants).
+announce_variants(_, _Generator, _Type, _Variants).
 
-       
 % get_real_category([],         []).
 % get_real_category([Category], Category).
 
@@ -1029,10 +1039,10 @@ get_dm_variant_terms(Form:[cat:Categories], DVariantTerms) :-
 	% The db version of get_dm_variants has been modified to return only base forms,
 	% so there's no reason to filter out non-base forms using
 	% filter_root_forms_to_base_with_categories/3 in the db version.
-	filter_root_forms_to_base_with_categories(DVariantTerms0, DVariantTerms1),
+	% filter_root_forms_to_base_with_categories(DVariantTerms0, DVariantTerms1),
 	( \+ control_option(all_derivational_variants) ->
-	  filter_an_variants(DVariantTerms1, Categories, DVariantTerms)
-	; DVariantTerms = DVariantTerms1
+	  filter_an_variants(DVariantTerms0, Categories, DVariantTerms)
+	; DVariantTerms = DVariantTerms0
 	).
 
 get_dm_variants(WordAtom, Categories, VariantTerms) :-
@@ -1057,20 +1067,20 @@ get_dm_variants(WordAtom, Categories, VariantTerms) :-
 filter_root_forms_to_base_with_categories/2 returns FilteredTerms, those
 elements of Terms which are base forms with the given categories. */
 
-filter_root_forms_to_base_with_categories(Forms, BaseForms) :-
-	( control_value(lexicon, c) ->
-	  filter_root_forms_to_base_with_categories_1(Forms, BaseForms)
-	; BaseForms = Forms
-	).
-
-filter_root_forms_to_base_with_categories_1([], []).
-filter_root_forms_to_base_with_categories_1([Form:[cat:Categories]|Rest], Result) :-
-	( is_a_base_form_with_categories(Form, Categories) ->
-	  lower(Form, LCForm),
-	  Result = [LCForm:[cat:Categories]|FilteredRest]
-	; Result = FilteredRest
-	),
-	filter_root_forms_to_base_with_categories_1(Rest, FilteredRest).
+% filter_root_forms_to_base_with_categories(Forms, BaseForms) :-
+% 	( control_value(lexicon, c) ->
+% 	  filter_root_forms_to_base_with_categories_1(Forms, BaseForms)
+% 	; BaseForms = Forms
+% 	).
+% 
+% filter_root_forms_to_base_with_categories_1([], []).
+% filter_root_forms_to_base_with_categories_1([Form:[cat:Categories]|Rest], Result) :-
+% 	( is_a_base_form_with_categories(Form, Categories) ->
+% 	  lower(Form, LCForm),
+% 	  Result = [LCForm:[cat:Categories]|FilteredRest]
+% 	; Result = FilteredRest
+% 	),
+% 	filter_root_forms_to_base_with_categories_1(Rest, FilteredRest).
 
 /* filter_an_variants(+DVariantTermsIn, +Categories, -DVariantTermsOut)
    filter_an_variants_aux(+DVariantTermsIn, +VariantCategories, -DVariantTermsOut)

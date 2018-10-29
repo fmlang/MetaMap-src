@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -45,7 +45,7 @@
     ]).
 
 :- use_module(lexicon(qp_lookup), [
-	assemble_definitions/3
+	assemble_definitions/2
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -106,7 +106,7 @@ generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions
 	% retokenize_for_apostrophe(Words1, Words),
 	% modify_tag_list_for_apostrophe(TagList0, TokenLists, TagList),
 	% assemble_definitions(TokenLists, TagList0, Definitions0),
-	assemble_definitions(Words, TagList, Definitions0),
+	assemble_definitions(Words, Definitions0),
 	remove_null_atom_defns(Definitions0, Definitions),
 	generate_variant_info(Definitions, VarInfoList),
 	% ChromosomeFound is 0,
@@ -144,13 +144,13 @@ generate_syntactic_analysis_plus(ListOfAscii, TagList, SyntAnalysis, Definitions
 
 
 % Assign to the combined atom the lexical category of the longer of the two atoms
-choose_lexcat(AtomBefore, LexCatBefore, AtomAfter, LexCatAfter, CombinedLexCat) :-
-	atom_length(AtomBefore, AtomBeforeLength),
-	atom_length(AtomAfter,  AtomAfterLength),
-	( AtomBeforeLength > AtomAfterLength ->
-	  CombinedLexCat = LexCatBefore
-	; CombinedLexCat = LexCatAfter
-	).
+% choose_lexcat(AtomBefore, LexCatBefore, AtomAfter, LexCatAfter, CombinedLexCat) :-
+% 	atom_length(AtomBefore, AtomBeforeLength),
+% 	atom_length(AtomAfter,  AtomAfterLength),
+% 	( AtomBeforeLength > AtomAfterLength ->
+% 	  CombinedLexCat = LexCatBefore
+% 	; CombinedLexCat = LexCatAfter
+% 	).
 
 % First arg is TagList: Call consult_tagged_text iff TagList is not []
 maybe_consult_tagged_text([], _Definitions, _VarInfoList, [], _1).

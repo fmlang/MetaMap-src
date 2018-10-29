@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -54,6 +54,7 @@
     ]).
 
 :- use_module(skr(skr_utilities), [
+	basename/2,
 	ensure_atom/2,
 	fatal_error/2,
         send_message/2,
@@ -311,9 +312,10 @@ medline_PMID_field_name(pmid).
 medline_PMID_field_name(ui).
 
 % See
-% http://www.nlm.nih.gov/bsd/mms/medlineelements.html
+% https://www.nlm.nih.gov/bsd/mms/medlineelements.html
 % for the various "TI" fields.
 medline_title_field_name(ti).     % Title
+medline_title_field_name(tt).     % Transliterated Title
 medline_title_field_name(bti).    % Book Title
 medline_title_field_name(cti).    % Collection Title
 medline_title_field_name(vti).    % Volume Title
@@ -350,8 +352,15 @@ padding_string("      ").
 
 set_text_id_and_field_type(TempTextID, TextID, FieldType) :-
 	( TempTextID == '' ->
-	  TextID = '00000000',
+	    ( current_stream(AbsFileNameAtom, read, _Stream) ->
+	      atom_codes(AbsFileNameAtom, AbsFileNameString), 
+	      basename(AbsFileNameString, RelFileNameString),
+	      atom_codes(TextID, RelFileNameString)
+	    ; TextID = 'USER'
+	    ),
+	  % TextID = '00000000',
 	  FieldType = "TX"
+	% TempTextID is NOT '' in the case of --sldiID
 	; TextID = TempTextID,
 	  FieldType = "TX"
 	).
@@ -992,7 +1001,7 @@ update_strings_with_one_UDA([FirstString|RestStrings], UDA:Expansion:_StartPos:_
 	tokenize_text_utterly(FirstString, TokenizedFirstString),
 	substitute(UDA, TokenizedFirstString, Expansion, UpdatedTokenizedFirstString),
 	append(UpdatedTokenizedFirstString, UpdatedFirstString),
-	update_strings_with_one_UDA(RestStrings, UDA:Expansion, UpdatedRestStrings).
+	update_strings_with_one_UDA(RestStrings, UDA:Expansion:_StartPos:_EndPos, UpdatedRestStrings).
 
 /* text_field(?TextField)
    text_field/1 is a factual predicate of the individual textual fields.

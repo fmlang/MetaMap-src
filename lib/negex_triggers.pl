@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -42,7 +42,7 @@
 % List of negation triggers.
 %
 
-% In http://code.google.com/p/negex/wiki/NegExTerms,
+% In https://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Pre-condition negation terms (used to mark an indexed term as negated)".
 
 nega_phrase_tokens(absence, [of]).
@@ -175,7 +175,7 @@ nega_phrase_tokens(sufficient, [to,rule,the,patient,out,against]).
 % The following nega_phrase_token was added by NLM
 nega_phrase_tokens(with, [no,evidence,of]).
 
-% In http://code.google.com/p/negex/wiki/NegExTerms,
+% In https://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Post-condition negation terms".
 
 negb_phrase_tokens(unlikely, []).
@@ -190,7 +190,7 @@ negb_phrase_tokens(are,[negative]).
 negb_phrase_tokens(was,[negative]).
 negb_phrase_tokens(were,[negative]).
 
-% In http://code.google.com/p/negex/wiki/NegExTerms,
+% In https://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Pre-condition possibility phrase (used to mark an indexed term as possible)".
 
 pnega_phrase_tokens(rule, [out]).
@@ -215,7 +215,7 @@ pnega_phrase_tokens(must, [be,ruled,out,for]).
 pnega_phrase_tokens(is, [to,be,ruled,out,for]).
 pnega_phrase_tokens(what, [must,be,ruled,out,is]).
 
-% In http://code.google.com/p/negex/wiki/NegExTerms,
+% In https://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Post-condition possibility terms (used to mark an indexed term as possible)".
 
 pnegb_phrase_tokens(did, [not,rule,out]).
@@ -233,7 +233,7 @@ pnegb_phrase_tokens(can, [be,ruled,out]).
 pnegb_phrase_tokens(must, [be,ruled,out]).
 pnegb_phrase_tokens(is, [to,be,ruled,out]).
 
-% In http://code.google.com/p/negex/wiki/NegExTerms,
+% In https://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Pseudo negation terms".
 
 pseudoneg_phrase_tokens(no,	 [increase]).
@@ -253,7 +253,7 @@ pseudoneg_phrase_tokens(without, [difficulty]).
 pseudoneg_phrase_tokens(not,     [necessarily]).
 pseudoneg_phrase_tokens(not,     [only]).
 
-% In http://code.google.com/p/negex/wiki/NegExTerms,
+% In https://code.google.com/p/negex/wiki/NegExTerms,
 % these are "Termination terms".
 
 conj_phrase_tokens(although, []).
@@ -352,6 +352,7 @@ conj_phrase_tokens(otherwise, []).
 conj_phrase_tokens(then,      []).
 conj_phrase_tokens(to,        [account,for]).
 conj_phrase_tokens(to,        [explain]).
+conj_phrase_tokens(non,       [traumatic]).
 
 % Negated UMLS concepts must below to one of the following semantic types
 % this is essentially a specially defined semantic group that is a super set of "Disorders"

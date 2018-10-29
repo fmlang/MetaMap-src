@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -62,15 +62,15 @@
 	set_message/5
     ]).
 
-:-   absolute_file_name(skr_lib(semtype_translation_2016AA),
+:-   absolute_file_name(skr_lib(semtype_translation_2018AB),
 			AbsFileName,
 			[extensions(['.pl'])]),
      file_exists(AbsFileName) ->
-     use_module(skr_lib(semtype_translation_2016AA),
+     use_module(skr_lib(semtype_translation_2018AB),
 		[expand_semtypes/2,
 		 is_abbrev_semtype/1]),
      format(user_error, 'File skr_umls_info.pl is loading ~w~n', [AbsFileName])
-   ; format(user_error, 'File skr_umls_info.pl is NOT loading ~w~n', [AbsFileName]).
+   ; format(user_error, 'File skr_umls_info.pl is NOT loading~n', []).
 
 :- use_module(skr_lib(sicstus_utils), [
 	concat_atom/2,

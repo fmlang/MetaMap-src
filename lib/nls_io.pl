@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
                                                                          
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -144,8 +144,7 @@ fget_lines_until_skr_break(Stream, NumBlankLinesOrig, NumBlankLinesIn, Lines) :-
 % file, it simply fails and later calls will abort.
 
 fget_line(Stream, Codes) :-
-	fget_line(Stream, Line, Terminator),
-	Terminator >= 0,		% not end-of-file
+	fget_line(Stream, Line, _Terminator),
 	Codes = Line.
 	% format(user_output, 'Read in line "~s"~n', [Codes]),
 	% true.

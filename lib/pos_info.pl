@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -237,7 +237,7 @@ handle_token_type(TokenType, UDA_AVL, PrevToken, TokenState, InputStringIn,
 			    NextPos, RestTokensNext, RestNewTokens)
 	),
 	!.
-handle_token_type(_TokenType, PrevToken, _TokenState,
+handle_token_type(_TokenType, _UDA_AVL, PrevToken, _TokenState,
 		  InputStringIn, CurrentToken, CurrentPos, _RestTokensIn,
 		  _InputStringNext, _NewTokens, _NextPos, _RestTokensNext,
 		  _RestNewTokens) :-
@@ -678,10 +678,10 @@ remove_leading_ws_tokens([H|T], AADefTokens) :-
 	; AADefTokens = [H|T]
 	).	    
 	
-remove_final_hyphen_and_ws_tokens(AADefTokensIn, AADefTokensOut) :-
-	rev(AADefTokensIn, RevAADefTokensIn0),
-	remove_leading_hyphen_and_ws_tokens(RevAADefTokensIn0, RevAADefTokensIn1),
-	rev(RevAADefTokensIn1, AADefTokensOut).
+% remove_final_hyphen_and_ws_tokens(AADefTokensIn, AADefTokensOut) :-
+% 	rev(AADefTokensIn, RevAADefTokensIn0),
+% 	remove_leading_hyphen_and_ws_tokens(RevAADefTokensIn0, RevAADefTokensIn1),
+% 	rev(RevAADefTokensIn1, AADefTokensOut).
 
 remove_final_ws_tokens(AADefTokensIn, AADefTokensOut) :-
 	rev(AADefTokensIn, RevAADefTokensIn0),
@@ -979,15 +979,15 @@ consume_aa_token_strings([SecondAAToken|RestAATokens],
 % 	% remove_leading_whitespace(InputString1, 0, InputStringNext, _NumBlanksRemoved),
 % 	consume_aa_token_strings(RestAATokens, NextAAToken, InputString1, InputStringOut).
 
-limit_forward_skip(AAToken, PrefixLength) :-
-	% AAToken = tok(_TokenType, _String, _LCString, pos(StartPos,_EndPos)),
-	token_template(AAToken, _TokenType, _String, _LCString, pos(StartPos,_EndPos)),
-	% If StartPos < 500, we're probably somwhere in the metadata,
-	% so don't enforce a 10-character limit on PrefixLength.
-	( StartPos < 500 ->
-	  true
-	; PrefixLength < 10
-	).
+% limit_forward_skip(AAToken, PrefixLength) :-
+% 	% AAToken = tok(_TokenType, _String, _LCString, pos(StartPos,_EndPos)),
+% 	token_template(AAToken, _TokenType, _String, _LCString, pos(StartPos,_EndPos)),
+% 	% If StartPos < 500, we're probably somwhere in the metadata,
+% 	% so don't enforce a 10-character limit on PrefixLength.
+% 	( StartPos < 500 ->
+% 	  true
+% 	; PrefixLength < 10
+% 	).
 
 remove_leading_whitespace([H|T], NumBlanksRemovedIn,
 			CharsWithNoWhiteSpace, NumBlanksRemovedOut) :-
@@ -1050,22 +1050,22 @@ remove_tokens_no_consume([FirstAADefToken|RestAADefTokens],
 	).
 
 
-consume_tokens_up_to_ws_tok([FirstToken|RestTokens], PrevTokenType,
-			    PosIn,  InputStringIn, NewTokensIn,
-			    PosOut, InputStringOut, NewTokensOut) :-
-	( ws_tok(FirstToken) ->
-	  PosOut is PosIn,
-	  InputStringOut = InputStringIn,
-	  NewTokensIn = NewTokensOut
-	; UDA_AVL = empty,
-	  add_raw_pos_info_2(FirstToken, aadef, UDA_AVL, PrevTokenType, PosIn, InputStringIn, 
-			     NewToken, PosNext, InputStringNext),
-	  NewTokensIn = [NewToken|NewTokensNext],
-	  consume_tokens_up_to_ws_tok(RestTokens, PrevTokenType,
-				      PosNext,  InputStringNext, NewTokensNext,
-				      PosOut, InputStringOut, NewTokensOut)
-	).
-
+% consume_tokens_up_to_ws_tok([FirstToken|RestTokens], PrevTokenType,
+% 			    PosIn,  InputStringIn, NewTokensIn,
+% 			    PosOut, InputStringOut, NewTokensOut) :-
+% 	( ws_tok(FirstToken) ->
+% 	  PosOut is PosIn,
+% 	  InputStringOut = InputStringIn,
+% 	  NewTokensIn = NewTokensOut
+% 	; UDA_AVL = empty,
+% 	  add_raw_pos_info_2(FirstToken, aadef, UDA_AVL, PrevTokenType, PosIn, InputStringIn, 
+% 			     NewToken, PosNext, InputStringNext),
+% 	  NewTokensIn = [NewToken|NewTokensNext],
+% 	  consume_tokens_up_to_ws_tok(RestTokens, PrevTokenType,
+% 				      PosNext,  InputStringNext, NewTokensNext,
+% 				      PosOut, InputStringOut, NewTokensOut)
+% 	).
+ 
 
 % Create new tokens from the tokens in arg1
 % and remove their corresponding strings from the InputString
@@ -1568,13 +1568,18 @@ adjust_1_token_list([FirstAAToken|RestAATokens], [FirstUnExpToken|RestUnExpToken
 adjust_1_token_list([], _UnExpRawTokenList, []).
 adjust_1_token_list([FirstAAToken|RestAATokens], UnExpTokenListIn,
 		    [FirstAdjustedToken|RestAdjustedTokens]) :-
-	adjust_one_token(FirstAAToken, UnExpTokenListIn,
+	adjust_one_token(UnExpTokenListIn, FirstAAToken,
 			 FirstAdjustedToken, UnExpTokenListNext),
 	adjust_1_token_list(RestAATokens, UnExpTokenListNext,
 			    RestAdjustedTokens).
 
 
-adjust_one_token(FirstAAToken, [FirstUnExpToken|RestUnExpTokens],
+% In the case of singular, code-created AAs,
+% e.g., "SNP" created from SNPs,
+% FirstAAToken won't be in the TokenList.
+
+adjust_one_token([], FirstAAToken, FirstAAToken, []).
+adjust_one_token([FirstUnExpToken|RestUnExpTokens], FirstAAToken, 
 		 FirstAdjustedToken, UnExpTokenListOut) :-
 	FirstAAToken    = tok(Type, Atom, LCAtom, pos(StartPos1,EndPos1)),
 	  % We've found the token in UnExpTokenList that matches the AA token!
@@ -1582,7 +1587,7 @@ adjust_one_token(FirstAAToken, [FirstUnExpToken|RestUnExpTokens],
 				pos(StartPos1,EndPos1), pos(StartPos2,EndPos2)) ->
 	  FirstAdjustedToken = tok(Type, Atom, LCAtom, pos(StartPos2,EndPos2)),
 	  UnExpTokenListOut = RestUnExpTokens
-	; adjust_one_token(FirstAAToken, RestUnExpTokens,
+	; adjust_one_token(RestUnExpTokens, FirstAAToken,
 			   FirstAdjustedToken, UnExpTokenListOut)
 	).
 

@@ -45,7 +45,7 @@ ifeq '$(O_SYSTEM)' "SunOS"
 else
   ifeq '$(O_SYSTEM)' "Linux"
     LIBS = -lpthread
-    DBLIBS = $(DBLIBS1) -lnsl -lrt
+    DBLIBS = $(DBLIBS1) -lnsl -lrt ${LIBS}
   else 
     ifeq '$(O_SYSTEM)' "Darwin"
         DBLIBS = $(DBLIBS1)

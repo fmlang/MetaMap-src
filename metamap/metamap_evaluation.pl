@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -308,9 +308,9 @@ compute_one_evaluation(MetaWords, N, CandidatesLength,
 	compute_match_value(MatchMap, MatchCCs, NTokenPhraseWords, NMetaWords,
 			    ExtraMetaWords, Variants, InvolvesHead, Value),
 	% format(user_error,'MatchValue    = ~q~n', [Value]),	
-	debug_compute_one_evaluation_2(DebugFlags, MetaString),
-	NegValue is -Value,
 	db_get_concept_cui(MetaConcept, CUI),
+	debug_compute_one_evaluation_2(DebugFlags, MetaString, CUI),
+	NegValue is -Value,
 	% new calls!
 	% CUISources and SemTypes are sorted by db_get_cui_sources_and_semtypes/3
 	db_get_cui_sources_and_semtypes(CUI, CUISources, SemTypes),
@@ -1222,8 +1222,8 @@ debug_compute_one_evaluation_1(DebugFlags, TokenPhraseWords, MetaWords,
 	; true
 	).
 
-debug_compute_one_evaluation_2(DebugFlags, MetaString) :-
+debug_compute_one_evaluation_2(DebugFlags, MetaString, CUI) :-
 	( memberchk(5, DebugFlags) ->    % see compute_match_value
-	  format(user_error, ' <-- ~p~n',[MetaString])
+	  format(user_error, ' <-- ~p:~p~n',[MetaString, CUI])
 	; true
 	).

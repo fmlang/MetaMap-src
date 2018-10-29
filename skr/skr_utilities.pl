@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -33,10 +33,11 @@
 % Purpose:  Utilities
 
 :- module(skr_utilities, [
+	basename/2,
 	check_valid_file_type/2,
 	compare_utterance_lengths/2,
 	compute_sum/3,
-	conditionally_print_end_info/0,
+	conditionally_print_end_info/2,
 	conditionally_skr_begin_write/2,
 	conditionally_skr_end_write/2,
 	conditionally_print_header_info/4,
@@ -61,9 +62,10 @@
 	generate_EOT_output/1,
 	get_candidate_feature/3,
 	get_all_candidate_features/3,
-	get_program_name/1,
 	% called by MetaMap API -- do not change signature!
 	output_should_be_bracketed/1,
+	% member_var/2,
+	memberchk_var/2,
 	output_tagging/3,
 	replace_crs_with_blanks/4,
 	replace_blanks_with_crs/4,
@@ -93,7 +95,8 @@
 
 :- use_module(metamap(metamap_utilities), [
 	candidate_term/16,
-	dump_aphrase_mappings/3,
+	% dump_aphrase_mappings/3,
+	dump_mappings/3,
 	% dump_evaluations_indented/6,
 	num_dump_evaluations_indented/8,
 	write_list_indented/1
@@ -103,7 +106,7 @@
 	% aev_print_version/2 is not explicitly called here,
 	% but it must still be imported because they're called via debug_call.
 	aev_print_version/2,
-	print_all_aevs/1,
+	% print_all_aevs/1,
 	% print_candidate_grid/6 and print_duplicate_info/4 are not explicitly called here,
 	% but they must still be imported because they're called via debug_call.
 	print_candidate_grid/6,
@@ -147,7 +150,8 @@
 	control_value/2,
 	display_control_options_for_modules/2,
 	display_mandatory_metamap_options/0,
-	display_current_control_options/2
+	display_current_control_options/2,
+	get_program_name/1
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -385,7 +389,7 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 	verify_sldi_settings(SLDISettings),
 	verify_negex_trigger_setting(NegExTriggerSetting),
 	verify_negex_settings(NegExSettings),
-	verify_lexicon_setting(LexiconSetting),
+	% verify_lexicon_setting(LexiconSetting),
 	verify_composite_phrases_setting(CompositePhrasesSetting),
 	verify_blanklines_setting(BlankLinesSetting),
 	verify_number_the_candidates_setting(NumberTheCandidatesSetting),
@@ -400,7 +404,8 @@ do_sanity_checking_and_housekeeping(ProgramName, DefaultRelease, InputStream, Ou
 			    AcrosAbbrsSettings, DerivationalVariantsSettings,
 			    TaggerServerSettings, WSDServerSettings,
 			    PruningSettings, SLDISettings, NegExTriggerSetting, NegExSettings,
-			    LexiconSetting, CompositePhrasesSetting, BlankLinesSetting,
+			    % LexiconSetting, CompositePhrasesSetting, BlankLinesSetting,
+			    CompositePhrasesSetting, BlankLinesSetting,
 			    NumberTheCandidatesSetting, NumberTheMappingsSetting,
 			    HideMappingsSetting1,HideMappingsSetting2],
 			   InputStream, OutputStream),
@@ -755,17 +760,17 @@ verify_all_del(SemTypesToDel) :-
 	; true
 	).
 
-verify_lexicon_setting(LexiconSetting) :-
-	( \+ control_value(lexicon, c),
-	  \+ control_value(lexicon, db) ->
-	  send_message('~n### MetaMap ERROR: --lexicon setting must be either c or db!~n', []),
-	  LexiconSetting is 1
-	; control_value(lexicon, c),
-	  control_value(lexicon, db) ->
-	  send_message('~n### MetaMap ERROR: --lexicon setting must be either c or db!~n', []),
-	  LexiconSetting is 1
-	; LexiconSetting is 0
-	).
+% verify_lexicon_setting(LexiconSetting) :-
+% 	( \+ control_value(lexicon, c),
+% 	  \+ control_value(lexicon, db) ->
+% 	  send_message('~n### MetaMap ERROR: --lexicon setting must be either c or db!~n', []),
+% 	  LexiconSetting is 1
+% 	; control_value(lexicon, c),
+% 	  control_value(lexicon, db) ->
+% 	  send_message('~n### MetaMap ERROR: --lexicon setting must be either c or db!~n', []),
+% 	  LexiconSetting is 1
+% 	; LexiconSetting is 0
+% 	).
 
 verify_composite_phrases_setting(CompositePhrasesSetting) :-
 	( \+ control_value(composite_phrases, _) ->
@@ -841,15 +846,15 @@ warning_check([WarningOption|RestOptions], OutputOption) :-
 	),
 	warning_check(RestOptions, OutputOption).
 
-fatal_error_check([], _OutputOption, Result, Result).
-fatal_error_check([FatalErrorOption|RestOptions], OutputOption, ResultIn, ResultOut) :-
-	( control_option(FatalErrorOption) ->
-	  send_message('~n### MetaMap ERROR: The --~w option cannot be used with ~w output.~n',
-		       [FatalErrorOption, OutputOption]),
-	  ResultNext is 1
-	; ResultNext is ResultIn
-	),
-	fatal_error_check(RestOptions, OutputOption, ResultNext, ResultOut).
+% fatal_error_check([], _OutputOption, Result, Result).
+% fatal_error_check([FatalErrorOption|RestOptions], OutputOption, ResultIn, ResultOut) :-
+% 	( control_option(FatalErrorOption) ->
+% 	  send_message('~n### MetaMap ERROR: The --~w option cannot be used with ~w output.~n',
+% 		       [FatalErrorOption, OutputOption]),
+% 	  ResultNext is 1
+% 	; ResultNext is ResultIn
+% 	),
+% 	fatal_error_check(RestOptions, OutputOption, ResultNext, ResultOut).
 
 send_message(Message, Format):-
 	% send message to stderr only, not to the output file, if there is one
@@ -904,11 +909,6 @@ format_cmd_line_for_machine_output(Options, Args, args(CommandLine,ArgsMO)) :-
 	concat_atom([ProgramName|Argv], ' ', CommandLine),
 	format_cmd_line_for_machine_output_1(Options, Args, ArgsMO).
 
-get_program_name(ProgramName) :-
-	environ('SP_APP_PATH', AbsolutePathName),
-	atom_codes(AbsolutePathName, AbsolutePathNameCodes),
-	basename(AbsolutePathNameCodes, ProgramNameCodes),
-	atom_codes(ProgramName, ProgramNameCodes).
 
 basename(File, Base) :-
         basename_aux(File, S, S, Base).
@@ -1122,7 +1122,7 @@ conditionally_dump_evals(Evaluations3, TotalCandidateCount, UtteranceLabel,
 %	).
 
 generate_mappings_output(Mappings, _Evaluations, UtteranceLabel,
-			 APhrases, BracketedOutput, MappingsMMO) :-
+			 _APhrases, BracketedOutput, MappingsMMO) :-
 	% Do not generate this output if machine_output, XML, or fielded_mmi_output is on!
 	( ( control_option(machine_output)
 	  ; xml_output_format(_XMLFormat)
@@ -1138,7 +1138,8 @@ generate_mappings_output(Mappings, _Evaluations, UtteranceLabel,
 	      skr_begin_write('Mappings')
 	    ; true
 	    ),
-	    dump_aphrase_mappings(APhrases, UtteranceLabel, 'Mapping'),
+	    % dump_aphrase_mappings(APhrases, UtteranceLabel, 'Mapping'),
+	    dump_mappings(Mappings, UtteranceLabel, 'Mapping'),
 	    ( BracketedOutput == 1 ->
 	      skr_end_write('Mappings')
 	    ; true
@@ -1490,7 +1491,6 @@ replace_crs_with_blanks([H|T], Pos, [NewH|NewT], ReplacementIndexes) :-
 	),
 	NextPos is Pos + 1,
 	replace_crs_with_blanks(T, NextPos, NewT, RestReplacementIndexes).
-
 % No more blanks to replace with <CR>s
 replace_blanks_with_crs([], String, _CurrPos, String).
 replace_blanks_with_crs([BlankIndex|RestIndexes], [H|T], CurrPos, [NewH|NewT]) :-
@@ -1609,9 +1609,11 @@ announce_tagging_mode(TagOption) :-
 	  ; format('No tagging will be done.~n', [])
 	  ).
 	
-conditionally_print_end_info :-
+conditionally_print_end_info(InputFile, OutputFile) :-
 	( \+ control_option(silent) ->
-	  format(user_output, '~nBatch processing is finished.~n', [])
+	  format(user_output,
+		 '~nBatch processing is finished for ~w sending output to ~w.~n',
+		 [InputFile, OutputFile])
 	; true
 	).
 
@@ -1884,3 +1886,23 @@ walk_off_field_lines([FieldLine|RestFieldLines], CharsIn, CharsOut) :-
 	; CharsNext1 = []
 	),
 	walk_off_field_lines(RestFieldLines, CharsNext1, CharsOut).
+
+% Test for membership of Element in VarList,
+% where VarList may have an uninstantiated tail, e.g., [a,b,c|Rest].
+memberchk_var(Element, VarList) :-
+	nonvar(VarList),
+	( VarList = [Element|_] ->
+	  true
+	; VarList = [_|Rest],
+	  memberchk_var(Element, Rest)
+	).
+
+% Test for membership of Element in VarList,
+% where VarList may have an uninstantiated tail, e.g., [a,b,c|Rest].
+% member_var(Element, VarList) :-
+% 	nonvar(VarList),
+% 	( VarList = [Element|_]
+% 	; VarList = [_|Rest],
+% 	  member_var(Element, Rest)
+% 	).
+
