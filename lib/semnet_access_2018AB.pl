@@ -28,13 +28,13 @@
 *
 ***************************************************************************/
 
-% File:	    semnet_access_2018AA.pl
-% Module:   SemNet Access_2018AA
+% File:	    semnet_access_2018AB.pl
+% Module:   SemNet Access_2018AB
 % Author:   Lan
 % Purpose:  Provide access to the semantic network
 
 
-:- module(semnet_access_2018AA, [
+:- module(semnet_access_2018AB, [
 	preferred_relation/1,
 	relation_inverse/2,
 	type_relation_type/3
