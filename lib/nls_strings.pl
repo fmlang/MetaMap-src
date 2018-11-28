@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -1176,11 +1176,11 @@ split_atom_completely(Atom, SplitAtom, AtomList) :-
 split_string_completely/ breaks String at each occurrence of Substring
 forming StringList.  */
 
-split_string_completely(String,Substring,[Left|SplitRight]) :-
-    split_string(String,Substring,Left,Right),
+split_string_completely(String, Substring, [Left|SplitRight]) :-
+    split_string(String, Substring, Left, Right),
     !,
-    split_string_completely(Right,Substring,SplitRight).
-split_string_completely(String,_Substring,[String]).
+    split_string_completely(Right, Substring, SplitRight).
+split_string_completely(String, _Substring, [String]).
 
 /* split_string_backtrack(?String, +Substring, ?Left, ?Right)
 split_string/4 embodies the property that String is the concatenation of

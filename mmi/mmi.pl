@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -146,8 +146,11 @@ get_UIAtom(OrigUtterances, UIAtom) :-
 	OrigUtterances = [FirstUtterance|_],
 	FirstUtterance = utterance(UtteranceIDAtom,_,_,_),
 	atom_codes(UtteranceIDAtom, UtteranceIDString),
-	append([PMIDString, ".", _Rest], UtteranceIDString),
+	% append([PMIDString, ".", _Rest], UtteranceIDString),
+	split_string_completely(UtteranceIDString, ".", SplitList),
+	append(PMIDStringList, [_FieldString,_NString], SplitList),
 	!,
+	concat_strings_with_separator(PMIDStringList, ".", PMIDString),
 	atom_codes(UIAtom, PMIDString).
 
 % conditionally_skr_begin_write(BracketedOutput, Message) :-

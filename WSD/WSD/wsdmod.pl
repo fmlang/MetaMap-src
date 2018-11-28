@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -32,6 +32,14 @@
 	do_WSD/9,
 	% called by MetaMap API -- do not change signature!
 	extract_SemRep_phrases_1/3
+    ]).
+
+:- use_module(metamap(metamap_tokenization), [
+	listify/2
+    ]).
+
+:- use_module(metamap(metamap_utilities), [
+	candidate_term/16
     ]).
 
 :- use_module(skr(skr_utilities), [
@@ -58,6 +66,7 @@
     ]).
 
 :- use_module(skr(skr), [
+	compute_confidence_value/5,
 	extract_phrases_from_aps/2,
 	get_inputmatch_atoms_from_phrase/2,
 	get_phrase_tokens/4
@@ -100,9 +109,11 @@
 
 :- use_module(library(lists),[
 	append/2,
+	keys_and_values/3,
 	last/2,
 	max_member/2,
-	rev/2
+	rev/2,
+	selectchk/3
    ]).
 
 :- use_module(library(lists),[
@@ -125,33 +136,101 @@
 
 do_WSD(UtteranceText, InputLabel, CitationTextAtom, AAs, Tokens,
        WSDServerStream, MMOPhrases, DisambMMOPhrases, SemRepPhrasesWithWSD) :-
+	maybe_do_SemRep_WSD(MMOPhrases, MMOPhrases1),
 	( control_option(word_sense_disambiguation) ->
-	  maybe_do_SemRep_WSD(MMOPhrases, MMOPhrases1),
 	  generate_AAs_MMO_term([mm_output(utterance, citation, modifiedtext, tagging,
-				      AAs, syntax, MMOPhrases1, extractedphrases)],
-			   AATerm),
-	  MMOutput = mm_output(utterance(InputLabel, UtteranceText, PosInfo, ReplPos),
+					   AAs, syntax, MMOPhrases1, extractedphrases)],
+				AATerm),
+	  MMOutput = mm_output(utterance(InputLabel, UtteranceText, _PosInfo, _ReplPos),
 			       citation(CitationTextAtom), modifiedtext, tagging,
 			       AATerm, syntax,
 			       MMOPhrases1, extractedphrases),
-	 % format(user_output, 'BEFORE disambiguate_mmoutput~n', []), ttyflush,
-	 disambiguate_mmoutput([MMOutput], WSDServerStream, [DisambMMOutput]),
-	 % format(user_output, 'AFTER disambiguate_mmoutput~n', []), ttyflush,
-	 DisambMMOutput = mm_output(utterance(InputLabel, UtteranceText, PosInfo, ReplPos),
-				    citation(CitationTextAtom), modifiedtext, tagging,
-				    AATerm, syntax,
-				    DisambMMOPhrases, _ExtractedPhrases),
-	 get_utterance_token_list(Tokens, TokensThisUtterance, _CharOffset, _TokensOut),
+          % format(user_output, 'BEFORE disambiguate_mmoutput~n', []), ttyflush,
+	  maybe_disambiguate_mmoutput([MMOutput], WSDServerStream, [DisambMMOutput]),
+	  % format(user_output, 'AFTER disambiguate_mmoutput~n', []), ttyflush,
+	  DisambMMOutput = mm_output(_Utterance, _Citation, _Modifiedtext, _Tagging,
+				     _AATerm, _Syntax, DisambMMOPhrases0, _ExtractedPhrases),
+	  maybe_create_supermapping_for_conj(DisambMMOPhrases0, DisambMMOPhrases),  
+	  get_utterance_token_list(Tokens, TokensThisUtterance, _CharOffset, _TokensOut),
+	  % skr_utilities:write_raw_token_lists(Tokens, []),
+	  % skr_utilities:write_raw_token_lists(TokensThisUtterance, []),
+	  extract_SemRep_phrases(DisambMMOPhrases, TokensThisUtterance, SemRepPhrasesWithWSD)
+	; DisambMMOPhrases0 = MMOPhrases,
+	  get_utterance_token_list(Tokens, TokensThisUtterance, _CharOffset, _TokensOut),
+	  extract_SemRep_phrases(DisambMMOPhrases0, TokensThisUtterance, SemRepPhrasesWithWSD)
+	),
+	  ( control_option(conj) ->
+	    create_supermapping_for_conj(DisambMMOPhrases0, DisambMMOPhrases)
+	  ; DisambMMOPhrases = DisambMMOPhrases0
+	).	
 
-	 % skr_utilities:write_raw_token_lists(Tokens, []),
-	 % skr_utilities:write_raw_token_lists(TokensThisUtterance, []),
 
-	 extract_SemRep_phrases(DisambMMOutput, TokensThisUtterance, SemRepPhrasesWithWSD)
-       ; DisambMMOPhrases = MMOPhrases
-       ).
+maybe_create_supermapping_for_conj(PhrasesIn, PhrasesOut) :-
+	( control_option(conj) ->
+	  create_supermapping_for_conj(PhrasesIn, PhrasesOut)
+	; PhrasesOut = PhrasesIn
+	).
+
+create_supermapping_for_conj([], []).
+create_supermapping_for_conj([FirstPhraseIn|RestPhrasesIn], [FirstPhraseOut|RestPhrasesOut]) :-
+	FirstPhraseIn = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
+			       candidates(TotalCandidateCount,ExcludedCandidateCount,
+					  PrunedCandidateCount,RemainingCandidateCount,Evaluations),
+			       mappings(Mappings),
+			       pwi(PhraseWordInfo),
+			       gvcs(GVCs),
+			       ev0(Evaluations3),
+			       aphrases(APhrases)),
+	merge_mappings(Mappings, SuperMapping),
+	FirstPhraseOut = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
+				candidates(TotalCandidateCount,ExcludedCandidateCount,
+					   PrunedCandidateCount,RemainingCandidateCount,Evaluations),
+				mappings(SuperMapping),
+				pwi(PhraseWordInfo),
+				gvcs(GVCs),
+				ev0(Evaluations3),
+				aphrases(APhrases)),
+	create_supermapping_for_conj(RestPhrasesIn, RestPhrasesOut).
+	
+merge_mappings([], []).
+merge_mappings([H|T], [SuperMapping]) :-
+	Mappings = [H|T],
+	get_all_candidates(Mappings, Candidates0),
+	append(Candidates0, Candidates1),
+	sort(Candidates1, Candidates2),
+	Candidates2 = [FirstCandidate|_],
+	get_candidate_feature(negvalue, FirstCandidate, NegValue),
+	normalize_scores(Candidates2, NegValue, Candidates),
+	Conj = 1,
+	compute_confidence_value(Candidates, Conj, _NPhraseWords, _Variants, ModScore),
+	SuperMapping = map(ModScore, Candidates).
+
+% Canonical conjunction phrase:
+% hereditary recurrent and metastatic ovarian or renal or pancreatic carcinoma
+
+% Ensure that all candidates have the same score,
+% specifically the score of the first candidate.
+normalize_scores([], _NegValue, []).
+normalize_scores([FirstCandidateIn|RestCandidatesIn], CommonNegValue,
+		 [FirstCandidateOut|RestCandidatesOut]) :-
+	candidate_term(_NegValue, CUI, MetaTerm, PreferredName, MetaWords, SemTypes,
+		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+		       IsOvermatch, UniqueSources, PosInfo, Status, Negated,
+		       FirstCandidateIn),
+	candidate_term(CommonNegValue, CUI, MetaTerm, PreferredName, MetaWords, SemTypes,
+		       MatchMap, LSComponents, TargetLSComponent, InvolvesHead,
+		       IsOvermatch, UniqueSources, PosInfo, Status, Negated,
+		       FirstCandidateOut),
+	normalize_scores(RestCandidatesIn, CommonNegValue, RestCandidatesOut).
+	
+get_all_candidates([], []).
+get_all_candidates([map(_NegScore, Candidates)|RestMappings],
+		   [Candidates|RestCandidates]) :-
+	get_all_candidates(RestMappings, RestCandidates).
 
 maybe_do_SemRep_WSD(MMOPhrases, MMOPhrases1) :-
-	( control_option(usemrep_processing) ->
+	( % control_option(word_sense_disambiguation),
+	  control_option(usemrep_processing) ->
 	  do_SemRep_WSD(MMOPhrases, MMOPhrases1)
 	; MMOPhrases1 = MMOPhrases
 	).
@@ -161,9 +240,54 @@ do_SemRep_WSD(MMOPhrasesIn,MMOPhrasesOut) :-
 	remove_ftcn_inpr_semtypes(MMOPhrases0,MMOPhrasesOut).
 %	format('MMOPhrase: ~q~n', [MMOPhrasesOut]).
 
-extract_SemRep_phrases(mm_output(_Utt,_CitText,_MT,_TG,_AA,_Sx,MMOPhrases,_Ex),
-		       Tokens, SemRepPhrases) :-
-	extract_SemRep_phrases_aux(MMOPhrases, Tokens, SemRepPhrases).
+% extract_SemRep_phrases(mm_output(_Utt,_CitText,_MT,_TG,_AA,_Sx,MMOPhrases,_Ex),
+% 		       Tokens, SemRepPhrases) :-
+% 	extract_SemRep_phrases_aux(MMOPhrases, Tokens, SemRepPhrases).
+
+extract_SemRep_phrases(DisambMMOPhrases, TokensThisUtterance, SemRepPhrasesWithWSD) :-
+	( control_option(usemrep_processing) ->
+	  extract_SemRep_phrases_aux(DisambMMOPhrases,
+				     TokensThisUtterance,
+				     SemRepPhrasesWithWSD)
+	  % reformat_SemRepPhrases(SemRepPhrasesWithWSD0, SemRepPhrasesWithWSD)
+	; SemRepPhrasesWithWSD = []
+	).
+
+/*
+* reformat_SemRepPhrases(SemRepPhrasesIn, SemRepPhrasesOut) :-
+* 	append(SemRepPhrasesIn, SemRepPhrasesAppended),
+* 	listify(SemRepPhrasesAppended, SemRepPhrasesOut).
+* 	
+* create_super_APhrase([NextAPhrase|RestAPhrases], FirstAPhrase, SuperAPhrase) :-
+* 	FirstAPhrase = ap(NegValue,LPhrase,PhraseMap,Mapping),
+* 	get_all_components([NextAPhrase|RestAPhrases], RestLPhrases, RestMappings),
+* 	append([LPhrase|RestLPhrases], AllLPhrases0),
+* 	append([Mapping|RestMappings], AllMappings0),
+* 	sort(AllLPhrases0, AllLPhrases),
+* 	sort(AllMappings0, AllMappings),
+* 	SuperAPhrase = ap(NegValue,AllLPhrases,PhraseMap,AllMappings).
+* 
+* 
+* get_all_components([], [], []).
+* get_all_components([NextAPhrase|RestAPhrases],
+* 		   [NextLPhrase|RestLPhrases],
+* 		   [NextMapping|RestMappings]) :-
+* 	NextAPhrase = ap(_NegValue,NextLPhrase,_PhraseMap,NextMapping),
+* 	get_all_components(RestAPhrases, RestLPhrases, RestMappings).
+* 
+* sort_by_position(SemRepPhrases0, [confid(C)|SemRepPhrases]) :-
+* 	selectchk(confid(C), SemRepPhrases0, RestPhrases),
+* 	get_position_terms(RestPhrases, PositionTerms),
+* 	keys_and_values(RestPhrasesWithPositionPrefix, PositionTerms, RestPhrases),
+* 	keysort(RestPhrasesWithPositionPrefix, Sorted),
+* 	keys_and_values(Sorted, _PositionTerms, SemRepPhrases).
+* 
+* get_position_terms([], []).
+* get_position_terms([First|Rest], [FirstPosTerm|RestPosTerms]) :-
+* 	arg(1, First, List),
+* 	last(List, FirstPosTerm),
+* 	get_position_terms(Rest, RestPosTerms).
+*/
 
 extract_SemRep_phrases_aux([], _Tokens, []).
 extract_SemRep_phrases_aux([phrase(Phrase,_,_,_,_,_,aphrases(APhrases))|RestPhraseTerms],
@@ -171,12 +295,11 @@ extract_SemRep_phrases_aux([phrase(Phrase,_,_,_,_,_,aphrases(APhrases))|RestPhra
 	Phrase = phrase(_,PhraseList,_,_),
 	get_inputmatch_atoms_from_phrase(PhraseList, InputMatchPhraseWords),
 	get_phrase_tokens(InputMatchPhraseWords, Tokens, PhraseTokens, TokensRest),
-	(APhrases == [] ->
-	  extract_SemRep_phrases_1([ap(_,PhraseList,_,[])], PhraseTokens, SemRepPhrases)
-	;
-	  APhrases = [APhrases0|_],
+ 	( APhrases == [] ->
+ 	  extract_SemRep_phrases_1([ap(_,PhraseList,_,[])], PhraseTokens, SemRepPhrases)
+ 	; APhrases = [APhrases0|_],
 	  extract_SemRep_phrases_1([APhrases0], PhraseTokens, SemRepPhrases)
-	),
+ 	),
 	!,
 	extract_SemRep_phrases_aux(RestPhraseTerms, TokensRest, RestSemRepPhrases).
 extract_SemRep_phrases_aux([phrase(_,_,_,_,_,_,aphrases(APhrases))|RestPhraseTerms],
@@ -200,7 +323,7 @@ add_pos_info_to_phrases([Item|RestItems], Evaluations, Tokens, [ItemPos|RestItem
 	functor(Item, Type, 1),
 	arg(1, Item, Elements),
 	get_from_list(metaconc, Elements, _Conc:CUI:_SemType),
-	get_metaconc_position_and_neg(CUI, Evaluations, Tokens, StartPos, EndPos, Negated),
+	get_metaconc_position_and_neg(Evaluations, CUI, Tokens, StartPos, EndPos, Negated),
 	!,
 	functor(ItemPos, Type, 1),
 	append(Elements, [negated(Negated),position(StartPos,EndPos)], ElementsWithPos),
@@ -213,8 +336,7 @@ add_pos_info_to_phrases([Item|RestItems], Evals, Tokens, [ItemPos|RestItemsPos])
 add_pos_info_to_phrases([Item|RestItems], Evals, Tokens, [Item|RestItemsPos]) :-
 	add_pos_info_to_phrases(RestItems, Evals, Tokens, RestItemsPos).
 
-
-get_metaconc_position_and_neg(CUI,[Eval|_RestEval], Tokens, StartPos, EndPos, Negated) :-
+get_metaconc_position_and_neg([Eval|_RestEvals], CUI, Tokens, StartPos, EndPos, Negated) :-
 	get_all_candidate_features([cui,posinfo,negated], Eval, [CUI,PosInfoList,Negated]),
 	% functor(Eval, ev, 11),
 	% arg(2, Eval, CUI),
@@ -223,8 +345,12 @@ get_metaconc_position_and_neg(CUI,[Eval|_RestEval], Tokens, StartPos, EndPos, Ne
 	% \+ MatchingTokens == [],
 	compute_positions(MatchingTokens, StartPos, EndPos),
 	!.
-get_metaconc_position(CUI,[_Eval|RestEval], Tokens, StartPos, EndPos) :-
-	get_metaconc_position(CUI,RestEval, Tokens, StartPos, EndPos).
+get_metaconc_position_and_neg([_Eval|RestEvals], CUI, Tokens, StartPos, EndPos, Negated) :-
+	get_metaconc_position_and_neg(RestEvals, CUI, Tokens, StartPos, EndPos, Negated).
+
+
+% get_metaconc_position(CUI,[_Eval|RestEval], Tokens, StartPos, EndPos) :-
+% 	get_metaconc_position(CUI,RestEval, Tokens, StartPos, EndPos).
 
 match_pos_token([], _Tokens, []) :- !.
 match_pos_token(_PosInfoList, [], []) :- !.
@@ -325,6 +451,12 @@ mm_output(ExpSentence, Citation, ModifiedText, Tagging, AA, Syntax, MMOPhrases, 
 
 */
 
+maybe_disambiguate_mmoutput(MMOutput, WSDServerStream, DisambMMOutput) :-
+	( control_option(word_sense_disambiguation) ->
+	  disambiguate_mmoutput(MMOutput, WSDServerStream, DisambMMOutput)
+	; DisambMMOutput = MMOutput
+	).
+
 disambiguate_mmoutput(MMOutput, _WSDServerStream, DisambMMOutput) :-
 	unambiguous_output(MMOutput, _UtteranceText),
 	!,
@@ -385,20 +517,38 @@ preferred_name_synonym_equal([MapTerm|_MapTermRest],MapTerm) :-
 preferred_name_synonym_equal([_MapTerm|MapTermRest],MapTermOut) :-
 	preferred_name_synonym_equal(MapTermRest,MapTermOut).
 
-% Apply the update to APhrases, since it is later used by
-% extract_SemRep_phrases
-update_aps_list(aphrases(APhrases), MapTermList, ModMapTermList,
-		aphrases(APhrasesOut)) :-
-	update_aps_list_aux(APhrases,MapTermList,ModMapTermList,APhrasesOut),
-	!.
+% Apply the update to APhrases, since it is later used by extract_SemRep_phrases
 
-update_aps_list_aux(_,[],[],[]) :- !.
-update_aps_list_aux([APhrase|RestAPhrases],[MapTerm|RestMapTerm],
-		    [MapTerm|RestModMapTerm],[APhrase|RestAPhrasesOut]) :-
+%%% Halil and FML reviewed this code on 08/23/2016 and concluded that it's broken
+%%% because it does no matching between the APhrases and Mappings.
+%%% The intent (I hope!) is simply to discard and aphrase(...) term
+%%% whose mapping(...) component is not in MapTermList.
+%%% update_aps_list(aphrases(APhrases), MapTermList, ModMapTermList,
+%%% 		aphrases(APhrasesOut)) :-
+%%% 	update_aps_list_aux(APhrases,MapTermList,ModMapTermList,APhrasesOut),
+%%% 	!.
+%%% 
+%%% update_aps_list_aux(_,[],[],[]) :- !.
+%%% update_aps_list_aux([APhrase|RestAPhrases],[MapTerm|RestMapTerm],
+%%% 		    [MapTerm|RestModMapTerm],[APhrase|RestAPhrasesOut]) :-
+%%% 	!,
+%%% 	update_aps_list_aux(RestAPhrases,RestMapTerm,RestModMapTerm,RestAPhrasesOut).
+%%% update_aps_list_aux(APhrases,[_MapTerm|RestMapTerm],RestModMapTerm,APhrasesOut) :-
+%%% 	update_aps_list_aux(APhrases,RestMapTerm,RestModMapTerm,APhrasesOut).
+
+% If there are no more APhrases, terminate with [].
+update_aphrase_list([], _MapTermList, []).
+% If there are no more Mappings, discard all remaining APhrases.
+update_aphrase_list(_APhrases, [], []) :- !.
+update_aphrase_list([APhrase|RestAPhrases],[MapTerm|RestMapTerms], [APhrase|RestAPhrasesOut]) :-
+	APhrase = ap(_NegValue,_Phrase,_PhraseMap,Mapping),
+	MapTerm = map(_NegMapScore,Mapping),
 	!,
-	update_aps_list_aux(RestAPhrases,RestMapTerm,RestModMapTerm,RestAPhrasesOut).
-update_aps_list_aux(APhrases,[_MapTerm|RestMapTerm],RestModMapTerm,APhrasesOut) :-
-	update_aps_list_aux(APhrases,RestMapTerm,RestModMapTerm,APhrasesOut).
+	update_aphrase_list(RestAPhrases, RestMapTerms, RestAPhrasesOut).
+update_aphrase_list([_APhrase|RestAPhrases], MapTerms, APhrasesOut) :-
+	update_aphrase_list(RestAPhrases, MapTerms, APhrasesOut).
+
+%%% different predicate
 
 update_aps(aphrases(APhrases),MapTerm,aphrases(APhrasesOut)) :-
 	update_aps_aux(APhrases,MapTerm,APhrasesOut),
@@ -424,11 +574,14 @@ remove_ftcn_inpr_semtypes([MMOPhrase|RestMMOPhrases],[MMOPhraseOut|RestMMOPhrase
 	% Mappings in Mappings term and APhrases are ordered differently
 	% Since update_aps_list looks at term differences later to reconcile mappings
 	% we first sort the mappings in Mappings term
-	APhrases = aphrases(APhraseList),
-	sort_by_aphrases(APhraseList,MapTermList,MapTermList,MapTermListSorted),
-	remove_ftcn_inpr_evaluations(MapTermListSorted,MapTermListSorted,MapTermListSortedOut),
-	update_aps_list(APhrases,MapTermListSorted,MapTermListSortedOut,APhrasesOut),
-	% And now, mappings list is out of whack, so correct that, as well
+	APhrases = aphrases(APhraseListIn),
+	sort_by_aphrases(APhraseListIn, MapTermList, MapTermList, MapTermListSorted),
+	remove_ftcn_inpr_evaluations(MapTermListSorted, MapTermListSorted, MapTermListSortedOut),
+	%%% See comment above immediately before definition of update_aphrase_list/3
+	%%% update_aps_list(APhrases,MapTermListSorted,MapTermListSortedOut,APhrasesOut),
+	update_aphrase_list(APhraseListIn, MapTermListSortedOut, APhraseListOut),
+	APhrasesOut = aphrases(APhraseListOut),
+	% And now, mappings list is out of whack, so correct that, as well.
 	% The reason is the order of mappings matter for the rest of WSD process 
 	% If we do not correct the order here, we will get different WSD results
 	% this got too convoluted, investigate a simpler way
@@ -739,7 +892,6 @@ is_non_term_char(0'$).
 
 % in which MarkedMMOPhrases is a list of terms of the form
 % phrase(UttNum,PhraseNum,Phrase,Candidates,Mappings,PWI,GVCs,EV0,APhrases)
-
 
 reinsert_mmo(DisambMMO, MarkedMappings, MarkedMMOutput, DisambMMOutput) :-
 	% temp
@@ -1135,26 +1287,26 @@ make_method_list([Method0|Methods], [Weight|Weights], [MethodElement|MethodList]
 	MethodElement = method(Method, Weight),
 	make_method_list(Methods, Weights, MethodList).
 
-display_WSD_methods :-
-	get_WSD_methods(WSDMethods),
-	sort(WSDMethods, SortedWSDMethods),
-	(  foreach(ThisShortName-_ThisLongName, SortedWSDMethods),
-	   foreach(ThisShortNameLength, ShortNameLengths)
-	do
-	   length(ThisShortName, ThisShortNameLength)
-	),
-	max_member(LongestShortNameLength, ShortNameLengths),
-	member(ShortName-LongName, SortedWSDMethods),
-	trim_whitespace_right(LongName, TrimmedLongName),
-	length(ShortName, ShortNameLength),
-	Padding is LongestShortNameLength - ShortNameLength,
-	format('~s~*c : ~s~n', [ShortName,Padding,32,TrimmedLongName]),
-	fail
-      ; true.
+%%% display_WSD_methods :-
+%%% 	get_WSD_methods(WSDMethods),
+%%% 	sort(WSDMethods, SortedWSDMethods),
+%%% 	(  foreach(ThisShortName-_ThisLongName, SortedWSDMethods),
+%%% 	   foreach(ThisShortNameLength, ShortNameLengths)
+%%% 	do
+%%% 	   length(ThisShortName, ThisShortNameLength)
+%%% 	),
+%%% 	max_member(LongestShortNameLength, ShortNameLengths),
+%%% 	member(ShortName-LongName, SortedWSDMethods),
+%%% 	trim_whitespace_right(LongName, TrimmedLongName),
+%%% 	length(ShortName, ShortNameLength),
+%%% 	Padding is LongestShortNameLength - ShortNameLength,
+%%% 	format('~s~*c : ~s~n', [ShortName,Padding,32,TrimmedLongName]),
+%%% 	fail
+%%%       ; true.
 
 %%% not yet implemented, because call_WSD_server/5 doesn't yet exist
 %%% get_WSD_methods(Methods) :-
-%%% 	call_WSD_server("<?xml version=""1.0""?><rdf:RDF xmlns:rdf=""http://www.w3.org/1999/02/22-rdf-syntax-ns#""           xmlns:wsd=""http://wsd.nlm.nih.gov/wsdserver#"">      <rdf:description about=""methodslistrequest"">      </rdf:description></rdf:RDF>",'ii-server2',0,5554, ResponseString),
+%%% 	call_WSD_server("<?xml version=""1.0""?><rdf:RDF xmlns:rdf=""https://www.w3.org/1999/02/22-rdf-syntax-ns#""           xmlns:wsd=""http://wsd.nlm.nih.gov/wsdserver#"">      <rdf:description about=""methodslistrequest"">      </rdf:description></rdf:RDF>",'ii-server2',0,5554, ResponseString),
 %%% 	xml_parse(ResponseString, ResponseTerm, [format(false)]),
 %%% 	arg(2, ResponseTerm, [_,NS,_]),
 %%% 	arg(3, NS, RDFElement),

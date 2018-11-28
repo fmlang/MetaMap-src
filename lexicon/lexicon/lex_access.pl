@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -43,7 +43,7 @@
 	get_im_varlist_with_cats/3,
 	get_im_varlist_for_form/3,
 	get_im_varlist_for_all_forms/2,
-	initialize_lexicon/2,
+	% initialize_lexicon/2,
 	% is_a_base_form/2,
 	is_a_base_form_with_categories/2,
 	is_a_form/1
@@ -59,21 +59,21 @@
 	db_get_lex_im_varlist/2
    ]).
 
-:- use_module(lexicon(qp_lexicon), [
-	lex_init/2,
+% :- use_module(lexicon(qp_lexicon), [
+	% lex_init/2,
 	% lex_cit_ci_vars/2,
-	lex_form_ci_cats/2,
-	lex_form_ci_recs/2,
-	lex_form_ci_vars/2,
-	lex_is_a_form_ci/1,
+	% lex_form_ci_cats/2,
+	% lex_form_ci_recs/2,
+	% lex_form_ci_vars/2,
+	% lex_is_a_form_ci/1,
 	% lex_is_a_root_ci/1,
-	lex_is_a_root_ci_cats/2,
-	remove_zero_EUI/2
-    ]).
+	% lex_is_a_root_ci_cats/2,
+	% remove_zero_EUI/2
+%     ]).
 
 :- use_module(lexicon(qp_lex_util), [
-	lex_form_ci_ord_4/4,
-	lex_get_base_from_record_3/3
+	lex_form_ci_ord/4
+	% lex_get_base_from_record_3/3
 	% lex_get_spvar_from_record/2
     ]).
 
@@ -119,15 +119,15 @@ lex_init_quietly/2, respectively. They also call c_initialize_lexAccess/0
 for the new lexicon access. This initialization will eventually allow
 the caller to specify lexiconVersion but for now it will be fixed. */
 
-initialize_lexicon(L,I) :-
-    % temp
-    lex_init(L,I),
-    !.
-initialize_lexicon(_L, _I) :-
-    fatal_error('Cannot connect to a lexicon.~n', []).
+% initialize_lexicon(L,I) :-
+%     % temp
+%     lex_init(L,I),
+%     !.
+% initialize_lexicon(_L, _I) :-
+%     fatal_error('Cannot connect to a lexicon.~n', []).
 
-is_a_base_form_with_categories(Form, Categories) :-
-	  lex_is_a_root_ci_cats(Form, Categories).
+% is_a_base_form_with_categories(Form, Categories) :-
+% 	  lex_is_a_root_ci_cats(Form, Categories).
 
 % get_im_varlist first computes the citation form(s) for the token,
 % then computes the variants of the citation form(s).
@@ -138,12 +138,13 @@ get_im_varlist_with_cats(BaseForm, Categories, VarList) :-
 	get_im_varlist_TOGGLE(BaseForm, Categories, VarList).
 
 get_im_varlist_TOGGLE(BaseForm, _Categories, VarInfo) :-
-	( control_value(lexicon, c) ->
-	  lex_form_ci_vars(BaseForm, VarInfo)
-	; control_value(lexicon, db) ->
-	  get_im_varlist_for_form(BaseForm, VarInfo, [])
-	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
-	).
+	  get_im_varlist_for_form(BaseForm, VarInfo, []).
+%	( control_value(lexicon, c) ->
+%	  lex_form_ci_vars(BaseForm, VarInfo)
+%	; control_value(lexicon, db) ->
+%	  get_im_varlist_for_form(BaseForm, VarInfo, [])
+%	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
+%	).
 
 % get_im_varlist_for_all_forms([], []).
 % get_im_varlist_for_all_forms([FirstBaseForm|RestBaseForms], VarList) :-
@@ -162,15 +163,16 @@ get_im_varlist_for_all_forms([FirstBaseForm|RestBaseForms], [FirstVarList|RestVa
 % 	get_variants_for_form_TOGGLE(Form, VarList).
  
 get_variants_for_form_TOGGLE(Form, VarList) :-
-	( control_value(lexicon, c) ->
-	  lex_form_ci_vars(Form, VarList)
- 	; control_value(lexicon, db) ->
-	  get_im_varlist_for_form(Form, VarList, [])
-	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
-	).
+	get_im_varlist_for_form(Form, VarList, []).
+% 	( control_value(lexicon, c) ->
+% 	  lex_form_ci_vars(Form, VarList)
+%  	; control_value(lexicon, db) ->
+% 	  get_im_varlist_for_form(Form, VarList, [])
+% 	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
+% 	).
 
 get_im_varlist_for_form(BaseForm, VarList, VarListTail) :-
-	control_value(lexicon, db),
+%	control_value(lexicon, db),
 	lower(BaseForm, BaseFormLC),
 	db_get_lex_im_varlist(BaseFormLC, Response),
         % Response is a list of lists of triples, e.g.,
@@ -200,15 +202,16 @@ get_categories_for_form(Form, LexCats) :-
 	get_categories_for_form_TOGGLE(Form, LexCats).
 
 get_categories_for_form_TOGGLE(Form, LexCats) :-
-	( control_value(lexicon, c) ->
-	  lex_form_ci_cats(Form, LexCats)
- 	; control_value(lexicon, db) ->
-	  db_get_lex_cats(Form, LexCats)
-	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
-	).
+	db_get_lex_cats(Form, LexCats).
+% 	( control_value(lexicon, c) ->
+% 	  lex_form_ci_cats(Form, LexCats)
+%  	; control_value(lexicon, db) ->
+% 	  db_get_lex_cats(Form, LexCats)
+% 	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
+% 	).
 
 get_spellings_and_inflections_for_form(Term, Categories, Spelling, Inflections) :-
-	lex_form_ci_ord_4(Term, Categories, Spelling, Inflections).
+	lex_form_ci_ord(Term, Categories, Spelling, Inflections).
 
 
 % get_base_forms_for_form_apostrophe_s(FormAtom, Categories, BaseFormList) :-
@@ -239,47 +242,48 @@ get_spellings_and_inflections_for_form(Term, Categories, Spelling, Inflections) 
 % 	; BaseFormList = []
 % 	).
 
-remove_punct_chars(Atom, AtomWithoutPunctChars) :-
-       atom_codes(Atom, CodeList),
-       (  foreach(Code, CodeList),
-	  fromto(CodesWithoutPunctChars, S0, S, [])
-       do ( local_punct(Code) ->
-	    S0 = S ;
-	    S0 = [Code|S]
-	  )
-       ),
-       atom_codes(AtomWithoutPunctChars, CodesWithoutPunctChars).
+% remove_punct_chars(Atom, AtomWithoutPunctChars) :-
+%        atom_codes(Atom, CodeList),
+%        (  foreach(Code, CodeList),
+% 	  fromto(CodesWithoutPunctChars, S0, S, [])
+%        do ( local_punct(Code) ->
+% 	    S0 = S ;
+% 	    S0 = [Code|S]
+% 	  )
+%        ),
+%        atom_codes(AtomWithoutPunctChars, CodesWithoutPunctChars).
        
-get_all_base_forms(LexicalEntries, BaseForms) :-
-	(  foreach(LE, LexicalEntries),
-	   foreach(BF, BaseForms0)
-	do LE = lexrec:[base:[CitationForm],spelling_variants:SpellingVariants|_],
-	   BF = [CitationForm|SpellingVariants]
-	),
-	append(BaseForms0, BaseForms1),
-	(  foreach(BF1,   BaseForms1),
-	   foreach(LCBF1, BaseForms)
-	do lower(BF1, LCBF1)
-	).
-
+% get_all_base_forms(LexicalEntries, BaseForms) :-
+% 	(  foreach(LE, LexicalEntries),
+% 	   foreach(BF, BaseForms0)
+% 	do LE = lexrec:[base:[CitationForm],spelling_variants:SpellingVariants|_],
+% 	   BF = [CitationForm|SpellingVariants]
+% 	),
+% 	append(BaseForms0, BaseForms1),
+% 	(  foreach(BF1,   BaseForms1),
+% 	   foreach(LCBF1, BaseForms)
+% 	do lower(BF1, LCBF1)
+% 	).
+ 
 get_base_forms_for_form_with_cats(Form, CategoryList, BaseFormList) :-
 	get_base_forms_for_form_with_cats_TOGGLE(Form, CategoryList, BaseFormList).
 
 get_base_forms_for_form_with_cats_TOGGLE(Form, CategoryList, BaseFormList) :-
- 	( control_value(lexicon, c) ->
- 	  lex_form_ci_recs(Form, LexRecords),
- 	   (findall(Cit,
- 		    (member(LexRecord,LexRecords),
- 		     lex_get_base_from_record_3(LexRecord, CategoryList, Cit)),
- 		    BaseFormList) ->
- 	             true
- 	   ;   BaseFormList=[]
- 	   )
-	  % BDB version
- 	; control_value(lexicon, db) ->
-	  get_base_forms_for_form_with_cats_apostrophe_s(Form, CategoryList, BaseFormList)
-	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
- 	).
+	get_base_forms_for_form_with_cats_apostrophe_s(Form, CategoryList, BaseFormList).
+%  	( control_value(lexicon, c) ->
+%  	  lex_form_ci_recs(Form, LexRecords),
+%  	   (findall(Cit,
+%  		    (member(LexRecord,LexRecords),
+%  		     lex_get_base_from_record_3(LexRecord, CategoryList, Cit)),
+%  		    BaseFormList) ->
+%  	             true
+%  	   ;   BaseFormList=[]
+%  	   )
+% 	  % BDB version
+%  	; control_value(lexicon, db) ->
+% 	  get_base_forms_for_form_with_cats_apostrophe_s(Form, CategoryList, BaseFormList)
+% 	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
+%  	).
 
 get_base_forms_for_form_with_cats_apostrophe_s(FormAtom, CategoryList, BaseFormList) :-
 	CategoryList = [Category],
@@ -294,8 +298,10 @@ get_base_forms_for_form_with_cats_apostrophe_s(FormAtom, CategoryList, BaseFormL
 	).
 
 is_a_form(PossibleForm) :-
-	( control_value(lexicon, c) ->
-	  lex_is_a_form_ci(PossibleForm)
-	; db_get_lex_base_forms(PossibleForm, Result),
-	  Result \== []
-	).
+ 	db_get_lex_base_forms(PossibleForm, Result),
+	Result \== [].
+% 	( control_value(lexicon, c) ->
+% 	  lex_is_a_form_ci(PossibleForm)
+% 	; db_get_lex_base_forms(PossibleForm, Result),
+% 	  Result \== []
+% 	).

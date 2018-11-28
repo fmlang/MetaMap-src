@@ -349,16 +349,18 @@ struct results_struct process_normal_query(const char *line)
 
    /* printf("NORMAL QUERY\n"); fflush(stdout); */
 
-   query = parse_query(line);
+  query = parse_query(line);
    /* printf("Query = >%s<\n", line);
     * fflush(stdout);
     * printf("query.table = >%s<\n", query.table);
     * fflush(stdout);
     */
+
    config_ptr = get_config(query.table);
    /* printf("Got config_ptr %d\n", config_ptr);
     * fflush(stdout);
    */
+
    rtn = return_results(query, config_ptr);
    free_query(query);
    return(rtn);

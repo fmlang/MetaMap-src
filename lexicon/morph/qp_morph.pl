@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -55,16 +55,16 @@
 
 % foreign_file(morph('morph'), [
 
-foreign_resource(qp_morph, [
-	c_dm_variants
-   ]).
+% foreign_resource(qp_morph, [
+% 	c_dm_variants
+%    ]).
 
-foreign(c_dm_variants, c, c_dm_variants(+string, +term, -term, [-integer])).
+% foreign(c_dm_variants, c, c_dm_variants(+string, +term, -term, [-integer])).
 
 % :- load_foreign_resource('../../qp_morph').
-:- environ('DYNAMIC_LIB_DIR',DynamicLibDir),
-   atom_concat(DynamicLibDir,'/qp_morph',QpMorphSo),
-   load_foreign_resource(QpMorphSo).
+% :- environ('DYNAMIC_LIB_DIR',DynamicLibDir),
+%    atom_concat(DynamicLibDir,'/qp_morph',QpMorphSo),
+%    load_foreign_resource(QpMorphSo).
  
 %%% returns inflectional variants in -Var
 %%% +Term is the input term
@@ -89,18 +89,19 @@ dm_variants(Term, Cats, Var) :-
 	dm_variants_TOGGLE(Term, Cats, Var).
 
 dm_variants_TOGGLE(Term, Cats, VarList) :-
-	( control_value(lexicon, c) ->
-	  c_dm_variants(Term, Cats, VarList0, 1),
-	  (  foreach(V0, VarList0),
-	     foreach(V,  VarList)
-	  do functor(V0, LexicalItem, 1),
-	     arg(1, V0, LexicalCategory),
-	     V = LexicalItem:[cat:[LexicalCategory]]
-	  )     
- 	; control_value(lexicon, db) ->
-	  get_dm_variants_by_category(Term, Cats, VarList)
-	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
-	).
+	get_dm_variants_by_category(Term, Cats, VarList).
+% 	( control_value(lexicon, c) ->
+% 	  c_dm_variants(Term, Cats, VarList0, 1),
+% 	  (  foreach(V0, VarList0),
+% 	     foreach(V,  VarList)
+% 	  do functor(V0, LexicalItem, 1),
+% 	     arg(1, V0, LexicalCategory),
+% 	     V = LexicalItem:[cat:[LexicalCategory]]
+% 	  )     
+%  	; control_value(lexicon, db) ->
+% 	  get_dm_variants_by_category(Term, Cats, VarList)
+% 	; fatal_error('### ERROR: lexicon setting must be either "c" or "db".~n', [])
+% 	).
 
 %%% changes Term(Cat) to Term:[cat:[Cat]]
 %%% reformat_dm_list([], []).
@@ -112,7 +113,7 @@ dm_variants_TOGGLE(Term, Cats, VarList) :-
 
 get_dm_variants_by_category(Term, CategoryList, VariantList) :-
 	CategoryList = [Category],
-	control_value(lexicon, db),
+	% control_value(lexicon, db),
 	db_get_lex_dm_variants_with_cat(Term, Category, VariantPairs),
 	(  foreach(VariantPair, VariantPairs),
 	   foreach(VariantTerm, VariantList)

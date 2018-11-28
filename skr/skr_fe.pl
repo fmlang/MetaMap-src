@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -70,11 +70,11 @@
    ]).
 
 :- use_module(metamap(metamap_parsing), [
-	collapse_syntactic_analysis/2,
-	generate_syntactic_analysis_plus/4
+        generate_syntactic_analysis_plus/4
    ]).
 
 :- use_module(metamap(metamap_tokenization), [
+	local_alnum/1,
 	local_ascii/1
    ]).
 
@@ -84,7 +84,7 @@
 
 :- use_module(skr(skr), [
 	initialize_skr/1,
-	skr_phrases/21,
+	skr_phrases/22,
 	stop_and_halt/0
    ]).
 
@@ -103,7 +103,7 @@
 
 :- use_module(skr(skr_utilities), [
 	check_valid_file_type/2,
-	conditionally_print_end_info/0,
+	conditionally_print_end_info/2,
 	conditionally_print_header_info/4,
 	compare_utterance_lengths/2,
 	convert_non_text_fields_to_blanks/6,
@@ -118,7 +118,6 @@
 	generate_utterance_output/6,
 	generate_variants_output/2,
 	get_all_candidate_features/3,
-	get_program_name/1,
 	output_should_be_bracketed/1,
 	output_tagging/3,
 	replace_crs_with_blanks/4,
@@ -163,6 +162,7 @@
 	control_value/2,
 	get_control_options_for_modules/2,
 	get_from_iargs/4,
+	get_program_name/1,
 	interpret_args/4,
 	interpret_options/4,
 	parse_command_line/1,
@@ -259,7 +259,7 @@ go(HaltOption, command_line(OptionsIn, ArgsIn)) :-
 	),
 	( HaltOption == halt ->
 	  stop_and_halt
-	; true
+	; close_all_streams
 	).
 
 /* initialize_skr(+Options, +Args, -InterpretedArgs, +IOptions)
@@ -364,7 +364,7 @@ batch_skr(InterpretedArgs, ProgramName, DefaultRelease, JSONFormat,
 	; true
 	),
 	!,
-	conditionally_print_end_info.
+	conditionally_print_end_info(InputFile, OutputFile).
 
 /* process_all(+TagOption, +TaggerServerHosts, +TaggerForced, +TaggerServerPort,
    	       +InterpretedArgs, +IOptions)
@@ -483,15 +483,13 @@ process_text(Text, TextID, TagOption, ServerStreams, RawTokenList, AAs,
  	; fatal_error('process_text/4 failed for ~p~n', [Text])
 	).
 
-remove_initial_whitespace([], []).
-remove_initial_whitespace([FirstTextString|RestTextStrings], ConvertedTextStrings) :-
-	( FirstTextString == [] ->
-	  remove_initial_whitespace(RestTextStrings, ConvertedTextStrings)
-	; trim_whitespace_left(FirstTextString, TrimmedFirstTextString),
-	  ConvertedTextStrings = [TrimmedFirstTextString|RestTextStrings]
-	).
-	
-
+% remove_initial_whitespace([], []).
+% remove_initial_whitespace([FirstTextString|RestTextStrings], ConvertedTextStrings) :-
+% 	( FirstTextString == [] ->
+% 	  remove_initial_whitespace(RestTextStrings, ConvertedTextStrings)
+% 	; trim_whitespace_left(FirstTextString, TrimmedFirstTextString),
+% 	  ConvertedTextStrings = [TrimmedFirstTextString|RestTextStrings]
+% 	).
 	
 process_text_1(Lines0, TextID, TagOption, ServerStreams,
 	       ExpRawTokenList, AdjustedAAs, UDAListIn, UDAListOut,
@@ -584,7 +582,9 @@ process_text_aux(ExpandedUtterances, TagOption, ServerStreams,
 		 ExpRawTokenList, WordDataCacheIn, USCCacheIn,
 		 RawTokenListOut, WordDataCacheOut, USCacheOut, NegationTerms, MMOutput) :-
 	( control_option(aas_only) ->
-	  true
+	  ExpandedUtterances = [ExpandedUtterance|_Rest],
+	  ExpandedUtterance = utterance(InputLabel,Text0,_PosInfo,_ReplacementPos),
+	  conditionally_announce_processing(InputLabel, Text0)	  
 	; do_process_text(ExpandedUtterances, TagOption, ServerStreams,
 			  OrigCitationTextAtomWithBlanks, CitationTextAtomWithCRs,
 			  AdjustedAAs, UDA_AVL, NoMapPairs, NoVarPairs,
@@ -608,6 +608,7 @@ do_process_text([ExpandedUtterance|Rest],
 		[UtteranceNegationTerms|RestNegationTerms],
 		 [mm_output(ExpandedUtterance,OrigCitationTextAtom,ModifiedText,Tagging,AAs,
 			    Syntax,DisambiguatedMMOPhrases,ExtractedPhrases)|RestMMOutput]) :-
+	% ExtractedPhrasesTest = [],
 	maybe_atom_gc(2, _DidGC,_SpaceCollected),
 	% Construct output terms
 	ModifiedText = modified_text(UtteranceText),
@@ -624,9 +625,9 @@ do_process_text([ExpandedUtterance|Rest],
 	  do_syntax_processing(TagOption, ServerStreams,
 			       UtteranceText, FullTagList, TagList,
 			       HRTagStrings, Definitions, SyntAnalysis0),
-	  conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	  skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
-		      AAs, UDA_AVL, NoMapPairs, NoVarPairs, SyntAnalysis, TagList,
+		      AAs, UDA_AVL, NoMapPairs, NoVarPairs,
+		      SyntAnalysis0, SyntAnalysis, TagList,
 		      WordDataCacheIn, USCCacheIn, ExpRawTokenListIn,
 		      ServerStreams, ExpRawTokenListNext, WordDataCacheNext, USCCacheNext,
 		      DisambiguatedMMOPhrases, UtteranceNegationTerms,
@@ -715,9 +716,9 @@ postprocess_sentences_1([FailedUtterance|_], _BracketedOutput,
 		    [UtteranceID,UtteranceText]).
 
 
-postprocess_phrases([], [], _BracketedOutput, _N, _M, _AAs, _Label, MMO, MMO).
-postprocess_phrases([MMOPhrase|RestMMOPhrases],
-		    [_ExtractedPhrase|RestExtractedPhrases],
+postprocess_phrases([], _ExtractedPhrases, _BracketedOutput,
+		    _N, _M, _AAs, _Label, MMO, MMO).
+postprocess_phrases([MMOPhrase|RestMMOPhrases], ExtractedPhrases,
 		    BracketedOutput, N, M, AAs, UtteranceLabel, MMOIn, MMOOut) :-
 	MMOPhrase = phrase(phrase(PhraseTextAtom0,Phrase,StartPos/Length,ReplacementPos),
 			   candidates(TotalCandidateCount,
@@ -750,7 +751,7 @@ postprocess_phrases([MMOPhrase|RestMMOPhrases],
 	% CHANGE
 	MMOIn = [PhraseMMO,CandidatesMMO,MappingsMMO|MMONext],
 	NextM is M + 1,
-	postprocess_phrases(RestMMOPhrases, RestExtractedPhrases,
+	postprocess_phrases(RestMMOPhrases, ExtractedPhrases,
 			    BracketedOutput, N, NextM, AAs, UtteranceLabel, MMONext, MMOOut).
 
 
@@ -988,9 +989,27 @@ set_utterance_text(Text, UtteranceText) :-
 	( control_option(term_processing) ->
 	  % OBSOLETE
 	  % eliminate_multiple_meaning_designator_string(Text0, Text1),
-	  normalized_syntactic_uninvert_string(Text, UtteranceText)
+	  leading_non_alnums(Text, LeadingAlnums, RemainingText0),
+	  trailing_non_alnums(RemainingText0, TrailingAlnums, RemainingText),
+	  normalized_syntactic_uninvert_string(RemainingText, UtteranceText0),
+	  append([LeadingAlnums, UtteranceText0, TrailingAlnums], UtteranceText)
 	; UtteranceText = Text
 	).
+
+leading_non_alnums([H|T], LeadingNonAlnums, RemainingText) :-
+	( local_alnum(H) ->
+	  LeadingNonAlnums = [],
+	  RemainingText = [H|T]
+	; LeadingNonAlnums = [H|RestLeadingNonAlnums],
+	  leading_non_alnums(T, RestLeadingNonAlnums, RemainingText)
+	).
+
+trailing_non_alnums(String, TrailingNonAlnums, RemainingText) :-
+	rev(String, RevString),
+	leading_non_alnums(RevString, RevTrailingNonAlnums, RevRemainingText),
+	rev(RevTrailingNonAlnums, TrailingNonAlnums),
+	rev(RevRemainingText, RemainingText).
+
 
 do_syntax_processing(TagOption, ServerStreams, UtteranceText, FullTagList, TagList,
 		     HRTagStrings, Definitions, SyntAnalysis0) :-
@@ -1005,13 +1024,7 @@ do_syntax_processing(TagOption, ServerStreams, UtteranceText, FullTagList, TagLi
 	  HRTagStrings = []
 	),
 	generate_syntactic_analysis_plus(UtteranceText, TagList, SyntAnalysis0, Definitions).
-
-conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis) :-
-	( control_option(term_processing) ->
-	  collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis)
-	; SyntAnalysis = SyntAnalysis0
-	).
-
+ 
 get_nomap_pairs(AtomNoMapPairs) :-
 	( control_value(nomap, FileName) ->
 	  check_valid_file_type(FileName, 'NoMap Strings'),

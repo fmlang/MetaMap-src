@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -85,78 +85,78 @@
 */
 
 :- module(flatten, [
-	and_to_list/2,		%  conjunction -> list of conjuncts
-	list_to_and/2,		%  list of conjuncts -> conjunction
+% 	and_to_list/2,		%  conjunction -> list of conjuncts
+% 	list_to_and/2,		%  list of conjuncts -> conjunction
+% 
+% 	or_to_list/2,		%  disjunction -> list of disjuncts
+% 	list_to_or/2,		%  list of disjuncts -> disjunction
+% 
+% 	plus_to_list/2,		%  sum -> list of terms
+% 	list_to_plus/2,		%  list of terms -> sum
+% 
+% 	times_to_list/2,	%  product -> list of factors
+% 	list_to_times/2,	%  list of factors -> product
+% 
+ 	flatten/2		%  list of lists -> list
+% 
+% 	binary_to_list/4,	%  Term,Operator -> DifferenceList
+% 	binary_to_list/5,	%  Term,Operator,Unit -> DifferenceList
+% 
+% 	list_to_binary/3,	%  List,Operator -> Term
+% 	list_to_binary/4	%  List,Operator,Unit -> Term
+]).
+% 
+% :- mode
+% 	and_to_list(+, -),
+% 	binary_to_list(+, +, -, ?),
+% 	binary_to_list(+, +, +, -, ?),
+% 	flatten(+, ?),
+% 	    flatten(+, ?, ?),
+% 	list_to_and(+, -),
+% 	list_to_binary(+, +, -),
+% 	list_to_binary(+, +, +, -),
+% 	list_to_binaryL(+, +, +, -),
+% 	list_to_binaryR(+, +, +, -),
+% 	list_to_or(+, -),
+% 	list_to_plus(+, -),
+% 	list_to_times(+, -),
+% 	or_to_list(+, -),
+% 	plus_to_list(+, -),
+% 	times_to_list(+, -).
 
-	or_to_list/2,		%  disjunction -> list of disjuncts
-	list_to_or/2,		%  list of disjuncts -> disjunction
-
-	plus_to_list/2,		%  sum -> list of terms
-	list_to_plus/2,		%  list of terms -> sum
-
-	times_to_list/2,	%  product -> list of factors
-	list_to_times/2,	%  list of factors -> product
-
-	flatten/2,		%  list of lists -> list
-
-	binary_to_list/4,	%  Term,Operator -> DifferenceList
-	binary_to_list/5,	%  Term,Operator,Unit -> DifferenceList
-
-	list_to_binary/3,	%  List,Operator -> Term
-	list_to_binary/4	%  List,Operator,Unit -> Term
-   ]).
-
-:- mode
-	and_to_list(+, -),
-	binary_to_list(+, +, -, ?),
-	binary_to_list(+, +, +, -, ?),
-	flatten(+, ?),
-	    flatten(+, ?, ?),
-	list_to_and(+, -),
-	list_to_binary(+, +, -),
-	list_to_binary(+, +, +, -),
-	list_to_binaryL(+, +, +, -),
-	list_to_binaryR(+, +, +, -),
-	list_to_or(+, -),
-	list_to_plus(+, -),
-	list_to_times(+, -),
-	or_to_list(+, -),
-	plus_to_list(+, -),
-	times_to_list(+, -).
-
-and_to_list(Conjunction, List) :-
-	binary_to_list(Conjunction, &, true, List, []).
-
-
-list_to_and(List, Conjunction) :-
-	list_to_binary(List, &, true, Conjunction).
-
-
-
-or_to_list(Disjunction, List) :-
-	binary_to_list(Disjunction, ;, false, List, []).
-
-
-list_to_or(List, Disjunction) :-
-	list_to_binary(List, ;, false, Disjunction).
-
-
-
-plus_to_list(Sum, List) :-
-	binary_to_list(Sum, +, 0, List, []).
-
-
-list_to_plus(List, Sum) :-
-	list_to_binary(List, +, 0, Sum).
-
-
-
-times_to_list(Product, List) :-
-	binary_to_list(Product, *, 1, List, []).
-
-
-list_to_times(List, Product) :-
-	list_to_binary(List, *, 1, Product).
+% and_to_list(Conjunction, List) :-
+% 	binary_to_list(Conjunction, &, true, List, []).
+% 
+% 
+% list_to_and(List, Conjunction) :-
+% 	list_to_binary(List, &, true, Conjunction).
+% 
+% 
+% 
+% or_to_list(Disjunction, List) :-
+% 	binary_to_list(Disjunction, ;, false, List, []).
+% 
+% 
+% list_to_or(List, Disjunction) :-
+% 	list_to_binary(List, ;, false, Disjunction).
+% 
+% 
+% 
+% plus_to_list(Sum, List) :-
+% 	binary_to_list(Sum, +, 0, List, []).
+% 
+% 
+% list_to_plus(List, Sum) :-
+% 	list_to_binary(List, +, 0, Sum).
+% 
+% 
+% 
+% times_to_list(Product, List) :-
+% 	binary_to_list(Product, *, 1, List, []).
+% 
+% 
+% list_to_times(List, Product) :-
+% 	list_to_binary(List, *, 1, Product).
 
 
 
@@ -179,56 +179,56 @@ flatten(Other) -->
 
 
 
-binary_to_list(Unit, _, Unit) --> !.
-binary_to_list(Node, Operator, Unit) -->
-	{ Node =.. [Operator,Lhs,Rhs] }, % Node can't be a variable
-	!,
-	binary_to_list(Lhs, Operator, Unit),
-	binary_to_list(Rhs, Operator, Unit).
-binary_to_list(Other, _, _) -->
-    %	{ Other ~= Unit, Other ~=.. [Operator,_,_] },
-	[Other].
-
-
-binary_to_list(Node, Operator) -->
-	{ nonvar(Node) },
-	{ Node =.. [Operator,Lhs,Rhs] },
-	!,
-	binary_to_list(Lhs, Operator),
-	binary_to_list(Rhs, Operator).
-binary_to_list(Other, _) -->
-    %	{ Other ~=.. [Operator,_,_] },
-	[Other].
-
-
-
-list_to_binary([], _, Unit, Unit).
-list_to_binary([Head|Tail], Operator, _, Answer) :-
-	current_op(_, yfx, Operator),
-	!,
-	list_to_binaryL(Tail, Operator, Head, Answer).
-list_to_binary([Head|Tail], Operator, _, Answer) :-
-	list_to_binaryR(Tail, Head, Operator, Answer).
-
-
-list_to_binary([Head|Tail], Operator, Answer) :-
-	current_op(_, yfx, Operator),
-	!,
-	list_to_binaryL(Tail, Operator, Head, Answer).
-list_to_binary([Head|Tail], Operator, Answer) :-
-	list_to_binaryR(Tail, Head, Operator, Answer).
-
-
-list_to_binaryL([], _, Term, Term).
-list_to_binaryL([Head|Tail], Operator, Term0, Term) :-
-	Term1 =.. [Operator,Term0,Head],
-	list_to_binaryL(Tail, Operator, Term1, Term).
-
-
-list_to_binaryR([], Term, _, Term).
-list_to_binaryR([Head|Tail], Term0, Operator, Term) :-
-	Term =.. [Operator,Term0,Term1],
-	list_to_binaryR(Tail, Head, Operator, Term1).
+% binary_to_list(Unit, _, Unit) --> !.
+% binary_to_list(Node, Operator, Unit) -->
+% 	{ Node =.. [Operator,Lhs,Rhs] }, % Node can't be a variable
+% 	!,
+% 	binary_to_list(Lhs, Operator, Unit),
+% 	binary_to_list(Rhs, Operator, Unit).
+% binary_to_list(Other, _, _) -->
+%     %	{ Other ~= Unit, Other ~=.. [Operator,_,_] },
+% 	[Other].
+% 
+% 
+% binary_to_list(Node, Operator) -->
+% 	{ nonvar(Node) },
+% 	{ Node =.. [Operator,Lhs,Rhs] },
+% 	!,
+% 	binary_to_list(Lhs, Operator),
+% 	binary_to_list(Rhs, Operator).
+% binary_to_list(Other, _) -->
+%     %	{ Other ~=.. [Operator,_,_] },
+% 	[Other].
+% 
+% 
+% 
+% list_to_binary([], _, Unit, Unit).
+% list_to_binary([Head|Tail], Operator, _, Answer) :-
+% 	current_op(_, yfx, Operator),
+% 	!,
+% 	list_to_binaryL(Tail, Operator, Head, Answer).
+% list_to_binary([Head|Tail], Operator, _, Answer) :-
+% 	list_to_binaryR(Tail, Head, Operator, Answer).
+% 
+% 
+% list_to_binary([Head|Tail], Operator, Answer) :-
+% 	current_op(_, yfx, Operator),
+% 	!,
+% 	list_to_binaryL(Tail, Operator, Head, Answer).
+% list_to_binary([Head|Tail], Operator, Answer) :-
+% 	list_to_binaryR(Tail, Head, Operator, Answer).
+% 
+% 
+% list_to_binaryL([], _, Term, Term).
+% list_to_binaryL([Head|Tail], Operator, Term0, Term) :-
+% 	Term1 =.. [Operator,Term0,Head],
+% 	list_to_binaryL(Tail, Operator, Term1, Term).
+% 
+% 
+% list_to_binaryR([], Term, _, Term).
+% list_to_binaryR([Head|Tail], Term0, Operator, Term) :-
+% 	Term =.. [Operator,Term0,Term1],
+% 	list_to_binaryR(Tail, Head, Operator, Term1).
 
 
 

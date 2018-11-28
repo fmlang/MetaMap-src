@@ -293,6 +293,8 @@ void btree_query(char *query,             /* Input  */
   }
   
   status = dbcp->c_get(dbcp, &key, &data, DB_SET);
+  fflush(stdout);
+
   i = 0;
   while(( status == 0 ) && ( data.data != NULL ) &&
 	(strcmp( (char *)key.data, query) == 0 ))

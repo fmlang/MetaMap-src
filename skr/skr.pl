@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -35,6 +35,7 @@
 
 :- module(skr, [
 	aev_print_version/2,
+	compute_confidence_value/5,
 	extract_phrases_from_aps/2,
 	get_inputmatch_atoms_from_phrase/2,
 	get_phrase_tokens/4,
@@ -45,16 +46,16 @@
 	% but they must still be exported because they're called via debug_call.
 	print_candidate_grid/6,
 	print_duplicate_info/4,
-	skr_phrases/21,
+	skr_phrases/22,
 	print_all_aevs/1,
 	stop_and_halt/0,
 	% called by MetaMap API -- do not change signature!
 	stop_skr/0
     ]).
 
-:- use_module(lexicon(lex_access), [
-	initialize_lexicon/2
-    ]).
+% :- use_module(lexicon(lex_access), [
+% 	initialize_lexicon/2
+%     ]).
 
 :- use_module(metamap(metamap_candidates), [
 	add_candidates/9
@@ -91,6 +92,7 @@
 	get_subitems_feature/3,
 	linearize_components/2,
 	linearize_phrase/4,
+	local_alpha/1,
 	local_digit/1,
 	local_ws/1,
 	new_phrase_item/3,
@@ -137,6 +139,7 @@
 	generate_EOT_output/1,
 	get_candidate_feature/3,
 	get_all_candidate_features/3,
+	memberchk_var/2,
 	replace_crs_with_blanks/4,
         send_message/2,
 	split_word/3,
@@ -170,7 +173,12 @@
 	final_negation_template/6
    ]).
 
+:- use_module(skr_lib(dysonyms), [
+	exclude_dysonyms/2
+   ]).
+
 :- use_module(skr_lib(nls_strings), [
+	atom_codes_list/2,
 	split_string_completely/3,
 	trim_and_compress_whitespace/2
    ]).
@@ -181,10 +189,6 @@
 	control_value/2,
 	set_control_options/1,
 	subtract_from_control_options/1
-    ]).
-
-:- use_module(skr_lib(semgroup_member), [
-	semrep_semgroup_member/2
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -233,14 +237,19 @@
 
 :- use_module(library(lists), [
 	append/2,
+	delete/3,
 	keys_and_values/3,
 	last/2,
 	last/3,
-	nth0/3,
 	rev/2,
 	select/3,
 	sumlist/2
     ]).
+
+:- use_module(library(lists3), [
+	remove_duplicates/2
+    ]).
+
 
 :- use_module(library(sets), [
 	del_element/3,
@@ -262,7 +271,7 @@ stop_skr/0 stops access to other modules and closes all streams.  */
 initialize_skr(Options) :-
 	set_control_options(Options),
 	initialize_db_access,
-	initialize_lexicon(_, _),
+	% initialize_lexicon(_, _),
 	( control_option(dynamic_variant_generation) ->
 	  initialize_metamap_variants(dynamic)
 	; initialize_metamap_variants(static)
@@ -300,13 +309,21 @@ warn_if_no_sab_files :-
 	; true
 	).
 
+conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis) :-
+	( control_option(term_processing) ->
+	  collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis)
+	; SyntAnalysis = SyntAnalysis0
+	).
+
 skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
-	    AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
+	    AAs, UDAs, NoMapPairs, NoVarPairs, SyntAnalysis0, SyntAnalysis, TagList,
 	    WordDataCacheIn, USCCacheIn, RawTokensIn,
 	    ServerStreams, RawTokensOut, WordDataCacheOut, USCCacheOut,
+	    % MMOPhrases, NegationTerms, ExtractedPhrases, SemRepPhrasesOut) :-
 	    MMOPhrases, NegationTerms, ExtractedPhrases, SemRepPhrasesOut) :-
+	conditionally_collapse_syntactic_analysis(SyntAnalysis0, SyntAnalysis),
 	( skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
-			  AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
+			  AAs, UDAs, NoMapPairs, NoVarPairs, SyntAnalysis, TagList,
 			  WordDataCacheIn, USCCacheIn, RawTokensIn,
 			  ServerStreams, RawTokensNext, WordDataCacheOut, USCCacheOut,
 			  MMOPhrases, ExtractedPhrases, NegationTerms, SemRepPhrasesOut) ->
@@ -324,11 +341,11 @@ skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAto
 		DisambiguatedMMOPhrases, ExtractedPhrases, NegationTerms,
 		minimal_syntax(SemRepPhrasesWithWSD)) :-
 	ServerStreams = _TaggerServerStream-WSDServerStream,
-	SyntacticAnalysis = minimal_syntax(Phrases0),
-	add_tokens_to_phrases(Phrases0, Phrases),
+	SyntacticAnalysis = minimal_syntax(Syntax0),
+	add_tokens_to_phrases(Syntax0, Syntax),
 	% UtteranceText contains no AAs. E.g.,
 	% "heart attack (HA)" will become simply "heart attack".
-	skr_phrases_1(Phrases, InputLabel, UtteranceText,
+	skr_phrases_1(Syntax, InputLabel, UtteranceText,
 		      AAs, UDAs, NoMapPairs, NoVarPairs,
 		      OrigCitationTextAtom,
 		      TagList,
@@ -353,40 +370,41 @@ skr_phrases_1([], _InputLabel,
 	      _OrigCitationTextAtom, _TagList,
 	      WordDataCache, USCCache, WordDataCache, USCCache,
 	      RawTokens, RawTokens, [], []).
-skr_phrases_1([FirstPhraseIn|RestPhrasesIn0], InputLabel, AllUtteranceText,
+skr_phrases_1([FirstSyntaxIn|RestSyntaxIn0], InputLabel, AllUtteranceText,
 	      AAs, UDAs, NoMapPairs, NoVarPairs, OrigCitationTextAtom,
 	      TagList,
 	      WordDataCacheIn, USCCacheIn,
 	      WordDataCacheOut, USCCacheOut,
 	      RawTokensIn, RawTokensOut,
 	      [FirstMMOPhrase|RestMMOPhrases],
-	      [Phrases|RestPhrases]) :-
+	      [FirstPhraseOut|RestPhrasesOut]) :-
 	% merge conjuncts beginning with FirstPhraseIn
 	get_label_components(InputLabel, PMID, _TiOrAB, _UtteranceNum),
-	merge_conjuncts(FirstPhraseIn, RestPhrasesIn0, PMID,
-			ConjoinedPhrase0, RestPhrasesIn1),
+	merge_conjuncts(FirstSyntaxIn, RestSyntaxIn0, PMID,
+			ConjoinedSyntax0, RestSyntaxIn1),
 	% TotalPhraseCount is total the number of phrases glommed together
 	% to form the composite phrase.
 	% E.g., TotalPhraseCount for [ [pain] [on the left side] [of the chest] ] is 3
 	% get_composite_phrases is intentionally non-deterministic
 	% in order to allow undoing the phrase-gluing, in case the result is too long!
-	get_composite_phrases([ConjoinedPhrase0|RestPhrasesIn1], CompositePhrase,
-			      TotalPhraseCount, RestPhrasesIn2, CompositeOptions),
-	% merge conjuncts beginning with CompositePhrase
-	merge_conjuncts(CompositePhrase, RestPhrasesIn2, PMID,
-			ConjoinedPhrase1, RestPhrasesIn3),
+	get_composite_phrases([ConjoinedSyntax0|RestSyntaxIn1], CompositeSyntax,
+			      TotalSyntaxCount, RestSyntaxIn2, CompositeOptions),
+	% merge conjuncts beginning with CompositeSyntax
+	merge_conjuncts(CompositeSyntax, RestSyntaxIn2, PMID,
+			ConjoinedSyntax1, RestSyntaxIn3),
+	maybe_print_inputmatches(ConjoinedSyntax1, PMID),
 	% Merge consecutive phrases spanned by an AA
 	% The original composite phrases are the list
-	% [CompositePhrase|NewRestPhrases0];
+	% [CompositeSyntax|NewRestSyntax0];
 	% after merging phrases that are spanned by an AA, the phrases are
-	% [MergedPhrase|RestMergedPhrases]
-	merge_aa_phrases(RestPhrasesIn3, ConjoinedPhrase1, AAs, UDAs,
-			 MergedPhrase, RestPhrasesIn4, MergeOptions),
-	% merge_conjuncts(MergedPhrase, NewRestPhrases1, PMID,
-	% 		  ConjoinedPhrase, NewRestPhrases2),
-	get_inputmatch_atoms_from_phrase(MergedPhrase, InputMatchConjoinedPhraseWords),
-	length(InputMatchConjoinedPhraseWords, Length),
-	( TotalPhraseCount > 0 ->
+	% [MergedSyntax|RestMergedSyntax]
+	merge_aa_phrases(RestSyntaxIn3, ConjoinedSyntax1, AAs, UDAs,
+			 MergedSyntax, RestSyntaxIn4, MergeOptions),
+	% merge_conjuncts(MergedSyntax, NewRestSyntax1, PMID,
+	% 		  ConjoinedSyntax, NewRestSyntax2),
+	get_inputmatch_atoms_from_phrase(MergedSyntax, InputMatchConjoinedSyntaxWords),
+	length(InputMatchConjoinedSyntaxWords, Length),
+	( TotalSyntaxCount > 0 ->
 	  Length < 21
 	; true
 	),	    
@@ -396,9 +414,9 @@ skr_phrases_1([FirstPhraseIn|RestPhrasesIn0], InputLabel, AllUtteranceText,
 	add_to_control_options(AllAddedOptions),
 	% AllUtteranceText is never used in skr_phrase; it's there only for gap analysis,
 	% which is no longer used!!
-	% format(user_output, 'Phrase ~w:~n', [ConjoinedPhrase]),
+	% format(user_output, 'Phrase ~w:~n', [ConjoinedSyntax]),
 	skr_phrase(InputLabel, AllUtteranceText,
-		   MergedPhrase, AAs, NoMapPairs, NoVarPairs,
+		   MergedSyntax, AAs, NoMapPairs, NoVarPairs,
 		   OrigCitationTextAtom, TagList,
 		   RawTokensIn, GVCs,
 		   WordDataCacheIn, USCCacheIn,
@@ -408,14 +426,14 @@ skr_phrases_1([FirstPhraseIn|RestPhrasesIn0], InputLabel, AllUtteranceText,
 	% format(user_output, 'Tokens Next:~n', []),
 	% skr_utilities:write_token_list(RawTokensNext, 0, 1),
 	set_var_GVCs_to_null(GVCs),
-	extract_phrases_from_aps(APhrases, Phrases),
+	extract_phrases_from_aps(APhrases, FirstPhraseOut),
 	subtract_from_control_options(AllAddedOptions),
 	% add_semtypes_to_phrases_if_necessary(Phrases0,FirstEPPhrases),
-	skr_phrases_1(RestPhrasesIn4, InputLabel, AllUtteranceText,
+	skr_phrases_1(RestSyntaxIn4, InputLabel, AllUtteranceText,
 		      AAs, UDAs, NoMapPairs, NoVarPairs, OrigCitationTextAtom,
 		      TagList,
 		      WordDataCacheNext, USCCacheNext, WordDataCacheOut, USCCacheOut,
-		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrases).
+		      RawTokensNext, RawTokensOut, RestMMOPhrases, RestPhrasesOut).
 
 % Either
 % (1) The last element of MergedPhrase is a head(_) or mod(_),
@@ -467,7 +485,7 @@ merge_conjuncts(FirstPhrase, RestPhrasesIn, PMID, ConjoinedPhrase, RestPhrasesOu
 	).
 
 % CLAUSE 1 of 3 for merge_conjuncts_aux/5
-% This clause handles plain vanilla "lung and stomach cancer" conjunction.
+% This clause handles plain vanilla "lung and liver cancer" conjunction.
 merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, PMID, ConjoinedPhrase, RestPhrasesOut) :-
 	% Get the next two phrases, NextPhrase1 and NextPhrase2
 	RestPhrasesIn = [ConjunctionPhrase,Conjunct2Phrase|_],
@@ -476,13 +494,13 @@ merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, PMID, ConjoinedPhrase, RestPhras
 	ConjunctionPhrase = [conj([lexmatch([ConjWord])|_])|_],
 	% and the conjunction lexmatch must be a specific conjunction
 	relevant_conj(ConjWord),
-	% The first phrase (i.e., FirstPhrase) must be < 5 elements long,
+	% The first phrase (i.e., FirstPhrase) must be =< 7 elements long,
 	length(FirstPhrase, FirstPhraseLength),
-	FirstPhraseLength =< 8,
+	FirstPhraseLength =< 7,
 	% and end with a head(_) or mod(_) element.
 	% Should this restriction be relaxed?
 	ends_with_head_or_mod_or_prep(FirstPhrase),
-	% The phrase after the conj(_) phrase (NextPhrase2) must be < 5 elements long
+	% The phrase after the conj(_) phrase (NextPhrase2) must be < 8 elements long
 	length(Conjunct2Phrase, Conjunct2PhraseLength),
 	Conjunct2PhraseLength < 8,
 	% merge_conjoined_phrases/2 should be nondeterminate
@@ -557,17 +575,21 @@ merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, PMID, ConjoinedPhrase, RestPhras
 %    head([lexmatch(['breast cancer']),inputmatch([breast,cancer]),tag(noun),tokens([breast,cancer])])]
 
 % CLAUSE 2 of 3 for merge_conjuncts_aux/5
-merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, PMID, ConjoinedPhrase, RestPhrasesOut) :-
+merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, _PMID, ConjoinedPhrase, RestPhrasesOut) :-
 	contains_relevant_conj([FirstPhrase|RestPhrasesIn], PhrasesEndingWithConj, Rest),
 	% ensure series coordination comma(s) appear before the conjunction
 	contains_series_coord(PhrasesEndingWithConj),
+	length(PhrasesEndingWithConj, PhrasesEndingWithConjLen),
+	PhrasesEndingWithConjLen < 6,
 	Rest = [FirstRestPhrases|RestPhrasesOut],
-	
 	append(PhrasesEndingWithConj, TempConjoinedPhrase),
 	append(TempConjoinedPhrase, FirstRestPhrases, ConjoinedPhrase0),
-	maybe_print_inputmatches(ConjoinedPhrase0, PMID),
+	length(ConjoinedPhrase0, ConjoinedPhrase0Length),
+	ConjoinedPhrase0Length < 15,
+	% maybe_print_inputmatches(ConjoinedPhrase0, PMID),
 	demote_heads(ConjoinedPhrase0, ConjoinedPhrase1),
-	promote_last_mod(ConjoinedPhrase1, ConjoinedPhrase).		
+	promote_last_mod(ConjoinedPhrase1, ConjoinedPhrase),
+	!.
 
 % CLAUSE 3 of 3 for merge_conjuncts_aux/5
 merge_conjuncts_aux(FirstPhrase, RestPhrasesIn, _PMID, ConjoinedPhrase, RestPhrasesOut) :-
@@ -580,7 +602,8 @@ contains_relevant_conj([H|T], PhrasesEndingWithConj, Rest) :-
 	  relevant_conj(ConjWord) ->
 	  PhrasesEndingWithConj = [H],
 	  Rest = T
-	; PhrasesEndingWithConj = [H|RestPhrasesEndingWithConj],
+	; H \= [prep(_)|_],
+	  PhrasesEndingWithConj = [H|RestPhrasesEndingWithConj],
 	  contains_relevant_conj(T, RestPhrasesEndingWithConj, Rest)
 	).
 
@@ -607,15 +630,39 @@ promote_last_mod(ConjoinedPhrase1, ConjoinedPhrase2) :-
 	last(AllButLast, NewLast, ConjoinedPhrase2).
 
 merge_conjoined_phrases_once(Conjunct1Phrase, RestPhrasesIn,
-			     PMID, ConjoinedPhrase, RestPhrasesOut) :-
+			     _PMID, ConjoinedPhrase, RestPhrasesOut) :-
 	RestPhrasesIn = [ConjunctionPhrase,Conjunct2Phrase|Rest],
+        last_head_mod_or_shapes(Conjunct1Phrase, Conjunct1PhraseLast), 
+        last_head_mod_or_shapes(Conjunct2Phrase, Conjunct2PhraseLast),
+        functor(Conjunct1PhraseLast, F1, _N1),
+        functor(Conjunct2PhraseLast, F2, _N2),
+        compatible_tags(F1, F2),
 	append([Conjunct1Phrase,ConjunctionPhrase,Conjunct2Phrase], TempConjoinedPhrase),
-	maybe_print_inputmatches(TempConjoinedPhrase, PMID),
+	% maybe_print_inputmatches(TempConjoinedPhrase, PMID),
 	demote_heads(TempConjoinedPhrase, ConjoinedPhrase),
 	RestPhrasesOut = Rest.	
 
+last_head_mod_or_shapes(Conjunct1Phrase, Conjunct1PhraseLast) :-
+	rev(Conjunct1Phrase, RevConjunct1Phrase),
+	member(Conjunct1PhraseLast, RevConjunct1Phrase),
+	functor(Conjunct1PhraseLast, F, _N),
+	head_or_mod_or_shapes(F).
+	
+
+compatible_tags(F1, F2) :-
+        ( F1 == F2 ->
+          true
+        ; head_or_mod_or_shapes(F1),
+          head_or_mod_or_shapes(F2)
+        ).
+
+head_or_mod_or_shapes(head).
+head_or_mod_or_shapes(mod).
+head_or_mod_or_shapes(shapes).
+
 maybe_print_inputmatches(TempConjoinedPhrase, PMID) :-
-	( control_option(fielded_mmi_output) ->
+	( control_option(fielded_mmi_output),
+	  control_option(conj) ->
 	  format('~s|CONJ|', [PMID]),
 	  print_inputmatches(TempConjoinedPhrase)
 	; true
@@ -855,6 +902,7 @@ skr_phrase_1(Label, UtteranceTextString,
 			       Variants, APhrases, _BestCandidates, Mappings0, PrunedCandidateCount),
 	RemainingCandidateCount is RefinedCandidateCount - PrunedCandidateCount,
 	sort(Mappings0, Mappings),
+	% Mappings = Mappings0,
 	% length(Mappings, MappingsLength),
 	% format(user_output, 'There are ~d Mappings~n', [MappingsLength]),
 	% I have here the data structures to call disambiguate_mmo/2
@@ -884,6 +932,24 @@ skr_phrase_1(Label, UtteranceTextString,
 			       % to include best candidates only in output
 			       ev0(RefinedEvaluationsAfterHiding),
 			       aphrases(APhrases)).
+
+proper_subset([], [_|_]).
+proper_subset(SubSetList, SuperSetList) :-
+	member(X, SubSetList),
+	\+ memberchk(X, SuperSetList),
+	!,
+	fail.
+proper_subset(SubSetList, SuperSetList) :-
+	member(X, SuperSetList),
+	\+ memberchk(X, SubSetList),
+	!.
+
+
+
+% proper_subset([H|T], ListIn) :-
+% 	memberchk(H, ListIn),
+% 	delete(ListIn, H, ListNext),
+% 	proper_subset(T, ListNext).
 
 maybe_hide_evaluations(Evaluations, EvaluationsAfterHiding) :-
 	( control_option(show_candidates) ->
@@ -1135,8 +1201,12 @@ filter_evaluations(InitialEvaluations, NoMapPairs, RefinedEvaluations, FinalEval
 					      EvaluationsAfterUserExclusions),
 	filter_evaluations_by_sources(EvaluationsAfterUserExclusions, EvaluationsAfterSources),
 	% SemType filtering is now done after mapping construction in filter_mappings_by_semtypes/6
-	% filter_evaluations_by_semtypes(EvaluationsAfterSources, RefinedEvaluations),
-	filter_numerical_evaluations(EvaluationsAfterSources, EvaluationsAfterNumerical), 
+	% UNLESS mappings are off (i.e., hide_mappings is on).
+	( \+ control_option(hide_mappings) ->
+	  EvaluationsAfterSemTypes = EvaluationsAfterSources
+	; filter_evaluations_by_semtypes(EvaluationsAfterSources, EvaluationsAfterSemTypes)
+	),
+	filter_numerical_evaluations(EvaluationsAfterSemTypes, EvaluationsAfterNumerical), 
 	RefinedEvaluations = EvaluationsAfterNumerical,
 	filter_evaluations_by_subsumption(RefinedEvaluations, FinalEvaluations).
 
@@ -1232,22 +1302,30 @@ debug_evaluations(Evaluations) :-
 	).
 
 generate_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-		       Variants, APhrases0, _BestCandidates, Mappings0, PrunedCount) :-
+		       Variants, APhrases, _BestCandidates, Mappings, PrunedCount) :-
 	  % Construct mappings only if necessary
 	( check_generate_best_mappings_control_options ->
 	  % format(user_output, 'About to call construct_best_mappings~n', []), ttyflush,
-	  construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-				  Variants, APhrases0, _BestCandidates, Mappings0, PrunedCount)
+	  construct_best_mappings(Evaluations, PhraseTextString,
+				  Phrase, PhraseWordInfoPair, NPhraseWords,
+				  Variants, APhrases0, _BestCandidates, Mappings0, PrunedCount),
+	  maybe_filter_mappings_by_semtypes(Mappings0, APhrases0,
+					    NPhraseWords, Variants,
+					    Mappings1, APhrases1),
+	  maybe_reduce_mappings_for_conj(Mappings1, Mappings1, APhrases1,
+					 NPhraseWords, Variants,
+					 Mappings, APhrases)
 	  % length(Mappings0, Mappings0Length),
 	  % format(user_output, 'Done with construct_best_mappings:~d ~n', [Mappings0Length]), ttyflush
-	; APhrases0 = [],
-          Mappings0 = [],
+	; APhrases = [],
+          Mappings = [],
 	  % If no mappings were constructed, no candidates were pruned;
 	  % this next call will assign Status 0 to all candidates.
 	  maybe_mark_pruned_evaluations(Evaluations, Evaluations),
 	  % Don't prune any candidates if we don't generate mappings!
 	  PrunedCount is 0
 	).
+
 extract_syntactic_tags([], []).
 extract_syntactic_tags([First|Rest], [FirstSTag|RestSTags]) :-
 	functor(First, FirstSTag, _Arity),
@@ -1564,7 +1642,7 @@ get_phrase_tokens_aux([H|T], PrevTokenStartPos, RawTokensIn, [TokenH|TokensT], R
 
 % Remove as many tokens from the head of the list that are higher-order or ws.
 % Moreover, if we encounter a PE (parenthetical expression), remove all the tokens
-% to the end of the PE unless the InputMatchPhraseWords includ the PE itself.
+% to the end of the PE unless the InputMatchPhraseWords include the PE itself.
 % PE tokens will be removed in the case of an AA, but not if the text contains
 % a real parenthetical expression, including a quoted string.
 remove_leading_hoa_ws_toks([], _InputMatchPhraseWords, []).
@@ -1903,10 +1981,16 @@ matching_semtypes(NoNumSemTypes, CandidateSemTypes) :-
 	).
 	
 mostly_digits(MetaTermString) :-
+	\+ contains_alphabetic_char(MetaTermString),
 	remove_whitespace_chars(MetaTermString, MetaTermStringNoWS),
 	length(MetaTermStringNoWS, Length),
 	count_digits(MetaTermStringNoWS, 0, DigitCount),
-	DigitCount/ Length > 0.49.
+	DigitCount/Length > 0.49.
+
+contains_alphabetic_char(MetaTermString) :-
+	member(Code, MetaTermString),
+	local_alpha(Code),
+	!.
 
 remove_whitespace_chars([], []).
 remove_whitespace_chars([H|T], CharsWithNoWS) :-
@@ -2118,8 +2202,8 @@ filter_evaluations_excluding_sts([FirstCandidate|RestCandidates], STs,
 % 	BestMaps = [].
 % 	% construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 % 	%			  Variants, APhrases, BestMaps).
-construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair,
-			Variants, APhrases, _BestCandidates, BestMaps, PrunedCount) :-
+construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPair, NPhraseWords,
+			Variants, APhrases0, _BestCandidates, BestMaps0, PrunedCount) :-
 	% consider doing construction, augmentation and filtering more linearly
 	% to increase control and to avoid keeping non-optimal results when
 	% control_option(compute_all_mappings) is not in effect
@@ -2152,37 +2236,160 @@ construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPai
 	% Cut away all the choice points left by the pruning code!
 	!,
 	construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllDistributedMappings,
-				  Variants, APhrases0, BestMaps0),
-	maybe_filter_mappings_by_semtypes(BestMaps0, APhrases0,
-					  NPhraseWords, Variants,
-					  BestMaps, APhrases).
+				  Variants, APhrases0, BestMaps0).
+%	maybe_filter_mappings_by_semtypes(BestMaps0, APhrases0,
+%					  NPhraseWords, Variants,
+%					  BestMaps, APhrases).
 
 % filter_mappings_by_semtypes(BestMaps, APhrases, BestMaps, APhrases).
 
+% maybe_reduce_mappings_for_conj(Mappings2, Mappings2, APhrases2, Mappings, APhrases)
+maybe_reduce_mappings_for_conj(Mappings0, Mappings0, APhrases0,
+			       NPhraseWords, Variants,
+			       Mappings, APhrases) :-
+	( \+ control_option(conj) ->
+	  Mappings = Mappings0,
+	  APhrases = APhrases0
+	; reduce_mappings_for_conj(Mappings0, Mappings0, APhrases0,
+				   NPhraseWords, Variants,
+				   Mappings1, APhrases1),
+	  % Must NOT call sort/2 because order must be preserved!
+	  remove_duplicates(Mappings1, Mappings2),
+	  ( Mappings2 = [map(MappingNegScore, _Map)|_] ->
+	    update_mappings_scores_to_best_score(Mappings2, MappingNegScore, Mappings)
+	  ; Mappings = []
+	  ),
+	  remove_duplicates(APhrases1, APhrases2),
+	  ( APhrases2 = [ap(APhraseNegScore,_LPhrase,_LPhraseMap,_Mapping)|_] ->
+	    update_aps_scores_to_best_score(APhrases2, APhraseNegScore, APhrases)
+	  ; APhrases = []
+	  )
+	).		  
 
-maybe_filter_mappings_by_semtypes(BestMaps0, APhrases0,
-				  NPhraseWords, Variants,
-				  BestMaps, APhrases) :-
+update_mappings_scores_to_best_score([], _NegScore, []).
+update_mappings_scores_to_best_score([FirstMapping|RestMappings],
+				     BestNegScore,
+				     [ReScoredFirstMapping|ReScoredRestMappings]) :-
+	FirstMapping = map(_OrigScore, ListOfConcepts),
+	ReScoredFirstMapping = map(BestNegScore, ListOfConcepts),
+	update_mappings_scores_to_best_score(RestMappings, BestNegScore, ReScoredRestMappings).
+
+update_aps_scores_to_best_score([], _NegScore, []).
+update_aps_scores_to_best_score([FirstAPhrase|RestAPhrases],
+				BestNegScore,
+				[ReScoredFirstAPhrase|ReScoredRestAPhrases]) :-
+	FirstAPhrase = ap(_OrigNegScore,OrigLPhrase,LPhraseMap,Mapping),
+	OrigLPhrase = [confid(_OrigConfidence)|RestLPhraseIn],
+	ReScoredLPhrase = [confid(BestNegScore)|RestLPhraseIn],
+	ReScoredFirstAPhrase = ap(BestNegScore,ReScoredLPhrase,LPhraseMap,Mapping),
+	update_aps_scores_to_best_score(RestAPhrases, BestNegScore, ReScoredRestAPhrases).
+
+% The initial implementation of --conj included all ancillary concepts.
+% E.g., "lung and liver cancer" (with WSD) generated
+% 1. Meta Mapping (824):
+%    902   Lung cancer (Primary malignant neoplasm of lung) [neop]
+%    645   LIVER (Liver) [bpoc]
+% 2. Meta Mapping (824):
+%    645   LUNG (Structure of parenchyma of lung) [tisu]
+%    861   Cancer, Liver (Malignant neoplasm of liver) [neop]
+
+reduce_mappings_for_conj([], _Mappings, [], _NPhraseWords, _Variants, [], []).
+reduce_mappings_for_conj([FirstMapping|RestMappings], AllMappings,
+			 [FirstAPhrase|RestAPhrases],
+			 NPhraseWords, Variants,
+			 FilteredMappings, FilteredAPhrases) :-
+	FirstMapping = map(_Score, MappingEvaluations),
+	filter_narrower_evals(MappingEvaluations, AllMappings, FilteredEvaluations),
+	% If no candidates are left in this mapping, discard the mapping altogether.
+	% This should not happen, but just in case, check for it!
+	( FilteredEvaluations == [] ->
+	  FilteredMappings = RestFilteredMappings,
+	  FilteredAPhrases = RestFilteredAPhrases
+	; Conj = 0,
+	  % Compute a confidence value for the reduced mapping the traditional way.
+	  compute_confidence_value(FilteredEvaluations, Conj, NPhraseWords, Variants, ModScore),
+	  ModifiedFirstMapping = map(ModScore, FilteredEvaluations),
+	  FilteredMappings = [ModifiedFirstMapping|RestFilteredMappings],
+	  modify_aphrase(FirstAPhrase, FilteredEvaluations, ModScore, ModifiedFirstAPhrase),
+	  FilteredAPhrases = [ModifiedFirstAPhrase|RestFilteredAPhrases]
+	),
+	reduce_mappings_for_conj(RestMappings, AllMappings, RestAPhrases,
+				 NPhraseWords, Variants,
+				 RestFilteredMappings, RestFilteredAPhrases).
+
+% In the revised version of conj, requested by Halil and OK-ed by Jim,
+% we discard all evals (i.e., candidates) in FirstMapping whose LSComponent
+% (matched words) is a proper subset of an eval in any other mapping.
+% For example, in "lung and liver cancer" (see above),
+% "LIVER" in mapping 1 is a proper subset of "Cancer, Liver" in mappping 2.
+% and
+% "LUNG" in mapping 2 is a proper subset of "Lung Cancer" in mappping 1.
+% So discard both those concepts, leaving only
+% 1. Meta Mapping (824):
+%    902   Lung cancer (Primary malignant neoplasm of lung) [neop]
+% 2. Meta Mapping (824):
+%    861   Cancer, Liver (Malignant neoplasm of liver) [neop]
+% Finally, wsdmod.pl constructs the supermapping, which consists of
+% only the remaining concepts,
+% "Lung cancer" and "Cancer, Liver" in this example.
+
+
+filter_narrower_evals([], _AllMappings, []).
+filter_narrower_evals([Eval1|RestEvals], AllMappings, FilteredEvaluations) :-
+	get_candidate_feature(lscomponents, Eval1, LSComponents1),
+	( eval_is_narrow(AllMappings, LSComponents1) ->
+	  FilteredEvaluations = RestFilteredEvaluations
+	; FilteredEvaluations = [Eval1|RestFilteredEvaluations]
+	),
+	filter_narrower_evals(RestEvals, AllMappings, RestFilteredEvaluations).
+
+% eval_is_narrow/2 must not have a base case with a [] first arg!
+eval_is_narrow([FirstMapping|RestMappings], LSComponents1) :-
+	( FirstMapping = map(_Score, MappingEvaluations),
+	  member(Eval2, MappingEvaluations),
+	  get_candidate_feature(lscomponents, Eval2, LSComponents2),
+	  proper_subset(LSComponents1, LSComponents2) ->
+	  true
+	; eval_is_narrow(RestMappings, LSComponents1)
+	).
+	
+% keep_best_evaluations_only([], _AllEvaluations, []).
+% keep_best_evaluations_only([Eval1|RestEvals], AllEvaluations, BestEvaluations) :-
+% 	get_candidate_feature(lscomponents, Eval1, LSComponents1),
+% 	( member(Eval2, AllEvaluations),
+% 	  get_candidate_feature(lscomponents, Eval2, LSComponents2),
+% 	  proper_subset(LSComponents1, LSComponents2) ->
+% 	  BestEvaluations = RestBestEvaluations
+% 	; BestEvaluations = [Eval1|RestBestEvaluations]
+% 	),
+% 	keep_best_evaluations_only(RestEvals, AllEvaluations, RestBestEvaluations).
+
+maybe_filter_mappings_by_semtypes(Mappings0, APhrases0, NPhraseWords,
+				  Variants, Mappings, APhrases) :-
 	( \+ control_option(restrict_to_sts),
 	  \+ control_option(exclude_sts) ->
-	  BestMaps = BestMaps0,
+	  Mappings = Mappings0,
 	  APhrases = APhrases0
-	; filter_mappings_by_semtypes(BestMaps0, APhrases0,
-				      NPhraseWords, Variants,
-				      BestMaps, APhrases)
+	; filter_mappings_by_semtypes(Mappings0, APhrases0, NPhraseWords,
+				      Variants, Mappings1, APhrases1),
+	  % Must NOT call sort/2 because order must be preserved!
+	  remove_duplicates(Mappings1, Mappings),
+	  remove_duplicates(APhrases1, APhrases)
+	    
 	).		  
 
 filter_mappings_by_semtypes([], [], _Variants, _NPhraseWords, [], []).
 filter_mappings_by_semtypes([FirstMapping|RestMappings], [FirstAPhrase|RestAPhrases],
 			    NPhraseWords, Variants,
 			    FilteredMappings, FilteredAPhrases) :-
-	FirstMapping = map(_Score, AllEvaluations),
-	filter_evaluations_by_semtypes(AllEvaluations, FilteredEvaluations),
+	FirstMapping = map(_Score, MappingEvaluations),
+	filter_evaluations_by_semtypes(MappingEvaluations, FilteredEvaluations),
 	  % If no candidates are left in this mapping, discard the mapping altogether
 	( FilteredEvaluations == [] ->
 	  FilteredMappings = RestFilteredMappings,
 	  FilteredAPhrases = RestFilteredAPhrases
-	; compute_confidence_value(FilteredEvaluations, NPhraseWords, Variants, ModScore),
+	; Conj = 0,
+	    compute_confidence_value(FilteredEvaluations, Conj, NPhraseWords, Variants, ModScore),
 	  ModifiedFirstMapping = map(ModScore, FilteredEvaluations),
 	  FilteredMappings = [ModifiedFirstMapping|RestFilteredMappings],
 	  modify_aphrase(FirstAPhrase, FilteredEvaluations, ModScore, ModifiedFirstAPhrase),
@@ -2193,28 +2400,34 @@ filter_mappings_by_semtypes([FirstMapping|RestMappings], [FirstAPhrase|RestAPhra
 				    RestFilteredMappings, RestFilteredAPhrases).
 	% deaugment_evaluations(BestAEvs, BestCandidates).
 
-modify_aphrase(FirstAPhrase, FilteredEvaluations, ModScore, ModifiedFirstAPhrase) :-
-	FirstAPhrase = ap(_OrigScore,LPhraseOut,LPhraseMapOut,_OrigMapping),
+modify_aphrase(APhrase, FilteredEvaluations, ModScore, ModifiedAPhrase) :-
+	APhrase = ap(_OrigScore,LPhraseOut,LPhraseMapOut,_OrigMapping),
 	LPhraseOut = [_OrigConfid|OrigSyntax],
 	modify_lphrase_syntax(OrigSyntax, FilteredEvaluations, ModSyntax),
 	ModLPhraseOut = [confid(ModScore)|ModSyntax],
-	ModifiedFirstAPhrase = ap(ModScore,ModLPhraseOut,LPhraseMapOut,FilteredEvaluations).
+	ModifiedAPhrase = ap(ModScore,ModLPhraseOut,LPhraseMapOut,FilteredEvaluations).
 
 
 % The Syntax elements are terms like these:
 % mod([lexmatch([stent]),inputmatch([stent]),tag(noun),tokens([stent]),metaconc('Stent Device Component':'C1705817':[medd])])
 % head([lexmatch([inferior,'vena caval',filter]),inputmatch([inferior,vena,caval,filter]),tag(noun),tokens([inferior,vena,caval,filter]),metaconc('Vena Cava Filters':'C0080306':[medd])])
 
+% We want to discard syntax elements that contain a metaconc(_:CUI:_) structure
+% whose CUI is NOT the CUI in a concept in FilteredEvaluations.
+
 modify_lphrase_syntax([], _FilteredEvaluations, []).
-modify_lphrase_syntax([FirstSyntaxElement|RestSyntaxElements], FilteredEvaluations, ModLPhraseOut) :-
+modify_lphrase_syntax([FirstSyntaxElement|RestSyntaxElements],
+		      FilteredEvaluations, ModLPhraseOut) :-
 	arg(1, FirstSyntaxElement, FeatureList),
 	( memberchk(metaconc(_MetaConcept:CUI:_SemTypes), FeatureList) ->
-	  % create an ev/16 term with only the CUI instantiated
-	  get_candidate_feature(cui, Candidate, CUI),
-	  ( memberchk(Candidate, FilteredEvaluations) ->
-	    ModLPhraseOut = [FirstSyntaxElement|RestModLPhraseOut]
-	  ; ModLPhraseOut = RestModLPhraseOut
-	  )
+	    % If FirstSyntaxElement contains a metaconc(_) term,
+	    % check if the CUI in the metaconc(_) structure appears in FilteredEvaluations.
+	    % If it does, keep FirstSyntaxElement; otherwise, discard it.
+	    ( member(Candidate, FilteredEvaluations),
+	      get_candidate_feature(cui, Candidate, CUI) ->
+	      ModLPhraseOut = [FirstSyntaxElement|RestModLPhraseOut]
+	    ; ModLPhraseOut = RestModLPhraseOut
+	    )
 	  % If FirstSyntaxElement contains no metaconc(_) term, just pass it through
 	  ; ModLPhraseOut = [FirstSyntaxElement|RestModLPhraseOut]
 	),
@@ -2252,7 +2465,7 @@ compute_phrase_words_length(PhraseWordInfoPair, NPhraseWords) :-
 construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllMappings,
 			  Variants, APhrases, BestMappings) :-
 	debug_message(mappings, '~N### Calling augment_phrase_with_mappings~n', []),
-	sort(AllMappings, SortedAllMappings),
+ 	sort(AllMappings, SortedAllMappings),
 	augment_phrase_with_mappings(SortedAllMappings, Phrase,
 				     PhraseWordInfoPair, Variants, APhrases0),
 	% The sort is now done inside augment_phrase_with_mappings
@@ -2949,10 +3162,10 @@ phrase_components_positions([H|T], [PositionsH|PositionsT]) :-
 	( for(I, Low, High), foreach(I, PositionsH) do true ),
 	phrase_components_positions(T, PositionsT).
 
-proper_subset(Set1, Set2) :-
-	subset(Set1, Set2),
-	member(Element, Set2),
-	\+ memberchk(Element, Set1).
+% proper_subset(Set1, Set2) :-
+% 	subset(Set1, Set2),
+% 	member(Element, Set2),
+% 	\+ memberchk(Element, Set1).
 
 % determine the lowest and highest phrase components in the AEvs
 min_max_phrase_components([], PhraseMin, PhraseMin, PhraseMax, PhraseMax).
@@ -3198,7 +3411,6 @@ maybe_mark_pruned_evaluations(AllCandidates, RemainingCandidates) :-
 	  )
 	; mark_pruned_evaluations(AllCandidates, RemainingCandidates)
 	).
-	
 
 mark_pruned_evaluations(AllCandidates, RemainingCandidates) :-
 	(  foreach(Candidate, AllCandidates),
@@ -3269,7 +3481,7 @@ construct_all_mappings(Evaluations, PhraseTextString, NPhraseWords, Variants,
 	debug_message(mappings, '~N### Filtering out subsumed mappings.~n', []),
  	filter_out_subsumed_mappings_chunked(Mappings3, ChunkSize, FinalMappings0),
 	remove_prepending_data(FinalMappings0, FinalMappings),
-	% for debugging or profiling
+	% for debugging or profiling only
 	% compute_duplicate_mapping_count(FinalMappings, DuplicateCountList, DuplicateMappingsCount),
 	% format(user_output, 'DMC = ~d~n', [DuplicateMappingsCount]),
 	% maybe_keep_best_mappings_only(FinalMappings1, FinalMappings),
@@ -3470,7 +3682,8 @@ assemble_mappings_1_dl([], Y, NPhraseWords, Variants, AEvs, MappingsIn, Mappings
 	%   fail
 	% ; nl(user_output)
 	% ),
-	compute_confidence_value(DeaugmentedMapping, NPhraseWords, Variants, NegValue),
+	Conj = 0,
+	compute_confidence_value(DeaugmentedMapping, Conj, NPhraseWords, Variants, NegValue),
 	MappingsOut = [NegValue-DeaugmentedMapping|MappingsIn].
 assemble_mappings_1_dl([H|T], CurrentMapping, NPhraseWords,
 		       Variants, AEvs, MappingsIn, MappingsOut) :-
@@ -3777,7 +3990,6 @@ prepend_one_phrase_map(MatchMap-EvTerm, EvTerm) :-
    augment_lphrase_with_mapping(+Mapping, +LPhrase, +LPhraseMap, +NPhraseWords, -APhrase)
 
 augment_phrase_with_mappings/4
-augment_lphrase_with_mappings/5
 augment_lphrase_with_mapping/5
 */
 
@@ -4043,20 +4255,22 @@ set_all_subitems_features(SubItemsIn, LexMatch, InputMatch, Tokens, MetaConc, Su
 	  set_subitems_feature(SubItems3,  metaconc,   [MetaConc], SubItemsOut)
 	).
 
+compute_confidence_value([], _Conj, _NPhraseWords, _Variants, -1000).
+compute_confidence_value([H|T], Conj, NPhraseWords, Variants, NegValue) :-
+	compute_conf_val_aux(Conj, [H|T], NPhraseWords, Variants, NegValue).
 
-% Test for membership of Element in VarList,
-% where VarList may have an uninstantiated tail, e.g., [a,b,c|Rest].
-memberchk_var(Element, VarList) :-
-	nonvar(VarList),
-	( VarList = [Element|_] ->
-	  true
-	; VarList = [_|Rest],
-	  memberchk_var(Element, Rest)
-	).
+% This is the conj case.
+compute_conf_val_aux(1, Mapping, _NPhraseWords, _Variants, NegValue) :-
+	InitScoreSum = 0,
+	InitEvalCount = 0,
+	% format(user_output, 'MAPPING: ~w~n', [Mapping]),
+	average_eval_scores(Mapping,
+			    InitEvalCount, _FinalEvalCount,
+			    InitScoreSum, _FinalScoreSum,
+			    NegValue).
 
-compute_confidence_value([], _NPhraseWords, _Variants, -1000).
-compute_confidence_value([H|T], NPhraseWords, Variants, NegValue) :-
-	Mapping = [H|T],
+% This is the default non-conj case.
+compute_conf_val_aux(0, Mapping, NPhraseWords, Variants, NegValue) :-
 	glean_info_from_mapping(Mapping, [], MatchMap0, [], TermLengths,
 				0, NMetaWords, no, InvolvesHead, ExtraMetaWords),
 	% format(user_output, '~w~n', [MatchMap0]),
@@ -4079,6 +4293,21 @@ compute_confidence_value([H|T], NPhraseWords, Variants, NegValue) :-
 			    ExtraMetaWords, Variants, InvolvesHead, Value),
 	maybe_debug_mapping_2,
 	NegValue is -Value.
+
+% Simply average all candidate scores, because the original method of
+% computing a mapping's score assumes that each word appears in exactly one candidate,
+% and the logic computes suspicious values.
+average_eval_scores([], EvalCount, EvalCount, ScoreSum, ScoreSum, MappingNegValue) :-
+	MappingNegValue is floor(1*(ScoreSum/EvalCount)).
+average_eval_scores([FirstCandidate|RestCandidates],
+		    EvalCountIn, EvalCount,
+		    ScoreSumIn, ScoreSum, MappingNegValue) :-
+	get_candidate_feature(negvalue, FirstCandidate, CandidateNegValue),
+	EvalCountNext is EvalCountIn + 1,
+	ScoreSumNext is ScoreSumIn + CandidateNegValue,
+	average_eval_scores(RestCandidates,
+			    EvalCountNext, EvalCount,
+			    ScoreSumNext, ScoreSum, MappingNegValue).
 
 maybe_debug_mapping_1(Mapping, MatchMap, MatchCCs) :-
 	( control_value(debug, DebugFlags),
@@ -4117,11 +4346,16 @@ glean_info_from_mapping([FirstCandidate|RestCandidates], MatchMapIn, MatchMapOut
 	get_all_candidate_features([metawords,matchmap,involveshead],
 				   FirstCandidate,
 				   [MetaWords,MatchMap0,InvolvesHead]),
-	modify_matchmap_for_concatenation(MatchMap0, NMetaWordsIn, MatchMap),
-	append(MatchMapIn, MatchMap, MatchMapInOut),
-	length(MetaWords, NMetaWords),
-	append(TermLengthsIn, [NMetaWords], TermLengthsInOut),
-	NMetaWordsInOut is NMetaWordsIn + NMetaWords,
+	maybe_modify_matchmap_for_concatenation(MatchMap0, MatchMapIn, NMetaWordsIn, MatchMapInOut),
+	% modify_matchmap_for_concatenation(MatchMap0, NMetaWordsIn, MatchMap),
+	% append(MatchMapIn, MatchMap, MatchMapInOut),
+	( MatchMapIn == MatchMap0 ->
+	  TermLengthsInOut = TermLengthsIn,
+	  NMetaWordsInOut is NMetaWordsIn
+	; length(MetaWords, NMetaWords),
+	  append(TermLengthsIn, [NMetaWords], TermLengthsInOut),
+	  NMetaWordsInOut is NMetaWordsIn + NMetaWords
+	),
 	( InvolvesHead == yes ->
 	  InvolvesHeadInOut = yes
 	; InvolvesHeadInOut = InvolvesHeadIn
@@ -4144,6 +4378,16 @@ glean_concepts_from_mapping([FirstCandidate|RestCandidates], [MetaConcept|RestCo
 modify_matchMap_for_concatenation/3
 */
 
+maybe_modify_matchmap_for_concatenation(MatchMap0, MatchMapIn, NMetaWordsIn, MatchMapInOut) :-
+	( MatchMap0 = MatchMapIn ->
+	  MatchMapInOut = MatchMap0
+	; MatchMapIn == [] ->
+	  MatchMapInOut = MatchMap0
+	; modify_matchmap_for_concatenation(MatchMap0, NMetaWordsIn, MatchMap),
+	  append(MatchMapIn, MatchMap, MatchMapInOut)
+	).
+	% format(user_output, '~w~n~w~n~w~n~w~n~n', [MatchMapIn, MatchMap0, NMetaWordsIn, MatchMapInOut]).
+
 modify_matchmap_for_concatenation(MatchMapIn, 0, MatchMapIn) :- !.
 modify_matchmap_for_concatenation([], _NMetaWords, []).
 modify_matchmap_for_concatenation([[PhraseComponent,MetaComponent,VarLevel]|Rest],
@@ -4154,7 +4398,6 @@ modify_matchmap_for_concatenation([[PhraseComponent,MetaComponent,VarLevel]|Rest
 	NewEnd is End + NMetaWords,
 	ModifiedMetaComponent = [NewBegin,NewEnd],
 	modify_matchmap_for_concatenation(Rest, NMetaWords, ModifiedRest).
-
 
 /* add_confidence_value(+LPhraseIn, +Value, -LPhraseOut)
 
@@ -4255,6 +4498,11 @@ filter_out_subsumed_evaluations_aux/2
 
 An evaluation E1 is subsumed by another E2 if E1's score is strictly worse than E2's
 and E1 and E2 have the same phrase involvement.
+
+Subsumed evaluations are marked by "E" in MetaMap's human-readable output, e.g.,
+
+  645   LIVER  (Liver Flavor) [food]          <------ NOT subsumed
+  590 E Hepatic  [blor]                       <------ subsumed
 
 */
 
@@ -4411,10 +4659,10 @@ is_prep_phrase([PhraseItem|_]) :-
 	get_phrase_item_name(PhraseItem, prep),
 	!.
 
-contains_head(Phrase) :-
-	member(PhraseItem, Phrase),
-	get_phrase_item_name(PhraseItem, head),
-	!.
+% contains_head(Phrase) :-
+% 	member(PhraseItem, Phrase),
+% 	get_phrase_item_name(PhraseItem, head),
+% 	!.
 
 ends_with_punc(PhraseItems) :-
 	% reversed order of args from QP library version!
@@ -4571,7 +4819,7 @@ check_construct_best_mappings_control_options :-
 	( \+ control_option(hide_mappings)    -> true
 	; control_option(fielded_mmi_output)  -> true
 	; control_option(machine_output)      -> true
-	; xml_output_format(_XMLFormat)      -> true
+	; xml_output_format(_XMLFormat)       -> true
 	; json_output_format(_JSONFormat)
 	).
 
@@ -4666,123 +4914,43 @@ get_aev_feature(matchmap, AEvTerm, MatchMap) :-
 
 :- use_module(skr_lib(addportray)).
 portray_candidate(Candidate) :-
-	( Candidate = []-[AEvTerm] ->
-	  get_aev_feature(cui, AEvTerm, CUI),
-	  writeq(final(CUI))
-	; Candidate = AEvTerm,
-	  get_aev_feature(cui, AEvTerm, CUI) ->
-	  writeq(aev(CUI))
-	; Candidate = EvTerm,
-	  get_candidate_feature(cui, EvTerm, CUI) ->
-	  writeq(ev(CUI))
-	).
+	nonvar(Candidate),
+	!,
+ 	get_candidate_feature(cui, Candidate, CUI),
+ 	get_candidate_feature(metaconcept, Candidate, PrefName),
+ 	writeq(ev(CUI-PrefName)).
+
+%%% 	( Candidate = []-[AEvTerm] ->
+%%% 	  get_aev_feature(cui, AEvTerm, CUI),
+%%% 	  writeq(final(CUI))
+%%% 	; Candidate = AEvTerm,
+%%% 	  get_aev_feature(cui, AEvTerm, CUI) ->
+%%% 	  writeq(aev(CUI))
+%%% 	; Candidate = EvTerm,
+%%% 	  get_candidate_feature(cui, EvTerm, CUI) ->
+%%% 	  writeq(ev(CUI))
+%%% 	).
+portray_candidate(Candidate) :- write(Candidate).
 :- add_portray(portray_candidate).
 
-portray_aev([]-[AEvTerm]) :-
-	!,
-	get_aev_feature(cui, AEvTerm, CUI),
-	writeq(final(CUI)).
-portray_aev(AEvTerm) :-
-	get_aev_feature(cui, AEvTerm, CUI),
-	writeq(final(CUI)).
-:- add_portray(portray_aev).
-
-portray_ev(EvTerm) :-
-	get_candidate_feature(cui, EvTerm, CUI),
-	writeq(ev(CUI)).
-:- add_portray(portray_ev).
-
-% dysonym processing
-exclude_dysonyms([], []).
-exclude_dysonyms([FirstCandidate|RestMapEval], RestMapEvalOut) :-
-	get_all_candidate_features([metaterm,metaconcept,semtypes],
-				   FirstCandidate,
-				   [Syn,PrefName,SemTypes]),
-	is_a_dysonym(Syn, PrefName,SemTypes),
-	!,
-	exclude_dysonyms(RestMapEval, RestMapEvalOut).
-exclude_dysonyms([MapEval|RestMapEval], [MapEval|RestMapEvalOut]) :-
-	exclude_dysonyms(RestMapEval, RestMapEvalOut).
-
-is_a_dysonym(Syn,PrefName,SemTypes) :-
-	remove_useless_suffixes(Syn, Syn0),
-	remove_useless_suffixes(PrefName, PrefName0),
-	atom_to_list(Syn0, SynList, SynLen),
-	atom_to_list(PrefName0, PrefList, PrefLen),
-	SynLen >= 1,
-	PrefLen > SynLen,
-	intersection(SynList, PrefList, Intersection),
-	length(Intersection,SynLen),
-	\+ dysonym_to_allow(Syn,PrefName),
-	\+ head_exception(PrefList), 
-	\+ gapped_dysonym(SynList,PrefList),
-	\+ anatomy_term_with_redundant_mod(SynList,PrefList,SemTypes).
-
-head_exception(PrefList) :-
-	exception_list(Exceptions),
-	last(PrefList,Head),
-	member(Head,Exceptions).
-
-remove_useless_suffixes(Str,StrOut) :-
-	useless_suffixes(Suffixes),
-	remove_suffixes(Suffixes, Str, StrOut).
-
-remove_suffixes([], Str, Str).
-remove_suffixes([Suffix|_RestSuffixes],Str,StrOut) :-
-	atom_codes(Suffix,SuffixStr),
-	length(SuffixStr,SuffixLen),
-	midstring(Str,StrOut,Suffix,0, _,SuffixLen),
-	!.
-remove_suffixes([_Suffix|RestSuffixes],Str,StrOut) :-
-	remove_suffixes(RestSuffixes,Str,StrOut).
-
-useless_suffixes([', NOS',', NEC', ' NOS', ' NEC']).
-
-% coronary disease -> coronary artery disease
-gapped_dysonym(SynList,PrefList) :-
-	length(SynList,2),
-	length(PrefList,3),
-	nth0(0,SynList,Syn0),
-	nth0(0,PrefList,Syn0),
-	nth0(1,SynList,Syn1),
-	nth0(2,PrefList,Syn1).
-
-% hippocampus->Entire hippocampus	
-anatomy_term_with_redundant_mod(SynList,PrefList,SemTypes) :-
-	length(SynList, SynLen),
-	length(PrefList, PrefLen),
-	PrefLen =:= SynLen + 1,
-	nth0(0,PrefList,'entire'),
-	\+ nth0(0,SynList,'entire'),
-	check_anat(SemTypes).
-
-
-check_anat([]) :- fail.  
-check_anat([SemType|_Rest]) :-
-	semrep_semgroup_member(SemType,anat),
-	!.
-check_anat([_SemType|Rest]) :-
-	check_anat(Rest).
-
-exception_list([gene, genes, proteins, 'protein,', procedure, procedures, regime, regimes, disease, diseases, disorder, disorders]).
-
-% These are dysonym exceptions that cannot be dealt with more general
-% dysonym exception rules. (They seem similar to "anatomy_term_with_redundant_mod" case,
-% but semantically are different.)
-dysonym_to_allow('Fistula','pathologic fistula').
-dysonym_to_allow('computed tomography','X-Ray Computed Tomography').
-dysonym_to_allow('tomography','X-Ray Computed Tomography').
-
-% copied from ssuppserv.pl - halil
-strings_to_atoms([], []).
-strings_to_atoms([String|More], [Atom|Gap]) :-
-	atom_codes(Atom, String),
-	strings_to_atoms(More, Gap).
-
-atom_to_list(Atom, List, Len) :-
-	lower(Atom, LCAtom),
-	atom_codes(LCAtom, LCChars),
-	split_string_completely(LCChars, " ", LCCharList),
-	strings_to_atoms(LCCharList, List),
-	length(List, Len).
-
+%%% portray_aev(AEV) :-
+%%% 	nonvar(AEV),
+%%% 	!,
+%%% 	( AEV = []-[AEvTerm] ->
+%%% 	  get_aev_feature(cui, AEvTerm, CUI),
+%%% 	  writeq(final(CUI))
+%%% 	; get_aev_feature(cui, AEvTerm, CUI),
+%%% 	  writeq(final(CUI))
+%%% 	; write(AEV)
+%%% 	).
+%%% portray_aev(AEV) :- write(AEV).
+%%% :- add_portray(portray_aev).
+%%% 
+%%% portray_ev(EvTerm) :-
+%%% 	nonvar(EvTerm),
+%%% 	!,
+%%% 	get_candidate_feature(cui, EvTerm, CUI),
+%%% 	writeq(ev(CUI)).
+%%% portray_ev(EvTerm) :- write(EvTerm).
+%%% 
+%%% :- add_portray(portray_ev).

@@ -1,4 +1,3 @@
-
 /****************************************************************************
 *
 *                          PUBLIC DOMAIN NOTICE                         
@@ -24,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -32,9 +31,9 @@
 */
 
 :- module(qp_lex_util, [
-	lex_get_base_from_record_3/3,
+	% lex_get_base_from_record_3/3,
 	% lex_get_spvar_from_record/2,
-	lex_form_ci_ord_4/4
+	lex_form_ci_ord/4
     ]).
 
 :- use_module(skr_lib(sicstus_utils), [
@@ -50,38 +49,38 @@
    ]).
 
 :- use_module(lexicon(qp_lexicon), [
-	lex_form_ci_var_lists_5/5,
-	default_lexicon_file/1,
-	default_index_file/1
+	lex_form_ci_var_lists/3
+	% default_lexicon_file/1,
+	% default_index_file/1
    ]).
 
 %%% lex_get_base_from_record_3(+Record, +Categories, -Base)
 %%% Extracts the base form of a record respecting Categories;
 %%% it fails unless one of Entries has a category in Categories.
-lex_get_base_from_record_3(Record, Categories, Base) :-
-    lex_get_entries_from_record(Record, Entries),
-    entries_intersect_categories(Entries, Categories),
-    Record = lexrec:LexRecList,
-    ( memberchk(base:[Base], LexRecList)
-    ; memberchk(spelling_variants:SpVars, LexRecList),
-      member(Base, SpVars)
-    ).
+% lex_get_base_from_record_3(Record, Categories, Base) :-
+%     lex_get_entries_from_record(Record, Entries),
+%     entries_intersect_categories(Entries, Categories),
+%     Record = lexrec:LexRecList,
+%     ( memberchk(base:[Base], LexRecList)
+%     ; memberchk(spelling_variants:SpVars, LexRecList),
+%       member(Base, SpVars)
+%     ).
 
-entries_intersect_categories([Entry|_Rest], Categories) :-
-    entry_intersects_categories(Entry, Categories),
-    !.
-%%% Note that there should be only one entry, but just in case
-entries_intersect_categories([_Entry|Rest], Categories) :-
-    entries_intersect_categories(Rest, Categories).
-
-entry_intersects_categories(entry:Features, Categories) :-
-    get_entry_category(Features, CategorySet),
-    intersect(CategorySet, Categories).
-
-get_entry_category([cat:CategorySet|_], CategorySet) :-
-    !.
-get_entry_category([_|Rest], CategorySet) :-
-    get_entry_category(Rest, CategorySet).
+% entries_intersect_categories([Entry|_Rest], Categories) :-
+%     entry_intersects_categories(Entry, Categories),
+%     !.
+% %%% Note that there should be only one entry, but just in case
+% entries_intersect_categories([_Entry|Rest], Categories) :-
+%     entries_intersect_categories(Rest, Categories).
+% 
+% entry_intersects_categories(entry:Features, Categories) :-
+%     get_entry_category(Features, CategorySet),
+%     intersect(CategorySet, Categories).
+% 
+% get_entry_category([cat:CategorySet|_], CategorySet) :-
+%     !.
+% get_entry_category([_|Rest], CategorySet) :-
+%     get_entry_category(Rest, CategorySet).
 
 %%% lex_get_spvar_from_record(+Record, -Spvar)
 %%% Extracts the spelling variants list for a lexical record.
@@ -90,8 +89,8 @@ get_entry_category([_|Rest], CategorySet) :-
 
 %%% lex_get_entries_from_record(+Record, -Entries)
 %%% Extracts the lexical entries list for a lexical record.
-lex_get_entries_from_record(Record, Entries) :-
-    Record = lexrec:[base:[_Base], spelling_variants:_Spvar, entries:Entries|_].
+% lex_get_entries_from_record(Record, Entries) :-
+%     Record = lexrec:[base:[_Base], spelling_variants:_Spvar, entries:Entries|_].
 
 %%% lex_form_ci_ord(+Term, -Spelling, -Inflections)
 %%% Given a query +Term, it returns two lists: one a complete list of all
@@ -101,13 +100,8 @@ lex_get_entries_from_record(Record, Entries) :-
 %%%      distinct lexical entries separate (otherwise, e.g., aid is
 %%%      computed to be a spelling variant of AIDS)
 
-lex_form_ci_ord_4(Term, Categories, Spelling, Inflections) :-
-	default_lexicon_file(Lexicon),
-	default_index_file(Index),
-	lex_form_ci_ord_7(Term, Categories, Spelling, Inflections, Lexicon, Index).
-
-lex_form_ci_ord_7(Term, Categories, Spelling, Inflections, Lexicon, Index) :-
-	lex_form_ci_var_lists_5(Term, Categories, Lexicon, Index, VariantLists0),
+lex_form_ci_ord(Term, Categories, Spelling, Inflections) :-
+	lex_form_ci_var_lists(Term, Categories, VariantLists0),
 	filter_by_categories([VariantLists0], Categories, VariantLists),
 	%    format('     lfco: ~p ~p~n~p~n~p~n~n',
 	%	   [Term,Categories,VariantLists0,VariantLists]),

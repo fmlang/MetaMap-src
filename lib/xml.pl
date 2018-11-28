@@ -18,10 +18,10 @@
 % Mats Carlsson, 2003-2006
 
 :- module( xml, [
-	xml_parse/2,
-	xml_parse/3,
-	xml_subterm/2,
-	xml_pp/1
+	% xml_parse/2,
+	xml_parse/3
+	% xml_subterm/2,
+	% xml_pp/1
 	]).
 
 :- use_module(library(types), [
@@ -39,7 +39,7 @@
 %@  interface to XML documents.  A description of the subset of XML that it
 %@  supports can be found at:
 %@  @c [PM] 4.1 link updated 2009-08-14
-%@  @uref{http://www.binding-time.co.uk/xmlpl.html}
+%@  @uref{https://www.binding-time.co.uk/xmlpl.html}
 %@  
 %@  The package, originally written by Binding Time Ltd., is in the public
 %@  domain and unsupported.  To use the package, enter the query:
@@ -191,8 +191,8 @@
  * of the data structure. Output parsing throws an exception if the document
  * is not well-formed, diagnosis tries to identify the specific culprit term.
  */
-xml_parse( Chars, Document ) :-
-	xml_parse( Chars, Document, [] ).
+% xml_parse( Chars, Document ) :-
+% 	xml_parse( Chars, Document, [] ).
 
 xml_parse( Chars, Document, Controls ) :-
 	Goal = xml_parse(Chars,Document,Controls),
@@ -244,18 +244,18 @@ user:generate_message_hook(xml_parse(Message,Document,Culprit,Path)) --> !,
 /* xml_subterm( +XMLTerm, ?Subterm ) unifies Subterm with a sub-term of Term.
  * Note that XMLTerm is a sub-term of itself. 
  */
-xml_subterm( Term, Term ).
-xml_subterm( xml(_Attributes, Content), Term ) :-
-	xml_subterm( Content, Term ).	
-xml_subterm( [H|T], Term ) :-
-	( xml_subterm( H, Term )
-	; xml_subterm( T, Term )
-	).
-xml_subterm( element(_Name,_Attributes,Content), Term ) :-
-	xml_subterm( Content, Term ).
-xml_subterm( namespace(_URI,_Prefix,Content), Term ) :-
-	xml_subterm( Content, Term ).
-
+% xml_subterm( Term, Term ).
+% xml_subterm( xml(_Attributes, Content), Term ) :-
+% 	xml_subterm( Content, Term ).	
+% xml_subterm( [H|T], Term ) :-
+% 	( xml_subterm( H, Term )
+% 	; xml_subterm( T, Term )
+% 	).
+% xml_subterm( element(_Name,_Attributes,Content), Term ) :-
+% 	xml_subterm( Content, Term ).
+% xml_subterm( namespace(_URI,_Prefix,Content), Term ) :-
+% 	xml_subterm( Content, Term ).
+ 
 /* xml is intended to be a rather modular module: it should be easy to
  * build a program that can output XML, but not read it, or vice versa.
  * Similarly, you may be happy to dispense with diagnosis once you are
@@ -1429,119 +1429,120 @@ legal_xml_unicode( Code ) :-
 /* xml_pp( +XMLDocument ) "pretty prints" XMLDocument on the current
  * output stream.
  */
-xml_pp( xml(Attributes, Document) ) :-
-	write( 'xml( ' ), pp_attributes( Attributes, "" ), put_code( 0', ), nl,
-	xml_pp_list( Document, "\t" ),
-	format( ' ).~n', [] ).
-xml_pp( malformed(Attributes, Document) ) :-
-	write( 'malformed( ' ), pp_attributes( Attributes, "" ), put_code( 0', ), nl,
-	xml_pp_list( Document, "\t" ),
-	format( ' ).~n', [] ).
+% xml_pp( xml(Attributes, Document) ) :-
+% 	write( 'xml( ' ), pp_attributes( Attributes, "" ), put_code( 0', ), nl,
+% 	xml_pp_list( Document, "\t" ),
+% 	format( ' ).~n', [] ).
+% xml_pp( malformed(Attributes, Document) ) :-
+% 	write( 'malformed( ' ), pp_attributes( Attributes, "" ), put_code( 0', ), nl,
+% 	xml_pp_list( Document, "\t" ),
+% 	format( ' ).~n', [] ).
+% 
+% xml_pp_indented( [], Indent ) :-
+% 	format( '~s[]', [Indent] ).
+% xml_pp_indented( List, Indent ) :-
+% 	List = [_|_],
+% 	format( '~s', [Indent] ),
+% 	xml_pp_list( List, Indent ).
+% xml_pp_indented( comment(Text), Indent ) :-
+% 	format( '~scomment(', [Indent] ), pp_string(Text), put_code( 0') ).
+% xml_pp_indented( namespace(URI,Prefix,Element), Indent ) :-
+% 	format( '~snamespace( ~q, "~s",~n', [Indent,URI,Prefix] ),
+% 	xml_pp_indented( Element, [0'\t|Indent] ),
+% 	format( '~n~s)', [[0'\t|Indent]] ).
+% xml_pp_indented( element(Tag,Attributes,Contents), Indent ) :-
+% 	format( '~selement( ~q,~n', [Indent,Tag] ),
+% 	pp_attributes( Attributes, [0'\t|Indent] ), put_code(0',), nl,
+% 	xml_pp_list( Contents, [0'\t|Indent] ), write( ' )' ).
+% xml_pp_indented( instructions(Target, Processing), Indent ) :-
+% 	format( '~sinstructions( ~q, ', [Indent,Target] ),
+% 	pp_string(Processing), put_code( 0') ).
+% xml_pp_indented( doctype(Name, DoctypeId), Indent ) :-
+% 	format( '~sdoctype( ~q, ', [Indent,Name] ),
+% 	xml_pp_indented( DoctypeId, [0'\t|Indent] ),
+% 	write( ' )' ).
+% xml_pp_indented( cdata(CData), Indent ) :-
+% 	format( '~scdata(', [Indent] ), pp_string(CData), put_code( 0') ).
+% xml_pp_indented( pcdata(PCData), Indent ) :-
+% 	format( '~spcdata(', [Indent] ), pp_string(PCData), put_code( 0') ).
+% xml_pp_indented( public(URN,URL), _Indent ) :-
+% 	format( 'public( "~s", "~s" )', [URN,URL] ).
+% xml_pp_indented( public(URN,URL,Literals), Indent ) :-
+% 	format( 'public( "~s", "~s",~n', [URN,URL] ),
+% 	xml_pp_list( Literals, [0'\t|Indent] ), write( ' )' ). %'
+% xml_pp_indented( system(URL), _Indent ) :-
+% 	format( 'system( "~s" )', [URL] ).
+% xml_pp_indented( system(URL,Literals), Indent ) :-
+% 	format( 'system( "~s",~n', [URL] ),
+% 	xml_pp_list( Literals, [0'\t|Indent] ), write( ' )' ). %'
+% xml_pp_indented( local, _Indent ) :-
+% 	write( local ).
+% xml_pp_indented( local(Literals), Indent ) :-
+% 	write( 'local(' ), nl,
+% 	xml_pp_list( Literals, [0'\t|Indent] ), write( ' )' ). %'
+% xml_pp_indented( dtd_literal(String), Indent ) :-
+% 	format( '~sdtd_literal(', [Indent] ), pp_string(String), put_code( 0') ). %'
+% xml_pp_indented( out_of_context(Tag), Indent ) :-
+% 	format( '~s/* SYNTAX ERROR */ out_of_context( ~q )', [Indent,Tag] ).
+% xml_pp_indented( unparsed(String), Indent ) :-
+% 	format( '~s/* SYNTAX ERROR */ unparsed( ', [Indent] ),
+% 	pp_string(String), put_code( 0') ).
+% 
+% xml_pp_list( [], Indent ) :-
+% 	format( '~s[]', [Indent] ).
+% xml_pp_list( [H|T], Indent ) :-
+% 	format( '~s[~n', [Indent] ),
+% 	xml_pp_indented( H, Indent ),
+% 	xml_pp_list1( T, Indent ),
+% 	format( '~s]', [Indent] ).
+% 
+% xml_pp_list1( [], _Indent ) :-
+% 	nl.
+% xml_pp_list1( [H|T], Indent ) :-
+% 	put_code( 0', ), nl,
+% 	xml_pp_indented( H, Indent ),
+% 	xml_pp_list1( T, Indent ).
+% 
+% pp_attributes( [], Indent ) :-
+% 	format( '~s[]', [Indent] ).
+% pp_attributes( [Attribute|Attributes], Indent ) :-
+% 	format( '~s[', [Indent] ),
+% 	pp_attributes1( Attributes, Attribute ),
+% 	put_code( 0'] ).
+% 
+% pp_attributes1( [], Name=Value ) :-
+% 	format( '~q=', [Name] ), pp_string( Value ).
+% pp_attributes1( [H|T], Name=Value ) :-
+% 	format( '~q=', [Name] ), pp_string( Value ), write( ', ' ),
+% 	pp_attributes1( T, H ).
+% /* XML Utilities
+%  *
+%  * $Revision: 1.10 $
+%  */
+% 
+% % Entity and Namespace map operations: these maps are usually quite small, so
+% % a linear list lookup is okay. They could be substituted by a logarithmic
+% % data structure - in extremis.
+% 
+% /* empty_map( ?Map ) is true if Map is a null map.
+%  */
 
-xml_pp_indented( [], Indent ) :-
-	format( '~s[]', [Indent] ).
-xml_pp_indented( List, Indent ) :-
-	List = [_|_],
-	format( '~s', [Indent] ),
-	xml_pp_list( List, Indent ).
-xml_pp_indented( comment(Text), Indent ) :-
-	format( '~scomment(', [Indent] ), pp_string(Text), put_code( 0') ).
-xml_pp_indented( namespace(URI,Prefix,Element), Indent ) :-
-	format( '~snamespace( ~q, "~s",~n', [Indent,URI,Prefix] ),
-	xml_pp_indented( Element, [0'\t|Indent] ),
-	format( '~n~s)', [[0'\t|Indent]] ).
-xml_pp_indented( element(Tag,Attributes,Contents), Indent ) :-
-	format( '~selement( ~q,~n', [Indent,Tag] ),
-	pp_attributes( Attributes, [0'\t|Indent] ), put_code(0',), nl,
-	xml_pp_list( Contents, [0'\t|Indent] ), write( ' )' ).
-xml_pp_indented( instructions(Target, Processing), Indent ) :-
-	format( '~sinstructions( ~q, ', [Indent,Target] ),
-	pp_string(Processing), put_code( 0') ).
-xml_pp_indented( doctype(Name, DoctypeId), Indent ) :-
-	format( '~sdoctype( ~q, ', [Indent,Name] ),
-	xml_pp_indented( DoctypeId, [0'\t|Indent] ),
-	write( ' )' ).
-xml_pp_indented( cdata(CData), Indent ) :-
-	format( '~scdata(', [Indent] ), pp_string(CData), put_code( 0') ).
-xml_pp_indented( pcdata(PCData), Indent ) :-
-	format( '~spcdata(', [Indent] ), pp_string(PCData), put_code( 0') ).
-xml_pp_indented( public(URN,URL), _Indent ) :-
-	format( 'public( "~s", "~s" )', [URN,URL] ).
-xml_pp_indented( public(URN,URL,Literals), Indent ) :-
-	format( 'public( "~s", "~s",~n', [URN,URL] ),
-	xml_pp_list( Literals, [0'\t|Indent] ), write( ' )' ). %'
-xml_pp_indented( system(URL), _Indent ) :-
-	format( 'system( "~s" )', [URL] ).
-xml_pp_indented( system(URL,Literals), Indent ) :-
-	format( 'system( "~s",~n', [URL] ),
-	xml_pp_list( Literals, [0'\t|Indent] ), write( ' )' ). %'
-xml_pp_indented( local, _Indent ) :-
-	write( local ).
-xml_pp_indented( local(Literals), Indent ) :-
-	write( 'local(' ), nl,
-	xml_pp_list( Literals, [0'\t|Indent] ), write( ' )' ). %'
-xml_pp_indented( dtd_literal(String), Indent ) :-
-	format( '~sdtd_literal(', [Indent] ), pp_string(String), put_code( 0') ). %'
-xml_pp_indented( out_of_context(Tag), Indent ) :-
-	format( '~s/* SYNTAX ERROR */ out_of_context( ~q )', [Indent,Tag] ).
-xml_pp_indented( unparsed(String), Indent ) :-
-	format( '~s/* SYNTAX ERROR */ unparsed( ', [Indent] ),
-	pp_string(String), put_code( 0') ).
-
-xml_pp_list( [], Indent ) :-
-	format( '~s[]', [Indent] ).
-xml_pp_list( [H|T], Indent ) :-
-	format( '~s[~n', [Indent] ),
-	xml_pp_indented( H, Indent ),
-	xml_pp_list1( T, Indent ),
-	format( '~s]', [Indent] ).
-
-xml_pp_list1( [], _Indent ) :-
-	nl.
-xml_pp_list1( [H|T], Indent ) :-
-	put_code( 0', ), nl,
-	xml_pp_indented( H, Indent ),
-	xml_pp_list1( T, Indent ).
-
-pp_attributes( [], Indent ) :-
-	format( '~s[]', [Indent] ).
-pp_attributes( [Attribute|Attributes], Indent ) :-
-	format( '~s[', [Indent] ),
-	pp_attributes1( Attributes, Attribute ),
-	put_code( 0'] ).
-
-pp_attributes1( [], Name=Value ) :-
-	format( '~q=', [Name] ), pp_string( Value ).
-pp_attributes1( [H|T], Name=Value ) :-
-	format( '~q=', [Name] ), pp_string( Value ), write( ', ' ),
-	pp_attributes1( T, H ).
-/* XML Utilities
- *
- * $Revision: 1.10 $
- */
-
-% Entity and Namespace map operations: these maps are usually quite small, so
-% a linear list lookup is okay. They could be substituted by a logarithmic
-% data structure - in extremis.
-
-/* empty_map( ?Map ) is true if Map is a null map.
- */
 empty_map( [] ).
-
-/* map_member( +Key, +Map, ?Data ) is true if Map is a ordered map structure
- * which records the pair Key-Data. Key must be ground.
- */
+ 
+% /* map_member( +Key, +Map, ?Data ) is true if Map is a ordered map structure
+%  * which records the pair Key-Data. Key must be ground.
+%  */
 map_member( Key0, [Key1-Data1|Rest], Data0 ) :-
 	( Key0 == Key1 ->
 		Data0 = Data1
 	; Key0 @> Key1 ->
 		map_member( Key0, Rest, Data0 )
 	).
-
-/* map_store( +Map0, +Key, +Data, ?Map1 ) is true if Map0 is an ordered map
- * structure, Key must be ground, and Map1 is identical to Map0 except that
- * the pair Key-Data is recorded by Map1.
- */
+% 
+% /* map_store( +Map0, +Key, +Data, ?Map1 ) is true if Map0 is an ordered map
+%  * structure, Key must be ground, and Map1 is identical to Map0 except that
+%  * the pair Key-Data is recorded by Map1.
+%  */
 map_store( [], Key, Data, [Key-Data] ).
 map_store( [Key0-Data0|Map0], Key, Data, Map ) :-
 	( Key == Key0 ->
@@ -1552,10 +1553,10 @@ map_store( [Key0-Data0|Map0], Key, Data, Map ) :-
 		Map = [Key0-Data0|Map1],
 		map_store( Map0, Key, Data, Map1 )
 	).
-
-/* context(?Element, ?PreserveSpace, ?CurrentNS, ?DefaultNS, ?Entities, ?Namespaces )
- * is an ADT hiding the "state" arguments for XML Acquisition
- */
+% 
+% /* context(?Element, ?PreserveSpace, ?CurrentNS, ?DefaultNS, ?Entities, ?Namespaces )
+%  * is an ADT hiding the "state" arguments for XML Acquisition
+%  */
 initial_context(
 		opt(Fmt,Ext,RemoveAttributePrefixes),
 		context(void,PreserveSpace,'','',Entities,Empty,

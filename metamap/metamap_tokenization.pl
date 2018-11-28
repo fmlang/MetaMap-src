@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -53,6 +53,7 @@
 	is_ws_word/1,
 	linearize_phrase/4,
 	linearize_components/2,
+	listify/2,
 	local_alnum/1,
 	local_alpha/1,
 	local_ascii/1,
@@ -226,17 +227,15 @@ undo_one_possessive(Token, TokenNoPoss) :-
 	; TokenNoPoss = Token
 	).
 
+% get_non_null_lexmatch(SubItems, LexMatch) :-
+% 	get_subitems_feature(SubItems, lexmatch, LexMatch),
+% 	LexMatch \== [].
 
-get_non_null_lexmatch(SubItems, LexMatch) :-
-	get_subitems_feature(SubItems, lexmatch, LexMatch),
-	LexMatch \== [].
-
-
-make_list(LexMatch, TextList) :-
-	( atom(LexMatch) ->
-	  TextList = [LexMatch]
-	; TextList = LexMatch
-	).
+% make_list(LexMatch, TextList) :-
+% 	( atom(LexMatch) ->
+% 	  TextList = [LexMatch]
+% 	; TextList = LexMatch
+% 	).
 
 /* 
    parse_phrase_word_info(+Phrase, +Option, -PhraseWordInfoPair)

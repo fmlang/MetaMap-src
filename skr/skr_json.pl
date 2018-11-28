@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -82,9 +82,6 @@
 :- use_module(library(system),[
 	environ/2
    ]).
-
-% This code creates Prolog structures that are fed to json:json_print
-% which is defined in the Quintus Prolog library.
 
 generate_and_print_json(AllMMO, OutputStream) :-
 	( json_output_params(JSONFormat, StartIndent, IndentInc, Padding, Space, NewLine),
@@ -218,12 +215,12 @@ generate_one_json_phrase_obj(MMOPhraseTerm, MMOCandidatesTerm, MMOMappingsTerm, 
 % "Pruned": "0"
 % OR
 % "Remaining": "14"
-generate_candidate_count_pair(CandidateCount, CountType, CandidateCountAttribute) :-
-	( CandidateCount =:= -1 ->
-	  CandidateCountAttribute = []
-	  % The pair/2 term needs to be in a list for the subsequent call to append/2
-	; CandidateCountAttribute = [pair(CountType,CandidateCount)]
-	).
+% generate_candidate_count_pair(CandidateCount, CountType, CandidateCountAttribute) :-
+% 	( CandidateCount =:= -1 ->
+% 	  CandidateCountAttribute = []
+% 	  % The pair/2 term needs to be in a list for the subsequent call to append/2
+% 	; CandidateCountAttribute = [pair(CountType,CandidateCount)]
+% 	).
 
 % We want the Candidates tag to contain only the Count attribute inside Mappings,
 % e.g., <Candidates Count="1">,
@@ -1017,18 +1014,18 @@ generate_json_option_value_term(OptionValue, OptionValueTermList) :-
 	  OptionValueTermList = [OptionValueTerm]
 	).
 
-convert_to_string(OptionValue, OptionValueString) :-
-	( atom(OptionValue) ->
-	  atom_codes(OptionValue, OptionValueString)
-	; number(OptionValue) ->
-	  number_codes(OptionValue, OptionValueString)
-	; OptionValue == [] ->
-	  OptionValueString = "[]"
-	; OptionValue = [_|_] ->
-	  OptionValueAtomList = OptionValue,
-	  atom_codes_list(OptionValueAtomList, OptionValueStringList),
-	  form_one_string(OptionValueStringList, ",", OptionValueString)
-	).
+% convert_to_string(OptionValue, OptionValueString) :-
+% 	( atom(OptionValue) ->
+% 	  atom_codes(OptionValue, OptionValueString)
+% 	; number(OptionValue) ->
+% 	  number_codes(OptionValue, OptionValueString)
+% 	; OptionValue == [] ->
+% 	  OptionValueString = "[]"
+% 	; OptionValue = [_|_] ->
+% 	  OptionValueAtomList = OptionValue,
+% 	  atom_codes_list(OptionValueAtomList, OptionValueStringList),
+% 	  form_one_string(OptionValueStringList, ",", OptionValueString)
+% 	).
 			   
 generate_json_NegEx_pair(NegExTerm, JNegExPair) :-
 	NegExTerm = neg_list(NegExList),
@@ -1352,74 +1349,3 @@ json_output_format(JSONFormat) :-
 	  JSONFormat = 'JSONn'
 	).
 
-% :- module(jsonprint,[
-% 	print_element/2,
-% 	print_array/2
-%    ]).
-
-%%
-%% JSON printing utilities
-%%
-
-% Originally implemented by Will Rogers;
-% updated by Francois Lang to take advantage of first-argument indexing.
-
-% json_print_array(ElementList, OutputStream) :-
-% 	format(OutputStream, '[',[]),
-% 	json_print_array_aux(ElementList, OutputStream),
-% 	format(OutputStream, ']',[]).
-% 	
-% json_print_array_aux([], _).
-% json_print_array_aux([Element|ElementList], OutputStream) :-
-% 	json_print_element(Element, OutputStream),
-% 	( ElementList=[] ->
-% 	    format(OutputStream, '',[])
-% 	; format(OutputStream, ',',[])
-% 	),
-% 	json_print_array_aux(ElementList, OutputStream).
-
-%%% json_print_element(object(ElementList), OutputStream) :-
-%%% 	format(OutputStream, '{',[]),	
-%%% 	json_print_element_aux(ElementList, OutputStream),
-%%% 	format(OutputStream, '}',[]).
-%%% 
-%%% json_print_element(pair(Key, Value), OutputStream) :-
-%%% 	( atomic(Value) ->
-%%% 	  ensure_atom(Value, ValueAtom),
-%%% 	  format(OutputStream, '"~s":"~s"', [Key,ValueAtom])
-%%% 	; format(OutputStream, '"~s":', [Key]),
-%%% 	  json_print_element(Value, OutputStream)
-%%% 	).
-%%% 
-%%% json_print_element_aux([], _Stream).
-%%% json_print_element_aux([Element|ElementList], OutputStream) :-
-%%% 	json_print_element(Element, OutputStream),
-%%% 	( ElementList == [] ->
-%%% 	  format(OutputStream, '', [])
-%%% 	; format(OutputStream, ',', [])
-%%% 	),
-%%% 	json_print_element_aux(ElementList, OutputStream).
-%%% 
-%%% jpe(object(ElementList), Indent, OutputStream) :-
-%%% 	% format(OutputStream, '~*c{~n',[Indent,32]),
-%%% 	IndentNext is Indent + 2,
-%%% 	jpe_aux(ElementList, IndentNext, OutputStream),
-%%% 	format(OutputStream, '~n~*c}',[Indent,32]).
-%%% 
-%%% jpe(pair(Key, Value), Indent, OutputStream) :-
-%%% 	( atomic(Value) ->
-%%% 	  ensure_atom(Value, ValueAtom),
-%%% 	  format(OutputStream, '~*c"~s": "~s"', [Indent,32,Key,ValueAtom])
-%%% 	; format(OutputStream, '~*c"~s": {~n', [Indent,32,Key]),
-%%% 	  jpe(Value, Indent, OutputStream)
-%%% 	).
-%%% 
-%%% jpe_aux([], _Indent, _Stream).
-%%% jpe_aux([Element|ElementList], Indent, OutputStream) :-
-%%% 	jpe(Element, Indent, OutputStream),
-%%% 	( ElementList == [] ->
-%%% 	  format(OutputStream, '', [])
-%%% 	; format(OutputStream, ',~n', [])
-%%% 	),
-%%% 	jpe_aux(ElementList, Indent, OutputStream).
-%%% 

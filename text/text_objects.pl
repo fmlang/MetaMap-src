@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -147,6 +147,7 @@
 	ic_tok/1,
 	lbracket_tok/1,
 	lc_tok/1,
+	mc_tok/1,
 	multi_brackets/2,
 	ne_lbracket_tok/1,
 	ne_rbracket_tok/1,
@@ -1114,7 +1115,7 @@ forbidden_first_aa_word(termed).
 forbidden_aa_word(apropos).
 forbidden_aa_word(daily).
 forbidden_aa_word(edu).
-forbidden_aa_word(http).
+forbidden_aa_word(https).
 forbidden_aa_word(html).
 forbidden_aa_word(preliminary).
 forbidden_aa_word(report).
@@ -1905,13 +1906,72 @@ find_aa(AATokensIn, AATokensWithParens, PE_Token, LastPos, RevPre, AAsIn, AAsOut
 	% format(user_output, 'SCO: ', []),
 	% skr_utilities:write_token_list(Scope, 0, 1),	
 %	store_aa(AATokens, LastUnwantedToken, Scope, AAsIn, AAsOut),
-	store_aa(AATokens, LastUnwantedToken, Scope, AAsNext, AAsOut),
-	!.
+	
+	% In input text like
+	% "oral glucose tolerance test (OGTT, n = 8)." (PMID 10094100),
+	% we do not want the AA to be "OGTT, n = 8", but just "OGTT"
+	
+	% 10094100|OGTT, n = 8|oral glucose tolerance test|8|11|7|27|565:11
 
+	remove_leading_space_tokens(AATokens, ModifiedAATokens1),
+	remove_n_equals_tokens(ModifiedAATokens1, ModifiedAATokens2),
+	remove_pe_tokens(ModifiedAATokens2, ModifiedAATokens),
+	store_aa(ModifiedAATokens, LastUnwantedToken, Scope, AAsNext, AAsOut),
+	!.
 %%    repeat find_initial_scope ..., if necessary
 %%    don't forget reverse aas (i.e., when the defn, not the aa, is
 %%    parenthesized and the aa precedes it but not necessarily immediately)
 find_aa(_AATokens, _AATokensWithParens, _PE_Token,  _LastPos, _RevPre, AAsIn, AAsIn).
+
+% This predicate handles abominations like "patients ( p = NS)",
+% in which the first AA token is a ws token.
+remove_leading_space_tokens([H|T], ModifiedAATokens) :-
+	( ws_tok(H) ->
+	  remove_leading_space_tokens(T, ModifiedAATokens)
+	; ModifiedAATokens = [H|T]
+	).
+
+remove_pe_tokens([H|T], ModifiedAATokens) :-
+	( H = tok(pe,[],2,_pos),
+	  T = [Next|_Rest],
+	  ex_lbracket_tok(Next),
+	  last(T, LastToken),
+	  ex_rbracket_tok(LastToken) ->
+	  append([[H,Next], ModifiedAATokens, [LastToken]], [H|T])
+	; ModifiedAATokens = [H|T]	
+	).
+	  
+
+remove_n_equals_tokens(AATokens, ModifiedAATokens) :-
+	( memberchk(tok(pn,"=","=",_PosInfo), AATokens) ->
+	  remove_spurious_aa_tokens(AATokens, ModifiedAATokens)
+	; ModifiedAATokens = AATokens
+	).
+
+% [tok(uc,"OGTT","ogtt",pos(29,33)),
+%  tok(pn,",",",",pos(33,34)),
+%  tok(ws," "," ",pos(34,35)),
+%  tok(lc,"n","n",pos(35,36)),
+%  tok(ws," "," ",pos(36,37)),
+%  tok(pn,"=","=",pos(37,38)),
+%  tok(ws," "," ",pos(38,39)),
+%  tok(nu,"8","8",pos(39,40))]
+% Discard all tokens beginning with the first ws token or pn tok whose second arg is "=", "," or ";"
+
+remove_spurious_aa_tokens([H|T], ModifiedAATokens) :-
+	( H = tok(ws," "," ",_PosInfo) ->
+	  ModifiedAATokens = []
+	; H = tok(pn,[Char],_String2,_PosInfo),
+	  comma_semicolon_or_equals(Char) ->
+	  ModifiedAATokens = []
+	; ModifiedAATokens = [H|RestModifiedAATokens],
+	  remove_spurious_aa_tokens(T, RestModifiedAATokens)
+	).
+
+comma_semicolon_or_equals(0',). % comma
+comma_semicolon_or_equals(0';). % semicolon
+comma_semicolon_or_equals(0'=). % equals
+
 
 % This test is a stopgap designed to handle pathological cases such as
 % "immunoliposomal doxorubicin (DXR) (ILD)" (PMID 14562030)
@@ -2173,7 +2233,7 @@ find_first_an([_|Rest], AN) :-
 
 match_initial_to_char(State, ConsumedTokenCount, AATokensLength, RevPre, InitialChar,
 		      PreviousMatchingText, RevScope1, RestTokens) :-
-	( ConsumedTokenCount > AATokensLength + 1 ->
+	( ConsumedTokenCount > AATokensLength + 5 ->
 	  RevScope1 = [],
 	  RestTokens = RevPre
 	; RevPre == [] ->
@@ -2506,16 +2566,16 @@ explode_one_aa_token_aux([C1|RestChars], [LC1|RestLCChars],
 	explode_one_aa_token_aux(RestChars, RestLCChars, Type, NewUtteranceCharPos, TokenPos,
 				 NextTokenCharPos, Parent, AATokenListNext, AATokenListOut).
 
-get_relevant_exploded_aa_tokens([FirstExplodedToken|RestExplodedTokens],
-				[FirstParentToken|RestParentTokens],
-				RelevantExplodedTokens) :-
-	( FirstExplodedToken = aatok(_Char,_Type,_C1,_LC1,_UtteranceCharPos,
-				     _TokenPos,_TokenCharPos,FirstParentToken) ->
-	  RelevantExplodedTokens = [FirstExplodedToken|RestExplodedTokens]
-	; get_relevant_exploded_aa_tokens(RestExplodedTokens,
-					  [FirstParentToken|RestParentTokens],
-					  RelevantExplodedTokens)
-	).
+% get_relevant_exploded_aa_tokens([FirstExplodedToken|RestExplodedTokens],
+% 				[FirstParentToken|RestParentTokens],
+% 				RelevantExplodedTokens) :-
+% 	( FirstExplodedToken = aatok(_Char,_Type,_C1,_LC1,_UtteranceCharPos,
+% 				     _TokenPos,_TokenCharPos,FirstParentToken) ->
+% 	  RelevantExplodedTokens = [FirstExplodedToken|RestExplodedTokens]
+% 	; get_relevant_exploded_aa_tokens(RestExplodedTokens,
+% 					  [FirstParentToken|RestParentTokens],
+% 					  RelevantExplodedTokens)
+% 	).
 	
 
 /* aa_match_full_tokens(+AAIn, +ScopeIn, -AAOut, -ScopeOut, -MatchOut)
@@ -2815,7 +2875,53 @@ store_aa(AATokens, LastUnwantedToken, ExpansionTokens0, AAsIn, AAsOut) :-
 	% modify_scope_for_punctuation(Tokens, ExpansionTokens1, ExpansionTokens),
 	% temp
 	% format('~nAdding to AVL:~p~n~p~n',[Tokens,ExpansionTokens]),
-	add_to_avl_once(AATokens, ExpansionTokens, AAsIn, AAsOut).
+	add_to_avl_once(AATokens, ExpansionTokens, AAsIn, AAsNext),
+	% If the AA is something like
+	% AA|21552472|SNPs|single-nucleotide polymorphisms
+	% we want to add
+	% AA|21552472|SNP|single-nucleotide polymorphism
+	% as well!
+	maybe_add_singular_AA(AATokens, ExpansionTokens, AAsNext, AAsOut).
+
+maybe_add_singular_AA(AATokens, ExpansionTokens, AAsNext, AAsOut) :-
+	( AATokens = [OrigShortFormToken],
+	  mc_tok(OrigShortFormToken),
+	  OrigShortFormToken = tok(mc,
+				   OrigShortFormString,
+				   OrigLCShortFormString,
+				   pos(StartPos1,OrigEndPos1)),
+	  % Ensure that the single-token short form ends in "s"
+	  last(OrigShortFormString, 0's),
+	  append(AllButLastTokens, [OrigLastExpansionToken], ExpansionTokens),
+	  OrigLastExpansionToken = tok(Type,
+				       OrigLastLongFormString,
+				       OrigLCLastLongFormString,
+				       pos(StartPos2,OrigEndPos2)),
+	  last(OrigLastLongFormString, 0's) ->
+	  remove_final_s(OrigShortFormString, ShortFormStringWithoutS),
+	  remove_final_s(OrigLCShortFormString, LCShortFormStringWithoutS),
+	  remove_final_s(OrigLastLongFormString, LastLongFormStringWithoutS),
+	  remove_final_s(OrigLCLastLongFormString, LCLastLongFormStringWithoutS),
+	  ModEndPos1 is OrigEndPos1 - 1,
+	  ModEndPos2 is OrigEndPos2 - 1,
+	  ModShortFormToken = tok(mc,
+				  ShortFormStringWithoutS,
+				  LCShortFormStringWithoutS,
+				   pos(StartPos1,ModEndPos1)),
+	  ModLastExpansionToken = tok(Type,
+				      LastLongFormStringWithoutS,
+				      LCLastLongFormStringWithoutS,
+				       pos(StartPos2,ModEndPos2)),
+	 append(AllButLastTokens, [ModLastExpansionToken], ModExpansionTokens),
+	 add_to_avl_once([ModShortFormToken], ModExpansionTokens, AAsNext, AAsOut)
+       ; AAsOut = AAsNext
+	).
+	
+remove_final_s(OrigShortFormString, ShortFormStringWithoutS) :-
+	( append(AllButLastChars, [0's], OrigShortFormString) ->
+	  ShortFormStringWithoutS = AllButLastChars
+	; ShortFormStringWithoutS = OrigShortFormString
+	).
 
 add_hyphen_to_expansion(AATokens, LastUnwantedToken, ExpansionTokensIn, ExpansionTokensOut) :-
 	% Do the AA tokens end with a hyphen? E.g.,
@@ -3073,8 +3179,13 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences,
 	avl_to_list(AAs0, AAList0),
 	remove_aa_redundancy(AAList0, AAList1),
 	remove_aa_expansion_overlap(AAList1, AAList1, AAList2),
+	% If the text contains, e.g., "single-nucleotide polymorphisms (SNPs)",
+	% we want to keep the plural "SNPs" AA but discard the singular "SNP" AA,
+	% and pass the plural AA only to annotate_with_aas.
+	% However, we want to keep the singular AA in the AVL tree.
+	remove_singular_aas(AAList2, AAList3),
 	list_to_avl(AAList2, AAs),
-	order_aas(AAList2, AAList),
+	order_aas(AAList3, AAList),
 	resolve_AA_conflicts(AAList, UDAListIn, UDAListNext),
 	% format(user_output, '~nAAs:~p~n', [AAs]),
 	% FakeAAs = node([tok(uc,"ha","ha",pos(16,18))],[[tok(lc,"heart","heart",pos(16,18)),tok(ws," "," ",pos(16,18)),tok(lc,"attack","attack",pos(16,18))]],0,empty,empty),
@@ -3098,6 +3209,22 @@ find_and_coordinate_sentences(UI, Fields, Sentences, CoordinatedSentences,
 	% skr_fe:write_token_list(CoordinatedSentences, 0, 1),
 	!.
 
+remove_singular_aas([], []).
+remove_singular_aas([H|T], PluralAAsOnly) :-
+	( H = [ShortFormToken1]-_LongFormTokens1,
+	  member([ShortFormToken2]-_LongFormTokens2, T),
+	  ShortFormToken1 = tok(TokenType1, ShortFormString1,
+				_LCShortFormString1, pos(Start1, End1)),
+	  ShortFormToken2 = tok(TokenType2, ShortFormString2,
+				_LCShortFormString2, pos(Start2, End2)),
+	  append(ShortFormString1, [0's], ShortFormString2),
+	  TokenType1 == TokenType2,
+	  Start1 == Start2,
+	  End2 is End1 + 1 ->
+	  remove_singular_aas(T, PluralAAsOnly)
+	; PluralAAsOnly = [H|Rest],
+	  remove_singular_aas(T, Rest)
+	).
 
 % UDATermList is a list of terms of the form UDA-Tokens, e.g.,
 %   [tok(uc,"CAT","cat",pos(59,62))]-

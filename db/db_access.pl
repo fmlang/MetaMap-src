@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -241,7 +241,7 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 
-default_release('2016AA').
+default_release('2018AB').
 
 initialize_db_access :-
 	get_data_release(Release, 1),

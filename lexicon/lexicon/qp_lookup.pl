@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -32,12 +32,12 @@
 */
 
 :- module(qp_lookup, [
-	assemble_definitions/3,
+	assemble_definitions/2,
 	punct_token/2
    ]).
 
 :- use_module(lexicon(qp_lexicon), [
-	lex_form_ci_recs_input_6/6,
+	lex_form_ci_recs_input/3,
 	default_lexicon_file/1,
 	default_index_file/1
    ]).
@@ -71,10 +71,10 @@
    ]).
 
 
-assemble_definitions(Input, TagList, Recs) :-
-	default_lexicon_file(Lexicon),
-	default_index_file(Index),
-	assembledefns_6(Input, TagList, Lexicon, Index, Recs),
+assemble_definitions(Input, Recs) :-
+	% default_lexicon_file(Lexicon),
+	% default_index_file(Index),
+	assembledefns(Input, Recs),
 	maybe_display_defns(Recs).
 
 maybe_display_defns(Defns) :-
@@ -85,35 +85,34 @@ maybe_display_defns(Defns) :-
 	; true
 	).
 
-assembledefns_6([], _TagList, _Lexicon, _Index, []).
-assembledefns_6([FirstPhrase|RestPhrases], TagList, Lexicon, Index,  AllRecs) :-
-	assembledefns_aux(FirstPhrase, '', [], TagList, Lexicon, Index, SomeRecs),
+assembledefns([], []).
+assembledefns([FirstPhrase|RestPhrases], AllRecs) :-
+	assembledefns_aux(FirstPhrase, '', [], SomeRecs),
 	append(SomeRecs, MoreRecs, AllRecs),
-	assembledefns_6(RestPhrases, TagList, Lexicon, Index, MoreRecs).
+	assembledefns(RestPhrases, MoreRecs).
 
 %%% returns matching records in the form: lexicon:[lexmatch:X, inputmatch:Y, records:Z]
 %%% where X is the "best" lexical item that matched, Y is a list of tokens from the
 %%% input, and Z is a list of records of the form: lexrec:[base:B, ...etc]
-assembledefns_aux([], _PrevToken, [], _TagList, _Lexicon, _Index, []).
+assembledefns_aux([], _PrevToken, [], []).
 
 %%% from lexicon
-assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList,
-		  Lexicon, Index, [Recs|MoreRecs]) :-
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, [Recs|MoreRecs]) :-
 	atom_codes(Token, Codes),
 	Codes = [FirstChar|_],
 	\+ local_punct(FirstChar),
-     	lex_form_ci_recs_input_6([Token|MoreTokens], Recs, Remaining, TagList, Lexicon, Index),
+     	lex_form_ci_recs_input([Token|MoreTokens], Recs, Remaining),
 	!,
-	assembledefns_aux(Remaining, Token, Rest, TagList, Lexicon, Index, MoreRecs).
+	assembledefns_aux(Remaining, Token, Rest, MoreRecs).
 
 %%% punctuation
-assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList, Lexicon, Index, [R|MoreRecs]) :- 
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, [R|MoreRecs]) :- 
 	punct_token(Token, R),
 	!,
-	assembledefns_aux(MoreTokens, Token, Rest, TagList, Lexicon, Index, MoreRecs).
+	assembledefns_aux(MoreTokens, Token, Rest, MoreRecs).
 
 %%% from shapes
-assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList, Lexicon, Index, Recs) :-
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, Recs) :-
 	% shapes(Shapes, PreviousToken, [Token|MoreTokens], Remaining),
 	shapes(Shapes, [Token|MoreTokens], Remaining),
 	( Shapes = [_|_] ->
@@ -121,13 +120,13 @@ assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList, Lexicon, In
 	; Recs = [Shapes|MoreRecs]
 	),
 	!,
-	assembledefns_aux(Remaining, Token, Rest, TagList, Lexicon, Index, MoreRecs).
+	assembledefns_aux(Remaining, Token, Rest, MoreRecs).
 
 %%% unknown token
-assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, TagList, Lexicon, Index, [R|MoreRecs]) :-
+assembledefns_aux([Token|MoreTokens], _PreviousToken, Rest, [R|MoreRecs]) :-
 	R = unknown:[inputmatch:[Token]],
 	% format(user_output, '### UNKNOWN token ~q~n', [Token]),
-	assembledefns_aux(MoreTokens, Token, Rest, TagList, Lexicon, Index, MoreRecs).
+	assembledefns_aux(MoreTokens, Token, Rest, MoreRecs).
 
 %%% punctuation records
 punct_token(Token, punctuation:[lexmatch:[Token], inputmatch:[Token], records:[punct:PunctName]]) :-

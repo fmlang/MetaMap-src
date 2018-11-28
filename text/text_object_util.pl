@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -69,6 +69,7 @@
 	lbracket_tok/1,
 	label_tok/1,
 	lc_tok/1,
+	mc_tok/1,
 	multi_brackets/2,
 	ne_lbracket_tok/1,
 	ne_rbracket_tok/1,
@@ -150,31 +151,33 @@ gather_whitespace([First|Rest],[First|RestWS],NewRest) :-
     gather_whitespace(Rest,RestWS,NewRest).
 gather_whitespace(Tokens,[],Tokens).
 
-ws_tok(tok(ws,_,_,_)).
-ws_tok(tok(ws,_,_,_,_)).
-
-pn_tok(tok(pn,_,_,_)).
-pn_tok(tok(pn,_,_,_,_)).
-
-
 aa_tok(tok(aa,_,_,_)).
 
 aadef_tok(tok(aadef,_,_,_)).
 
-lc_tok(tok(lc,_,_,_)).
+ic_tok(tok(ic,_,_,_)).
 
 label_tok(tok(label,_,_,_)).
 label_tok(tok(label,_,_,_,_)).
 
+lc_tok(tok(lc,_,_,_)).
 
-ic_tok(tok(ic,_,_,_)).
+mc_tok(tok(mc,_,_,_)).
 
 nu_tok(tok(nu,_,_,_)).
 
 pe_tok(tok(pe,_,_,_)).
 pe_tok(tok(pe,_,_,_,_)).
 
+pn_tok(tok(pn,_,_,_)).
+pn_tok(tok(pn,_,_,_,_)).
+
 uc_tok(tok(uc,_,_,_)).
+
+ws_tok(tok(ws,_,_,_)).
+ws_tok(tok(ws,_,_,_,_)).
+
+
 
 % 'an' is overloaded: It can stand for
 % (1) broadly alphanumeric, meaning the union of all tokens

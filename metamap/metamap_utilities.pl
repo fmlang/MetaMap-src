@@ -23,7 +23,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -37,10 +37,11 @@
 	% must be exported for mm_print
 	build_concept_name_1/5,
 	candidate_term/16,
-	dump_aphrase_mappings/3,
+	% dump_aphrase_mappings/3,
 	% dump_evaluations_indented/6,
 	% must be exported for mm_print
 	dump_evaluations_indented/7,
+	dump_mappings/3,
 	dump_variants_labelled/5,
 	extract_nonexcluded_sources/3,
 	extract_relevant_sources/3,
@@ -73,13 +74,13 @@
 	file_exists/1
    ]).
 
-:-   absolute_file_name(skr_lib(semtype_translation_2016AA),
+:-   absolute_file_name(skr_lib(semtype_translation_2018AB),
 			AbsFileName,
 			[extensions(['.pl'])]),
      file_exists(AbsFileName) ->
-     use_module(skr_lib(semtype_translation_2016AA), [expand_semtypes/2]),
-     format(user_error, 'File metamap_utilities.pl is loading ~w~n', [AbsFileName])
-   ; format(user_error, 'File metamap_utilities.pl is NOT loading ~w~n', [AbsFileName]).
+     use_module(skr_lib(semtype_translation_2018AB), [expand_semtypes/2]),
+     format(user_error, 'File semtype_translation_2018AB.pl is loading ~w~n', [AbsFileName])
+   ; format(user_error, 'File semtype_translation_2018AB.pl is NOT loading ~n', []).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
@@ -151,23 +152,42 @@ maybe_display_META_header(FormatString, Args) :-
 	; format(FormatString, Args)
 	).
 
-dump_aphrase_mappings([], _UtteranmceLabel, Label) :-
+dump_mappings([], _UtteranceLabel, Label) :-
 	% format('Meta ~a: <none>~n', [Label]).
 	maybe_display_META_header('Meta ~a: <none>~n', [Label]).
-dump_aphrase_mappings([H|T], UtteranceLabel, Label) :-
-	APhrases = [H|T],
+dump_mappings([H|T], UtteranceLabel, Label) :-
+	Mappings = [H|T],
 	( control_option(number_the_mappings) ->
 	  Counter is 1
 	; Counter is 0
 	),
-	dump_aphrase_mappings_aux(APhrases, UtteranceLabel, Label, Counter).
+	dump_mappings_aux(Mappings, UtteranceLabel, Label, Counter).
 
-dump_aphrase_mappings_aux([], _UtteranceLabel, _Label, _Counter).
-dump_aphrase_mappings_aux([ap(NegValue,_,_,Mapping)|Rest], UtteranceLabel, Label, Counter) :-
+dump_mappings_aux([], _UtteranceLabel, _Label, _Counter).
+dump_mappings_aux([Mapping|RestMappings], UtteranceLabel, Label, Counter) :-
+	Mapping = map(NegValue, Evaluations),
 	Score is -NegValue,
 	get_display_and_increment_counter(Counter, CounterDisplay, NextCounter),
-	dump_mapping(Mapping, UtteranceLabel, Label, Score, CounterDisplay),
-	dump_aphrase_mappings_aux(Rest, UtteranceLabel, Label, NextCounter).
+	dump_mapping(Evaluations, UtteranceLabel, Label, Score, CounterDisplay),
+	dump_mappings_aux(RestMappings, UtteranceLabel, Label, NextCounter).
+
+% dump_aphrase_mappings([], _UtteranceLabel, Label) :-
+% 	% format('Meta ~a: <none>~n', [Label]).
+% 	maybe_display_META_header('Meta ~a: <none>~n', [Label]).
+% dump_aphrase_mappings([H|T], UtteranceLabel, Label) :-
+% 	APhrases = [H|T],
+% 	( control_option(number_the_mappings) ->
+% 	  Counter is 1
+% 	; Counter is 0
+% 	),
+% 	dump_aphrase_mappings_aux(APhrases, UtteranceLabel, Label, Counter).
+% 
+% dump_aphrase_mappings_aux([], _UtteranceLabel, _Label, _Counter).
+% dump_aphrase_mappings_aux([ap(NegValue,_,_,Mapping)|Rest], UtteranceLabel, Label, Counter) :-
+% 	Score is -NegValue,
+% 	get_display_and_increment_counter(Counter, CounterDisplay, NextCounter),
+% 	dump_mapping(Mapping, UtteranceLabel, Label, Score, CounterDisplay),
+% 	dump_aphrase_mappings_aux(Rest, UtteranceLabel, Label, NextCounter).
 
 get_display_and_increment_counter(Counter, CounterDisplay, NextCounter) :-
 	( Counter =:= 0 ->
@@ -310,7 +330,7 @@ build_concept_name_1(PreferredName, CUI, _Sources, _SourcesAtom, _PreferredNameD
 % build_list([First|Rest], ListIn, ListOut) :-
 % 	build_list(Rest,[First,', '|ListIn], ListOut).
 
-
+% must be exported for mm_print
 dump_evaluations_indented(Candidates, TotalCandidateCount,
 			  ExcludedCandidateCount, PrunedCandidateCount,
 			  RemainingCandidateCount, Label, OutputStream) :-
@@ -430,7 +450,7 @@ num_dump_one_evaluation(Candidate:RelatedCandidates, N, UtteranceLabel, NextN) :
 	build_concept_name_1(PreferredName, CUI, SourceInfo, SourcesAtom, PreferredNameDisplay),
 	choose_status_symbol(Status, Negated, StatusSymbol),
 	conditionally_expand_semtypes(ShortSemTypes, LongSemTypes),
-	num_display_concept_info(N, UtteranceLabel, MetaTerm, PreferredName, SourcesAtom,
+	num_display_concept_info(N, Candidate, UtteranceLabel, MetaTerm, PreferredName, SourcesAtom,
 				 CandidateScore, CUI, PreferredNameDisplay,
 				 StatusSymbol, PosInfoAtom, LongSemTypes),
 	% format('~n', []),
@@ -444,7 +464,7 @@ get_next_N(N, N1) :-
 	; N1 is N + 1
 	).
 
-num_display_concept_info(N, UtteranceLabelAtom, MetaTerm, PreferredName,
+num_display_concept_info(N, _Candidate, UtteranceLabelAtom, MetaTerm, PreferredName,
 			 SourcesAtom, CandidateScore, CUI, PreferredNameDisplayIn,
 			 StatusSymbol, PosInfo, SemTypes) :-
 	( control_option(show_cuis) ->
@@ -471,6 +491,13 @@ num_display_concept_info(N, UtteranceLabelAtom, MetaTerm, PreferredName,
 		 [N,CandidateScore,StatusSymbol,DisplayCUI,Colon,
 		  MetaTerm,PreferredNameDisplay,SemTypes])
 	).
+
+% get_first_elements([], []).
+% get_first_elements([H|T], [Interpolation|RestFirstElements]) :-
+% 	H = [HFirstElement|_],
+% 	HFirstElement = [FirstPos,LastPos],
+% 	between:numlist(FirstPos, LastPos, Interpolation),
+% 	get_first_elements(T, RestFirstElements).
 
 modify_utterance_label_display(UtteranceLabelAtom, ModUtteranceLabelAtom) :-
         atom_codes(UtteranceLabelAtom, UtteranceLabelString),
@@ -559,14 +586,14 @@ extract_relevant_sources([_|Rest], Sources, ExtractedRest) :-
 	extract_relevant_sources(Rest, Sources, ExtractedRest).
 
 
-extract_relevant_simple_sources([], _, []).
-extract_relevant_simple_sources([FirstSource|RestSources], RestrictSources, ExtractedSources) :-
-	( memberchk(FirstSource, RestrictSources) ->
-	  ExtractedSources = [FirstSource|RestExtractedSources]
-	; ExtractedSources = RestExtractedSources
-	),
-	extract_relevant_simple_sources(RestSources, RestrictSources, RestExtractedSources).
-
+% extract_relevant_simple_sources([], _, []).
+% extract_relevant_simple_sources([FirstSource|RestSources], RestrictSources, ExtractedSources) :-
+% 	( memberchk(FirstSource, RestrictSources) ->
+% 	  ExtractedSources = [FirstSource|RestExtractedSources]
+% 	; ExtractedSources = RestExtractedSources
+% 	),
+% 	extract_relevant_simple_sources(RestSources, RestrictSources, RestExtractedSources).
+ 
 extract_nonexcluded_sources([], _, []).
 extract_nonexcluded_sources([[I,ConceptNameInSource,Source,TTY]|Rest],
 			    Sources,
@@ -577,14 +604,14 @@ extract_nonexcluded_sources([[I,ConceptNameInSource,Source,TTY]|Rest],
 extract_nonexcluded_sources([_|Rest], Sources, ExtractedRest) :-
 	extract_nonexcluded_sources(Rest, Sources, ExtractedRest).
 
-extract_nonexcluded_simple_sources([] ,_, []).
-extract_nonexcluded_simple_sources([FirstSource|RestSources], ExcludeSources, ExtractedSources) :-
-	( \+ memberchk(FirstSource, ExcludeSources) ->
-	  ExtractedSources = [FirstSource|RestExtractedSources]
-	; ExtractedSources = RestExtractedSources
-	),
-	extract_nonexcluded_simple_sources(RestSources, ExcludeSources, RestExtractedSources).
-
+% extract_nonexcluded_simple_sources([] ,_, []).
+% extract_nonexcluded_simple_sources([FirstSource|RestSources], ExcludeSources, ExtractedSources) :-
+% 	( \+ memberchk(FirstSource, ExcludeSources) ->
+% 	  ExtractedSources = [FirstSource|RestExtractedSources]
+% 	; ExtractedSources = RestExtractedSources
+% 	),
+% 	extract_nonexcluded_simple_sources(RestSources, ExcludeSources, RestExtractedSources).
+ 
 /* extract_name_in_source(+SourceInfo, -ConceptNameInSource)
 
 extract_name_in_source/2 extracts ConceptNameInSource from the first entry in SourceInfo.

@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -70,6 +70,8 @@
 :- use_module(library(system), [
 	datime/1
     ]).
+
+:- use_module(skr_lib(print_chars)).
 
 :- prolog_flag(agc_margin, Current), New is 5*Current, prolog_flag(agc_margin, Current, New).
 

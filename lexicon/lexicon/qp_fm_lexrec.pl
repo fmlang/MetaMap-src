@@ -24,7 +24,7 @@
 *  merchantability or fitness for any particular purpose.
 *                                                                         
 *  For full details, please see the MetaMap Terms & Conditions, available at
-*  http://metamap.nlm.nih.gov/MMTnCs.shtml.
+*  https://metamap.nlm.nih.gov/MMTnCs.shtml.
 *
 ***************************************************************************/
 
@@ -333,6 +333,7 @@ fm_noun_variants([V|R]) -->
     ;	{ R = [] }
     ),
     !.
+fm_noun_variants([]) --> [].
 
 fm_noun_variant(reg) --> "reg".
 fm_noun_variant(glreg) --> "glreg".
