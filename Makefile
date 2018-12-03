@@ -41,10 +41,10 @@
 #
 # Building the 64-bit version
 #   $ make SKR=${ROOT}/specialist/SKR \
-#      APPNAME=metamap12 MSAPPNAME=mmserver12 MACHINE_TYPE=-m64 \
-#      ARCHDIR=x86_64-linux-glibc2.5
-#      BERKELEY=${BERELEY_DB_64bit}/db-4.8.24 \
-#      SICSTUS=/nfsvol/crfiler-ind/II_Research/SICStus/sp-$(SICSTUS_VERSION)-x86_64-linux-glibc2.5 \
+#      APPNAME=metamap18 MSAPPNAME=mmserver18 MACHINE_TYPE=-m64 \
+#      ARCHDIR=x86_64-linux-glibc2.17 \
+#      BERKELEY=${BERKELEY_DB_64bit}/db-4.8.24 \
+#      SICSTUS=/nfsvol/crfiler-ind/II_Research/SICStus/sp-${SICSTUS_VERSION}-x86_64-linux-glibc2.17
 #
 # Possible environment variable values:
 #  ROOT=${HOME}
@@ -55,11 +55,11 @@ include Makefile.include
 # For source release
 # SICSTUSARGS=-f -l $(SKR_SRC_HOME)/sicstus.ini
 
-APPNAME=metamap16
+APPNAME=metamap18
 SAVED_STATE=$(APPNAME).sav
 BINEXEC=$(APPNAME).BINARY.$(ARCH)
 
-MSAPPNAME=mmserver16
+MSAPPNAME=mmserver18
 MSSAVED_STATE=$(MSAPPNAME).sav
 MSBINEXEC=$(MSAPPNAME).BINARY.$(ARCH)
 
@@ -71,15 +71,15 @@ forceall : build_debug build_lib build_db build_functions \
 	   build_lcat build_lvar
 
 
-build_metamap : $(BINEXEC)
-build_mmserver : $(MSBINEXEC)
+build_metamap : $(BINEXEC) $(DEBUGTARGETS)
+build_mmserver : $(MSBINEXEC) $(DEBUGTARGETS)
 
 TARGETS=$(DEBUGTARGETS) $(DBTARGETS) $(MISCTARGETS)		\
         $(FUNCTIONTARGETS) $(MORPHTARGETS) $(QUERYTARGETS)	\
         $(LIBTARGETS) $(LEXICONTARGETS)
 
 # sharable libraries needed by SICStus Prolog interpreter
-PROLOGSHOBJS=db_access.$(SOEXT) nls_signal.$(SOEXT) qp_lexicon.$(SOEXT) qp_morph.$(SOEXT) 
+PROLOGSHOBJS=db_access.$(SOEXT) nls_signal.$(SOEXT) # qp_lexicon.$(SOEXT) qp_morph.$(SOEXT) 
 
 DEBUGTARGETS=debug/debug.a debug/debug.$(SOEXT) debug/debug.o debug/get_val.o
 build_debug : $(DEBUGTARGETS)
@@ -169,7 +169,6 @@ $(BINEXEC) : $(SAVED_STATE)
 	--output=$(BINEXEC) \
 	--static \
 	--main=restore \
-	--embed_rt_sav \
 	--resources=$(SAVED_STATE)=/$(SAVED_STATE) $(LINK_FILES) $(LDFLAGS)
 
 # MetaMap Server targets
@@ -188,7 +187,6 @@ $(MSBINEXEC) : $(MSSAVED_STATE)
 	--output=$(MSBINEXEC) \
 	--static \
 	--main=restore \
-	--embed_rt_sav \
 	--resources=$(MSSAVED_STATE)=/$(MSSAVED_STATE) $(LINK_FILES) $(LDFLAGS)
 
 # arbitrary targets

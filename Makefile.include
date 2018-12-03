@@ -48,9 +48,13 @@ export SKR_WSD=$(SKR_SRC_HOME)/WSD
 export SKR_MORPH=$(SKR_SRC_HOME)/lexicon/morph
 export SKR_MMI=$(SKR_SRC_HOME)/mmi
 export TOOLS_SRC=$(SKR)/tools
+export DYNAMIC_LIB_DIR=$(SKR_SRC_HOME)
 
 O_SYSTEM = $(shell uname)
 MACHINE_TYPE=-m64
+
+# Mats Carlsson's fix for the "Toronto" citation
+export PROLOGMAXSIZE=1G
 
 ifeq '$(O_SYSTEM)' "Linux"
   RANLIB = /bin/true
@@ -124,18 +128,7 @@ endif
 
 RESPATH=.:$(SKR_LIB):$(SKR_LEXICON)/lexicon:$(SKR_LEXICON)/morph:$(SKR_DB)
 
-export LINK_FILES=$(SKR_DEBUG)/debug.o \
-           ./lexicon/functions/linfl.o \
-           ./lexicon/functions/tokenize.o \
-           ./lexicon/morph/lm.o \
-           ./lexicon/morph/util.o \
-           ./lexicon/query/btree_query.o \
-           ./lexicon/query/tokenize.o \
-           ./lexicon/query/wl.o \
-           ./lexicon/miscutil/miscutil.o \
-           ./debug/get_val.o \
-           ./lexicon/morph/dm.o \
-           ./db/c_nls_db.a \
+export LINK_FILES=./db/c_nls_db.a \
            $(BERKELEY_LIB_STATIC) \
            $(XDR_STATIC_LIB)
 
