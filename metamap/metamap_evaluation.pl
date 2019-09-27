@@ -231,6 +231,7 @@ evaluate_candidate_list([usc(MetaCanonical,MetaString,MetaConcept)|Rest],
 				 RawTokensOut, AAs,
 				 InputmatchPhraseWords,
 				 TokenHeadWords, PhraseTokens, Evaluation) ->
+	  % format(user_error, '### ~w~n', [Evaluation]),
 	  % format(user_error, '### OUT: ~w ~w ~w~n', [MetaCanonical,MetaString,MetaConcept]),
 	  % format(user_error, '~n### Eval ~q|~q|~q~n', [MetaCanonical,MetaConcept,Evaluation]),
 	  % format(user_error, '~q~n', [Evaluation]),

@@ -49,7 +49,8 @@
     ]).
 
 :- use_module(skr_db(db_access), [
-	all_digits/1
+	all_digits/1,
+	db_get_singular/2
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -619,7 +620,9 @@ All these predicates create an AVL tree AAs.
 find_all_aas/4 simply has an in/out AVL tree.
 find_aas_1/5 is an auxiliary for processing a single sentence.  */
 
-find_all_aas(Sentences, _UIString, _OutputStream, AAs) :-
+find_all_aas([], _UIString, _OutputStream, empty).
+find_all_aas([FirstSentence|RestSentences], _UIString, _OutputStream, AAs) :-
+        Sentences = [FirstSentence|RestSentences],
 	empty_avl(AAs0),
 	% reversed order of args from QP library version!
 	last(Sentences, LastToken),
@@ -2885,44 +2888,37 @@ store_aa(AATokens, LastUnwantedToken, ExpansionTokens0, AAsIn, AAsOut) :-
 
 maybe_add_singular_AA(AATokens, ExpansionTokens, AAsNext, AAsOut) :-
 	( AATokens = [OrigShortFormToken],
-	  mc_tok(OrigShortFormToken),
-	  OrigShortFormToken = tok(mc,
+	  an_tok(OrigShortFormToken),
+          OrigShortFormToken = tok(TokenType1,
 				   OrigShortFormString,
 				   OrigLCShortFormString,
 				   pos(StartPos1,OrigEndPos1)),
 	  % Ensure that the single-token short form ends in "s"
-	  last(OrigShortFormString, 0's),
+	  ( last(OrigShortFormString, 0's) -> true ; last(OrigShortFormString, 0'S) ), 
 	  append(AllButLastTokens, [OrigLastExpansionToken], ExpansionTokens),
-	  OrigLastExpansionToken = tok(Type,
-				       OrigLastLongFormString,
-				       OrigLCLastLongFormString,
-				       pos(StartPos2,OrigEndPos2)),
-	  last(OrigLastLongFormString, 0's) ->
-	  remove_final_s(OrigShortFormString, ShortFormStringWithoutS),
-	  remove_final_s(OrigLCShortFormString, LCShortFormStringWithoutS),
-	  remove_final_s(OrigLastLongFormString, LastLongFormStringWithoutS),
-	  remove_final_s(OrigLCLastLongFormString, LCLastLongFormStringWithoutS),
-	  ModEndPos1 is OrigEndPos1 - 1,
-	  ModEndPos2 is OrigEndPos2 - 1,
-	  ModShortFormToken = tok(mc,
+	  OrigLastExpansionToken = tok(TokenType2, OrigLastLongFormString,
+	  OrigLCLastLongFormString, pos(StartPos2,OrigEndPos2)),
+	  ( last(OrigLastLongFormString, 0's) -> true ; last(OrigLastLongFormString, 0'S) ),
+	  db_get_singular(OrigShortFormString, ShortFormStringWithoutS),
+	  db_get_singular(OrigLCShortFormString, LCShortFormStringWithoutS),
+	  db_get_singular(OrigLastLongFormString, LastLongFormStringWithoutS),
+	  db_get_singular(OrigLCLastLongFormString, LCLastLongFormStringWithoutS),
+          ModEndPos1 is OrigEndPos1 - 1,
+          ModEndPos2 is OrigEndPos2 - 1,
+          ModShortFormToken = tok(TokenType1,
 				  ShortFormStringWithoutS,
 				  LCShortFormStringWithoutS,
-				   pos(StartPos1,ModEndPos1)),
-	  ModLastExpansionToken = tok(Type,
+				  pos(StartPos1,ModEndPos1)),
+	  ModLastExpansionToken = tok(TokenType2,
 				      LastLongFormStringWithoutS,
 				      LCLastLongFormStringWithoutS,
-				       pos(StartPos2,ModEndPos2)),
-	 append(AllButLastTokens, [ModLastExpansionToken], ModExpansionTokens),
-	 add_to_avl_once([ModShortFormToken], ModExpansionTokens, AAsNext, AAsOut)
-       ; AAsOut = AAsNext
-	).
+				      pos(StartPos2,ModEndPos2)),
+	  append(AllButLastTokens, [ModLastExpansionToken],
+	  ModExpansionTokens),
+	  add_to_avl_once([ModShortFormToken],
+	  ModExpansionTokens, AAsNext, AAsOut)
+	; AAsOut = AAsNext ).
 	
-remove_final_s(OrigShortFormString, ShortFormStringWithoutS) :-
-	( append(AllButLastChars, [0's], OrigShortFormString) ->
-	  ShortFormStringWithoutS = AllButLastChars
-	; ShortFormStringWithoutS = OrigShortFormString
-	).
-
 add_hyphen_to_expansion(AATokens, LastUnwantedToken, ExpansionTokensIn, ExpansionTokensOut) :-
 	% Do the AA tokens end with a hyphen? E.g.,
 	% "Hydrosulfide (HS-) coordination in iron porphyrinates." (PMID 20038134).

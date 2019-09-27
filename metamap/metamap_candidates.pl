@@ -421,7 +421,6 @@ frequent_first_word_pair('2',                   'acid').
 frequent_first_word_pair('3',                   'acid').
 frequent_first_word_pair('4',                   'acid').
 frequent_first_word_pair('accidental',          'poisoning').
-frequent_first_word_pair('acetaminophen',       'tablet').
 frequent_first_word_pair('activation',          'activity').
 frequent_first_word_pair('anterior',            'nerve').
 frequent_first_word_pair('anti',                'antibody').
@@ -433,10 +432,10 @@ frequent_first_word_pair('bacteria',            'protein').
 frequent_first_word_pair('bony',                'bone').
 frequent_first_word_pair('bony',                'vertebra').
 frequent_first_word_pair('c',                   'protein').
+frequent_first_word_pair('cdisc',               'terminology').
 frequent_first_word_pair('compact',             'bone').
 frequent_first_word_pair('compact',             'vertebra').
 frequent_first_word_pair('ctcae',               'injury').
-frequent_first_word_pair('decreased',           '[pe]').
 frequent_first_word_pair('down',                'activity').
 frequent_first_word_pair('downregulation',      'activity').
 frequent_first_word_pair('drosophila',          'protein').
@@ -444,6 +443,7 @@ frequent_first_word_pair('e',                   'protein').
 frequent_first_word_pair('entire',              'artery').
 frequent_first_word_pair('entire',              'muscle').
 frequent_first_word_pair('entire',              'vein').
+frequent_first_word_pair('grade',               'injury').
 frequent_first_word_pair('hemoglobin',          'phenotype').
 frequent_first_word_pair('hla',                 'antigen').
 frequent_first_word_pair('human',               '1').
@@ -451,7 +451,6 @@ frequent_first_word_pair('human',               '2').
 frequent_first_word_pair('human',               'antigen').
 frequent_first_word_pair('human',               'microrna').
 frequent_first_word_pair('human',               'protein').
-frequent_first_word_pair('increased',           '[pe]').
 frequent_first_word_pair('inhibition',          'activity').
 frequent_first_word_pair('intentional',         'poisoning').
 frequent_first_word_pair('lateral',             'nerve').
@@ -468,7 +467,6 @@ frequent_first_word_pair('periosteum',          'vertebra').
 frequent_first_word_pair('positive',            'activity').
 frequent_first_word_pair('positive',            'process').
 frequent_first_word_pair('posterior',           'nerve').
-frequent_first_word_pair('product',             'form').
 frequent_first_word_pair('rat',                 'protein').
 frequent_first_word_pair('regulation',          'activity').
 frequent_first_word_pair('regulation',          'process').
@@ -480,6 +478,7 @@ frequent_first_word_pair('stage',               'cancer').
 frequent_first_word_pair('stage',               'carcinoma').
 frequent_first_word_pair('stage',               'lymphoma').
 frequent_first_word_pair('stage',               'v7').
+frequent_first_word_pair('stage',               'v8').
 frequent_first_word_pair('structure',           'artery').
 frequent_first_word_pair('surface',             'bone').
 frequent_first_word_pair('surface',             'vertebra').

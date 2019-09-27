@@ -177,8 +177,6 @@ uc_tok(tok(uc,_,_,_)).
 ws_tok(tok(ws,_,_,_)).
 ws_tok(tok(ws,_,_,_,_)).
 
-
-
 % 'an' is overloaded: It can stand for
 % (1) broadly alphanumeric, meaning the union of all tokens
 % containing alphabetic and numeric strings

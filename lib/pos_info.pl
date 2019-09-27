@@ -205,7 +205,7 @@ create_UNEXP_raw_token_list([CurrentToken|RestTokens], UDA_AVL, CurrentPos, Toke
 % NewTokens:       The output token list.
 % NextPos:         The character position afteer processing this ws token.
 % RestTokensNext:  The input token list on which create_EXP_raw_token_list/5 should recurse.
-%		   In this simple case, RestTokensNext is simply RestTokens.
+%		   In this simple case,Z RestTokensNext is simply RestTokens.
 % RestNewTokens:   The output token list on which create_EXP_raw_token_list/5 should recurse.
 %		   In this simple case, RestNewTokens is simply the tail of NewTokens.
 

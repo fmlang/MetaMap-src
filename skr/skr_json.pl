@@ -96,6 +96,7 @@ generate_and_print_json(AllMMO, OutputStream) :-
 	  json_print(JMMOObj, 0, StartIndent, IndentInc, Padding, Space, NewLine, OutputStream)
 	; true
 	),
+% 	flush_output(OutputStream),
 	!.
 generate_and_print_json(AllMMO, _OutputStream) :-
 	AllMMO = [_ArgsMMO,_AAsMMO,_NegExMMO|UtteranceMMO],
