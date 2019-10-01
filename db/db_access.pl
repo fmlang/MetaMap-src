@@ -43,6 +43,7 @@
 	% db_get_cui_sts/2,
 	% db_get_cui_semtypes/2,
 	db_get_mesh_mh/2,
+	db_get_singular/2,
 	db_get_mesh_tc_relaxed/2,
 	db_get_meta_mesh/2,
 	db_get_mwi_word_count/3,
@@ -241,7 +242,7 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 
-default_release('2018AB').
+default_release('2019AA').
 
 initialize_db_access :-
 	get_data_release(Release, 1),
@@ -1228,3 +1229,27 @@ db_get_cui_sources_and_semtypes(CUI, SourcesList, SemTypesList) :-
         split_atom_completely(SemTypesAtom, ',', SemTypesList0),
         sort(SourcesList0, SourcesList),
         sort(SemTypesList0, SemTypesList).
+
+db_get_singular(PluralString, SingularString) :-
+    get_data_model(Model),
+    get_data_version(Version),
+    get_data_release(Year, 0),
+    model_location(Version, Year, Model, _BasePath, Location),
+    IrregPluralFileName = irreg_plural,
+    concat_atom([Location, '/', IrregPluralFileName], IRREG_PLURAL_TABLE),
+    file_exists(IRREG_PLURAL_TABLE, read),
+    atom_codes(IrregPluralFileName, IrregPluralString),
+    form_simple_query("singular", IrregPluralString, "plural", PluralString, Query),
+    run_query(Query, [[SingularAtom]], 1),
+    !,
+    atom_codes(SingularAtom, SingularString).
+db_get_singular(PluralString, SingularString) :-
+    ( append(SingularString, [0's], PluralString) ->
+      true
+    ; append(SingularString, [0'S], PluralString)
+    ),
+    !.
+db_get_singular(PluralString, SingularString) :-
+    SingularString = PluralString.
+					     
+					      
