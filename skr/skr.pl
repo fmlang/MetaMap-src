@@ -330,9 +330,18 @@ skr_phrases(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
 	  % clean up token list by removing un-consumed tokens
 	  remove_tokens_until_label_token(RawTokensNext, RawTokensOut)
 	  % skr_utilities:write_token_list(RawTokensOut, 0, 1)
-        ; fatal_error('skr_phrases/14 failed for text ~p: ~p~n',
-		      [InputLabel,UtteranceText])
+        ; format(user_error, 'skr_phrases/14 failed on text ~p: ~p~n',
+		      [InputLabel,UtteranceText]),
+	  conditionally_abort
         ).
+
+remove_empty_lists([], []).
+remove_empty_lists([H|T], Rest) :-
+	( H == [] ->
+	  NewRest = Rest
+	; Rest = [H|NewRest]
+	),
+	remove_empty_lists(T, NewRest).
 
 skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAtom,
 		AAs, UDAs, NoMapPairs, NoVarPairs, SyntacticAnalysis, TagList,
@@ -352,7 +361,8 @@ skr_phrases_aux(InputLabel, UtteranceText, OrigCitationTextAtom, CitationTextAto
 		      WordDataCacheIn, USCCacheIn,
 		      WordDataCacheOut, USCCacheOut,
 		      RawTokensIn, RawTokensOut,
-		      MMOPhrases, ExtractedPhrases),
+		      MMOPhrases0, ExtractedPhrases),
+	remove_empty_lists(MMOPhrases0, MMOPhrases),
 	% current_output(OutputStream),
 	% format(user_output, '~n### Current output before WSD is ~q', [OutputStream]),
 	compute_negex(RawTokensIn, UtteranceText, MMOPhrases, NegationTerms),
@@ -859,9 +869,24 @@ skr_phrase(Label, UtteranceText, PhraseSyntax, AAs, NoMapPairs, NoVarPairs,
 		       WordDataCacheOut, USCCacheOut,
 		       RawTokensOut, APhrases, MMOPhraseTerm) ->
 	  true
-        ; fatal_error('skr_phrase failed on ~w ~w~n~n', [Label, PhraseSyntax]),
-	  abort
+%         ; fatal_error('skr_phrase failed on ~w ~w~n~n', [Label, PhraseSyntax])
+        ; format(user_error, 'skr_phrase failed on ~w ~w~n', [Label, PhraseSyntax]),
+	  RawTokensOut = RawTokensIn,
+	  USCCacheOut = USCCacheIn,
+	  WordDataCacheOut = WordDataCacheIn,
+	  APhrases = [],
+	  MMOPhraseTerm = [],
+	  conditionally_abort
         ).
+
+conditionally_abort :-
+	( control_option(abort_on_fail)  ->
+	  format(user_error, '################################################################~n', []),
+	  format(user_error, 'PROCESSING ABORTED!~n', []),
+	  format(user_error, '################################################################~n', []),
+ 	  abort
+	; true
+	).
 
 skr_phrase_1(Label, UtteranceTextString,
 	     PhraseSyntax, AAs, NoMapPairs, NoVarPairs,
@@ -1355,9 +1380,11 @@ compute_evaluations(Label, UtteranceText, NoVarPairs,
 	debug_compute_evaluations_2(DebugFlags, GVCs, Variants),
 
 	debug_message(trace, '~N### Calling add_candidates: ~q~n', [TokenPhraseWords]),
-	test_single_char_tokens(InputMatchPhraseWords, IgnoreSingleChars),
+	% test_single_char_tokens(InputMatchPhraseWords, IgnoreSingleChars),
+	IgnoreSingleChars is 0,
 	CandidateCount is 1,
-	maybe_ignore_GVCs(GVCs, GVCsToEvaluate),
+	% maybe_ignore_GVCs(GVCs, GVCsToEvaluate),
+	GVCsToEvaluate = GVCs,
 	add_candidates(GVCsToEvaluate, CandidateCount, Variants, IgnoreSingleChars, DebugFlags,
 		       WordDataCacheIn, USCCacheIn,
 		       WordDataCacheOut, USCCacheOut),
@@ -2232,7 +2259,7 @@ construct_best_mappings(Evaluations, PhraseTextString, Phrase, PhraseWordInfoPai
 	append(AllDistributedMappings0, AllDistributedMappings),
 	length(AllDistributedMappings, AllDistributedMappingsCount),
 	debug_message(mappings, '~N### ~d Mappings with Duplicates.~n', [AllDistributedMappingsCount]),
-	test_mappings_limit(AllDistributedMappingsCount),
+	% test_mappings_limit(AllDistributedMappingsCount),
 	% Cut away all the choice points left by the pruning code!
 	!,
 	construct_best_mappings_1(Phrase, PhraseWordInfoPair, AllDistributedMappings,
@@ -2433,17 +2460,17 @@ modify_lphrase_syntax([FirstSyntaxElement|RestSyntaxElements],
 	),
 	modify_lphrase_syntax(RestSyntaxElements, FilteredEvaluations, RestModLPhraseOut).
 
-test_mappings_limit(MappingsCount) :-
-	  % If no_prune is not set, then determine the max allowable number of mappings
-	( \+ control_option(no_prune) ->
-	   ( control_value(mappings_limit, MaxMappingsCount) ->
-	     true
-	   ; MaxMappingsCount is 500000
-	   ),
-	   MappingsCount < MaxMappingsCount
-	  % If no_prune is set, simply succeed.	
-	; true
-	).	
+% test_mappings_limit(MappingsCount) :-
+% 	  % If no_prune is not set, then determine the max allowable number of mappings
+% 	( \+ control_option(no_prune) ->
+% 	   ( control_value(mappings_limit, MaxMappingsCount) ->
+% 	     true
+% 	   ; MaxMappingsCount is 500000
+% 	   ),
+% 	   MappingsCount < MaxMappingsCount
+% 	  % If no_prune is set, simply succeed.	
+% 	; true
+% 	).	
 
 compute_phrase_words_length(PhraseWordInfoPair, NPhraseWords) :-
 	  PhraseWordInfoPair = _AllPhraseWordInfo:FilteredPhraseWordInfo,

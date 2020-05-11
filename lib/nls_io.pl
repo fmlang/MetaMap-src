@@ -35,21 +35,16 @@
 
 :- module(nls_io,[
 	fget_line/2,
-  	fget_non_ws_only_line/3,
-	fget_lines_until_skr_break/4,
+  	fget_non_separator_line/3,
+	fget_lines_until_skr_break/4
 	% needed by tools/lib/reader.pl
-  	get_line/1,
-    	get_line/2
+  	% get_line/1,
+    	% get_line/2
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
-	local_ascii/1,
 	local_ws/1
     ]).
-
-% :- use_module(skr_lib(ctypes),[
-% 	is_ascii/1
-%     ]).
 
 :- use_module(skr(skr_utilities),[
 	fatal_error/2
@@ -59,34 +54,47 @@
 	concat_atom/2
     ]).
 
+:- use_module(library(lists), [
+        prefix/2
+   ]).
 
 
-/* fget_non_ws_only_line(+Stream, -Line)
 
-fget_non_ws_only_line/2 reads lines from Stream until it encounters a non
-"blank" Line, i.e., a line with only whitespace characters (if any).
-It fails at end-of-file.  */
+/* fget_non_separator_line(+Stream, -Line)
 
-fget_non_ws_only_line(Stream, NumBlankLines, Line) :-
+fget_non_separator_line/2 reads lines from Stream
+until it encounters a non-separator line, which is either
+  * an empty line or a line of whitespace (for MEDLINE format)
+  * a line beginning with "ER  -" (for RIS format).
+*/
+
+fget_non_separator_line(Stream, NumBlankLines, Line) :-
 	% At end of stream, peek_code returns -1
 	peek_code(Stream, Code),
 	Code =\= -1,
 	!,
 	fget_line(Stream, Line0),
-	( is_ws_only(Line0),
+	( separator_line(Line0),
           % If --blanklines 0 is specified,
 	  % whitespace before the first printing char is NOT ignored.
 	  NumBlankLines =\= 0 ->
-	  fget_non_ws_only_line(Stream, NumBlankLines, Line)
+	  fget_non_separator_line(Stream, NumBlankLines, Line)
 	; Line = Line0
 	).
 
-is_ws_only([]).
-is_ws_only([Code|Rest]) :-
+separator_line([]).
+% This is for RIS format, which uses "ER  -" as a citation-separator line,
+% unlike MEDLINE, which uses an empty line as a citation-separator line.
+separator_line([H|T]) :- prefix([H|T], "ER  -"), !.
+
+separator_line([H|T]) :- separator_line_aux([H|T]).
+
+separator_line_aux([]).
+separator_line_aux([Code|Rest]) :-
 	% tab, lf, vt, ff, cr and space
 	% is_space(Code),
 	local_ws(Code),
-	is_ws_only(Rest).
+	separator_line_aux(Rest).
 
 %%% /* fget_all_non_null_lines(+Stream, -Lines)
 %%% 
@@ -110,7 +118,7 @@ fget_lines_until_skr_break(Stream, NumBlankLinesOrig, NumBlankLinesIn, Lines) :-
 	( Terminator =:= -1 ->
 	  Lines = [Line]
 	  % If the input line consists only of whitespace...
-	; is_ws_only(Line) ->
+	; separator_line(Line) ->
 	  % Steven Bedrick special handling
 	  ( NumBlankLinesIn is 1 ->
 	    Lines = []

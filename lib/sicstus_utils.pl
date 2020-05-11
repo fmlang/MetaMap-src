@@ -137,7 +137,10 @@ lower(Text, Lower) :-
 
 lower_chars([], []).
 lower_chars([T|Ts], [U|Us]) :-
-        local_to_lower(T, U),
+        ( local_to_lower(T, U) ->
+	  true
+	; U = T
+	),
         lower_chars(Ts, Us).
 
 /* lowercase_list(+TextList, -LowercaseTextList)
@@ -146,7 +149,10 @@ strings/atoms corresponding to those in TextList. */
 
 lowercase_list([], []).
 lowercase_list([First|Rest], [LCFirst|LCRest]) :-
+%	write(user_output, 'CALL'(lower(First))), nl(user_output),
 	lower(First, LCFirst),
+%	atom_codes(LCFirstAtom, LCFirst),
+%	write(user_output, 'SUCCEED'(lower(First, LCFirst))), nl(user_output),
 	lowercase_list(Rest, LCRest).
 
 

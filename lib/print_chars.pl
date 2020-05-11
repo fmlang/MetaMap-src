@@ -41,11 +41,6 @@
 	portray_chars/1
    ]).
 
-:- use_module(metamap(metamap_tokenization), [
-	local_ascii/1,
-	local_print/1
-   ]).
-
 :- use_module(skr_lib(addportray), [
 	add_portray/1
    ]).

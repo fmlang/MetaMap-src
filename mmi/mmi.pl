@@ -54,6 +54,10 @@
 	tokenize_text_utterly/2
     ]).
 
+:- use_module(skr(skr_text_processing), [
+	medlineRIS_title_field_name/1
+   ]).
+
 :- use_module(skr(skr_utilities), [
 	conditionally_skr_begin_write/2,
    	conditionally_skr_end_write/2,
@@ -71,6 +75,7 @@
 
 :- use_module(skr_lib(nls_strings),[
 	atom_codes_list/2,
+	replace_nonprints/2,
 	split_string/4,
 	split_string_completely/3,
 	trim_and_compress_whitespace/2
@@ -128,7 +133,9 @@
         environ/2
    ]).
 
-do_MMI_processing(OrigUtterances, BracketedOutput, AAs, UDAList, DisambMMOutput) :-
+do_MMI_processing([], _BracketedOutput, _AAs, _UDAList, _DisambMMOutput).
+do_MMI_processing([H|T], BracketedOutput, AAs, UDAList, DisambMMOutput) :-
+	OrigUtterances = [H|T],
 	% Do MMI processing, if requested
 	( control_option(fielded_mmi_output) ->
 	  conditionally_skr_begin_write(BracketedOutput, 'MMI'),
@@ -192,7 +199,7 @@ max_freq(13).
 
 process_citation(UIAtom, MMOutput, FieldedStream) :-
 	max_freq(MaxFreqIn),
-	compute_mesh_in_text(MMOutput, MaxFreqIn, TFInfo, MaxFreqOut, FieldedStream),
+	compute_mesh_in_text(MMOutput, UIAtom, MaxFreqIn, TFInfo, MaxFreqOut, FieldedStream),
 	% format(user_output, '~p~n', [TFInfo]),
 	process_tf(TFInfo, MaxFreqOut, AATFInfo),
 	% format(user_output, '~p~n', [AATFInfo]),
@@ -210,28 +217,28 @@ process_citation(UIAtom, _MMOutput, _FieldedStream) :-
 %    compute_mesh_in_text(user_output,MMOutput,TFInfo).
 
 % compute_mesh_in_text(ReportStream,MMOutput,TFInfo) :-
-compute_mesh_in_text(MMOutput, MaxFreqIn, TFInfo, MaxFreqOut, Stream) :-
-        get_pre_tf_in_all_utterances(MMOutput, PreTFInfo0, Stream),
+compute_mesh_in_text(MMOutput, UI, MaxFreqIn, TFInfo, MaxFreqOut, Stream) :-
+        get_pre_tf_in_all_utterances(MMOutput, PreTFInfo0, UI, Stream),
 	sort(PreTFInfo0, PreTFInfo),
 	compute_mesh_in_textfields(PreTFInfo, MaxFreqIn, TFInfo0, MaxFreqOut),
 	sort(TFInfo0, TFInfo1),
 	collapse_tf(TFInfo1, TFInfo).
 
-get_pre_tf_in_all_utterances([], [], _Stream).
-get_pre_tf_in_all_utterances([Utterance|Rest], PreTFInfo, Stream) :-
-	get_pre_tf_in_utterance(Utterance, UtterancePreTFInfo, Stream),
+get_pre_tf_in_all_utterances([], [], _UI, _Stream).
+get_pre_tf_in_all_utterances([Utterance|Rest], PreTFInfo, UI, Stream) :-
+	get_pre_tf_in_utterance(UI, Utterance, UtterancePreTFInfo, Stream),
 	append(UtterancePreTFInfo, RestPreTFInfo, PreTFInfo),
-	get_pre_tf_in_all_utterances(Rest, RestPreTFInfo, Stream).
+	get_pre_tf_in_all_utterances(Rest, RestPreTFInfo, UI, Stream).
 
-get_pre_tf_in_utterance(Utterance, PreTFInfo, Stream) :-
+get_pre_tf_in_utterance(UI, Utterance, PreTFInfo, Stream) :-
 	Utterance = mm_output(utterance(Label,Text,_PosInfo,_ReplPos),
 			      CitationTextAtom,_ModifiedText,_Tagging,AAList,
 			      _Syntax,Phrases,_ExtractedPhrases),
 	maybe_output_text(Text, Stream),
 	determine_field_nsent(Label, Field, NSent),
-	UI = 'empty',
+	% UI = 'empty',
 	reformat_AA_list_for_output(AAList, UI, SortedAAList),
-	get_pre_tf_in_phrases(Phrases, CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo).
+	get_pre_tf_in_phrases(Phrases, UI, CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo).
 
 maybe_output_text(TextString, Stream) :-
         ( control_option(pipe_output) ->
@@ -276,13 +283,13 @@ determine_field_nsent(Label, Field, NSent) :-
 
 %  add_breakpoint([pred(mmi:get_lexcat/6), goal(_:G), true(arg(6,G,'UNKNOWN'))]-[exit,print,ask], BID).
 
-get_pre_tf_in_phrases([], _CitationTextAtom, _SortedAAList, _Field, _NSent, []).
-get_pre_tf_in_phrases([Phrase|RestPhrases], CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo) :-
-	get_pre_tf_in_phrase(Phrase, CitationTextAtom, SortedAAList, Field, NSent, PhrasePreTFInfo),
+get_pre_tf_in_phrases([], _UI, _CitationTextAtom, _SortedAAList, _Field, _NSent, []).
+get_pre_tf_in_phrases([Phrase|RestPhrases], UI, CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo) :-
+	get_pre_tf_in_phrase(UI, Phrase, CitationTextAtom, SortedAAList, Field, NSent, PhrasePreTFInfo),
 	append(PhrasePreTFInfo, RestPreTFInfo, PreTFInfo),
-	get_pre_tf_in_phrases(RestPhrases, CitationTextAtom, SortedAAList, Field, NSent, RestPreTFInfo).
+	get_pre_tf_in_phrases(RestPhrases, UI, CitationTextAtom, SortedAAList, Field, NSent, RestPreTFInfo).
 
-get_pre_tf_in_phrase(Phrase, CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo) :-
+get_pre_tf_in_phrase(UI, Phrase, CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo) :-
 	% extract the mappings component, which is a list of terms of the form
 	% map(-888,[
 	%  ev(-694,'C0025545','Metallothionein','Metallothionein',
@@ -295,7 +302,7 @@ get_pre_tf_in_phrase(Phrase, CitationTextAtom, SortedAAList, Field, NSent, PreTF
 	% remove_punct_pairs(InputMatchTagPairs1, InputMatchTagPairs),
 	InputMatchTagPairs = InputMatchTagPairs1,
         form_super_mapping(AllMappings, SuperMapping),
-	get_pre_tf_in_mapping(SuperMapping, InputMatchTagPairs,
+	get_pre_tf_in_mapping(SuperMapping, UI, InputMatchTagPairs,
 			      CitationTextAtom, SortedAAList, Field, NSent, PreTFInfo).
 
 % remove_punct_pairs([], []).
@@ -372,21 +379,21 @@ extract_evs([map(_Score,CandidateList)|RestMaps], [CandidateList|RestMappings]) 
 % TermString    = stringified MetaTerm (possibly non-preferred name of concept)
 % Value         = -NegValue
 % Text          = text in citation
-% Field         = ti or ab
+% Field         = ti (MEDLINE) / t1 (RIS) or ab
 % CUI           = CUI from ev term
 % NSent         = index of utterance in TI or AB
 % PosInfo       = PosInfo of concept
 % LexCat        = Lexical Category of concept
 % Negated       = 1/0 depending on NegEx status of concept
 
-get_pre_tf_in_mapping([], _Syntax, _CitationTextAtom, _SortedAAList, _Field, _NSent, []).
-get_pre_tf_in_mapping([Candidate|Rest], Syntax, CitationTextAtom,
+get_pre_tf_in_mapping([], _UI, _Syntax, _CitationTextAtom, _SortedAAList, _Field, _NSent, []).
+get_pre_tf_in_mapping([Candidate|Rest], UI, Syntax, CitationTextAtom,
 		      SortedAAList, Field, NSent, [TFZero|RestPreTFInfo]) :-
-	get_pre_tf_in_candidate(Candidate, Syntax, CitationTextAtom, SortedAAList, Field, NSent, TFZero),
-	get_pre_tf_in_mapping(Rest, Syntax, CitationTextAtom, SortedAAList, Field, NSent, RestPreTFInfo).
+	get_pre_tf_in_candidate(UI, Candidate, Syntax, CitationTextAtom, SortedAAList, Field, NSent, TFZero),
+	get_pre_tf_in_mapping(Rest, UI, Syntax, CitationTextAtom, SortedAAList, Field, NSent, RestPreTFInfo).
 
 
-get_pre_tf_in_candidate(Candidate, Syntax, CitationTextAtom, SortedAAList, Field, NSent, TFZeroTerm) :-
+get_pre_tf_in_candidate(UI, Candidate, Syntax, CitationTextAtom, SortedAAList, Field, NSent, TFZeroTerm) :-
 	get_all_candidate_features([negvalue,cui,metaterm,metaconcept,
 				    metawords,semtypes,posinfo,negated],
 				   Candidate,
@@ -402,7 +409,7 @@ get_pre_tf_in_candidate(Candidate, Syntax, CitationTextAtom, SortedAAList, Field
 	PosInfo = [H|T],
 	collapse_pos_info(T, H, CollapsedPosInfo),
 	extract_text_string(CollapsedPosInfo, CitationTextAtom, TextString),
-	get_lexcat(TextString, SortedAAList,
+	get_lexcat(UI, TextString, SortedAAList,
 		   [LowerMetaConcept,LowerMetaTerm|MetaWords],
 		   Syntax, Candidate, LexCat),
 	% TFZero = tf0(ConceptString,STs,TermString,Value,TextString,Field,
@@ -410,11 +417,11 @@ get_pre_tf_in_candidate(Candidate, Syntax, CitationTextAtom, SortedAAList, Field
 	tf0_term(ConceptString, STs, TermString, Value, TextString, Field,
 		 CUI, NSent, CollapsedPosInfo, LexCat, Negated, TFZeroTerm),
 	!.
-get_pre_tf_in_candidate(Candidate, _Syntax, _CitationTextAtom, _SortedAAList, _Field, _NSent, _TFZero) :-
+get_pre_tf_in_candidate(UI, Candidate, _Syntax, _CitationTextAtom, _SortedAAList, _Field, _NSent, _TFZero) :-
 	get_candidate_feature(metaconcept, Candidate, MetaConcept),
 	% Candidate = ev(_NegValue,_CUI,_MetaTerm,MetaConcept,_MetaWords,_SemTypes,
 	% 	       _MatchMap,_InvolvesHead,_IsOvermatch,_SourceInfo,_PosInfo),
-	fatal_error('get_pre_tf_in_mapping/5 failed for ~p~n', [MetaConcept]).
+	fatal_error('get_pre_tf_in_mapping/5 failed for ~p in ~q~n', [MetaConcept,UI]).
 
 
 lc_all([], []).
@@ -423,14 +430,14 @@ lc_all([H|T], [LowerH|LowerT]) :-
 	lc_all(T, LowerT).
 
 
-get_AA_expansion(TextString0, SortedAAList, Expansion, TextString) :-
+get_AA_expansion(UI, TextString0, SortedAAList, Expansion, TextString) :-
 	( SortedAAList \== [],
-	  UI = empty,
+	  % UI = empty,
 	  atom_codes(TextAtom0, TextString0),
 	  tokenize_text_utterly(TextAtom0, TokenizedTextAtom0),
 	  member(Token, [TextAtom0|TokenizedTextAtom0]),
 	  memberchk(UI-Token-ExpansionTextAtom-_AATokenLength-_AATextLength-
-		   _ExpansionTokenLength-_ExpansionTextLength,
+		   _ExpansionTokenLength-_ExpansionTextLength-_StartPos,
 		    SortedAAList) ->
 	  tokenize_text(ExpansionTextAtom, TokenizedExpansionTextAtom),
 	  % English is a head-final language, so try to find the lexcat of the last word
@@ -442,11 +449,11 @@ get_AA_expansion(TextString0, SortedAAList, Expansion, TextString) :-
 	  TextString = TextString0
 	).
 
-get_lexcat(TextString0, SortedAAList, MetaWords, Syntax, Candidate, LexCat) :-
+get_lexcat(UI, TextString0, SortedAAList, MetaWords, Syntax, Candidate, LexCat) :-
 	trim_and_compress_whitespace(TextString0, TextString1), 
 	% If TextString0 is AA, replace it with its expansion,
 	% for which there will presumably be a lexcat.
- 	get_AA_expansion(TextString1, SortedAAList, Expansion, TextString),
+ 	get_AA_expansion(UI, TextString1, SortedAAList, Expansion, TextString),
 	atom_codes(TextAtom1, TextString1),
 	tokenize_text_utterly(TextAtom1, TokenizedAtom0),
 	lower(TextString, TextStringLC),
@@ -464,7 +471,7 @@ get_lexcat(TextString0, SortedAAList, MetaWords, Syntax, Candidate, LexCat) :-
 	  SortedLexCats = [_Weight-LexCat|_Rest] ->
 	  true
 	; LexCat = 'UNKNOWN',
-	  send_message('### UNKNOWN lexcat for ~q|~q|~q~n', [AtomWordList,Candidate,Syntax])
+	  send_message('### UNKNOWN lexcat in ~q for ~q|~q|~q~n', [UI, AtomWordList,Candidate,Syntax])
 	).
 
 % The lower the weight, the better
@@ -508,13 +515,17 @@ extract_text_atoms([StartPos/Length|RestPosInfo], CitationTextAtom, [Atom|RestAt
 	extract_text_atoms(RestPosInfo, CitationTextAtom, RestAtoms).
 
 compute_mesh_and_treecodes(MetaConcept, TreeCodes) :-
-	( db_get_meta_mesh(MetaConcept, Concept) ->
+	replace_nonprints(MetaConcept, MetaConcept1),
+	trim_and_compress_whitespace(MetaConcept1, MetaConcept2),
+	( db_get_meta_mesh(MetaConcept2, Concept) ->
 	  true
-        ; db_get_mesh_mh(MetaConcept, Concept) ->
+        ; db_get_mesh_mh(MetaConcept2, Concept) ->
 	  true
-	; Concept = MetaConcept
-	),
-	db_get_mesh_tc_relaxed(Concept, TreeCodes).
+	; Concept = MetaConcept2,
+	  db_get_mesh_tc_relaxed(Concept, TreeCodes) ->
+	  true
+	; TreeCodes = []
+	).
 
 % tuple4_term(Term, Field, NSent, Text, Tuple4Term) :-
 % 	Tuple4Term = tuple4(Term, Field, NSent, Text).
@@ -580,7 +591,7 @@ compute_mesh_in_textfields([TFZeroTerm1, TFZeroTerm2 | RestTFZeroTerms],
 	Fields = [Field1,Field2|RestFields],
 	length(Fields, FrequencyCount),
 	update_max_freq(MaxFreqIn, FrequencyCount, MaxFreqNext),
-	set_title_flag_n(Fields, ti, TitleFlag),
+	set_title_flag_n(ti, Fields, TitleFlag),
 	compute_mesh_and_treecodes(MetaConcept, TreeCodes),
 	compute_mesh_in_textfields(NewRestTFZeroTerms, MaxFreqNext, ComputedRest, MaxFreqOut).
 % compute_mesh_in_textfields([tf0(MetaConcept,STs,Term,Value,Text,
@@ -667,17 +678,25 @@ add_pos_info_to_tuples([Tuple6|RestTuples], AllPosInfo, [Tuple7|RestTuplesWithPo
 	memberchk(Tuple5, AllPosInfo),
 	add_pos_info_to_tuples(RestTuples, AllPosInfo, RestTuplesWithPosInfo).
 
-set_title_flag_1(Field, TitleFlag) :-
-	( Field == ti ->
+set_title_flag_1(FieldAtom, TitleFlag) :-
+	( upper(FieldAtom, UpperFieldAtom),
+	  medlineRIS_title_field_name(UpperFieldAtom) ->
 	  TitleFlag = yes
 	; TitleFlag = no
 	).
 
-set_title_flag_n(Fields, Value, TitleFlag) :-
-	( member(Value,Fields) ->
+set_title_flag_n(yes, Fields, TitleFlag) :-
+	( member(yes, Fields) ->
 	  TitleFlag = yes
 	; TitleFlag = no
 	).
+set_title_flag_n(ti, Fields, TitleFlag) :-
+	medlineRIS_title_field_name(UpperTitleFieldAtom),
+	lower(UpperTitleFieldAtom, LowerTitleFieldAtom),
+	member(LowerTitleFieldAtom, Fields),
+	!,
+	TitleFlag = yes.
+set_title_flag_n(ti, _Fields, no).
 
 update_max_freq(MaxFreqIn, FrequencyCount, MaxFreqOut) :-
 	( FrequencyCount > MaxFreqIn ->
@@ -725,7 +744,7 @@ collapse_tf([TFTerm1,TFTerm2|Rest], [TFTerm3|ComputedRest]) :-
 	Tuples0 = [Tuples1,Tuples2|RestTuples],
 	append(Tuples0, Tuples),
 	TitleFlags = [TitleFlag1,TitleFlag2|RestTitleFlags],
-	set_title_flag_n(TitleFlags, yes, TitleFlag),
+	set_title_flag_n(yes, TitleFlags, TitleFlag),
 	Freqs = [Freq1,Freq2|RestFreqs],
 	% Texts0 = [Texts1,Texts2|RestTexts],
 	% append(Texts0, Texts),
@@ -965,7 +984,7 @@ print_treecode_info([FirstTreeCode|RestTreeCodes], Stream) :-
 
 
 % We want the 4-tuple terms sorted in reverse order of appearance in the original citation,
-% i.e., all X-ab-N-Y terms before all X-ti-N-Y terms, and within all the ab and ti terms,
+% i.e., all X-ab-N-Y terms before all X-ti/t1-N-Y terms, and within all the ab and ti terms,
 % in reverse order of utterance number.
 % We do this via keysort, by
 % (1) creating keys of the form ab-NegN, where NegN is the negative of the original N,
@@ -1019,6 +1038,9 @@ augment_fields([Field|Rest], [N-UCField|AugmentedRest]) :-
 fieldn(Field, UCField, N) :-
 	( Field == ti ->
 	  UCField = 'TI',
+	  N is 1
+	; Field == t1 ->
+	  UCField = 'T1',
 	  N is 1
 	; Field == ab ->
 	  UCField = 'AB',

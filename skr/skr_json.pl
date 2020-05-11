@@ -1272,7 +1272,13 @@ conditionally_indent(Env, Indent, Space, OutputStream) :-
 jp(J) :-
 	json_print(J, 0, 0, 0, 0, '', '', user_output).
 
-json_print(object(ElementList), Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream) :-
+
+json_print(JSON, Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream) :-
+	% format(user_error, '~w~n~n~n', [print:JSON]),
+	json_print_1(JSON, Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream).
+
+
+json_print_1(object(ElementList), Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream) :-
 	!,
 	conditionally_indent(Env, Indent, Space, OutputStream),
 	format(OutputStream, '{~w',[NewLine]),
@@ -1282,7 +1288,7 @@ json_print(object(ElementList), Env, Indent, IndentInc, Padding, Space, NewLine,
 	conditionally_indent(1, Indent, Space, OutputStream),
 	format(OutputStream, '}', []).
 
-json_print(pair(Key, Value), _Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream) :-
+json_print_1(pair(Key, Value), _Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream) :-
 	!,
 	( atomic(Value) ->
 	  ensure_atom(Value, ValueAtom),
@@ -1294,7 +1300,7 @@ json_print(pair(Key, Value), _Env, Indent, IndentInc, Padding, Space, NewLine, O
 	  json_print(Value, 0, Indent, IndentInc, Padding, Space, NewLine, OutputStream)
 	).
 
-json_print([H|T], _Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream) :-
+json_print_1([H|T], _Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream) :-
 	!,
 	format(OutputStream, '[', []),
 	( atomic(H) ->
@@ -1305,7 +1311,7 @@ json_print([H|T], _Env, Indent, IndentInc, Padding, Space, NewLine, OutputStream
 	json_print_aux([H|T], NextIndent, IndentInc, Padding, Space, NewLine, OutputStream),
 	format(OutputStream, ']', []).
 	
-json_print(Atomic, _Env, Indent, _IndentInc, _Padding, Space, _NewLine, OutputStream) :-
+json_print_1(Atomic, _Env, Indent, _IndentInc, _Padding, Space, _NewLine, OutputStream) :-
 	atomic(Atomic),
 	!,
 	conditionally_indent(0, Indent, Space, OutputStream),

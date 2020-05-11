@@ -55,6 +55,7 @@
 	% must be exported for mm_print and mwi_utilities 
 	replace_all_substrings/4,
 	replace_nonprints_in_strings/2,
+        replace_nonprints/2,
 	replace_tabs_in_strings/2,
 	safe_number_codes/2,
 	split_string/4,
@@ -79,7 +80,7 @@
 	local_alpha/1,
 	local_digit/1,
 	local_print/1,
-	local_to_lower/2,
+	% local_to_lower/2,
 	local_ws/1,
 	tokenize_text_more_lc/2
     ]).
@@ -1134,7 +1135,7 @@ replace_nonprints_in_strings([First|Rest], [ModifiedFirst|ModifiedRest]) :-
 
 replace_nonprints([], []).
 replace_nonprints([Char|Rest], [ModifiedChar|ModifiedRest]) :-
-	( Char < 127,
+	( % Char < 127,
 	  local_print(Char) ->
 	  ModifiedChar = Char
 	; ModifiedChar = 32

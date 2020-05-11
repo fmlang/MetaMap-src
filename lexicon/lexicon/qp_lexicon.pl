@@ -91,6 +91,7 @@
    ]).
 
 :- use_module(metamap(metamap_tokenization), [
+	local_alnum/1,
 	local_punct/1,
 	tokenize_text/2
    ]).
@@ -824,15 +825,28 @@ remove_unwanted_substrings(LexFormStringIn, LexFormStringOut) :-
 unwanted_string("(ies)").
 unwanted_string("(es)").
 unwanted_string("(s)").
-unwanted_string("'s").
+% unwanted_string("'s").
 
 change_puncts_to_blanks([], []).
+change_puncts_to_blanks([C1, 39, C3|T1], [C1, 39, C3|T2]) :-
+	local_alnum(C1),
+	local_alnum(C3),
+	!,
+	change_puncts_to_blanks(T1, T2).
 change_puncts_to_blanks([H1|T1], [H2|T2]) :-
 	( local_punct(H1) ->
 	  H2 = 0'    % there is a blank space after the "'"!
 	; H2 = H1
 	),
 	change_puncts_to_blanks(T1, T2).
+
+% change_puncts_to_blanks([], []).
+% change_puncts_to_blanks([H1|T1], [H2|T2]) :-
+% 	( local_punct(H1) ->
+%	  H2 = 0'    % there is a blank space after the "'"!
+%	; H2 = H1
+%	),
+%	change_puncts_to_blanks(T1, T2).
 	
 
 count_matching_input_tokens([], InputTokenList,
@@ -944,10 +958,24 @@ update_match_type(MatchScoreIn, CurrentMatchScore, MatchScoreNext) :-
 %             If the input token list is      [rami,       communicantes]
 %                the   lex token list will be [ramus, ' ', communicans]
 
+
+% Allow token match if the tokens are identical (of course!), or if
+% First LexToken == FirstInputToken + apostrophe + s.
+apostrophe_s_match(FirstLexToken, FirstInputToken) :-
+	( FirstLexToken == FirstInputToken ->
+	  true
+	; atom_codes(FirstLexToken, FirstLexTokenCodes),
+	  atom_codes(FirstInputToken, FirstInputTokenCodes),
+	  append(FirstInputTokenCodes, Tail, FirstLexTokenCodes),
+	  Tail = [0'\', 0's]
+	).
+	  
+
 token_match([FirstLexToken|RestLexTokens], [FirstInputToken|RestInputTokens],
 	    RemainingLexTokens, RemainingInputTokens,
 	    AdditionalInputTokenCount, MatchScore, MatchingLexTokens) :-
- 	( FirstLexToken == FirstInputToken ->
+	( apostrophe_s_match(FirstLexToken, FirstInputToken) ->
+%  	( FirstLexToken == FirstInputToken ->
 %	  atom_codes(FirstLexToken, [FirstLexTokenCode|_]),
 %	  \+ local_punct(FirstLexTokenCode) ->
 	  RemainingLexTokens = RestLexTokens,

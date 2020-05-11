@@ -51,7 +51,9 @@ establish_tcp_connection(ServerName, ServerHost, Port, Stream) :-
 
 test_tcp_connect(ServerName, ServerHost, Port, Stream) :-
 	on_exception(ExceptionCode,
-		     socket_client_open(inet(ServerHost,Port), Stream, [type(text)]),
+		     socket_client_open(inet(ServerHost,Port),
+					Stream,
+					[type(text),encoding('utf-8')]),
 		     signal_tcp_error(socket_client_open,
 				      ServerName, ServerHost, Port, ExceptionCode)).
 

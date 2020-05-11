@@ -198,7 +198,11 @@ re_attach_apostrophe_s_to_prev_word([OrigWord, '''', s | RestWordsIn], TagList, 
 	concat_atom([OrigWord, '''', s], WordWithApostropheS),
 	% verify that the synthetically created Word+apostrophe+s
 	% is indeed in the TagList!
-	memberchk([WordWithApostropheS,_LexCat], TagList),
+	% Don't check TagList is there is none!
+	( control_option(no_tagging) ->
+	  true
+	; memberchk([WordWithApostropheS,_LexCat], TagList)
+	),
 	!,
 	WordListOut = [WordWithApostropheS|RestWordsOut],
 	re_attach_apostrophe_s_to_prev_word(RestWordsIn, TagList, RestWordsOut).

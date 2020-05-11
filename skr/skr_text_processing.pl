@@ -37,7 +37,8 @@
 	extract_sentences/13,
 	get_skr_text/2,
 	get_skr_text_2/2,
-	medline_field_separator_char/1,
+	medlineRIS_field_separator_char/1,
+        medlineRIS_title_field_name/1,
 	text_field/1
 	% is_sgml_text/1,
 	% moved from labeler % needed by sgml_extractor?
@@ -70,7 +71,7 @@
 :- use_module(skr_lib(nls_io), [
 	fget_line/2,
 	fget_lines_until_skr_break/4,
-	fget_non_ws_only_line/3
+	fget_non_separator_line/3
     ]).
 
 
@@ -131,7 +132,7 @@ get_skr_text(Lines, TextID) :-
 % get_skr_text_2 is used ONLY for reading in the UDA file (and the NoMap file).
 get_skr_text_2(InputStream, [First|Rest]) :-
 	% skip all blank lines at the beginning of the input
-	fget_non_ws_only_line(InputStream, 1, First),
+	fget_non_separator_line(InputStream, 1, First),
 	% fget_line(InputStream, First),
         !,
 	NumBlankLines is 1,
@@ -140,7 +141,7 @@ get_skr_text_2(_, []).
 
 get_skr_text_3(InputStream, NumBlankLines, [FirstText|Rest], TextID) :-
 	% Skip all blank lines at the beginning of the input
-	fget_non_ws_only_line(InputStream, NumBlankLines, First),
+	fget_non_separator_line(InputStream, NumBlankLines, First),
 	!,
 	% "sldi" == "single-line-delimited input"
 	% The sldi option reads exactly one line of input and then stops reading.
@@ -253,17 +254,18 @@ extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
 	glom_whitespace_fields(RestLines, FirstLine, Lines00),
 	replace_tabs_in_strings(Lines00, Lines1),
 	replace_nonprints_in_strings(Lines1, Lines2),
-	( medline_citation(Lines2) ->
+	% Lines2 = Lines1,
+	( medlineRIS_citation(Lines2) ->
 	  extract_coord_sents_from_citation(Lines2, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
 					    UniqueIDString, AAs, UDAListIn, UDAListOut, UDA_AVL),
 	  InputType = citation
-	; is_smart_fielded(Lines2) ->
-	  extract_coord_sents_from_smart(Lines2, TextFields, NonTextFields,
-					 Sentences, CoordinatedSentences,
-					 UniqueIDString, AAs, UDAListIn, UDAListOut, UDA_AVL),
-	  InputType = smart,
-	  NonTextFields = []
+% 	; is_smart_fielded(Lines2) ->
+% 	  extract_coord_sents_from_smart(Lines2, TextFields, NonTextFields,
+% 					 Sentences, CoordinatedSentences,
+% 					 UniqueIDString, AAs, UDAListIn, UDAListOut, UDA_AVL),
+% 	  InputType = smart,
+% 	  NonTextFields = []
 	; form_dummy_citation(Lines2, TextID, CitationLines),
 	  extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
 					    Sentences, CoordinatedSentences,
@@ -284,45 +286,54 @@ extract_sentences(Lines0, TextID, InputType, TextFields, NonTextFields,
 % (2) A subsequent string begins with the same sequence as above,
 % but with "TI" instead of "PMID" or "UI".
 
-medline_citation([FirstString,NextString|RestStrings]) :-
-	medline_PMID_field_name(PMIDFieldNameAtom),
-	atom_codes(PMIDFieldNameAtom, PMIDFieldNameString),
-	medline_field_string(FirstString, PMIDFieldNameString),
+medlineRIS_citation([FirstString,NextString|RestStrings]) :-
+	medlineRIS_field_string(FirstString, FirstFieldNameString),
+	atom_codes(FirstFieldNameAtom, FirstFieldNameString),
+	medlineRIS_first_field_name(FirstFieldNameAtom),
 	!,
-	medline_title_field_name(TitleFieldNameAtom),
-	atom_codes(TitleFieldNameAtom, TitleFieldNameString),
 	member(OtherString, [NextString|RestStrings]),
-	medline_field_string(OtherString, TitleFieldNameString),
+	medlineRIS_field_string(OtherString, TitleFieldNameString),
+	atom_codes(TitleFieldNameAtom, TitleFieldNameString),
+	medlineRIS_title_field_name(TitleFieldNameAtom),
 	!.
 
-medline_field_string(PMIDString, FieldNameString) :-
+medlineRIS_field_string(PMIDString, FieldNameString) :-
 	trim_whitespace_left(PMIDString, TrimmedPMIDString),
-	lower_chars(TrimmedPMIDString, LowerTrimmedPMIDString),
-	append(FieldNameString, StringWithoutCitationIndicator, LowerTrimmedPMIDString),
-	trim_whitespace_left(StringWithoutCitationIndicator, TrimmedStringWithoutCitationIndicator),
-	TrimmedStringWithoutCitationIndicator = [FirstChar|_RestChars],
-	medline_field_separator_char(FirstChar).
+% 	lower_chars(TrimmedPMIDString, LowerTrimmedPMIDString),
+	append(FieldNameString, StringWithoutCitationIndicator, TrimmedPMIDString),
+	StringWithoutCitationIndicator = [FirstChar1|_],
+	medlineRIS_field_separator_char(FirstChar1),	
+	trim_whitespace_left(StringWithoutCitationIndicator,
+			     TrimmedStringWithoutCitationIndicator),
+	TrimmedStringWithoutCitationIndicator = [FirstChar2|_RestChars],
+	medlineRIS_field_separator_char(FirstChar2).
 
-medline_field_separator_char(0'-).
-medline_field_separator_char(0'|).
-medline_field_separator_char(0':).
-medline_field_separator_char(0'.).
+medlineRIS_field_separator_char(0'-).
+medlineRIS_field_separator_char(0'|).
+medlineRIS_field_separator_char(0':).
+medlineRIS_field_separator_char(0'.).
+medlineRIS_field_separator_char(0' ).
 
-medline_PMID_field_name(pmid).
-medline_PMID_field_name(ui).
+medlineRIS_first_field_name('PMID').   % For MEDLINE format
+medlineRIS_first_field_name('TY').     % For RIS format
+
+medlineRIS_PMID_field_name('PMID'). % MEDLINE title
+medlineRIS_PMID_field_name('UI').   % Dummy citation title
+medlineRIS_PMID_field_name('U1').   % RIS title
 
 % See
 % https://www.nlm.nih.gov/bsd/mms/medlineelements.html
 % for the various "TI" fields.
-medline_title_field_name(ti).     % Title
-medline_title_field_name(tt).     % Transliterated Title
-medline_title_field_name(bti).    % Book Title
-medline_title_field_name(cti).    % Collection Title
-medline_title_field_name(vti).    % Volume Title
+medlineRIS_title_field_name('TI').     % MEDLINE Title
+medlineRIS_title_field_name('T1').     % RIS Title
+medlineRIS_title_field_name('TT').     % Transliterated Title
+medlineRIS_title_field_name('BTI').    % Book Title
+medlineRIS_title_field_name('CTI').    % Collection Title
+medlineRIS_title_field_name('VTI').    % Volume Title
 
 
-is_smart_fielded([First,_|_]) :-
-	append(".", _, First).
+% is_smart_fielded([First,_|_]) :-
+% 	append(".", _, First).
 
 /* form_dummy_citation(+Lines, -CitationLines)
 
@@ -374,11 +385,11 @@ extract_coord_sents_from_citation(CitationLines, TextFields, NonTextFields,
 				  Sentences, CoordinatedSentences,
 				  UniqueID, AAs, UDAListIn, UDAListOut, UDA_AVL) :-
     extract_all_fields(CitationLines, CitationFields),
-    (   member([FieldIDString,Field], CitationFields),
-	lower_chars(FieldIDString, LowerFieldIDString),
-	atom_codes(LowerFieldIDAtom, LowerFieldIDString), 
-	medline_PMID_field_name(LowerFieldIDAtom) ->
-        extract_document_unique_identifier(Field, UniqueID)
+    ( medlineRIS_PMID_field_name(FieldIDAtom),
+      atom_codes(FieldIDAtom, FieldIDString),
+      member([FieldIDString,Field], CitationFields) ->
+%      lower_chars(FieldIDString, LowerFieldIDString),
+      extract_document_unique_identifier(FieldIDAtom, Field, UniqueID)
     ;   UniqueID = "00000000"
     ),
     extract_coord_sents_from_fields(UniqueID, CitationFields, TextFields, NonTextFields,
@@ -493,7 +504,7 @@ extract_rest_of_field([First|Rest],[First|RestFieldLines], NewFieldID,
 % Non-DCG version
 % f_begins_field(FR,A,B) :-
 % 	f_dense_token(Field,A,C),
-% 	medline_field_data(Field,_D,_E),
+% 	medlineRIS_field_data(Field,_D,_E),
 % 	f_separator(_F,C,G),
 % 	% format(user_output, 'BEFORE f_any~n', []),
 % 	format(user_output, 'BEFORE f_any(~w,~w,~w)~n', [R,G,H]),
@@ -506,13 +517,13 @@ extract_rest_of_field([First|Rest],[First|RestFieldLines], NewFieldID,
 % Cleaned-up DCG version
 f_begins_field(FR) -->
 	f_dense_token(F),
-	{ medline_field_data(F,_,_) },
+	{ medlineRIS_field_data(F) },
 	f_separator(_),
 	f_any(R),
 	{ FR = [F,R] }.
 
 % Original DCG version
-% f_begins_field(FR) --> f_dense_token(F), {medline_field_data(F,_,_)},
+% f_begins_field(FR) --> f_dense_token(F), {medlineRIS_field_data(F,_,_)},
 %                        f_separator(_), f_any(R),
 %                         {FR=[F,R]}.
 
@@ -530,7 +541,7 @@ f_begins_field(FR) -->
 
 % Cleaned-up DCG version
 f_dense_token(T) -->
-	[Char], { \+ Char == 0' }, { \+ medline_field_separator_char(Char) },
+	[Char], { \+ Char == 0' }, { \+ medlineRIS_field_separator_char(Char) },
 	( f_dense_token(U) ->
 	  { T = [Char|U] }
 	; { T = [Char] }
@@ -561,7 +572,7 @@ f_dense_token(T) -->
 f_separator(S) -->
 	f_blanks(_B1),
 	[Char],
-	{ medline_field_separator_char(Char) },
+	{ medlineRIS_field_separator_char(Char) },
 	f_blanks(_B2),
 	{ S = Char }.
 
@@ -629,223 +640,535 @@ medline_field/3 is a factual predicate that defines Medline/PubMed fields.
 Note that legal fields are either those defined by PubMed or additional
 fields (UI, TX, QU and QT) that we use. */
 
-medline_field_data(FieldString, ShortDescription, LongDescription) :-
+medlineRIS_field_data(FieldString) :-
 	atom_codes(FieldAtom, FieldString),
-	medline_field(FieldAtom, ShortDescription, LongDescription).
+	( medline_field(FieldAtom) ->
+	 true
+	; ris_field(FieldAtom)
+	).
 
-medline_field('UI',
-	      'Unique Identifier',
-	      'Unique Identifier').
-medline_field('TX',
-	      'Text',
-	      'Text').
-medline_field('QU',
-	      'Query',
-	      'Query').
-medline_field('QT',
-	      'Query Text',
-	      'Query Text').
-medline_field('AB',
-	      'Abstract',
-	      'Abstract').
-medline_field('AD',
-	      'Affiliation',
-	      'Institutional affiliation and address of the first author, and grant numbers').
-medline_field('AID',
-	      'Article Identifier',
-	      'Article ID values may include the pii (controlled publisher identifier) or doi (Digital Object Identifier)').
-medline_field('AU',
-	      'Author',
-	      'Authors').
-medline_field('CI',
-	      'Copyright Information',
-	      'Copyright statement').
-medline_field('CIN',
-	      'Comment In',
-	      'Reference containing a comment about the article').
-medline_field('CN',
-	      'Corporate Author',
-	      'Corporate author or group names with authorship responsibility').
-medline_field('CON',
-	      'Comment On',
-	      'Reference upon which the article comments').
-medline_field('DA',
-	      'Date Created',
-	      'Used for internal processing at NLM').
-medline_field('DCOM',
-	      'Date Completed',
-	      'Used for internal processing at NLM').
-medline_field('DEP',
-	      'Date of Electronic Publication',
-	      'Electronic publication date').
-medline_field('DP',
-	      'Publication Date',
-	      'The date the article was published').
-medline_field('EDAT',
-	      'Entrez Date',
-	      'The date the citation was added to PubMed').
-medline_field('EFR',
-	      'Erratum For',
-	      'Cites the original article needing the correction').
-medline_field('EIN',
-	      'Erratum In',
-	      'Reference containing a published erratum to the article').
-medline_field('FAU',
-	      'Full Author Name',
-	      'Full Author Names').
-medline_field('FIR',
-	      'Full Investigator',
-	      'Full investigator name').
-medline_field('FPS',
-	      'Full Personal Name as Subject',
-	      'Full Personal Name of the subject of the article').
-medline_field('GN',
-	      'General Note',
-	      'Supplemental or descriptive information related to the document').
-medline_field('GR',
-	      'Grant Number',
-	      'Research grant numbers, contract numbers, or both that designate financial support by any agency of the US PHS (Public Health Service)').
-medline_field('GS',
-	      'Gene Symbol',
-	      'Abbreviated gene names (used 1991 through 1996)').
-medline_field('IP',
-	      'Issue',
-	      'The number of the issue, part, or supplement of the journal in which the article was published').
-medline_field('IR',
-	      'Investigator',
-	      'NASA-funded principal investigator').
-medline_field('IRAD',
-	      'Investigator Affiliation',
-	      'Affiliation of NASA-funded principal investigator').
-medline_field('IS',
-	      'ISSN',
-	      'International Standard Serial Number of the journal').
-medline_field('JID',
-	      'NLM Unique ID',
-	      'Unique journal ID in NLM''s catalog of books, journals, and audiovisuals').
-medline_field('LA',
-	      'Language',
-	      'The language in which the article was published').
-medline_field('LR',
-	      'Last Revision Date',
-	      'The date a change was made to the record during a maintenance procedure').
-medline_field('MH',
-	      'MeSH Terms',
-	      'NLM''s controlled vocabulary').
-medline_field('MHDA',
-	      'MeSH Date',
-	      'The date MeSH terms were added to the citation. The MeSH date is the same as the Entrez date until MeSH are added').
-medline_field('OAB',
-	      'Other Abstract',
-	      'Abstract supplied by an NLM collaborating organization').
-medline_field('OCI',
-	      'Other Copyright Information',
-	      'Copyright owner').
-medline_field('OID',
-	      'Other ID',
-	      'Identification numbers provided by organizations supplying citation data').
-medline_field('ORI',
-	      'Original Report In',
-	      'Displays on Patient Summary. Cites original article associated with the patient summary').
-medline_field('OT',
-	      'Other Term',
-	      'Non-MeSH subject terms (keywords) assigned by an organization identified by the Other Term Owner').
-medline_field('OTO',
-	      'Other Term Owner',
-	      'Organization that provided the Other Term data').
-medline_field('OWN',
-	      'Owner',
-	      'Organization acronym that supplied citation data').
-medline_field('PG',
-	      'Pagination',
-	      'The full pagination of the article').
-medline_field('PHST',
-	      'Publication History Status Date',
-	      'History status date').
-medline_field('PL',
-	      'Place of Publication',
-	      'Journal''s country of publication').
-medline_field('PMID',
-	      'PubMed Unique Identifier',
-	      'Unique number assigned to each PubMed citation').
-medline_field('PS',
-	      'Personal Name as Subject',
-	      'Individual is the subject of the article').
-medline_field('PST',
-	      'Publication Status',
-	      'Publication status').
-medline_field('PT',
-	      'Publication Type',
-	      'The type of material the article represents').
-medline_field('PUBM',
-	      'Publishing Model',
-	      'Article''s model of print or electronic publishing').
-medline_field('RF',
-	      'Number of References',
-	      'Number of bibliographic references for Review articles').
-medline_field('RIN',
-	      'Retraction In',
-	      'Retraction of the article').
-medline_field('RN',
-	      'EC/RN Number',
-	      'Number assigned by the Enzyme Commission to designate a particular enzyme or by the Chemical Abstracts Service for Registry Numbers').
-medline_field('ROF',
-	      'Retraction Of',
-	      'Article being retracted').
-medline_field('RPF',
-	      'Republished From',
-	      'Original article').
-medline_field('RPI',
-	      'Republished In',
-	      'Corrected and republished article').
-medline_field('SB',
-	      'Subset',
-	      'Journal/Citation Subset values representing various topic areas').
-medline_field('SFM',
-	      'Space Flight Mission',
-	      'NASA-supplied data space flight/mission name and/or number').
-medline_field('SI',
-	      'Secondary Source Identifier',
-	      'Identifies a secondary source that supplies information, e.g., other data sources, databanks and accession numbers of molecular sequences discussed in articles').
-medline_field('SO',
-	      'Source',
-	      'Composite field containing bibliographic information').
-medline_field('SPIN',
-	      'Summary For Patients In',
-	      'Cites a patient summary article').
-medline_field('STAT',
-	      'Status Tag',
-	      'Used for internal processing at NLM').
-medline_field('TA',
-	      'Journal Title Abbreviation',
-	      'Standard journal title abbreviation').
-medline_field('TI',
-	      'Title',
-	      'The title of the article').
-medline_field('TT',
-	      'Transliterated / Vernacular Title',
-	      'Non-Roman alphabet language titles are transliterated.').
-medline_field('UIN',
-	      'Update In',
-	      'Update to the article').
-medline_field('UOF',
-	      'Update Of',
-	      'The article being updated').
-medline_field('VI',
-	      'Volume', 'Journal volume').
+medline_field('UI'
+	      % 'Unique Identifier',
+	      % 'Unique Identifier'
+	      ).
+medline_field('TX'
+	      % 'Text',
+	      % 'Text'
+	      ).
+medline_field('QU'
+	      % 'Query',
+	      % 'Query'
+	      ).
+medline_field('QT'
+	      % 'Query Text',
+	      % 'Query Text'
+	      ).
+medline_field('AB'
+	      % 'Abstract',
+	      % 'Abstract'
+	      ).
+medline_field('AD'
+	      % 'Affiliation',
+	      % 'Institutional affiliation and address of the first author, and grant numbers'
+	      ).
+medline_field('AID'
+	      % 'Article Identifier',
+	      % 'Article ID values may include the pii (controlled publisher identifier) or doi (Digital Object Identifier)'
+	     ).
+medline_field('AU'
+	      % 'Author',
+	      % 'Authors'
+	      ).
+medline_field('CI'
+	      % 'Copyright Information',
+	      % 'Copyright statement'
+	      ).
+medline_field('CIN'
+	      % 'Comment In',
+	      % 'Reference containing a comment about the article'
+	      ).
+medline_field('CN'
+	      % 'Corporate Author',
+	      % 'Corporate author or group names with authorship responsibility'
+	      ).
+medline_field('CON'
+	      % 'Comment On',
+	      % 'Reference upon which the article comments'
+	      ).
+medline_field('DA'
+	      % 'Date Created',
+	      % 'Used for internal processing at NLM'
+	      ).
+medline_field('DCOM'
+	      % 'Date Completed',
+	      % 'Used for internal processing at NLM'
+	      ).
+medline_field('DEP'
+	      % 'Date of Electronic Publication',
+	      % 'Electronic publication date'
+	      ).
+medline_field('DP'
+	      % 'Publication Date',
+	      % 'The date the article was published'
+	      ).
+medline_field('EDAT'
+	      % 'Entrez Date',
+	      % 'The date the citation was added to PubMed'
+	      ).
+medline_field('EFR'
+	      % 'Erratum For',
+	      % 'Cites the original article needing the correction'
+	      ).
+medline_field('EIN'
+	      % 'Erratum In',
+	      % 'Reference containing a published erratum to the article'
+	      ).
+medline_field('FAU'
+	      % 'Full Author Name',
+	      % 'Full Author Names'
+	      ).
+medline_field('FIR'
+	      % 'Full Investigator',
+	      % 'Full investigator name'
+	      ).
+medline_field('FPS'
+	      % 'Full Personal Name as Subject',
+	      % 'Full Personal Name of the subject of the article'
+	      ).
+medline_field('GN'
+	      % 'General Note',
+	      % 'Supplemental or descriptive information related to the document'
+	      ).
+medline_field('GR'
+	      % 'Grant Number',
+	      % 'Research grant numbers, contract numbers, or both that designate financial support by any agency of the US PHS (Public Health Service)
+	      ).
+medline_field('GS'
+	      % 'Gene Symbol'
+	      % 'Abbreviated gene names (used 1991 through 1996)'
+	     ).
+medline_field('IP'
+	      % 'Issue'
+	      % 'The number of the issue, part, or supplement of the journal in which the article was published'
+	      ).
+medline_field('IR'
+	      % 'Investigator',
+	      % 'NASA-funded principal investigator'
+	      ).
+medline_field('IRAD'
+	      % 'Investigator Affiliation',
+	      % 'Affiliation of NASA-funded principal investigator'
+	      ).
+medline_field('IS'
+	      % 'ISSN',
+	      % 'International Standard Serial Number of the journal'
+	      ).
+medline_field('JID'
+	      % 'NLM Unique ID',
+	      % 'Unique journal ID in NLM''s catalog of books, journals, and audiovisuals'
+	      ).
+medline_field('LA'
+	      % 'Language',
+	      % 'The language in which the article was published'
+	      ).
+medline_field('LR'
+	      % 'Last Revision Date',
+	      % 'The date a change was made to the record during a maintenance procedure'
+	      ).
+medline_field('MH'
+	      % 'MeSH Terms',
+	      % 'NLM''s controlled vocabulary'
+	      ).
+medline_field('MHDA'
+	      % 'MeSH Date',
+	      % 'The date MeSH terms were added to the citation. The MeSH date is the same as the Entrez date until MeSH are added'
+	      ).
+medline_field('OAB'
+	      % 'Other Abstract',
+	      % 'Abstract supplied by an NLM collaborating organization'
+	      ).
+medline_field('OCI'
+	      % 'Other Copyright Information',
+	      % 'Copyright owner'
+	      ).
+medline_field('OID'
+	      % 'Other ID',
+	      % 'Identification numbers provided by organizations supplying citation data'
+	      ).
+medline_field('ORI'
+	      % 'Original Report In',
+	      % 'Displays on Patient Summary. Cites original article associated with the patient summary'
+	      ).
+medline_field('OT'
+	      % 'Other Term'
+	      % 'Non-MeSH subject terms (keywords) assigned by an organization identified by the Other Term Owner'
+	     ).
+medline_field('OTO'
+	      % 'Other Term Owner',
+	      % 'Organization that provided the Other Term data'
+	      ).
+medline_field('OWN'
+	      % 'Owner',
+	      % 'Organization acronym that supplied citation data'
+	      ).
+medline_field('PG'
+	      % 'Pagination',
+	      % 'The full pagination of the article'
+	      ).
+medline_field('PHST'
+	      % 'Publication History Status Date',
+	      % 'History status date'
+	      ).
+medline_field('PL'
+	      % 'Place of Publication',
+	      % 'Journal''s country of publication'
+	      ).
+medline_field('PMID'
+	      % 'PubMed Unique Identifier',
+	      % 'Unique number assigned to each PubMed citation'
+	      ).
+medline_field('PS'
+	      % 'Personal Name as Subject',
+	      % 'Individual is the subject of the article'
+	      ).
+medline_field('PST'
+	      % 'Publication Status',
+	      % 'Publication status'
+	      ).
+medline_field('PT'
+	      % 'Publication Type',
+	      % 'The type of material the article represents'
+	      ).
+medline_field('PUBM'
+	      % 'Publishing Model',
+	      % 'Article''s model of print or electronic publishing'
+	      ).
+medline_field('RF'
+	      % 'Number of References',
+	      % 'Number of bibliographic references for Review articles'
+	      ).
+medline_field('RIN'
+	      % 'Retraction In',
+	      % 'Retraction of the article'
+	      ).
+medline_field('RN'
+	      % 'EC/RN Number',
+	      % 'Number assigned by the Enzyme Commission to designate a particular enzyme or by the Chemical Abstracts Service for Registry Numbers'
+	      ).
+medline_field('ROF'
+	      % 'Retraction Of',
+	      % 'Article being retracted'
+	      ).
+medline_field('RPF'
+	      % 'Republished From',
+	      % 'Original article'
+	      ).
+medline_field('RPI'
+	      % 'Republished In',
+	      % 'Corrected and republished article'
+	      ).
+medline_field('SB'
+	      % 'Subset',
+	      % 'Journal/Citation Subset values representing various topic areas'
+	      ).
+medline_field('SFM'
+	      % 'Space Flight Mission',
+	      % 'NASA-supplied data space flight/mission name and/or number'
+	      ).
+medline_field('SI'
+	      % 'Secondary Source Identifier',
+	      % 'Identifies a secondary source that supplies information, e.g., other data sources, databanks and accession numbers of molecular sequences discussed in articles'
+	      ).
+medline_field('SO'
+	      % 'Source',
+	      % 'Composite field containing bibliographic information'
+	      ).
+medline_field('SPIN'
+	      % 'Summary For Patients In',
+	      % 'Cites a patient summary article'
+	      ).
+medline_field('STAT'
+	      % 'Status Tag',
+	      % 'Used for internal processing at NLM'
+	      ).
+medline_field('TA'
+	      % 'Journal Title Abbreviation',
+	      % 'Standard journal title abbreviation'
+	      ).
+medline_field('TI'
+	      % 'Title',
+	      % 'The title of the article'
+	      ).
+medline_field('TT'
+	      % 'Transliterated / Vernacular Title',
+	      % 'Non-Roman alphabet language titles are transliterated.'
+	      ).
+medline_field('UIN'
+	      % 'Update In',
+	      % 'Update to the article'
+	      ).
+medline_field('UOF'
+	      % 'Update Of',
+	      % 'The article being updated'
+	      ).
+medline_field('VI'
+	      % 'Volume',
+	      % 'Journal volume'
+	      ).
 
-extract_coord_sents_from_smart(SmartLines, TextFields, NonTextFields,
-			       Sentences, CoordinatedSentences,
-			       UniqueID, AAs, UDAListIn, UDAListOut, UDA_AVL) :-
-	extract_all_smart_fields(SmartLines, CitationFields),
-	( select_field("UI", CitationFields, UIField) ->
-	  extract_document_unique_identifier(UIField, UniqueID)
-	; UniqueID = "00000000"
-	),
-	extract_coord_sents_from_fields(UniqueID, CitationFields, TextFields,
-					NonTextFields, Sentences, CoordinatedSentences,
-					AAs, UDAListIn, UDAListOut, UDA_AVL),
-	!.
+ris_field('TY'
+	 % 'Type of reference (must be the first tag)'
+	 ).
+ris_field('A1'
+	 % 'First Author'
+	  ).
+ris_field('A2'
+	 % 'Secondary Author (each author on its own line preceded by the tag)'
+	 ).
+ris_field('A3'
+	 % 'Tertiary Author (each author on its own line preceded by the tag)'
+	 ).
+ris_field('A4'
+	 % 'Subsidiary Author (each author on its own line preceded by the tag)'
+	 ).
+ris_field('AB'
+	 % 'Abstract'
+	  ).
+ris_field('AD'
+	 % 'Author Address'
+	  ).
+ris_field('AN'
+	 % 'Accession Number'
+	  ).
+ris_field('AU'
+	 % 'Author (each author on its own line preceded by the tag)'
+	 ).
+ris_field('AV'
+	 % 'Location in Archives'
+	  ).
+ris_field('BT'
+	 % 'This field maps to T2 for all reference types except for Whole Book and Unpublished Work references. It can contain alphanumeric characters. There is no practical limit to the length of this field.'
+	  ).
+ris_field('C1'
+	 % 'Custom 1'
+	  ).
+ris_field('C2'
+	 % 'Custom 2'
+	  ).
+ris_field('C3'
+	 % 'Custom 3'
+	  ).
+ris_field('C4'
+	 % 'Custom 4'
+	  ).
+ris_field('C5'
+	 % 'Custom 5'
+	  ).
+ris_field('C6'
+	 % 'Custom 6'
+	  ).
+ris_field('C7'
+	 % 'Custom 7'
+	  ).
+ris_field('C8'
+	 % 'Custom 8'
+	  ).
+ris_field('CA'
+	 % 'Caption'
+	  ).
+ris_field('CN'
+	 % 'Call Number'
+	  ).
+ris_field('CP'
+	 % 'This field can contain alphanumeric characters. There is no practical limit to the length of this field.'
+	  ).
+ris_field('CT'
+	 % 'Title of unpublished reference'
+	  ).
+ris_field('CY'
+	 % 'Place Published'
+	  ).
+ris_field('DA'
+	 % 'Date'
+	  ).
+ris_field('DB'
+	 % 'Name of Database'
+	  ).
+ris_field('DO'
+	 % 'DOI'
+	  ).
+ris_field('DP'
+	 % 'Database Provider'
+	  ).
+ris_field('ED'
+	 % 'Editor'
+	  ).
+ris_field('EP'
+	 % 'End Page'
+	  ).
+ris_field('ET'
+	 % 'Edition'
+	  ).
+ris_field('ID'
+	 % 'Reference ID'
+	  ).
+ris_field('IS'
+	 % 'Issue number'
+	  ).
+ris_field('J1'
+	 % 'Periodical name: user abbreviation 1. This is an alphanumeric field of up to 255 characters.'
+	  ).
+ris_field('J2'
+	 % 'Alternate Title (this field is used for the abbreviated title of a book or journal name, the latter mapped to T2)'
+).
+ris_field('JA'
+	 % 'Periodical name: standard abbreviation. This is the periodical in which the article was (or is to be, in the case of in-press references) published. This is an alphanumeric field of up to 255 characters.'
+	 ).
+ris_field('JF'
+	 % 'Journal/Periodical name: full format. This is an alphanumeric field of up to 255 characters.'
+	  ).
+ris_field('JO'
+	 % 'Journal/Periodical name: full format. This is an alphanumeric field of up to 255 characters.'
+	  ).
+ris_field('KW'
+	 % 'Keywords (keywords should be entered each on its own line preceded by the tag)'
+	 ).
+ris_field('L1'
+	 % 'Link to PDF. There is no practical limit to the length of this field. URL addresses can be entered individually, one per tag or multiple addresses can be entered on one line using a semi-colon as a separator.'
+	  ).
+ris_field('L2'
+	 % 'Link to Full-text. There is no practical limit to the length of this field. URL addresses can be entered individually, one per tag or multiple addresses can be entered on one line using a semi-colon as a separator.'
+	  ).
+ris_field('L3'
+	 % 'Related Records. There is no practical limit to the length of this field.'
+	  ).
+ris_field('L4'
+	 % 'Image(s). There is no practical limit to the length of this field.'
+	 ).
+ris_field('LA'
+	 % 'Language'
+	  ).
+ris_field('LB'
+	 % 'Label'
+	  ).
+ris_field('LK'
+	 % 'Website Link'
+	  ).
+ris_field('M1'
+	 % 'Number'
+	  ).
+ris_field('M2'
+	 % 'Miscellaneous 2. This is an alphanumeric field and there is no practical limit to the length of this field.'
+	  ).
+ris_field('M3'
+	 % 'Type of Work'
+	  ).
+ris_field('N1'
+	 % 'Notes'
+	  ).
+ris_field('N2'
+	 % 'Abstract. This is a free text field and can contain alphanumeric characters. There is no practical length limit to this field.'
+	  ).
+ris_field('NV'
+	 % 'Number of Volumes'
+	  ).
+ris_field('OP'
+	 % 'Original Publication'
+	  ).
+ris_field('PB'
+	 % 'Publisher'
+	  ).
+ris_field('PP'
+	 % 'Publishing Place'
+	  ).
+ris_field('PY'
+	 % 'Publication year (YYYY)'
+	 ).
+ris_field('RI'
+	 % 'Reviewed Item'
+	  ).
+ris_field('RN'
+	 % 'Research Notes'
+	  ).
+ris_field('RP'
+	 % 'Reprint Edition'
+	  ).
+ris_field('SE'
+	 % 'Section'
+	  ).
+ris_field('SN'
+	 % 'ISBN/ISSN'
+	  ).
+ris_field('SP'
+	 % 'Start Page'
+	  ).
+ris_field('ST'
+	 % 'Short Title'
+	  ).
+ris_field('T1'
+	 % 'Primary Title'
+	  ).
+ris_field('T2'
+	 % 'Secondary Title (journal title, if applicable)'
+	 ).
+ris_field('T3'
+	 % 'Tertiary Title'
+	  ).
+ris_field('TA'
+	 % 'Translated Author'
+	  ).
+ris_field('TI'
+	 % 'Title'
+	  ).
+ris_field('TT'
+	 % 'Translated Title'
+	  ).
+ris_field('U1'
+	 % 'User definable 1. This is an alphanumeric field and there is no practical limit to the length of this field.'
+	  ).
+ris_field('U2'
+	 % 'User definable 2. This is an alphanumeric field and there is no practical limit to the length of this field.'
+	  ).
+ris_field('U3'
+	 % 'User definable 3. This is an alphanumeric field and there is no practical limit to the length of this field.'
+	  ).
+ris_field('U4'
+	 % 'User definable 4. This is an alphanumeric field and there is no practical limit to the length of this field.'
+	  ).
+ris_field('U5'
+	 % 'User definable 5. This is an alphanumeric field and there is no practical limit to the length of this field.'
+	  ).
+ris_field('UR'
+	 % 'URL'
+	  ).
+ris_field('VL'
+	 % 'Volume number'
+	  ).
+ris_field('VO'
+	 % 'Published Standard number'
+	  ).
+ris_field('Y1'
+	 % 'Primary Date'
+	  ).
+ris_field('Y2'
+	 % 'Access Date'
+	  ).
+ris_field('ER'
+	 % 'End of Reference (must be empty and the last tag)'
+	 ).
+
+% extract_coord_sents_from_smart(SmartLines, TextFields, NonTextFields,
+% 			       Sentences, CoordinatedSentences,
+% 			       UniqueID, AAs, UDAListIn, UDAListOut, UDA_AVL) :-
+% 	extract_all_smart_fields(SmartLines, CitationFields),
+% 	( select_field("UI", CitationFields, UIField) ->
+% 	  extract_document_unique_identifier(UIField, UniqueID)
+% 	; UniqueID = "00000000"
+% 	),
+% 	extract_coord_sents_from_fields(UniqueID, CitationFields, TextFields,
+% 					NonTextFields, Sentences, CoordinatedSentences,
+% 					AAs, UDAListIn, UDAListOut, UDA_AVL),
+% 	!.
 
 /* extract_all_smart_fields(+SmartLines, -CitationFields)
    concatenate_broken_lines(+SmartLinesIn, -SmartLinesOut)
@@ -856,10 +1179,10 @@ concatenate_broken_lines/2
 extract_each_smart_field/2
 */
 
-extract_all_smart_fields(SmartLines0,CitationFields) :-
-    concatenate_broken_lines(SmartLines0,SmartLines),
-    extract_each_smart_field(SmartLines,CitationFields),
-    !.
+% extract_all_smart_fields(SmartLines0,CitationFields) :-
+%     concatenate_broken_lines(SmartLines0,SmartLines),
+%     extract_each_smart_field(SmartLines,CitationFields),
+%     !.
 
 /* Fields can be broken across lines. When this is done, an exclam is added
    to the end of the broken line and the rest of the original line continues
@@ -881,31 +1204,31 @@ concatenate_broken_lines([First|Rest],[First|ModifiedRest]) :-
 concatenate_broken_lines(X,X).
 
 
-extract_each_smart_field([],[]) :-
-    !.
-extract_each_smart_field([FirstLine|RestLines],
-			 [[CitID,[Field]]|RestCitationFields]) :-
-    FirstLine = [0'.,FieldChar|Field],
-    FieldID = [FieldChar],
-    !,
-    % temp; this is awful
-    ( FieldID=="I" ->
-      skr_begin_write('ID'),
-      skr_write_string(FirstLine),
-      skr_end_write('ID')
-    ; true
-    ),
-    smartfield_to_citationfield(FieldID,CitID),
-    extract_each_smart_field(RestLines,RestCitationFields).
-extract_each_smart_field([FirstLine|RestLines],CitationFields) :-
-    send_message('### WARNING: The following line should begin a field but does not:~n', []),
-    send_message('~s~nIt is being ingored.~n~n',[FirstLine]),
-    extract_each_smart_field(RestLines,CitationFields).
-
-smartfield_to_citationfield("I","UI") :- !.
-smartfield_to_citationfield("T","TI") :- !.
-smartfield_to_citationfield("A","AB") :- !.
-smartfield_to_citationfield(X,X) :- !.
+% extract_each_smart_field([],[]) :-
+%     !.
+% extract_each_smart_field([FirstLine|RestLines],
+% 			 [[CitID,[Field]]|RestCitationFields]) :-
+%     FirstLine = [0'.,FieldChar|Field],
+%     FieldID = [FieldChar],
+%     !,
+%     % temp; this is awful
+%     ( FieldID=="I" ->
+%       skr_begin_write('ID'),
+%       skr_write_string(FirstLine),
+%       skr_end_write('ID')
+%     ; true
+%     ),
+%     smartfield_to_citationfield(FieldID,CitID),
+%     extract_each_smart_field(RestLines,RestCitationFields).
+% extract_each_smart_field([FirstLine|RestLines],CitationFields) :-
+%     send_message('### WARNING: The following line should begin a field but does not:~n', []),
+%     send_message('~s~nIt is being ingored.~n~n',[FirstLine]),
+%     extract_each_smart_field(RestLines,CitationFields).
+% 
+% smartfield_to_citationfield("I","UI") :- !.
+% smartfield_to_citationfield("T","TI") :- !.
+% smartfield_to_citationfield("A","AB") :- !.
+% smartfield_to_citationfield(X,X) :- !.
 
 /* select_field(+FieldID, +CitationFields, -Field)
 
@@ -923,8 +1246,13 @@ select_field(FieldID, [_First|Rest], Field) :-
 extract_document_unique_identifier/2
 */
 
-extract_document_unique_identifier(Field, UniqueID) :-
-	( Field = [UniqueID] ->
+extract_document_unique_identifier(FieldIDAtom, Field, UniqueID) :-
+	% For RIS fields
+	( FieldIDAtom == 'U1' ->
+	  Field = [UniqueID]
+	  % append(UniqueID, [0'[,0'p,0'm,0'i,0'd|_], FieldText)
+	  % atom_codes(UniqueID, FieldText)
+	; Field = [UniqueID] ->
 	  true
 	; UniqueID  = "00000000"
 	).
@@ -943,10 +1271,12 @@ extract_coord_sents_from_fields(UniqueID, Fields, TextFields, NonTextFields, Sen
 	update_text_fields_with_UDAs(UDAListOut, TextFields0, TextFields).
 
 add_whitespace_to_end_of_title(TextFields0, TextFields1) :-
-	( TextFields0 = [["TI",TitleStrings]|Rest] ->
+	( TextFields0 = [[TitleFieldString,TitleStrings]|Rest],
+	  atom_codes(TitleFieldAtom, TitleFieldString),
+	  medlineRIS_title_field_name(TitleFieldAtom) ->
 	  TitleStrings = [FirstTitleString|RestTitleStrings],
 	  add_ws_to_last_title_string(RestTitleStrings, FirstTitleString, NewTitleStrings),
-	  TextFields1 = [["TI",NewTitleStrings]|Rest]
+	  TextFields1 = [[TitleFieldString,NewTitleStrings]|Rest]
 	; TextFields1 = TextFields0
 	).
 
@@ -955,7 +1285,6 @@ add_ws_to_last_title_string([], LastTitleString, [LastTitleStringWithFinalWS]) :
 add_ws_to_last_title_string([NextTitleString|RestTitleStrings],
 			    TitleString, [TitleString|RestNewTitleStrings]) :-
 	add_ws_to_last_title_string(RestTitleStrings, NextTitleString, RestNewTitleStrings).
-
 
 right_trim_last_string([], []).
 right_trim_last_string([H|T], TextFieldsOut) :-
@@ -1007,19 +1336,21 @@ update_strings_with_one_UDA([FirstString|RestStrings], UDA:Expansion:_StartPos:_
    text_field/1 is a factual predicate of the individual textual fields.
 */
 
-text_field('DOC').
-text_field('QU').
-text_field('QT').
+% text_field('DOC').
+% text_field('QU').
+% text_field('QT').
 text_field('TI').
+text_field('T1').
 text_field('AB').
-text_field('AS').
-text_field('MP').
-text_field('OP').
-text_field('SP').
-text_field('PE').
-text_field('RX').
-text_field('HX').
 text_field('TX').
+% text_field('AS').
+% text_field('MP').
+% text_field('OP').
+% text_field('SP').
+% text_field('PE').
+% text_field('RX').
+% text_field('HX').
+% text_field('TX').
 
 
 /* extract_text_fields(+FieldsIn, -TextFields, -NonTextFields)

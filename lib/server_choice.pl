@@ -107,7 +107,10 @@ get_port_env_var(ServerTypeCodes, PortEnvVar) :-
 	atom_codes(PortEnvVar, PortEnvVarCodes).
 
 get_server_stream_aux(ServerType, ControlValue, HostsEnvVar, PortEnvVar, ServerStream) :-
-        environ(PortEnvVar, ServerPortAtom),
+        ( control_value(PortEnvVar, ServerPortAtom) ->
+	  true
+	; environ(PortEnvVar, ServerPortAtom)
+	),
 	ensure_number(ServerPortAtom, ServerPort),
 	( control_value(ControlValue, ChosenServerHost) ->
 	  UserChoice = ChosenServerHost,
