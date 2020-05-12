@@ -3820,20 +3820,24 @@ create_nomap_pairs(InputStream, StringNoMapPairs) :-
 % The shorter string is deemed to be the AA, and the longer, the expansion,
 % unless either is zero length, in which case declare an error.
 
-determine_UDA_and_expansion(BeforeString, AfterString, Shorter, Longer) :-
+% determine_UDA_and_expansion(BeforeString, AfterString, Shorter, Longer) :-
+determine_UDA_and_expansion(BeforeString, AfterString, BeforeString, AfterString) :-
 	( BeforeString == [] ->
 	  fatal_error('UDA file cannot contain empty UDA or Expansion!~n', [])
 	; AfterString == [] ->
 	  fatal_error('UDA file cannot contain empty UDA or Expansion!~n', [])
-	; length(BeforeString, BeforeLength),
-	  length(AfterString, AfterLength),
-	  ( BeforeLength < AfterLength ->
-	    Shorter = BeforeString,
-	    Longer  = AfterString
-	  ; Shorter = AfterString,
-	    Longer  = BeforeString
-	  )
+	; true
 	).
+
+%	; length(BeforeString, BeforeLength),
+%	  length(AfterString, AfterLength),
+%	  ( BeforeLength < AfterLength ->
+%	    Shorter = BeforeString,
+%	    Longer  = AfterString
+%	  ; Shorter = AfterString,
+%	    Longer  = BeforeString
+%	  )
+%	).
 
 % We need to remove from the UDA any UDA that is
 % (1) itself an author-defined AA, or
