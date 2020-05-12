@@ -36,6 +36,9 @@
 
 % Source:   NLM TC, OMED TC, NCBI TC and MMI TS
 
+% In NLM.2019AB, we took the top 1825 entries (all those with frequency of at least 5),
+% giving us 488952 of the 511450 stop phrases collected, i.e., 95.60%.
+
 % In NLM.2018AA, we took the top 1821 entries (all those with frequency of at least 5),
 % giving us 474428 of the 499335 stop phrases collected, i.e., 95.01%.
 
@@ -64,13 +67,12 @@
     stop_phrase/2
     ]).
 
-stop_phrase('"', [punc]). % " Just to fake out Emacs
 stop_phrase('"', [punc]).
 stop_phrase('"phaseolicola', [punc,head]).
 stop_phrase('%', [punc]).
 stop_phrase('''', [punc]).
 stop_phrase('''.', [punc,punc]).
-stop_phrase('("', [punc,punc]). % " Just to fake out Emacs...again
+stop_phrase('("', [punc,punc]).
 stop_phrase('(', [punc]).
 stop_phrase('(+', [punc,punc]).
 stop_phrase('(- 9', [punc,punc,shapes]).
@@ -214,10 +216,10 @@ stop_phrase('(bmax', [punc,head]).
 stop_phrase('(bt2camp', [punc,head]).
 stop_phrase('(c', [punc,head]).
 stop_phrase('(c12u', [punc,head]).
+stop_phrase('(cfu-gm', [punc,head]).
 stop_phrase('(ch2n', [punc,head]).
 stop_phrase('(ch2nh', [punc,head]).
 stop_phrase('(csa', [punc,head]).
-stop_phrase('(e', [punc,head]).
 stop_phrase('(e1', [punc,head]).
 stop_phrase('(ec50', [punc,head]).
 stop_phrase('(ed50', [punc,head]).
@@ -740,6 +742,7 @@ stop_phrase('cbf', [head]).
 stop_phrase('centrally', [adv]).
 stop_phrase('cerebral', [head]).
 stop_phrase('certainly', [adv]).
+stop_phrase('cfu-gm', [head]).
 stop_phrase('ch,', [head,punc]).
 stop_phrase('characterise', [verb]).
 stop_phrase('characterised', [verb]).
@@ -1037,6 +1040,7 @@ stop_phrase('from all', [prep,det]).
 stop_phrase('from which', [prep,pron]).
 stop_phrase('from', [prep]).
 stop_phrase('fsh', [head]).
+stop_phrase('fsh,', [head,punc]).
 stop_phrase('fully', [adv]).
 stop_phrase('functionally', [adv]).
 stop_phrase('furthermore', [adv]).
@@ -1107,10 +1111,8 @@ stop_phrase('ideally', [adv]).
 stop_phrase('identifies', [verb]).
 stop_phrase('identify', [verb]).
 stop_phrase('identifying', [verb]).
-stop_phrase('ie', [conj]).
 stop_phrase('if', [conj]).
 stop_phrase('ifn', [head]).
-stop_phrase('ige', [head]).
 stop_phrase('igg', [head]).
 stop_phrase('igg,', [head,punc]).
 stop_phrase('igg.', [head,punc]).
@@ -1126,6 +1128,7 @@ stop_phrase('illustrating', [verb]).
 stop_phrase('imidazo', [head]).
 stop_phrase('immunize', [verb]).
 stop_phrase('immunized', [verb]).
+stop_phrase('immunohistochemical', [head]).
 stop_phrase('immunohistochemically', [adv]).
 stop_phrase('immunologically', [adv]).
 stop_phrase('impair', [verb]).
@@ -1256,6 +1259,7 @@ stop_phrase('located', [verb]).
 stop_phrase('located.', [verb,punc]).
 stop_phrase('loosely', [adv]).
 stop_phrase('lose', [verb]).
+stop_phrase('m (', [aux]).
 stop_phrase('m)', [aux]).
 stop_phrase('mainly', [adv]).
 stop_phrase('manage', [verb]).
@@ -1572,6 +1576,7 @@ stop_phrase('safely', [adv]).
 stop_phrase('said', [verb]).
 stop_phrase('satisfactorily', [adv]).
 stop_phrase('satisfy', [verb]).
+stop_phrase('sc', [head]).
 stop_phrase('scarcely', [adv]).
 stop_phrase('secondarily', [adv]).
 stop_phrase('seek', [verb]).
@@ -1691,7 +1696,7 @@ stop_phrase('that g1', [compl,head]).
 stop_phrase('that', [compl]).
 stop_phrase('that', [pron]).
 stop_phrase('that,', [compl,punc]).
-stop_phrase('the "', [det,punc]). % " Just to fake out Emacs...again
+stop_phrase('the "', [det,punc]).
 stop_phrase('the advantages', [det,head]).
 stop_phrase('the assumption', [det,head]).
 stop_phrase('the contention', [det,head]).
@@ -1819,6 +1824,7 @@ stop_phrase('varied.', [verb,punc]).
 stop_phrase('vary', [verb]).
 stop_phrase('varying', [verb]).
 stop_phrase('versus', [conj]).
+stop_phrase('vi', [head]).
 stop_phrase('virtually', [adv]).
 stop_phrase('visualize', [verb]).
 stop_phrase('visually', [adv]).

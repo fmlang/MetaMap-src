@@ -97,8 +97,7 @@
 
 :- use_module(skr(skr_text_processing), [
 	extract_sentences/13,
-	get_skr_text/2,
-	medline_field_separator_char/1
+	get_skr_text/2
    ]).
 
 :- use_module(skr(skr_utilities), [
@@ -118,8 +117,9 @@
 	generate_utterance_output/6,
 	generate_variants_output/2,
 	get_all_candidate_features/3,
-	output_should_be_bracketed/1,
-	output_tagging/3,
+	graceful_error/2,
+        output_should_be_bracketed/1,
+	output_tagging/2,
 	replace_crs_with_blanks/4,
 	send_message/2,
 	token_template/5,
@@ -475,12 +475,12 @@ in Sentences in case the original text is preferred. */
 %%% DO NOT MODIFY process_text/12 without checking with the maintainer of the MetaMap API.
 process_text(Text, TextID, TagOption, ServerStreams, RawTokenList, AAs,
 	     UDAListIn, UDAListOut, NoMapPairs, NoVarPairs, NegationTerms, MMResults) :-
-	halt_if_non_ASCII(Text),
+	% halt_if_non_ASCII(Text),
 	( process_text_1(Text, TextID, TagOption, ServerStreams,
 			 RawTokenList, AAs, UDAListIn, UDAListOut,
 			 NoMapPairs, NoVarPairs, NegationTerms, MMResults) ->
 	  true
- 	; fatal_error('process_text/4 failed for ~p~n', [Text])
+ 	; graceful_error('process_text/4 failed for ~p~n', [Text])
 	).
 
 % remove_initial_whitespace([], []).
@@ -652,7 +652,7 @@ postprocess_text(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
 			     IOptions,  ExpRawTokenList, AAs, UDAList,
 			     NegationTerms, MMResults) ->
 	  true
-	; fatal_error('postprocess_text/2 failed for~n~p~n', [Lines0])
+	; graceful_error('postprocess_text/2 failed for~n~p~n', [Lines0])
 	).
 
 postprocess_text_1(OutputStream, Lines0, BracketedOutput, InterpretedArgs,
@@ -697,11 +697,11 @@ postprocess_sentences_1([OrigUtterance|RestOrigUtterances],
 	OrigUtterance = utterance(Label, TextString, StartPos/Length, ReplPos),
 	MMOutput = mm_output(_ExpandedUtterance, _Citation, _ModifiedText, Tagging,
 			     _AAs, _Syntax, MMOPhrases, ExtractedPhrases),
-	Tagging = tagging(_TagOption, FullTagList, _TagList, HRTagStrings),
+	Tagging = tagging(_TagOption, _FullTagList, TagList, _HRTagStrings),
 	generate_utterance_output(Label, TextString, StartPos, Length, ReplPos, UtteranceMMO),
 	% CHANGE
 	MMOIn = [UtteranceMMO|MMONext1],
-	output_tagging(BracketedOutput, HRTagStrings, FullTagList),
+	output_tagging(BracketedOutput, TagList),
 	postprocess_phrases(MMOPhrases, ExtractedPhrases,
 			    BracketedOutput, N, 1, AAs, Label, MMONext1, MMONext2),
 	!,
@@ -712,7 +712,7 @@ postprocess_sentences_1([OrigUtterance|RestOrigUtterances],
 postprocess_sentences_1([FailedUtterance|_], _BracketedOutput,
 			_N, _AAs, _MMOutput, _MMOIn, _MMOOut) :-
 	FailedUtterance = utterance(UtteranceID,UtteranceText,_PosInfo,_ReplPos),
-	fatal_error('postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
+	graceful_error('postprocess_sentences/3 failed on sentence ~w:~n       "~s"~n',
 		    [UtteranceID,UtteranceText]).
 
 
@@ -1016,6 +1016,8 @@ do_syntax_processing(TagOption, ServerStreams, UtteranceText, FullTagList, TagLi
 	ServerStreams = TaggerServerStream-_WSDServerStream,
 	( TagOption == tag ->
 	  tag_text(UtteranceText, TaggerServerStream, FullTagList, TagList, HRTagStrings),
+%	    FullTagList = [],
+%	    HRTagStrings = [],
 	  % If tag_text succeeded, cut out the choice point
 	  % left behind when the tagger was chosen
 	  !

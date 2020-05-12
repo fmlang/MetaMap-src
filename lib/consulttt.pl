@@ -95,7 +95,7 @@ consult_tagged_text( [ lexicon:[ lexmatch:LexMatch, inputmatch:InputMatch | _ ] 
     RealIndexIn is IndexIn + Len - 1,
 
     % get the tag of the *last* word in the InputMatch list
-    nth1( RealIndexIn, TaggedTextIn, [ _TagToken, Tag ] ), !,
+    graceful_nth1( RealIndexIn, TaggedTextIn, [ _TagToken, Tag ] ), !,
 
     VarInfoList = [Label:_ | _ ],
 
@@ -156,7 +156,7 @@ consult_tagged_text( [ unknown:[ inputmatch:[Token]| _ ] | MoreDefinitions ],
                      IndexIn) :- 
 
 
-    nth1( IndexIn, TaggedTextIn, [ Token, Tag ] ), !,  
+    graceful_nth1( IndexIn, TaggedTextIn, [ _Token, Tag ] ), !,  
 
     (  memberchk( Tag, [ bl, ba, dq, ap, bq, at, nm, dl, pc,
                          up, am ,ax ,pl, eq, tl, un, lb, rb, ls, gr ] )
@@ -173,7 +173,12 @@ consult_tagged_text( [ unknown:[ inputmatch:[Token]| _ ] | MoreDefinitions ],
 
     consult_tagged_text( MoreDefinitions, MoreVarInfoList, TaggedTextIn, MoreTaggedTextOut, IndexOut).
 
-
+graceful_nth1(IndexIn, TaggedTextIn, [Token, Tag]) :-
+	( nth1(IndexIn, TaggedTextIn, [Token, Tag]) ->
+	  true
+	; Tag = noun
+	).
+	
 % --------
 
 can_be_pastP([verb:[pastpart]|_]) :- !.

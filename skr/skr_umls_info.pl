@@ -62,11 +62,11 @@
 	set_message/5
     ]).
 
-:-   absolute_file_name(skr_lib(semtype_translation_2019AA),
+:-   absolute_file_name(skr_lib(semtype_translation_2020AA),
 			AbsFileName,
 			[extensions(['.pl'])]),
      file_exists(AbsFileName) ->
-     use_module(skr_lib(semtype_translation_2019AA),
+     use_module(skr_lib(semtype_translation_2020AA),
 		[expand_semtypes/2,
 		 is_abbrev_semtype/1]),
      format(user_error, 'File skr_umls_info.pl is loading ~w~n', [AbsFileName])

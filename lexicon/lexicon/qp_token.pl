@@ -92,16 +92,22 @@ tokenize_string(String,TokenLists) :-
 % ---------- GRAMMAR FOR TOKENIZE TEXT WITH WHITESPACE
 
 ttw_tokens(Ts) --> ttw_token(T), !, ttw_tokens(RestTs), {Ts=[T|RestTs]}
-
                 ;  {Ts=[]}.
 
-ttw_token(T) --> [C], {local_alnum(C)}, !, ttw_alnums(RestCs),
-                 {atom_codes(T,[C|RestCs])}
-              ;  [T].
 
-ttw_alnums(Cs) --> [C], {local_alnum(C)}, !, ttw_alnums(RestCs), {Cs=[C|RestCs]}
+ttw_token(T) --> [C1,39,C3], { local_alnum(C1), local_alnum(C3) }, !, ttw_alnums(RestCs),
+		{atom_codes(T,[C1,39,C3|RestCs])}.
 
-                ;  {Cs=[]}.
+ttw_token(T) --> [C], { local_alnum(C) }, !, ttw_alnums(RestCs),
+		{atom_codes(T,[C|RestCs])}
+		;  [T].
+
+ttw_alnums(Cs) --> [C1,39,C3], { local_alnum(C1), local_alnum(C3) }, !, ttw_alnums(RestCs),
+		{Cs=[C1,39,C3|RestCs]}.
+
+ttw_alnums(Cs) --> [C], { local_alnum(C) }, !, ttw_alnums(RestCs),
+		{Cs=[C|RestCs]}
+		;  {Cs=[]}.
 
 
 form_barrier_token_lists(Tokens,TokenLists) :-

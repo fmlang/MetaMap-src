@@ -35,6 +35,7 @@
 
 :- module(negex,[
 	compute_negex/4,
+	do_negex/0,
 	default_negex_semtypes/1,
 	final_negation_template/6
 	% generate_all_negex_output/1
@@ -51,6 +52,7 @@
 
 :- use_module(skr(skr_utilities), [
 	fatal_error/2,
+   	graceful_error/2,
 	get_candidate_feature/3,
 	get_all_candidate_features/3
    ]).
@@ -122,23 +124,23 @@ final_negation_template(negation(Type, TriggerText, TriggerPosInfo,
 compute_negex(RawTokenList, Lines, PhraseList, NegationTerms) :-
 	( compute_negex_1(RawTokenList, PhraseList, NegationTerms) ->
 	  true
-	; fatal_error('Negex failed on "~p".~n', [Lines]),
-	  abort
+	; graceful_error('Negex failed on ~p.~n', [Lines]),
+	  NegationTerms = []
 	).
 
-% do_negex :-
-% 	( control_option(negex) ->
-% 	  true
-% 	; control_option(negex_trigger_file) ->
-% 	  true
-% 	; control_option(fielded_mmi_output) ->
-% 	  true
-% 	; control_value(negex_st_add, _) ->
-% 	  true
-% 	; control_value(negex_st_del, _) ->
-% 	  true
-% 	; control_value(negex_st_set, _)
-% 	).
+do_negex :-
+	( control_option(negex) ->
+	  true
+	; control_option(negex_trigger_file) ->
+	  true
+	; control_option(fielded_mmi_output) ->
+	  true
+	; control_value(negex_st_add, _) ->
+	  true
+	; control_value(negex_st_del, _) ->
+	  true
+	; control_value(negex_st_set, _)
+	).
 
 compute_negex_1(RawTokenList, PhraseList, NegationTerms) :-
 	% ( \+ control_option(machine_output),
@@ -979,8 +981,9 @@ term_wordlength(Term, WordLength) :-
 
 % This error prevents TokenIndex from being returned uninstantiated,
 % which should never happen!
-charpos_to_tokenindex([], NegationTerm, CharPosInfo, _, _) :-
-	fatal_error('NegEx negation "~p" beyond char pos ~w.~n~n',
+charpos_to_tokenindex([], NegationTerm, CharPosInfo, Start, TokenIndex) :-
+	TokenIndex = Start,
+	graceful_error('NegEx negation "~p" beyond char pos ~w.~n~n',
 		    [NegationTerm,CharPosInfo]).
 charpos_to_tokenindex([Token|TokenList], NegationTerm, CharPosInfo, Start, TokenIndex) :-
 	Token = tok(_,_,NString,AbsPosInfo,RelPosInfo),

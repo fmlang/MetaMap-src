@@ -139,6 +139,7 @@ filter_uscs_init_subseq([usc(UIString,S,C)|Rest], Word, DebugUSCs, FilterWordStr
 	% UIString\=='other',
 	% UIString\=='Other',
 	tokenize_text_mm(UIString, UIStringTokens),
+	% format(user_output, 'TTMM:~w:~w~n', [UIString, UIStringTokens]),
 	prefix(UIStringTokens, FilterWordStrings),
 	!,
 	maybe_announce_USC(DebugUSCs, 1, Word, FilterWordStrings, UIString, S, C),

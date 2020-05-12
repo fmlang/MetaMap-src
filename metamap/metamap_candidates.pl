@@ -40,6 +40,10 @@
 	word_is_last_word_of_some_variant/2
     ]).
 
+:- use_module(metamap(frequent_first_word_pair), [
+	frequent_first_word_pair/2
+    ]).
+
 :- use_module(metamap(metamap_stop_phrase), [
 	stop_phrase/2
     ]).
@@ -235,7 +239,8 @@ get_meta_candidates_for_variants_1([Variant-NFR|Rest], AllVariants,
 	get_meta_uscs(Variant, AllVariants, NFR, DebugFlags, NewCandidates,
 		      WordDataCacheIn, USCCacheIn,
 		      WordDataCacheNext, USCCacheNext),
-	debug_get_meta_candidates_2(DebugFlags, NewCandidates),
+	debug_get_meta_candidates_2(DebugFlags, Variant, NewCandidates),
+	debug_get_meta_candidates_3(DebugFlags, NewCandidates),
 	append(NewCandidates, CandidatesIn, CandidatesInOut),
 	get_meta_candidates_for_variants_1(Rest, AllVariants,
 					  CandidatesInOut, CandidatesOut, DebugFlags,
@@ -395,8 +400,19 @@ debug_get_meta_candidates_1(DebugFlags, Variant) :-
 	; true
 	).
 
-debug_get_meta_candidates_2(DebugFlags, NewCandidates) :-
+debug_get_meta_candidates_2(DebugFlags, Variant, NewCandidates) :-
 	( memberchk(2, DebugFlags) ->
+	  format(user_error, 'Variant "~s" generated new candidates:', [Variant]),
+	  ( member(NC, NewCandidates),
+	    format(user_error, '~w~n', NC),
+	    fail
+	  ; true
+	  )
+	; true
+	).
+
+debug_get_meta_candidates_3(DebugFlags, NewCandidates) :-
+	( memberchk(3, DebugFlags) ->
 	  length(NewCandidates, NewCandidatesLength),
 	  format(user_error, '~d candidates.~n', [NewCandidatesLength]),
 	  wl(NewCandidates)
@@ -416,79 +432,3 @@ debug_get_uscs(DebugFlags, WordDataCacheIn, WordDataCacheOut) :-
 % 	Node = node(_,_,_,_,_),
 % 	writeq('NODE').
 % :- add_portray(portray_node).
-
-frequent_first_word_pair('2',                   'acid').
-frequent_first_word_pair('3',                   'acid').
-frequent_first_word_pair('4',                   'acid').
-frequent_first_word_pair('accidental',          'poisoning').
-frequent_first_word_pair('activation',          'activity').
-frequent_first_word_pair('anterior',            'nerve').
-frequent_first_word_pair('anti',                'antibody').
-frequent_first_word_pair('arabidopsis',         'protein').
-frequent_first_word_pair('articular',           'vertebra').
-frequent_first_word_pair('bacillus',            '1').
-frequent_first_word_pair('bacillus',            'protein').
-frequent_first_word_pair('bacteria',            'protein').
-frequent_first_word_pair('bony',                'bone').
-frequent_first_word_pair('bony',                'vertebra').
-frequent_first_word_pair('c',                   'protein').
-frequent_first_word_pair('cdisc',               'terminology').
-frequent_first_word_pair('compact',             'bone').
-frequent_first_word_pair('compact',             'vertebra').
-frequent_first_word_pair('ctcae',               'injury').
-frequent_first_word_pair('down',                'activity').
-frequent_first_word_pair('downregulation',      'activity').
-frequent_first_word_pair('drosophila',          'protein').
-frequent_first_word_pair('e',                   'protein').
-frequent_first_word_pair('entire',              'artery').
-frequent_first_word_pair('entire',              'muscle').
-frequent_first_word_pair('entire',              'vein').
-frequent_first_word_pair('grade',               'injury').
-frequent_first_word_pair('hemoglobin',          'phenotype').
-frequent_first_word_pair('hla',                 'antigen').
-frequent_first_word_pair('human',               '1').
-frequent_first_word_pair('human',               '2').
-frequent_first_word_pair('human',               'antigen').
-frequent_first_word_pair('human',               'microrna').
-frequent_first_word_pair('human',               'protein').
-frequent_first_word_pair('inhibition',          'activity').
-frequent_first_word_pair('intentional',         'poisoning').
-frequent_first_word_pair('lateral',             'nerve').
-frequent_first_word_pair('left',                'trunk').
-frequent_first_word_pair('malignant',           'tumor').
-frequent_first_word_pair('member',              'family').
-frequent_first_word_pair('mouse',               '1').
-frequent_first_word_pair('mouse',               '2').
-frequent_first_word_pair('mouse',               'protein').
-frequent_first_word_pair('negative',            'activity').
-frequent_first_word_pair('negative',            'process').
-frequent_first_word_pair('periosteum',          'bone').
-frequent_first_word_pair('periosteum',          'vertebra').
-frequent_first_word_pair('positive',            'activity').
-frequent_first_word_pair('positive',            'process').
-frequent_first_word_pair('posterior',           'nerve').
-frequent_first_word_pair('rat',                 'protein').
-frequent_first_word_pair('regulation',          'activity').
-frequent_first_word_pair('regulation',          'process').
-frequent_first_word_pair('right',               'artery').
-frequent_first_word_pair('right',               'trunk').
-frequent_first_word_pair('rnu6',                'gene').
-frequent_first_word_pair('s',                   'protein').
-frequent_first_word_pair('stage',               'cancer').
-frequent_first_word_pair('stage',               'carcinoma').
-frequent_first_word_pair('stage',               'lymphoma').
-frequent_first_word_pair('stage',               'v7').
-frequent_first_word_pair('stage',               'v8').
-frequent_first_word_pair('structure',           'artery').
-frequent_first_word_pair('surface',             'bone').
-frequent_first_word_pair('surface',             'vertebra').
-frequent_first_word_pair('synovial',            'joint').
-frequent_first_word_pair('trabecular',          'bone').
-frequent_first_word_pair('trabecular',          'vertebra').
-frequent_first_word_pair('trunk',               'artery').
-frequent_first_word_pair('trunk',               'nerve').
-frequent_first_word_pair('trunk',               'vein').
-frequent_first_word_pair('up',                  'activity').
-frequent_first_word_pair('upregulation',        'activity').
-frequent_first_word_pair('xenopus',             'protein').
-frequent_first_word_pair('zebrafish',           'protein').

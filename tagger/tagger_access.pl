@@ -41,7 +41,10 @@
    ]).
 
 :- use_module(metamap(metamap_tokenization), [
+	local_alnum/1,
+      	local_digit/1,
 	local_punct/1,
+        local_ws/1,
 	no_combine_pronoun/1
    ]).
 
@@ -60,6 +63,10 @@
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
 	control_value/2
+   ]).
+
+:- use_module(skr_lib(pos_info), [
+	remove_leading_whitespace/4
    ]).
 
 :- use_module(skr_lib(server_choice), [
@@ -143,7 +150,7 @@ tag_text_with_options(Input, TaggerServerStream, ModeOption, PrologOption, Tagge
 	TaggedTextList0 \== '',
 	TaggedTextList0 \== end_of_file,
 	% TaggedTextList = TaggedTextList0,
-	postprocess_tagger_apostrophe_s(TaggedTextList0, TaggedTextList),
+	postprocess_tagger_apostrophe_s(TaggedTextList0, Input, TaggedTextList),
 	!.
 tag_text_with_options(Input, _, _, _Tagger, []) :-
 	format('tagger_access:tag_text_with_options/4 failed for ~p~n', [Input]).
@@ -306,19 +313,90 @@ get_chars_tagger(Stream, Input) :-
 % (1) is not a he/she/it pronoun AND
 % (2) does not end in a punctuation char
 
-postprocess_tagger_apostrophe_s([], []).
-postprocess_tagger_apostrophe_s(TaggedTextList0, TaggedTextList) :-
-	TaggedTextList0 = [[OrigWord,LexCat], ['\'',ap], [s,'noun/3']|RestTaggedTextList0],
-	\+ no_combine_pronoun(OrigWord),
-	atom_codes(OrigWord, OrigWordCodes),
-	last(OrigWordCodes, LastCode),
+% This has been generalized to keep an apostrophe inside a token
+% if it is surrounded by real words.
+% If this works, thr predicate should be renamed!!
+
+sp :- spy(postprocess_tagger_apostrophe_s).
+
+postprocess_tagger_apostrophe_s([], _Input, []).
+postprocess_tagger_apostrophe_s(TaggedTextList0, Input, TaggedTextList) :-
+	TaggedTextList0 = [['\'',ap]|RestTaggedTextList0],
+	!,
+	TaggedTextList = [['\'',ap]|RestTaggedTextList],
+	remove_leading_apostrophe(Input, RestInput1),
+	remove_leading_whitespace(RestInput1, 0, RestInput2, _NumWhiteSpaceCharsRemoved),
+	postprocess_tagger_apostrophe_s(RestTaggedTextList0, RestInput2, RestTaggedTextList).
+
+postprocess_tagger_apostrophe_s(TaggedTextList0, Input, TaggedTextList) :-
+	TaggedTextList0 = [[Word1,LexCat1], ['\'',ap],
+			   [Word2,LexCat2]|RestTaggedTextList0],
+	% The next three lines handle strings like "Mobius' syndrome";
+	% We don't want to re-attach an apostrophe immediately followed by whitespace!
+	atom_codes(Word1, Word1Codes),
+	append(Word1Codes, RestInput, Input),
+	RestInput = [0'\', NextChar|_],
+	\+ local_ws(NextChar),
+	% Make sure that LexCat1 and LexCat1 are "real" lexcats (e.g., adj, adv, aux, etc.)
+	% and not punctuation lexcats (e.g., pc, am, ax, etc).
+	no_punc_lexcat(LexCat1),
+	no_punc_lexcat(LexCat2),
+	\+ no_combine_pronoun(Word1),
+	atom_codes(Word1, Word1Codes),
+	last(Word1Codes, LastCode),
 	\+ local_punct(LastCode),
 	!,
-	concat_atom([OrigWord, '''', s], Noun),
-	TaggedTextList = [[Noun,LexCat]|RestTaggedTextList],
-	postprocess_tagger_apostrophe_s(RestTaggedTextList0, RestTaggedTextList).
-postprocess_tagger_apostrophe_s([H|RestIn], [H|RestOut]) :-
-	postprocess_tagger_apostrophe_s(RestIn, RestOut).
+	concat_atom([Word1, '''', Word2], Noun),
+	TaggedTextList = [[Noun,LexCat1]|RestTaggedTextList],
+	atom_codes(Word1, Word1Codes),
+	atom_codes(Word2, Word2Codes),
+	append(Word1Codes, RestInput1, Input),
+	remove_leading_apostrophe(RestInput1, RestInput2),
+	append(Word2Codes, RestInput3, RestInput2),
+	remove_leading_whitespace(RestInput3, 0, RestInput4, _NumWhiteSpaceCharsRemoved),
+	postprocess_tagger_apostrophe_s(RestTaggedTextList0, RestInput4, RestTaggedTextList).
+postprocess_tagger_apostrophe_s([[Word,Lexcat]|RestIn], Input, [[Word,Lexcat]|RestOut]) :-
+	atom_codes(Word, WordCodes),
+	append(WordCodes, RestInput0, Input),
+	remove_leading_apostrophe(RestInput0, RestInput1),
+	remove_leading_whitespace(RestInput1, 0, RestInput, _NumWhiteSpaceCharsRemoved),
+	postprocess_tagger_apostrophe_s(RestIn, RestInput, RestOut).
+
+remove_leading_apostrophe([], []).
+remove_leading_apostrophe([Char1|RestChars], RestInput1) :-
+	( Char1 == 0'\' ->
+	  RestInput1 = RestChars
+	; RestInput1 = [Char1|RestChars]
+	).
+
+% Change e.g.,'noun/5' to just 'noun'
+no_punc_lexcat(LexCat) :-
+	atom_codes(LexCat, LexCatCodes),
+	remove_non_alnums(LexCatCodes, LexCatCodesAlnums),
+	atom_codes(LexCatAlnums, LexCatCodesAlnums),
+	no_punc_lexcat_1(LexCatAlnums).
+
+remove_non_alnums([], []).
+remove_non_alnums([H|T], Alnums) :-
+	( local_alnum(H),
+	  \+ local_digit(H) ->
+	  Alnums = [H|RestAlnums]
+	; Alnums = RestAlnums
+	),
+	remove_non_alnums(T, RestAlnums).
+
+no_punc_lexcat_1(adj).
+no_punc_lexcat_1(adv).
+no_punc_lexcat_1(aux).
+no_punc_lexcat_1(det).
+% no_punc_lexcat_1(num).
+no_punc_lexcat_1(conj).
+no_punc_lexcat_1(noun).
+no_punc_lexcat_1(prep).
+no_punc_lexcat_1(pron).
+no_punc_lexcat_1(verb).
+no_punc_lexcat_1(compl).
+no_punc_lexcat_1(modal).
 
 %%% postprocess_tagger_apostrophe_s([], _QueryAtom, []).
 %%% postprocess_tagger_apostrophe_s(TaggedTextList0, QueryAtom, TaggedTextList) :-

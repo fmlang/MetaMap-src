@@ -1208,7 +1208,6 @@ debug_evaluate_candidate_list_3(DebugFlags, N, CandidatesLength, Evaluation) :-
 	  ; true
 	  ).
 
-
 debug_evaluate_candidate_list_4(DebugFlags, N, CandidatesLength) :-
 	  ( memberchk(3, DebugFlags) ->
 	    format(user_error, '  ~d|~d|NO~n',[N, CandidatesLength])

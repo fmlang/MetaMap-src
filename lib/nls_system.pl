@@ -171,6 +171,9 @@ is_control_option(metamap, 'L', lexicon_year, 	 		no,
 % is_control_option(metamap, 'M', mmi_output,              no, none).
 is_control_option(metamap, 'N', fielded_mmi_output,      	no, none).
 % is_control_option(metamap, 'O', show_preferred_names_only, 	no, none).
+is_control_option(metamap, 'P', 'TAGGER_SERVER_PORT', 	no,
+                  aspec('TAGGER_SERVER_PORT', mandatory, none, none, no_default,
+                        'Which tagger server port to use')).		  
 is_control_option(metamap, 'Q', composite_phrases, 		yes,
                   aspec(composite_phrases, mandatory, integer, yes, 4,
                         'Max number of prepositional phrases to glom on')).	% MetaMap default
@@ -180,7 +183,7 @@ is_control_option(metamap, 'R', restrict_to_sources, no,
 
 is_control_option(metamap, 'S', 'TAGGER_SERVER', no,
                   aspec('TAGGER_SERVER', mandatory, none, none, no_default,
-                        'Which tagger server to use')).
+                        'Which tagger server to use')).
 is_control_option(metamap, 'T', tagger_output, 			no, none).
 % is_control_option(metamap, 'U', allow_duplicate_concept_names,  no, none).
 is_control_option(metamap, 'V', mm_data_version, no,
@@ -225,10 +228,33 @@ is_control_option(metamap,   x, syntax, 			no, none).
 is_control_option(metamap,   y, word_sense_disambiguation, 	no, none).
 is_control_option(metamap,   z, term_processing, 		no, none).
 
+is_control_option(metamap,  '', aas_only,                	no, none).
+is_control_option(metamap,  '', abort_on_fail,	 	 	no, none).
+is_control_option(metamap,  '', blanklines, 		 	no,
+                  aspec(blanklines, mandatory, integer, none, no_default,
+			'Number of newlines to read to signal end of citation')).
+is_control_option(metamap,  '', cascade,	 		no, none).
+is_control_option(metamap,  '', conj,		 	 	no, none).
 is_control_option(metamap,  '', debug, 			 	no,
                   aspec(debug, mandatory, list, none, no_default, 'Debugging settings')).
 is_control_option(metamap,  '', help, 		 	 	no, none).
-is_control_option(metamap,  '', tokenize_only, 		 	no, none).
+
+is_control_option(metamap,  '', lexicon, yes,
+                   aspec(lexicon, mandatory, none, yes, db,
+                         'Specify "c" or "db" for lexicon version.')).
+% show lexical definitions
+is_control_option(metamap,  '', 'show_lex',		 	no, none).
+
+is_control_option(metamap,  '', map_thresh, no,
+                   aspec(map_thresh, mandatory, none, none, no_default,
+                         'Integer specifying what percentage of mappings to keep (for internal use only!)')).
+is_control_option(metamap,  '', mappings_limit, no,
+                  aspec(mappings_limit, mandatory, integer, none, no_default,
+                        'Max number of mappings to allow before backtracking into pruning')).
+is_control_option(metamap,  '', min_length, 	 no,
+                  aspec(min_length, mandatory, integer, none, no_default,
+                        'Minimum length of concept name')).
+
 is_control_option(metamap,  '', negex,		 	 	no, none).
 is_control_option(metamap,  '', negex_st_add, 		 	no,
                   aspec(negex_st_add, mandatory, list, none, no_default, 'SemTypes to add to NegEx')).
@@ -236,39 +262,55 @@ is_control_option(metamap,  '', negex_st_del, 		 	no,
                   aspec(negex_st_del, mandatory, list, none, no_default, 'SemTypes to delete from to NegEx')).
 is_control_option(metamap,  '', negex_st_set, 		 	no,
                   aspec(negex_st_set, mandatory, list, none, no_default, 'SemTypes to set for NegEx')).
+% recompile negex_triggers.pl
+is_control_option(metamap,  '', 'negex_trigger_file', no,
+		  aspec(negex_trigger_file, mandatory, file, read, no_default,
+			'File containing NegEx trigger definitions')).
 
-is_control_option(metamap,  '', blanklines, 		 	no,
-                  aspec(blanklines, mandatory, integer, none, no_default,
-			'Number of newlines to read to signal end of citation')).
+is_control_option(metamap,  '', 'nomap', no,
+		  aspec(nomap, mandatory, file, read, no_default,
+			'File containing String/CUI pairs to exclude.')).
+is_control_option(metamap,  '', 'novar', no,
+		  aspec(novar, mandatory, file, read, no_default,
+			'File containing variant pairs to exclude.')).		  
+is_control_option(metamap,  '', 'num_break',	 		no, none).
+is_control_option(metamap,  '', 'no_nums',	 		no,
+                  aspec(no_nums, mandatory, list, none, no_default,
+                        'List of semantic types to exclude for numerical_concepts')).
+		  
+is_control_option(metamap,  '', no_prune,	 	 	no, none).
+is_control_option(metamap,  '', prune, no,
+                  aspec(prune, mandatory, integer, none, no_default,
+                        'Max number of candidates to allow before pruning')).
+is_control_option(metamap,  '', phrases_only, 	 	 	no, none).
+is_control_option(metamap,  '', 'pipe_output',		 	no, none).
+is_control_option(metamap,  '', prompt, no,
+                   aspec(prompt, mandatory, none, none, no_default,
+                         'Specify the prompt for interactive use.')).
+
+is_control_option(metamap,  '', silent,		 	 	no, none).
+
+% sldi == "Single-Line Delimited Input"
+is_control_option(metamap,  '', sldi,	 	 		no, none).
+% sldiID == "Single-Line Delimited Input with ID"
+is_control_option(metamap,  '', sldiID,	 	 		no, none).
+
+is_control_option(metamap,  '', tokenize_only, 		 	no, none).
+
 % is_control_option(metamap, '', 'LEXICON_SERVER', no,
 %                   aspec('LEXICON_SERVER', mandatory, none, none, no_default,
 %                         'Which lexicon server to use')).
-		  
-is_control_option(metamap,  '', silent,		 	 	no, none).
-is_control_option(metamap,  '', aas_only,                	no, none).
+
 % is_control_option(metamap,  '', max_ambiguity,	 	 no,
 %                   aspec(max_ambiguity, mandatory, integer, none, 0,
 %                         'Maximum allowable degree of ambiguity')).
 % is_control_option(metamap,  '', min_conc_length, 	 no,
 %                   aspec(min_concn_length, mandatory, integer, none, no_default,
 %                         'Must specify an integer value.')).
-is_control_option(metamap,  '', min_length, 	 no,
-                  aspec(min_length, mandatory, integer, none, no_default,
-                        'Minimum length of concept name')).
-is_control_option(metamap,  '', phrases_only, 	 	 	no, none).
 % is_control_option(metamap,  '', apostrophe_s_contraction, 	no, none).
+
+is_control_option(metamap,  '', utterances_only,	 	no, none).
 is_control_option(metamap,  '', warnings, 	 	 	no, none).
-is_control_option(metamap,  '', mappings_limit, no,
-                  aspec(mappings_limit, mandatory, integer, none, no_default,
-                        'Max number of mappings to allow before backtracking into pruning')).
-is_control_option(metamap,  '', no_prune,	 	 	no, none).
-is_control_option(metamap,  '', prune, no,
-                  aspec(prune, mandatory, integer, none, no_default,
-                        'Max number of candidates to allow before pruning')).
-% sldi == "Single-Line Delimited Input"
-is_control_option(metamap,  '', sldi,	 	 		no, none).
-% sldiID == "Single-Line Delimited Input with ID"
-is_control_option(metamap,  '', sldiID,	 	 		no, none).
 % expvars expands variant generation to e.g., intrahepatically --> hepatic
 % is_control_option(metamap,  '', expvars,	 	 	no,
 % 		  aspec(expvars, mandatory, integer, none, no_default, 'expvars setting: 0, 1, 2.')).
@@ -276,50 +318,19 @@ is_control_option(metamap,  '', sldiID,	 	 		no, none).
 % is_control_option(metamap,  '', noexp,	 	 		no,
 % 		  aspec(noexp, mandatory, list, none, no_default, 'expvars false positives.')).
 % is_control_option(metamap,  '', restore, 	 	 	no, none).
-is_control_option(metamap,  '', 'UDA',   			no,
-		  aspec('UDA', mandatory, file, read, no_default, 'File containing UDAs')).
 is_control_option(metamap,  '', 'JSONf',   			no,
 		  aspec('JSONf', mandatory, integer, none, no_default, 'integer specifying JSON indenting')).
 is_control_option(metamap,  '', 'JSONn',	 	 	no, none).
+is_control_option(metamap,  '', 'UDA',   			no,
+		  aspec('UDA', mandatory, file, read, no_default, 'File containing UDAs')).
 is_control_option(metamap,  '', 'XMLf',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLf1',		 	no, none).
 is_control_option(metamap,  '', 'XMLn',		 	 	no, none).
 is_control_option(metamap,  '', 'XMLn1',		 	no, none).
-is_control_option(metamap,  '', 'conj',		 	 	no, none).
+
 
 % is_control_option(metamap,  '', 'allcats',		 	no, none).
 
-is_control_option(metamap,  '', lexicon, yes,
-                   aspec(lexicon, mandatory, none, yes, db,
-                         'Specify "c" or "db" for lexicon version.')).
-
-is_control_option(metamap,  '', map_thresh, no,
-                   aspec(map_thresh, mandatory, none, none, no_default,
-                         'Integer specifying what percentage of mappings to keep (for internal use only!)')).
-
-is_control_option(metamap,  '', prompt, no,
-                   aspec(prompt, mandatory, none, none, no_default,
-                         'Specify the prompt for interactive use.')).
-
-% show lexical definitions
-is_control_option(metamap,  '', 'show_lex',		 	no, none).
-is_control_option(metamap,  '', 'pipe_output',		 	no, none).
-% recompile negex_triggers.pl
-is_control_option(metamap,  '', 'negex_trigger_file', no,
-		  aspec(negex_trigger_file, mandatory, file, read, no_default,
-			'File containing NegEx trigger definitions')).
-is_control_option(metamap,  '', 'nomap', no,
-		  aspec(nomap, mandatory, file, read, no_default,
-			'File containing String/CUI pairs to exclude.')).
-is_control_option(metamap,  '', 'novar', no,
-		  aspec(novar, mandatory, file, read, no_default,
-			'File containing variant pairs to exclude.')).		  
-is_control_option(metamap,  '', 'utterances_only',	 	no, none).
-is_control_option(metamap,  '', 'cascade',	 		no, none).
-is_control_option(metamap,  '', 'num_break',	 		no, none).
-is_control_option(metamap,  '', 'no_nums',	 		no,
-                  aspec(no_nums, mandatory, list, none, no_default,
-                        'List of semantic types to exclude for numerical_concepts')).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% USemRep %%%%%% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -337,6 +348,7 @@ is_control_option(usemrep,  '', domain, no,
 is_control_option(usemrep,  '', lexicon, yes,
                    aspec(lexicon, mandatory, none, yes, db,
                          'Specify "c" or "db" for lexicon version.')).
+is_control_option(usemrep,  '', no_abgene,	 	 	no, none).
 is_control_option(usemrep,  '', negex,		 	 	no, none).
 is_control_option(usemrep,  '', negex_st_add, 		 	no,
                   aspec(negex_st_add, mandatory, list, none, no_default, 'SemTypes to add to NegEx')).
@@ -387,6 +399,9 @@ is_control_option(usemrep, 'L', lexicon_year, 	 		no,
                         'Lexicon year [2006,2012,2014]')).
 is_control_option(usemrep,   l, allow_large_n,		        no, none).
 is_control_option(usemrep, 'M', relaxed_model,               no, none).
+is_control_option(usemrep, 'O', 'TAGGER_SERVER_PORT', 	no,
+                  aspec('TAGGER_SERVER_PORT', mandatory, none, none, no_default,
+                        'Which tagger server port to use')).		  
 is_control_option(usemrep, 'P', extract_phrases_only,        no, none).
 is_control_option(usemrep, 'Q', composite_phrases,           no,
                   aspec(composite_phrases, mandatory, integer, yes, 4,
@@ -399,6 +414,9 @@ is_control_option(usemrep,   s, restrict_to_sources, no,
                         'List of sources to use for output')).
 
 is_control_option(usemrep, 'S', generic_processing,          no,  none).
+is_control_option(usemrep, 'N', use_generic_domain_extension, no, none).
+is_control_option(usemrep, 'n', use_generic_domain_modification, no, none).
+
 is_control_option(usemrep,   t, threshold, no,
                   aspec(threshold, mandatory, integer, none, no_default,
                         'Threshold for displaying candidates')).
@@ -450,7 +468,6 @@ is_control_option(filter_mrconso, 'V', mm_data_version, no,
 is_control_option(filter_mrconso, 'Z', mm_data_year, no,
                   aspec(mm_data_year,mandatory, none, none, no_default,
                         'Release of MetaMap data to use')).
-
 is_control_option(filter_mrconso, p, progress_bar_interval, no,
                   aspec(progress_bar_interval,mandatory,integer,none,no_default,
                         'Interval of progress bar')).
@@ -465,6 +482,13 @@ is_control_option(filter_mrconso,  '', clfi, no,
                         'Whether to use original C code or lexAccess version of lex_form_input')).
 is_control_option(filter_mrconso,'N',silent,no,none).
 is_control_option(filter_mrconso,w,warnings,no,none).
+
+is_control_option(filter_mrconso, 'P', 'TAGGER_SERVER_PORT', 	no,
+                  aspec('TAGGER_SERVER_PORT', mandatory, none, none, no_default,
+                        'Which tagger server port to use')).		  
+is_control_option(filter_mrconso, 'S', 'TAGGER_SERVER', no,
+                  aspec('TAGGER_SERVER', mandatory, none, none, no_default,
+                        'Which tagger server to use')).
 
 is_control_option(glean_mrconso, f, first_term_is_concept, yes, none).
 is_control_option(glean_mrconso, c, generate_CUIs,         no,  none).

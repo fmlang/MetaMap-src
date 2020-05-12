@@ -38,7 +38,8 @@
 	collapse_pos_info/3,
 	create_EXP_raw_token_list/7,
 	create_UNEXP_raw_token_list/6,
-        get_next_token_state/3
+        get_next_token_state/3,
+	remove_leading_whitespace/4
     ]).
 
 :- use_module(metamap(metamap_tokenization), [
@@ -989,6 +990,7 @@ consume_aa_token_strings([SecondAAToken|RestAATokens],
 % 	; PrefixLength < 10
 % 	).
 
+remove_leading_whitespace([], NumBlanksRemoved, [], NumBlanksRemoved).
 remove_leading_whitespace([H|T], NumBlanksRemovedIn,
 			CharsWithNoWhiteSpace, NumBlanksRemovedOut) :-
 	( ws_char(H) ->

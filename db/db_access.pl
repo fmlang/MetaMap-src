@@ -96,6 +96,7 @@
 	debug_message/3,
 	ensure_atom/2,
 	fatal_error/2,
+        graceful_error/2,
 	send_message/2
     ]).
 
@@ -242,7 +243,7 @@ default_version(DefaultVersion) :-
 	; DefaultVersion = 'NLM'
 	).
 
-default_release('2019AA').
+default_release('2020AA').
 
 initialize_db_access :-
 	get_data_release(Release, 1),
@@ -331,7 +332,7 @@ db_get_concept_cui(Concept, CUIAtom) :-
 	),
 	!.
 db_get_concept_cui(Concept, []) :-
-	fatal_error('db_get_concept_cui failed for ~w~n', [Concept]).
+	graceful_error('db_get_concept_cui failed for ~w~n', [Concept]).
 
 db_get_concept_cui_aux(ConceptAtom, CUI) :-
 	form_simple_query("cui", "conceptcui", "concept", ConceptAtom, Query),
@@ -346,7 +347,7 @@ db_get_versioned_source_name(RootSourceName, VersionedSourceName) :-
 	db_get_versioned_source_name_aux(RootSourceNameString, VersionedSourceName),
 	!.
 db_get_versioned_source_name(RootSourceName, []) :-
-	fatal_error('db_get_versioned_source_name failed for ~w~n', [RootSourceName]).
+	graceful_error('db_get_versioned_source_name failed for ~w~n', [RootSourceName]).
 
 db_get_versioned_source_name_aux(RootSourceName, VersionedSourceNames) :-
 	form_simple_query("versioned, exists", "sab_rv", "root", RootSourceName, Query),
@@ -357,7 +358,7 @@ db_get_root_source_name(VersionedSourceName, RootSourceName) :-
 	db_get_root_source_name_aux(VersionedSourceNameString, RootSourceName),
 	!.
 db_get_root_source_name(VersionedSourceName, []) :-
-	fatal_error('db_get_root_source_name failed for ~w~n', [VersionedSourceName]).
+	graceful_error('db_get_root_source_name failed for ~w~n', [VersionedSourceName]).
 
 db_get_root_source_name_aux(VersionedSourceName, RootSourceNames) :-
 	form_simple_query("root, exists", "sab_vr", "versioned", VersionedSourceName, Query),
@@ -388,7 +389,7 @@ db_get_cui_sourceinfo(CUI, SourceInfo) :-
 	),
 	!.
 db_get_cui_sourceinfo(CUI, []) :-
-	fatal_error('db_get_cui_sourceinfo failed for ~p~n', [CUI]).
+	graceful_error('db_get_cui_sourceinfo failed for ~p~n', [CUI]).
 
 db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 	form_simple_query("i, str, src, tty", "cuisourceinfo", "cui", CUIAtom, Query),
@@ -407,7 +408,7 @@ db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 %%% 	),
 %%% 	!.
 %%% db_get_concept_sts(Concept, []) :-
-%%% 	fatal_error('db_get_concept_sts failed for ~w~n', [Concept]),
+%%% 	graceful_error('db_get_concept_sts failed for ~w~n', [Concept]),
 %%% 	abort.
 %%% 
 %%% db_get_concept_sts_aux(ConceptAtom, SemTypes) :-
@@ -427,7 +428,7 @@ db_get_cui_sourceinfo_aux(CUIAtom, SourceInfo) :-
 %%% 	),
 %%% 	!.
 %%% db_get_cui_sts(CUI, []) :-
-%%% 	fatal_error('db_get_cui_sts failed for ~w~n', [CUI]).
+%%% 	graceful_error('db_get_cui_sts failed for ~w~n', [CUI]).
 %%% 
 %%% db_get_cui_sts_aux(CUIAtom, SemTypes) :-
 %%% 	form_simple_query("st", "cuist", "concept", CUIAtom, Query),
@@ -450,7 +451,7 @@ db_get_all_acros_abbrs(Word, AAPairs) :-
 	),
 	!.
 db_get_all_acros_abbrs(Word, []) :-
-	fatal_error('db_get_all_acros_abbrs failed for ~p~n', [Word]).
+	graceful_error('db_get_all_acros_abbrs failed for ~p~n', [Word]).
 
 db_get_all_acros_abbrs_aux(Word, AAPairs) :-
 	form_simple_query("expansion, type", "nlsaa", "word", Word, Query),
@@ -477,7 +478,7 @@ db_get_unique_acros_abbrs(Word, AAPairs) :-
 	),
 	!.
 db_get_unique_acros_abbrs(Word, []) :-
-	fatal_error('get_unique_acros_abbrs failed for ~p~n', [Word]).
+	graceful_error('get_unique_acros_abbrs failed for ~p~n', [Word]).
 
 % Result must be in a list for subsequent processing
 % db_get_unique_acros_abbrs_aux(Word, [Expansion:Type]) :-
@@ -503,7 +504,7 @@ db_get_synonyms(Word, Synonyms) :-
 	),
 	!.
 db_get_synonyms(Word, []) :-
-	fatal_error('db_get_synonyms/2 failed for ~p.~n', [Word]).
+	graceful_error('db_get_synonyms/2 failed for ~p.~n', [Word]).
 
 db_get_synonyms_aux(WordAtom, Synonyms) :-
 	form_simple_query("syn, scat", "syns", "word", WordAtom, Query),
@@ -528,7 +529,7 @@ db_get_synonyms_with_cat(Word, WordCategory, Synonyms) :-
 	),
 	!.
 db_get_synonyms_with_cat(Word, WordCategory, []) :-
-	fatal_error('db_get_synonyms/3 failed for ~w/~w.~n', [Word, WordCategory]).
+	graceful_error('db_get_synonyms/3 failed for ~w/~w.~n', [Word, WordCategory]).
 
 db_get_synonyms_with_cat_aux(WordAtom, WordCategoryAtom, Synonyms) :-
 	form_complex_query("syn, scat", "syns", "word", WordAtom, "wcat", WordCategoryAtom, Query),
@@ -571,7 +572,7 @@ db_get_mesh_tc_relaxed(MeSH, TreeCodes) :-
 	),
 	!.
 db_get_mesh_tc_relaxed(MeSH, []) :-
-	fatal_error('db_get_mesh_tc_relaxed failed for ~p.~n', [MeSH]).
+	graceful_error('db_get_mesh_tc_relaxed failed for ~p.~n', [MeSH]).
 
 db_get_mesh_tc_relaxed_aux(MeSHAtom, TreeCodes) :-
 	form_simple_query("tc", "meshtcrelaxed", "mesh", MeSHAtom, Query),
@@ -591,7 +592,7 @@ db_get_mesh_mh(MeSH, MH) :-
 	),
 	!.
 % db_get_mesh_mh(MeSH, []) :-
-% 	fatal_error('db_get_mesh_mh failed for ~p.~n', [MeSH]).
+% 	graceful_error('db_get_mesh_mh failed for ~p.~n', [MeSH]).
 
 db_get_mesh_mh_aux(MeSHAtom, MH) :-
 	form_simple_query("mh", "meshmh", "mesh", MeSHAtom, Query),
@@ -616,7 +617,7 @@ db_get_meta_mesh(MeSH, MHString) :-
 	),
 	!.
 % db_get_meta_mesh(MeSH, []) :-
-% 	fatal_error('db_get_meta_mesh failed for ~p.~n', [MeSH]).
+% 	graceful_error('db_get_meta_mesh failed for ~p.~n', [MeSH]).
 
 db_get_meta_mesh_aux(MeSHAtom, MH) :-
 	form_simple_query("mesh", "metamesh", "meta", MeSHAtom, Query),
@@ -649,7 +650,7 @@ db_get_mwi_word_data(Table, Word, DebugFlags, Results) :-
 	  ),
 	!.
 db_get_mwi_word_data(Table, Word, _DebugFlags, []) :-
-	fatal_error('db_get_mwi_word_data failed for word ~p on table ~p.~n', [Word,Table]).
+	graceful_error('db_get_mwi_word_data failed for word ~p on table ~p.~n', [Word,Table]).
 
 possibly_widen_table(NarrowTable, WideTable, Widen) :-
 	db_access_status(Version, Release, Model),
@@ -688,7 +689,7 @@ db_get_mwi_word_data_WIDE(Table, Word, DebugFlags, RawResults) :-
 	debug_db_get_mwi_data_aux_2(DebugFlags, RawResults),
 	!.
 db_get_mwi_word_data_WIDE(Table, Word, _DebugFlags, _RawResults) :-
-	fatal_error('db_get_mwi_word_data_aux failed for ~p on table ~p.~n', [Word,Table]).
+	graceful_error('db_get_mwi_word_data_aux failed for ~p on table ~p.~n', [Word,Table]).
 
 % This is the narrow version
 db_get_mwi_word_data_NARROW(Table, Word, DebugFlags, RawResults) :-
@@ -712,7 +713,7 @@ db_get_mwi_word_data_NARROW(Table, Word, DebugFlags, RawResults) :-
 	!.
 
 db_get_mwi_word_data_NARROW(Table, Word, _DebugFlags, _RawResults) :-
-	fatal_error('db_get_mwi_word_data_aux failed for ~p on table ~p.~n', [Word,Table]).
+	graceful_error('db_get_mwi_word_data_aux failed for ~p on table ~p.~n', [Word,Table]).
 
 form_uscs([], _N, []) :- !.
 form_uscs([First|Rest], N, [usc(Nmstr,Str,Concept)|ModifiedRest]) :-
@@ -745,7 +746,7 @@ db_get_mwi_word_count(Table, Word, Count) :-
 	!.
 % This predicate must be allowed to fail gracefully
 % db_get_mwi_word_count(Table, Word, 0) :-
-%        fatal_error('db_get_mwi_word_count failed for ~p on table ~p.~n',
+%        graceful_error('db_get_mwi_word_count failed for ~p on table ~p.~n',
 %              	      [Word,Table]).
 
 db_get_mwi_word_count_aux(TableAtom, WordAtom, WordCount) :-
@@ -1036,19 +1037,19 @@ normalize_db_access_year(Release, NormalizedRelease) :-
 	    )
 	  ; ReleaseLength =:= 4,
 	    % Nonstandard, e.g., 08AA, 09AB, 10AA, etc.
-	    Codes = [D1, D2, A, ABC],
+	    Codes = [D1, D2, A, ABCD],
 	    local_digit(D1),
 	    local_digit(D2),
 	    A == 0'A,
-	    is_ABC(ABC) ->
+	    is_ABCD(ABCD) ->
 	    choose_century(D1, Century),
 	    concat_atom([Century, Release], NormalizedRelease)
 	  ; ReleaseLength =:= 6,
 	    % e.g., 2008AA, 2009AB, 2010AA, etc.
-	    Codes = [D1, D2, D3, D4, A, ABC],
+	    Codes = [D1, D2, D3, D4, A, ABCD],
 	    all_digits([D1,D2,D3,D4]),
 	    A == 0'A,
-	    is_ABC(ABC) ->
+	    is_ABCD(ABCD) ->
 	    NormalizedRelease = ReleaseAtom
 	  )
 	),
@@ -1065,9 +1066,10 @@ choose_century(Digit, Century) :-
 all_digits([]).
 all_digits([H|T]) :- local_digit(H), all_digits(T).
 
-is_ABC(0'A).
-is_ABC(0'B).
-is_ABC(0'C).
+is_ABCD(0'A).
+is_ABCD(0'B).
+is_ABCD(0'C).
+is_ABCD(0'D).
 
 
 get_data_model(Model) :-
@@ -1116,10 +1118,19 @@ debug_db_get_mwi_data_aux_2(DebugFlags, RawResults) :-
 	).
 
 ensure_string(AtomOrString, String) :-
-        ( is_print_string(AtomOrString) ->
+	% FML 02/25/2020: Need to relax this restriction because of UMLS strings
+	% such as "TOCOSOL™ Paclitaxel" in which "™" is not a print char.
+	% ( is_print_string(AtomOrString) ->
+	( is_codes_string(AtomOrString) ->
           String = AtomOrString
         ; atom_codes(AtomOrString, String)
         ).
+
+is_codes_string([]).
+is_codes_string([H|T]) :-
+	integer(H),
+	is_codes_string(T).
+
 
 db_get_lex_base_forms(Word, BaseForms) :-
 	form_simple_query("baseform", "lex_form", "word", Word, Query),

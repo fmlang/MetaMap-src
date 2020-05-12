@@ -62,11 +62,12 @@
 	generate_EOT_output/1,
 	get_candidate_feature/3,
 	get_all_candidate_features/3,
+        graceful_error/2,
 	% called by MetaMap API -- do not change signature!
 	output_should_be_bracketed/1,
 	% member_var/2,
 	memberchk_var/2,
-	output_tagging/3,
+	output_tagging/2,
 	replace_crs_with_blanks/4,
 	replace_blanks_with_crs/4,
 	send_message/2,
@@ -119,7 +120,7 @@
     ]).
 
 :- use_module(skr(skr_text_processing), [
-	medline_field_separator_char/1
+	medlineRIS_field_separator_char/1
     ]).
 
 :- use_module(skr(skr_umls_info), [
@@ -1416,7 +1417,7 @@ write_EOU_term(OutputStream) :-
 	format(OutputStream, '.~n', []).
 
 
-output_tagging(BracketedOutput, HRTagStrings, FullTagList) :-
+output_tagging(BracketedOutput, TagList) :-
 	% (1a) If either tagger_output or format_tagger_output is on
 	( ( control_option(formal_tagger_output)
 	  ; control_option(tagger_output)
@@ -1426,10 +1427,7 @@ output_tagging(BracketedOutput, HRTagStrings, FullTagList) :-
 	    skr_begin_write('Tagging')
 	  ; format('~n', [])
 	  ),
-	  ( control_option(tagger_output) ->
-	    skr_write_strings(HRTagStrings)
-	  ; skr_write_list(FullTagList)
-	  ),
+	  skr_write_list(TagList),
 	  ( BracketedOutput == 1 ->
 	    skr_end_write('Tagging')
 	  ; true
@@ -1734,6 +1732,10 @@ fatal_error(Message, Args) :-
 	send_message(Message, Args),
 	halt.
 
+graceful_error(Message, Args) :-
+	send_message('~n### MetaMap ERROR: ', []),
+	send_message(Message, Args).
+
 set_message(SourceList, PluralIndicator, Verb, Pronoun, Determiner) :-
 	length(SourceList, Length),
 	( Length is 1 ->
@@ -1831,7 +1833,7 @@ trim_field_name_prefix(Field, CharsIn, FieldLength, NumBlanksTrimmed, CharsNext3
 	trim_whitespace_left_count(CharsNext0, CharsNext1, NumBlanksTrimmed1),
 	% trim off the hyphen after the blanks
 	CharsNext1 = [FirstChar|CharsNext2],
-	medline_field_separator_char(FirstChar),
+	medlineRIS_field_separator_char(FirstChar),
 	% trim off any whitespace immediately after the hyphen
 	trim_whitespace_left_count(CharsNext2, CharsNext3, NumBlanksTrimmed2),
 	% The "+1" is for the hyphen

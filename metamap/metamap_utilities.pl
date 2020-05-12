@@ -74,13 +74,13 @@
 	file_exists/1
    ]).
 
-:-   absolute_file_name(skr_lib(semtype_translation_2019AA),
+:-   absolute_file_name(skr_lib(semtype_translation_2020AA),
 			AbsFileName,
 			[extensions(['.pl'])]),
      file_exists(AbsFileName) ->
-     use_module(skr_lib(semtype_translation_2019AA), [expand_semtypes/2]),
-     format(user_error, 'File semtype_translation_2019AA.pl is loading ~w~n', [AbsFileName])
-   ; format(user_error, 'File semtype_translation_2019AA.pl is NOT loading ~n', []).
+     use_module(skr_lib(semtype_translation_2020AA), [expand_semtypes/2]),
+     format(user_error, 'File semtype_translation_2020AA.pl is loading ~w~n', [AbsFileName])
+   ; format(user_error, 'File semtype_translation_2020AA.pl is NOT loading ~n', []).
 
 :- use_module(skr_lib(nls_system), [
 	control_option/1,
